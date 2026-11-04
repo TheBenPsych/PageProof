@@ -7,9 +7,7 @@ A browser extension for **Chrome and Firefox** that captures a whole web page, t
 - **Whole page:** scrolls the page for you and stitches it into one tall image. Images, embeds and videos are captured exactly as they look on screen (videos as a still frame).
 - **Proof of where it came from:** a banner across the top shows the website's domain, the full web address, and the date and time of the capture.
 - **Hidden content too:** anything that doesn't fit on screen is marked "Section 1", "Section 2" and so on in the capture and shown in full underneath:
-  - boxes that scroll on their own, up/down **or sideways** (chat panes, long tables, product rows)
-  - **carousels**: PageProof clicks the "next" arrow and saves every slide until they loop back to the start
-  - closed **fold-out** areas ("click to expand"), opened one at a time
+  - boxes that scroll up and down on their own (like the comments on an Instagram post, chat panes, long tables)
   - **dropdown lists**: every choice is written out, with the selected one marked
 - **Endless pages:** on sites that keep loading more articles as you scroll, the capture stops where the page ended when you clicked. Click the PageProof icon again at any time to stop a capture early and keep what it has so far.
 - **Two ways to save:** PDF, and an HTML backup that stores every picture, style and font inside the file, so it still opens correctly even if the website deletes them.
@@ -86,8 +84,8 @@ Firefox removes "temporary" add-ons when it closes, so you'd repeat these steps 
 - Browser pages like the new tab page, settings, and the add-on stores can't be captured. Browsers block that for safety.
 - Sites that scroll inside a big box instead of the whole window (many web apps) are captured as one normal page, not as a separate section.
 - Sticky headers and menus appear once at the top instead of repeating down the page.
-- Very long pages stop after 60 screens. Carousels stop after 20 slides.
-- Carousels that only change when you swipe (no arrow button) and menus that open on hover aren't opened automatically. Open them yourself, then press **Alt+Shift+P**.
+- Very long pages stop after 60 screens.
+- Carousels, fold-out areas and hover menus aren't opened automatically. Open them to what you need yourself, then press **Alt+Shift+P**.
 - The PDF is always one file, however long the page.
 - PageProof asks to "access data on all websites" so it can save the page's pictures, ask the server for its details, and get the timestamp. It only does this when you click capture. The only thing sent anywhere else is the fingerprint code, to the timestamp service.
 - Your capture log lives in this browser. Download it as a .csv now and then to keep a copy.

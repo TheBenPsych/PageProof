@@ -15,56 +15,21 @@
   const instant = { behavior: 'instant' };
   const scroller = () => document.scrollingElement || document.documentElement;
 
-  // A box that scrolls on its own: up/down, sideways, or both.
+  // A box that scrolls up and down on its own (like the comments on an Instagram post).
   function scrollAxes(el) {
     if (el === document.body || el === document.documentElement) return null;
     const cs = getComputedStyle(el);
     if (cs.visibility === 'hidden' || cs.display === 'none') return null;
     const y = /(auto|scroll|overlay)/.test(cs.overflowY) && el.scrollHeight - el.clientHeight >= 20 && el.clientHeight >= 60;
-    const x = /(auto|scroll|overlay)/.test(cs.overflowX) && el.scrollWidth - el.clientWidth >= 20 && el.clientHeight >= 40;
-    if (!(x || y) || el.clientWidth < 100) return null;
-    return { x, y };
+    if (!y || el.clientWidth < 100) return null;
+    return { x: false, y: true };
   }
   const isScrollable = el => !!scrollAxes(el);
-
-  // Carousels that move with "next" arrows instead of scrolling.
-  const CAROUSEL = '[aria-roledescription="carousel" i], .swiper, .swiper-container, .slick-slider, .splide, .glide, ' +
-    '.flickity-enabled, .owl-carousel, .carousel, [class*="carousel" i], [class*="slider" i], [class*="slideshow" i]';
-  const NEXT = '.swiper-button-next, .slick-next, .splide__arrow--next, .glide__arrow--right, .flickity-prev-next-button.next, ' +
-    '.owl-next, .carousel-control-next, [data-slide="next"], [data-bs-slide="next"], [aria-label*="next" i], [title*="next" i], ' +
-    '[class*="next" i], [aria-label*="forward" i], [class*="arrow-right" i], [class*="right-arrow" i]';
 
   function isShown(el) {
     const r = el.getBoundingClientRect();
     const cs = getComputedStyle(el);
     return r.width > 4 && r.height > 4 && cs.visibility !== 'hidden' && cs.display !== 'none' && +cs.opacity !== 0;
-  }
-
-  function nextButton(box) {
-    for (const scope of [box, box.parentElement, box.parentElement && box.parentElement.parentElement]) {
-      if (!scope) continue;
-      const btn = [...scope.querySelectorAll(NEXT)].find(b => {
-        if (!isShown(b)) return false;
-        const link = b.closest('a[href]');
-        if (link && !/^(#|javascript:)/i.test(link.getAttribute('href'))) return false; // never follow real links
-        return !/prev|back|left/i.test((b.className && b.className.baseVal !== undefined ? b.className.baseVal : b.className) + ' ' + (b.getAttribute('aria-label') || ''));
-      });
-      if (btn) return btn;
-    }
-    return null;
-  }
-
-  function isDisabled(btn) {
-    return btn.disabled || btn.getAttribute('aria-disabled') === 'true' || /disabled/i.test(String(btn.className)) || !isShown(btn);
-  }
-
-  // What the carousel is showing right now, to notice when it loops back.
-  function carouselLook(box) {
-    const r = box.getBoundingClientRect();
-    const inView = el => { const q = el.getBoundingClientRect(); return q.right > r.left + 5 && q.left < r.right - 5 && q.bottom > r.top && q.top < r.bottom && q.width > 0; };
-    const imgs = [...box.querySelectorAll('img')].filter(inView).map(i => i.currentSrc || i.src).join('|');
-    const text = [...box.querySelectorAll('h1,h2,h3,h4,p,span,a,figcaption')].filter(inView).map(e => e.textContent.trim()).filter(Boolean).join('|').slice(0, 2000);
-    return imgs + '#' + text;
   }
 
   function visibleArea(el) {
@@ -166,25 +131,6 @@
       const ax = scrollAxes(el);
       return { kind: 'scroll', el, axes: ax, label: labelFor(el), startTop: el.scrollTop, startLeft: el.scrollLeft };
     });
-
-    // Carousels with a "next" button (skip ones that are already a sideways scroll box).
-    const inTargets = el => targets.some(t => t.el === el || t.el.contains(el) || el.contains(t.el));
-    const carousels = [];
-    for (const box of document.querySelectorAll(CAROUSEL)) {
-      if (carousels.length >= 6) break;
-      const r = box.getBoundingClientRect();
-      if (r.width < 150 || r.height < 80 || !isShown(box) || box === pageEl) continue;
-      if (inTargets(box) || carousels.some(c => c.el.contains(box) || box.contains(c.el))) continue;
-      const btn = nextButton(box);
-      if (btn) carousels.push({ kind: 'carousel', el: box, btn, label: labelFor(box) });
-    }
-    targets.push(...carousels);
-
-    // Fold-out areas that are closed.
-    for (const d of [...document.querySelectorAll('details:not([open])')].filter(isShown).slice(0, 10)) {
-      const sum = d.querySelector('summary');
-      targets.push({ kind: 'details', el: d, label: (sum ? sum.textContent : labelFor(d)).replace(/\s+/g, ' ').trim().slice(0, 70) || 'Fold-out area' });
-    }
 
     // Dropdown lists: write out every choice.
     for (const sel of [...document.querySelectorAll('select')].filter(isShown).slice(0, 20)) {
@@ -307,57 +253,6 @@
     };
   }
 
-  // Capture a whole element (opened fold-out, carousel slide), scrolling the window if it's tall.
-  function elementPart(t, step) {
-    const vw = document.documentElement.clientWidth, vh = window.innerHeight;
-    if (step === 0) t.el.scrollIntoView({ block: 'start', inline: 'nearest', ...instant });
-    else window.scrollBy({ top: vh, ...instant });
-    const r = t.el.getBoundingClientRect();
-    const x0 = Math.ceil(Math.max(0, r.left)), y0 = Math.ceil(Math.max(0, r.top));
-    const x1 = Math.floor(Math.min(vw, r.right)), y1 = Math.floor(Math.min(vh, r.bottom));
-    if (x1 - x0 < 10 || y1 - y0 < 10) return null;
-    return { crop: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, contentX: x0 - r.left, contentY: y0 - r.top,
-      width: r.width, height: r.height, done: r.bottom <= vh + 1 };
-  }
-
-  function openDetails(n) {
-    const t = targets.find(x => x.n === n);
-    if (!t || !t.el.isConnected) return false;
-    t.el.open = true;
-    t.opened = true;
-    return true;
-  }
-
-  function closeDetails(n) {
-    const t = targets.find(x => x.n === n);
-    if (t && t.opened) { t.el.open = false; t.opened = false; }
-  }
-
-  function sectionPart(n, step) {
-    const t = targets.find(x => x.n === n);
-    return t && t.el.isConnected ? elementPart(t, step) : null;
-  }
-
-  // Move a carousel to its next slide. Says whether a new, unseen slide is showing.
-  function carouselNext(n) {
-    const t = targets.find(x => x.n === n);
-    if (!t || !t.el.isConnected) return { ok: false };
-    t.seen = t.seen || new Set([carouselLook(t.el)]);
-    const btn = t.btn.isConnected ? t.btn : nextButton(t.el);
-    if (!btn || isDisabled(btn)) return { ok: false };
-    btn.click();
-    return { ok: true };
-  }
-
-  function carouselIsNew(n) {
-    const t = targets.find(x => x.n === n);
-    if (!t) return false;
-    const look = carouselLook(t.el);
-    if (t.seen.has(look)) return false;
-    t.seen.add(look);
-    return true;
-  }
-
   function restore() {
     removeBadges();
     hidden.forEach(([el, v]) => { el.style.visibility = v; });
@@ -365,12 +260,10 @@
     targets.forEach(t => {
       if (!t.el.isConnected) return;
       if (t.kind === 'scroll') { t.el.scrollTop = t.startTop; t.el.scrollLeft = t.startLeft; }
-      if (t.opened) t.el.open = false;
     });
     if (pageEl && pageEl.isConnected) pageEl.scrollTop = pageElStart;
     if (start) window.scrollTo({ left: start.x, top: start.y, ...instant });
   }
 
-  window.__pageproof = { prepare, scrollPage, hideFixed, removeBadges, scrollSection, sectionPart,
-    openDetails, closeDetails, grewNow, carouselNext, carouselIsNew, restore };
+  window.__pageproof = { prepare, scrollPage, hideFixed, removeBadges, scrollSection, grewNow, restore };
 })();

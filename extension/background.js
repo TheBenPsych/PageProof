@@ -4,8 +4,6 @@ if (typeof PP_DB === 'undefined' && typeof importScripts === 'function') importS
 const api = globalThis.browser || globalThis.chrome;
 const MAX_PAGE_SHOTS = 60;     // stop after this many screens on very long pages
 const MAX_SECTION_SHOTS = 40;  // per scrollable section
-const MAX_SLIDES = 20;         // per carousel
-const SLIDE_MS = 900;          // wait for a carousel to finish sliding
 const SETTLE_MS = 350;         // wait for things to draw after each scroll
 const MIN_GAP_MS = 600;        // browsers allow only ~2 screenshots per second
 
@@ -117,7 +115,7 @@ async function capture(tab) {
     if (!record.notes.some(n => n.includes('kept loading')) && await inPage(tabId, 'grewNow')) record.notes.push('This page kept loading more content as it scrolled (endless scrolling), so the capture stopped where the page ended when you clicked.');
     record.main.height = Math.min(record.main.height, Math.max(...record.main.tiles.map(t => t.destY + t.crop.h)));
 
-    // 2) Extra sections: scroll boxes, carousels, fold-outs, dropdown lists.
+    // 2) Extra sections: scroll boxes and dropdown lists.
     await inPage(tabId, 'removeBadges');
     for (const s of info.sections) {
       if (stopRequested) break;
@@ -152,39 +150,6 @@ async function capture(tab) {
           if (at.scrollTop >= at.maxY - 1) break;
           top = at.scrollTop + at.crop.h;
         }
-      }
-
-      if (s.kind === 'details') {
-        if (await inPage(tabId, 'openDetails', s.n)) {
-          await sleep(SETTLE_MS);
-          for (let step = 0; step < MAX_SECTION_SHOTS && !stopRequested; step++) {
-            const at = await inPage(tabId, 'sectionPart', s.n, step);
-            if (!at) break;
-            await sleep(SETTLE_MS);
-            add(await shoot(windowId), at, at.contentX, at.contentY);
-            if (at.done) break;
-          }
-          await inPage(tabId, 'closeDetails', s.n);
-        }
-      }
-
-      if (s.kind === 'carousel') {
-        // Click "next" until the slides start repeating. Slides are stacked top to bottom.
-        let y = 0;
-        for (let k = 0; k < MAX_SLIDES && !stopRequested; k++) {
-          if (k > 0) {
-            const moved = await inPage(tabId, 'carouselNext', s.n);
-            if (!moved || !moved.ok) break;
-            await sleep(SLIDE_MS);
-            if (!(await inPage(tabId, 'carouselIsNew', s.n))) break;
-          }
-          const at = await inPage(tabId, 'sectionPart', s.n, 0);
-          if (!at) break;
-          await sleep(SETTLE_MS);
-          add(await shoot(windowId), at, 0, y);
-          y += at.crop.h + 16;
-        }
-        sec.slides = sec.tiles.length;
       }
 
       if (sec.tiles.length) record.sections.push(sec);

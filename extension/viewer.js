@@ -128,14 +128,12 @@ function layout(rec, s) {
     scroll: sec.axes && sec.axes.x && !sec.axes.y
       ? 'Full contents of the side-scrolling area marked "Section ' + sec.n + '" above (shown in rows, left to right).'
       : 'Full contents of the scroll box marked "Section ' + sec.n + '" in the capture above.',
-    carousel: 'All ' + (sec.slides || sec.tiles.length) + ' slide(s) of the carousel marked "Section ' + sec.n + '" above, shown in order from top to bottom.',
-    details: 'The closed fold-out area marked "Section ' + sec.n + '" above, opened to show what is inside.',
     select: 'Every choice in the dropdown list marked "Section ' + sec.n + '" above. [x] = the choice selected when captured.'
   })[sec.kind || 'scroll'];
 
   for (const sec of rec.sections) {
     const headH = Math.round(56 * u);
-    const kindName = { scroll: 'Scroll box', carousel: 'Carousel', details: 'Fold-out', select: 'Dropdown list' }[sec.kind || 'scroll'];
+    const kindName = { scroll: 'Scroll box', select: 'Dropdown list' }[sec.kind || 'scroll'];
     const label = 'Section ' + sec.n + ' (' + kindName + '): ' + sec.label;
     const note = describe(sec);
     blocks.push({ y, h: headH, draw(ctx) {
@@ -269,7 +267,7 @@ async function start() {
   }
 
   const notes = [...rec.notes];
-  if (rec.sections.length) notes.push(rec.sections.length + ' extra section' + (rec.sections.length > 1 ? 's' : '') + ' (scroll boxes, carousels, fold-outs, dropdown lists) added at the bottom.');
+  if (rec.sections.length) notes.push(rec.sections.length + ' extra section' + (rec.sections.length > 1 ? 's' : '') + ' (scroll boxes and dropdown lists) added at the bottom.');
   setStatus(notes.join(' '));
 
   // Make the PDF right away so every file is ready for the evidence pack.
@@ -383,7 +381,7 @@ async function start() {
       ]),
       '',
       'Extra sections captured: ' + (rec.sections.length ? '' : 'none'),
-      ...rec.sections.map(x => '  Section ' + x.n + ' (' + (x.kind || 'scroll') + '): ' + x.label + (x.kind === 'carousel' ? ' - ' + x.slides + ' slide(s)' : '')),
+      ...rec.sections.map(x => '  Section ' + x.n + ' (' + (x.kind || 'scroll') + '): ' + x.label),
       '',
       'FILES AND SHA-256 FINGERPRINTS',
       'If a file is changed in any way, its fingerprint will no longer match.',
