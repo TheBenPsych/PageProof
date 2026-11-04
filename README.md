@@ -87,7 +87,8 @@ Firefox removes "temporary" add-ons when it closes, so you'd repeat these steps 
 - Sites that scroll inside a big box instead of the whole window (many web apps) are captured as one normal page, not as a separate section.
 - Sticky headers and menus appear once at the top instead of repeating down the page.
 - Very long pages stop after 60 screens. Carousels stop after 20 slides.
-- Carousels that only change when you swipe (no arrow button) and menus that open on hover aren't opened automatically. Open them yourself, then press **Alt+Shift+P**. The PDF is always one file, however long the page.
+- Carousels that only change when you swipe (no arrow button) and menus that open on hover aren't opened automatically. Open them yourself, then press **Alt+Shift+P**.
+- The PDF is always one file, however long the page.
 - PageProof asks to "access data on all websites" so it can save the page's pictures, ask the server for its details, and get the timestamp. It only does this when you click capture. The only thing sent anywhere else is the fingerprint code, to the timestamp service.
 - Your capture log lives in this browser. Download it as a .csv now and then to keep a copy.
 - Keep your evidence zips unchanged, ideally with a copy on a separate drive. Opening them is fine, but re-saving or editing a file breaks its fingerprint.
