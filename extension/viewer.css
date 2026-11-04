@@ -16,3 +16,7 @@ button:not(:disabled):hover { filter: brightness(1.1); }
 #status.error { background: #fee2e2; color: #991b1b; }
 main { padding: 0 16px 32px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 main img { max-width: 100%; height: auto; box-shadow: 0 2px 12px rgba(0,0,0,.25); background: #fff; }
+button.main { background: #16a34a; }
+details { margin: 0 16px 12px; padding: 8px 12px; border-radius: 8px; background: rgba(127,127,127,.12); font-size: 14px; }
+summary { cursor: pointer; font-weight: 600; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }

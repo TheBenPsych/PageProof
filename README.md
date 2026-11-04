@@ -7,14 +7,24 @@ A browser extension for **Chrome and Firefox** that captures a whole web page, t
 - **Whole page:** scrolls the page for you and stitches it into one tall image. Images, embeds and videos are captured exactly as they look on screen (videos as a still frame).
 - **Proof of where it came from:** a banner across the top shows the website's domain, the full web address, and the date and time of the capture.
 - **Scroll boxes too:** parts of the page that scroll on their own (chat panes, long tables, comment boxes) are marked "Section 1", "Section 2" and so on in the capture, and their full contents are added as numbered sections underneath the main page.
-- **Three ways to save:** PNG (image), PDF, and an HTML backup of the page's code.
+- **Three ways to save:** PNG (image), PDF, and an HTML backup that stores every picture, style and font inside the file, so it still opens correctly even if the website deletes them.
+- **Evidence pack:** one .zip with the PNG, PDF, HTML backup, the original image files from the page, and a `capture-details.txt` record (web address, page title, time and time zone, window size, browser) listing a SHA-256 fingerprint for every file.
 
 ## How to use it
 
 1. Go to any normal website.
 2. Click the PageProof icon in your toolbar (or press **Alt+Shift+P**).
 3. It jumps to the top of the page, then scrolls down while it captures. The icon shows a counter while it works. Don't scroll or switch tabs until it finishes.
-4. A new tab opens with your capture. Click **Download PNG**, **Download PDF**, or **Download HTML backup**.
+4. A new tab opens with your capture. Click **Download evidence pack (.zip)** to get everything at once, or download the PNG, PDF or HTML backup on their own.
+
+## Checking a fingerprint later
+
+Each file's SHA-256 fingerprint is listed in `capture-details.txt`. If even one pixel or letter of a file changes, its fingerprint changes. To check a file:
+
+- **Windows:** open Command Prompt and type `certutil -hashfile "C:\path\to\file.png" SHA256`
+- **Mac:** open Terminal and type `shasum -a 256 /path/to/file.png`
+
+Compare the result with the line in `capture-details.txt`. If they match, the file has not been changed since it was captured.
 
 ## Install it
 
@@ -47,6 +57,7 @@ Firefox removes "temporary" add-ons when it closes, so you'd repeat these steps 
 - Sites that scroll inside a big box instead of the whole window (many web apps) are captured as one normal page, not as a separate section.
 - Sticky headers and menus appear once at the top instead of repeating down the page.
 - Very long pages stop after 60 screens. Very tall captures download as more than one PNG part, but the PDF is always one file.
-- The HTML backup saves the page's text and layout. Pictures in it still load from the original website, so the PNG or PDF is your real proof.
+- PageProof asks to "access data on all websites" so it can download the page's pictures into the HTML backup and evidence pack. It only uses this when you click capture, and nothing is sent anywhere.
+- Videos are saved as the frame showing on screen (and their cover picture in the HTML backup), not the video file itself.
 - Content inside an embedded frame from another site (like a YouTube player) is captured as it looks, but scroll boxes inside such frames aren't expanded.
 - Nothing is sent anywhere. Everything happens inside your browser.

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "PageProof",
-  "version": "1.1.0",
-  "description": "Capture a whole web page, stamped with its web address and time. Saves as PNG, PDF and an HTML backup.",
+  "version": "1.2.0",
+  "description": "Capture a whole web page as evidence: stamped with its web address and time, saved as PNG, PDF and a full HTML backup with images.",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -18,12 +18,20 @@
   },
   "background": {
     "service_worker": "background.js",
-    "scripts": ["db.js", "background.js"]
+    "scripts": [
+      "db.js",
+      "background.js"
+    ]
   },
-  "permissions": ["activeTab", "scripting"],
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
   "commands": {
     "_execute_action": {
-      "suggested_key": { "default": "Alt+Shift+P" },
+      "suggested_key": {
+        "default": "Alt+Shift+P"
+      },
       "description": "Capture the whole page"
     }
   },
@@ -31,7 +39,14 @@
     "gecko": {
       "id": "pageproof@thebenpsych",
       "strict_min_version": "121.0",
-      "data_collection_permissions": { "required": ["none"] }
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
     }
-  }
+  },
+  "host_permissions": [
+    "<all_urls>"
+  ]
 }

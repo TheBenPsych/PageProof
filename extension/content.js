@@ -67,7 +67,33 @@
     let html = null;
     if (wantHtml) {
       const copy = document.documentElement.cloneNode(true);
-      copy.querySelectorAll('script').forEach(s => s.remove());
+      // Point every picture at the exact file the browser is showing right now.
+      const origImgs = document.querySelectorAll('img'), copyImgs = copy.querySelectorAll('img');
+      origImgs.forEach((img, i) => {
+        const c = copyImgs[i];
+        if (!c) return;
+        const src = img.currentSrc || img.src;
+        if (src) c.setAttribute('src', src);
+        c.removeAttribute('srcset');
+        c.removeAttribute('sizes');
+        c.removeAttribute('loading');
+      });
+      copy.querySelectorAll('picture source').forEach(s => s.remove());
+      // Drawings on <canvas> are turned into pictures where the browser allows it.
+      const origCanvas = document.querySelectorAll('canvas'), copyCanvas = copy.querySelectorAll('canvas');
+      origCanvas.forEach((cv, i) => {
+        try {
+          const img = document.createElement('img');
+          img.src = cv.toDataURL('image/png');
+          img.width = cv.clientWidth; img.height = cv.clientHeight;
+          copyCanvas[i] && copyCanvas[i].replaceWith(img);
+        } catch (e) { /* protected canvas, leave it */ }
+      });
+      document.querySelectorAll('video').forEach((v, i) => {
+        const c = copy.querySelectorAll('video')[i];
+        if (c && v.poster) c.setAttribute('poster', v.poster);
+      });
+      copy.querySelectorAll('script, noscript').forEach(s => s.remove());
       const head = copy.querySelector('head') || copy;
       const base = document.createElement('base');
       base.href = location.href;
@@ -112,8 +138,9 @@
       url: location.href,
       title: document.title,
       viewWidth: document.documentElement.clientWidth,
-      background: pageBackground(),
       viewHeight: window.innerHeight,
+      userAgent: navigator.userAgent,
+      background: pageBackground(),
       innerWidth: window.innerWidth,
       sections: targets.map(t => ({ n: t.n, label: t.label })),
       html

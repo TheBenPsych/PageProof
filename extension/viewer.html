@@ -14,15 +14,19 @@
       <div id="sub">Getting your capture ready...</div>
     </div>
     <div class="buttons">
+      <button id="pack" class="main" disabled>Download evidence pack (.zip)</button>
       <button id="png" disabled>Download PNG</button>
       <button id="pdf" disabled>Download PDF</button>
       <button id="html" disabled>Download HTML backup</button>
     </div>
   </header>
   <div id="status"></div>
+  <details id="detailsBox" hidden><summary>Capture details and fingerprints</summary><pre id="details"></pre></details>
   <main id="preview"></main>
   <script src="db.js"></script>
   <script src="pdf.js"></script>
+  <script src="zip.js"></script>
+  <script src="archive.js"></script>
   <script src="viewer.js"></script>
 </body>
 </html>

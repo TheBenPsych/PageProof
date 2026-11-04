@@ -22,6 +22,40 @@ function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 60000);
 }
 
+const api = globalThis.browser || globalThis.chrome;
+
+function formatTime(rec) {
+  const opts = { dateStyle: 'medium', timeStyle: 'long' };
+  try { return new Date(rec.time).toLocaleString(undefined, { ...opts, timeZone: rec.timeZone }); }
+  catch (e) { return new Date(rec.time).toLocaleString(); }
+}
+
+function zoneLabel(rec) {
+  let offset = '';
+  try {
+    offset = new Intl.DateTimeFormat('en-US', { timeZone: rec.timeZone, timeZoneName: 'longOffset' })
+      .formatToParts(new Date(rec.time)).find(p => p.type === 'timeZoneName').value.replace('GMT', 'UTC');
+  } catch (e) { /* older browser */ }
+  if (offset === 'UTC') offset = 'UTC+00:00';
+  return (rec.timeZone || 'unknown') + (offset ? ' (' + offset + ')' : '');
+}
+
+async function sha256(bytes) {
+  const d = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return [...d].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+const bytesOf = async blob => new Uint8Array(await blob.arrayBuffer());
+
+function imageName(img, i) {
+  const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp', 'image/svg+xml': 'svg',
+    'image/avif': 'avif', 'image/bmp': 'bmp', 'image/x-icon': 'ico', 'image/vnd.microsoft.icon': 'ico' }[img.type];
+  let name = '';
+  try { name = decodeURIComponent(new URL(img.url).pathname.split('/').pop() || ''); } catch (e) { /* ignore */ }
+  name = name.replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[^\w.-]+/g, '_').slice(0, 60) || 'image';
+  return 'images/' + String(i + 1).padStart(3, '0') + '_' + name + '.' + (ext || 'bin');
+}
+
 const toBlob = (canvas, type, q) => new Promise(r => canvas.toBlob(r, type, q));
 
 async function loadBitmap(src) {
@@ -40,12 +74,11 @@ function layout(rec, s) {
   const W = Math.round(rec.main.width * s);
   const blocks = [];
   let y = 0;
-  const when = new Date(rec.time);
   const host = new URL(rec.url).hostname || rec.url;
   const u = Math.max(1, s); // size unit for text
 
-  // Banner with the web address and time, at the very top.
-  const bannerH = Math.round(84 * u);
+  // Banner with the web address, time and capture details, at the very top.
+  const bannerH = Math.round(108 * u);
   blocks.push({ y, h: bannerH, draw(ctx) {
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(0, 0, W, bannerH);
@@ -53,17 +86,25 @@ function layout(rec, s) {
     ctx.fillRect(0, bannerH - 4 * u, W, 4 * u);
     const pad = 18 * u;
     ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = '#94a3b8';
     ctx.font = (13 * u) + 'px system-ui, sans-serif';
-    const right = 'Captured ' + when.toLocaleString() + '  ·  PageProof';
-    const rightW = ctx.measureText(right).width;
-    ctx.fillText(right, W - pad - rightW, 32 * u);
+    const right = [
+      'Captured ' + formatTime(rec),
+      'Time zone: ' + zoneLabel(rec),
+      'Window ' + rec.viewWidth + ' x ' + rec.viewHeight + '  \u00b7  PageProof ' + rec.version
+    ];
+    const rightW = Math.max(...right.map(t => ctx.measureText(t).width));
+    ctx.fillStyle = '#94a3b8';
+    right.forEach((t, i) => ctx.fillText(t, W - pad - rightW, (30 + i * 22) * u));
+    const leftW = W - rightW - pad * 3;
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold ' + (26 * u) + 'px system-ui, sans-serif';
-    ctx.fillText(fitText(ctx, host, W - rightW - pad * 3), pad, 38 * u);
+    ctx.fillText(fitText(ctx, host, leftW), pad, 38 * u);
     ctx.fillStyle = '#cbd5e1';
     ctx.font = (14 * u) + 'px system-ui, sans-serif';
-    ctx.fillText(fitText(ctx, rec.url, W - pad * 2), pad, 64 * u);
+    ctx.fillText(fitText(ctx, rec.url, leftW), pad, 64 * u);
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = (13 * u) + 'px system-ui, sans-serif';
+    ctx.fillText(fitText(ctx, 'Page title: ' + (rec.title || '(none)'), leftW), pad, 88 * u);
   } });
   y += bannerH;
 
@@ -181,29 +222,88 @@ async function start() {
   $('png').disabled = false;
   $('png').onclick = () => pngs.forEach((b, i) => download(b, base + (pngs.length > 1 ? '_part' + (i + 1) : '') + '.png'));
 
-  $('pdf').disabled = false;
-  $('pdf').onclick = async () => {
-    $('pdf').disabled = true;
-    $('pdf').textContent = 'Making PDF...';
-    try {
-      const pageH = Math.round(plan.W * 1.4142); // A4 shape
-      const pages = [];
-      for (let y0 = 0; y0 < plan.H; y0 += pageH) {
-        const h = Math.min(pageH, plan.H - y0);
-        const jpg = await toBlob(renderSlice(plan, y0, h), 'image/jpeg', 0.92);
-        pages.push({ jpeg: new Uint8Array(await jpg.arrayBuffer()), width: plan.W, height: h });
-      }
-      download(makePdf(pages, { title: 'PageProof capture of ' + host, subject: rec.url + ' captured ' + rec.time }), base + '.pdf');
-    } finally {
-      $('pdf').disabled = false;
-      $('pdf').textContent = 'Download PDF';
-    }
-  };
-
-  if (rec.html) {
-    $('html').disabled = false;
-    $('html').onclick = () => download(new Blob([rec.html], { type: 'text/html' }), base + '.html');
+  // Make the PDF right away so every file is ready for the evidence pack.
+  const pageH = Math.round(plan.W * 1.4142); // A4 shape
+  const pages = [];
+  for (let y0 = 0; y0 < plan.H; y0 += pageH) {
+    const h = Math.min(pageH, plan.H - y0);
+    const jpg = await toBlob(renderSlice(plan, y0, h), 'image/jpeg', 0.92);
+    pages.push({ jpeg: await bytesOf(jpg), width: plan.W, height: h });
   }
+  const pdf = makePdf(pages, { title: 'PageProof capture of ' + host, subject: rec.url + ' captured ' + rec.time });
+  $('pdf').disabled = false;
+  $('pdf').onclick = () => download(pdf, base + '.pdf');
+
+  // HTML backup with every picture stored inside it.
+  let saved = null;
+  const buildHtml = async () => {
+    $('html').textContent = 'Saving images...';
+    saved = await PP_ARCHIVE(rec, n => { $('html').textContent = 'Saving images (' + n + ')...'; });
+    $('html').textContent = 'Download HTML backup';
+    $('html').disabled = false;
+  };
+  $('html').onclick = () => saved && download(new Blob([saved.html], { type: 'text/html' }), base + '.html');
+
+  let allowed = true;
+  try { allowed = await api.permissions.contains({ origins: ['<all_urls>'] }); } catch (e) { /* assume yes */ }
+  if (!allowed) {
+    const btn = document.createElement('button');
+    btn.textContent = 'Allow saving images';
+    notes.push('To store the pictures inside the HTML backup, PageProof needs your OK once.');
+    setStatus(notes.join(' '));
+    $('status').append(' ', btn);
+    await new Promise(resolve => {
+      btn.onclick = async () => {
+        try { await api.permissions.request({ origins: ['<all_urls>'] }); } catch (e) { /* declined */ }
+        btn.remove();
+        resolve();
+      };
+    });
+  }
+  await buildHtml();
+  if (saved.failed.length) notes.push(saved.failed.length + ' file' + (saved.failed.length > 1 ? 's' : '') + ' could not be saved into the HTML backup (they are listed in capture-details.txt).');
+  setStatus(notes.join(' '));
+
+  // Evidence pack: every file plus a details file with each file's SHA-256 fingerprint.
+  const files = [];
+  pngs.forEach((b, i) => files.push({ name: base + (pngs.length > 1 ? '_part' + (i + 1) : '') + '.png', blob: b }));
+  files.push({ name: base + '.pdf', blob: pdf });
+  files.push({ name: base + '.html', blob: new Blob([saved.html], { type: 'text/html' }) });
+  for (const f of files) f.bytes = await bytesOf(f.blob);
+  saved.images.forEach((img, i) => files.push({ name: imageName(img, i), bytes: img.bytes, url: img.url }));
+  for (const f of files) f.hash = await sha256(f.bytes);
+
+  const lines = [
+    'PAGEPROOF CAPTURE RECORD',
+    '========================',
+    '',
+    'Web address:   ' + rec.url,
+    'Domain:        ' + host,
+    'Page title:    ' + (rec.title || '(none)'),
+    'Captured:      ' + formatTime(rec),
+    'Captured UTC:  ' + rec.time,
+    'Time zone:     ' + zoneLabel(rec),
+    'Window size:   ' + rec.viewWidth + ' x ' + rec.viewHeight + ' (screen scale ' + (Math.round(s * 100) / 100) + ')',
+    'Browser:       ' + rec.userAgent,
+    'Tool:          PageProof ' + rec.version + ' (https://github.com/TheBenPsych/PageProof)',
+    '',
+    'Scroll sections captured: ' + (rec.sections.length ? '' : 'none'),
+    ...rec.sections.map(x => '  Section ' + x.n + ': ' + x.label),
+    '',
+    'FILES AND SHA-256 FINGERPRINTS',
+    'If a file is changed in any way, its fingerprint will no longer match.',
+    '',
+    ...files.flatMap(f => [f.hash + '  ' + f.name, ...(f.url ? ['    original: ' + f.url] : [])]),
+    ...(saved.failed.length ? ['', 'COULD NOT BE SAVED (blocked or removed by the website):', ...saved.failed.map(u => '  ' + u)] : []),
+    ''
+  ];
+  const details = new TextEncoder().encode(lines.join('\r\n'));
+  files.push({ name: 'capture-details.txt', bytes: details });
+  const zip = PP_ZIP(files.map(f => ({ name: f.name, bytes: f.bytes })), new Date(rec.time));
+  $('pack').disabled = false;
+  $('pack').onclick = () => download(zip, base + '_evidence.zip');
+  $('details').textContent = lines.join('\n');
+  $('detailsBox').hidden = false;
 
   // Keep only the 5 most recent captures so the browser doesn't fill up.
   const keys = (await PP_DB.keys()).sort();
