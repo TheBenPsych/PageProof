@@ -8,7 +8,7 @@ A browser extension for **Chrome and Firefox** that captures a whole web page, t
 - **Proof of where it came from:** a banner across the top shows the website's domain, the full web address, and the date and time of the capture.
 - **Scroll boxes too:** parts of the page that scroll on their own (chat panes, long tables, comment boxes) are marked "Section 1", "Section 2" and so on in the capture, and their full contents are added as numbered sections underneath the main page.
 - **Two ways to save:** PDF, and an HTML backup that stores every picture, style and font inside the file, so it still opens correctly even if the website deletes them.
-- **Evidence pack:** one .zip holding everything below, named with the date and your case number.
+- **Evidence pack:** one .zip holding everything below, named `CaseID_domain_date_time_CaptureID.zip` (for example `CASE-42_traded.co_2026-11-04_15-17-55_PP-7KQ2MX.zip`). Every capture gets its own unique Capture ID, which also appears in the PDF banner, the details file and the capture log.
   - The PDF and the HTML backup
   - `_source.html`: the page source exactly as the website's server sent it
   - `images/`: the original image files from the page

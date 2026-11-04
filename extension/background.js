@@ -74,6 +74,7 @@ async function capture(tab) {
 
   const record = {
     id: 'cap-' + Date.now(),
+    captureId: 'PP-' + [...crypto.getRandomValues(new Uint8Array(6))].map(b => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join(''),
     url: info.url,
     title: info.title,
     time: new Date().toISOString(),
@@ -134,7 +135,7 @@ async function capture(tab) {
 
   record.server = await server;
   await PP_DB.put(record);
-  await addLog({ id: record.id, time: record.time, url: record.url, title: record.title });
+  await addLog({ id: record.id, captureId: record.captureId, time: record.time, url: record.url, title: record.title });
   await api.tabs.create({ url: api.runtime.getURL('viewer.html?id=' + record.id), index: tab.index + 1 });
 }
 

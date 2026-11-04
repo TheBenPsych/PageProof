@@ -90,7 +90,7 @@ function layout(rec, s) {
     const right = [
       'Captured ' + formatTime(rec),
       'Time zone: ' + zoneLabel(rec),
-      'Window ' + rec.viewWidth + ' x ' + rec.viewHeight + '  \u00b7  PageProof ' + rec.version
+      'Capture ID ' + (rec.captureId || '-') + '  \u00b7  Window ' + rec.viewWidth + ' x ' + rec.viewHeight + '  \u00b7  PageProof ' + rec.version
     ];
     const rightW = Math.max(...right.map(t => ctx.measureText(t).width));
     ctx.fillStyle = '#94a3b8';
@@ -190,7 +190,8 @@ async function start() {
   if (!rec) { setStatus('This capture was not found. It may have been cleared. Please capture the page again.', true); return; }
 
   const host = new URL(rec.url).hostname || 'page';
-  const base = 'PageProof_' + host + '_' + stamp(new Date(rec.time));
+  const when = host + '_' + stamp(new Date(rec.time)) + (rec.captureId ? '_' + rec.captureId : '');
+  const base = 'PageProof_' + when;
   document.title = 'PageProof: ' + host;
   $('domain').textContent = host;
   $('sub').textContent = rec.url + '  ·  ' + new Date(rec.time).toLocaleString();
@@ -290,6 +291,7 @@ async function start() {
       'PAGEPROOF CAPTURE RECORD',
       '========================',
       '',
+      'Capture ID:    ' + (rec.captureId || '(none)'),
       'Web address:   ' + rec.url,
       'Domain:        ' + host,
       'Page title:    ' + (rec.title || '(none)'),
@@ -349,11 +351,12 @@ async function start() {
       { name: 'fingerprints.sha256', bytes: fpBytes },
       ...(ts.error ? [] : [{ name: 'fingerprints.sha256.tsr', bytes: ts.reply }, { name: 'fingerprints.sha256.tsq', bytes: ts.query }]),
       { name: 'capture-details.txt', bytes: new TextEncoder().encode(text) },
-      { name: 'README.txt', bytes: new TextEncoder().encode(ppReadme({ version: rec.version, url: rec.url, time: rec.time, base,
+      { name: 'README.txt', bytes: new TextEncoder().encode(ppReadme({ captureId: rec.captureId, version: rec.version, url: rec.url, time: rec.time, base,
         hasSource: !!srv.source, imageCount: saved.images.length, ts })) }
     ];
     const zip = PP_ZIP([...files, ...extra].map(f => ({ name: f.name, bytes: f.bytes })), new Date(rec.time));
-    const zipName = base + (c.caseRef ? '_' + c.caseRef.replace(/[^\w.-]+/g, '_').slice(0, 40) : '') + '_evidence.zip';
+    // Name: CaseID_domain_date_time_CaptureID.zip (case ID first when entered).
+    const zipName = (c.caseRef ? c.caseRef.replace(/[^\w.-]+/g, '_').slice(0, 40) + '_' : '') + when + '.zip';
     download(zip, zipName);
     const zipHash = await sha256(await bytesOf(zip));
     try {

@@ -11,6 +11,7 @@ function ppReadme(o) {
     'This folder is a record of the web page below, captured with PageProof ' + o.version + ',',
     'a browser extension (source code: https://github.com/TheBenPsych/PageProof).',
     '',
+    '  Capture ID:   ' + (o.captureId || '(none)'),
     '  Web address:  ' + o.url,
     '  Captured:     ' + o.time + ' (UTC)',
     '',

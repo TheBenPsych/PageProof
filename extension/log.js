@@ -7,7 +7,7 @@ async function load() {
   for (const e of [...log].reverse()) {
     const saves = e.saves && e.saves.length ? e.saves : [{}];
     for (const s of saves) {
-      rows.push([new Date(e.time).toLocaleString(), e.url, e.title || '', s.caseRef || '', s.collector || '',
+      rows.push([new Date(e.time).toLocaleString() + (e.captureId ? ' (' + e.captureId + ')' : ''), e.url, e.title || '', s.caseRef || '', s.collector || '',
         s.at ? new Date(s.at).toLocaleString() + ' - ' + s.file : '(not saved)', s.sha256 || '',
         s.timestamp ? s.timestamp + ' (' + s.tsa + ')' : '', s.notes || '']);
     }
