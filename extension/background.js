@@ -46,27 +46,28 @@ async function capture(tab) {
     viewWidth: info.viewWidth,
     innerWidth: info.innerWidth,
     html: info.html,
-    main: { width: info.viewWidth, height: 0, tiles: [] },
+    main: { width: info.viewWidth, height: 0, tiles: [], background: info.background },
     sections: [],
     notes: []
   };
 
   try {
-    // 1) The main page, one screen at a time.
-    let y = 0, prevY = -1;
+    // 1) The main page, one screen at a time, starting from the very top.
+    let y = 0, prevNext = -1;
     for (let i = 0; i < MAX_PAGE_SHOTS; i++) {
       progress(String(i + 1));
       const at = await inPage(tabId, 'scrollPage', y);
-      await sleep(SETTLE_MS);
+      await sleep(i === 0 ? SETTLE_MS * 2 : SETTLE_MS);
       const shot = await shoot(windowId);
-      record.main.tiles.push({ src: shot, crop: { x: 0, y: 0, w: info.viewWidth, h: at.viewHeight }, destY: at.y });
-      record.main.height = Math.max(record.main.height, at.y + at.viewHeight);
+      record.main.tiles.push({ src: shot, crop: at.crop, destX: at.crop.x, destY: at.destY });
+      record.main.height = Math.max(record.main.height, at.total, at.destY + at.crop.h);
       if (i === 0) await inPage(tabId, 'hideFixed');
-      if (at.y + at.viewHeight >= info.fullHeight - 1 || at.y <= prevY) break;
-      prevY = at.y;
-      y = at.y + at.viewHeight;
+      if (at.done || at.next <= prevNext) break;
+      prevNext = at.next;
+      y = at.next;
       if (i === MAX_PAGE_SHOTS - 1) record.notes.push('This page was very long, so the capture stops after ' + MAX_PAGE_SHOTS + ' screens.');
     }
+    record.main.height = Math.min(record.main.height, Math.max(...record.main.tiles.map(t => t.destY + t.crop.h)));
 
     // 2) Each scrollable box, scrolled from top to bottom.
     await inPage(tabId, 'removeBadges');

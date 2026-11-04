@@ -8,6 +8,8 @@
   const badges = [];      // the numbered labels we drew on the page
   let targets = [];       // scrollable boxes found on the page
   let start = null;       // where the page was scrolled before we began
+  let pageEl = null;      // on sites where the page scrolls inside a big box instead of the window
+  let pageElStart = 0;
 
   const instant = { behavior: 'instant' };
   const scroller = () => document.scrollingElement || document.documentElement;
@@ -19,6 +21,33 @@
     if (cs.visibility === 'hidden' || cs.display === 'none') return false;
     if (el.scrollHeight - el.clientHeight < 20) return false;
     return el.clientHeight >= 60 && el.clientWidth >= 100;
+  }
+
+  function visibleArea(el) {
+    const r = el.getBoundingClientRect();
+    const w = Math.min(r.right, document.documentElement.clientWidth) - Math.max(r.left, 0);
+    const h = Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0);
+    return w > 0 && h > 0 ? w * h : 0;
+  }
+
+  function pageBackground() {
+    for (const el of [pageEl, document.body, document.documentElement]) {
+      if (!el) continue;
+      const c = getComputedStyle(el).backgroundColor;
+      if (c && c !== 'transparent' && !/rgba\(.*,\s*0\)$/.test(c)) return c;
+    }
+    return '#ffffff';
+  }
+
+  // Keep each "Section N" label pinned to the top-left corner of its box as we scroll.
+  function placeBadges() {
+    for (const t of targets) {
+      const r = t.el.getBoundingClientRect();
+      const out = r.bottom < 0 || r.top > window.innerHeight || r.width === 0;
+      t.badge.style.display = out ? 'none' : 'block';
+      t.badge.style.left = Math.max(0, r.left) + 'px';
+      t.badge.style.top = r.top + 'px';
+    }
   }
 
   function labelFor(el) {
@@ -48,32 +77,42 @@
     }
 
     // Find scrollable boxes inside the page, biggest first.
-    targets = [...document.querySelectorAll('body *')]
+    let found = [...document.querySelectorAll('body *')]
       .filter(isScrollable)
-      .sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)
+      .sort((a, b) => visibleArea(b) - visibleArea(a));
+
+    // Some sites (web apps) keep the window still and scroll the whole page inside one
+    // big box. Treat that box as the page itself, not as a separate section.
+    const vw = document.documentElement.clientWidth, vh = window.innerHeight;
+    pageEl = null;
+    if (found.length && se.scrollHeight <= vh + 5 && visibleArea(found[0]) >= 0.4 * vw * vh) {
+      pageEl = found.shift();
+      pageElStart = pageEl.scrollTop;
+    }
+
+    targets = found
+      .filter(el => visibleArea(el) > 0 || el.getBoundingClientRect().height > 0)
       .slice(0, MAX_SECTIONS)
       .map((el, i) => ({ el, n: i + 1, label: labelFor(el), startTop: el.scrollTop, outline: el.style.outline }));
 
     // Mark each one with a numbered label so the main capture points to its section below.
     for (const t of targets) {
       t.el.style.outline = '3px dashed #e11d48';
-      const r = t.el.getBoundingClientRect();
       const b = document.createElement('div');
       b.textContent = 'Section ' + t.n + ' (see below)';
-      b.style.cssText = 'position:absolute;z-index:2147483647;background:#e11d48;color:#fff;' +
+      b.style.cssText = 'position:fixed;z-index:2147483647;background:#e11d48;color:#fff;' +
         'font:bold 13px/1.4 system-ui,sans-serif;padding:2px 8px;border-radius:0 0 6px 0;' +
         'pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.4);';
-      b.style.left = (r.left + window.scrollX) + 'px';
-      b.style.top = (r.top + window.scrollY) + 'px';
-      document.body.appendChild(b);
+      document.documentElement.appendChild(b);
       badges.push(b);
+      t.badge = b;
     }
 
     return {
       url: location.href,
       title: document.title,
-      fullHeight: Math.max(se.scrollHeight, document.body ? document.body.scrollHeight : 0),
       viewWidth: document.documentElement.clientWidth,
+      background: pageBackground(),
       viewHeight: window.innerHeight,
       innerWidth: window.innerWidth,
       sections: targets.map(t => ({ n: t.n, label: t.label })),
@@ -81,10 +120,33 @@
     };
   }
 
-  // Scroll the main page and report where it actually landed.
+  // Scroll the main page to y and say which part of the screen to keep,
+  // where it goes in the final picture, and where to scroll next.
   function scrollPage(y) {
-    window.scrollTo({ left: 0, top: y, ...instant });
-    return { y: window.scrollY, viewHeight: document.documentElement.clientHeight || window.innerHeight };
+    const vw = document.documentElement.clientWidth, vh = window.innerHeight;
+    let res;
+    if (!pageEl) {
+      const se = scroller();
+      window.scrollTo({ left: 0, top: y, ...instant });
+      const at = window.scrollY, total = Math.max(se.scrollHeight, document.body ? document.body.scrollHeight : 0);
+      res = { crop: { x: 0, y: 0, w: vw, h: vh }, destY: at, total, next: at + vh, done: at + vh >= total - 1 };
+    } else {
+      pageEl.scrollTo({ top: y, ...instant });
+      const st = pageEl.scrollTop, max = pageEl.scrollHeight - pageEl.clientHeight;
+      const r = pageEl.getBoundingClientRect();
+      const top = Math.ceil(Math.max(0, r.top + pageEl.clientTop));
+      const bottom = Math.floor(Math.min(vh, r.top + pageEl.clientTop + pageEl.clientHeight));
+      const left = Math.ceil(Math.max(0, r.left + pageEl.clientLeft));
+      const right = Math.floor(Math.min(vw, r.left + pageEl.clientLeft + pageEl.clientWidth));
+      const total = top + pageEl.scrollHeight + Math.max(0, vh - bottom);
+      // The first screen keeps everything (header, side menu). After that, only the scrolling box.
+      res = st === 0
+        ? { crop: { x: 0, y: 0, w: vw, h: vh }, destY: 0 }
+        : { crop: { x: left, y: top, w: right - left, h: bottom - top }, destY: top + st };
+      Object.assign(res, { total, next: st + (bottom - top), done: st >= max - 1 });
+    }
+    placeBadges();
+    return res;
   }
 
   // After the first screenshot, hide headers/bars that stick to the screen,
@@ -94,7 +156,7 @@
       if (badges.includes(el)) continue;
       const pos = getComputedStyle(el).position;
       if (pos !== 'fixed' && pos !== 'sticky') continue;
-      if (targets.some(t => el.contains(t.el))) continue;
+      if (targets.some(t => el.contains(t.el)) || (pageEl && el.contains(pageEl))) continue;
       hidden.push([el, el.style.visibility]);
       el.style.setProperty('visibility', 'hidden', 'important');
     }
@@ -134,6 +196,7 @@
     hidden.forEach(([el, v]) => { el.style.visibility = v; });
     hidden.length = 0;
     targets.forEach(t => { if (t.el.isConnected) t.el.scrollTop = t.startTop; });
+    if (pageEl && pageEl.isConnected) pageEl.scrollTop = pageElStart;
     if (start) window.scrollTo({ left: start.x, top: start.y, ...instant });
   }
 

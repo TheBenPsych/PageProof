@@ -13,7 +13,7 @@ A browser extension for **Chrome and Firefox** that captures a whole web page, t
 
 1. Go to any normal website.
 2. Click the PageProof icon in your toolbar (or press **Alt+Shift+P**).
-3. Wait a few seconds while it scrolls. The icon shows a counter while it works. Don't scroll or switch tabs until it finishes.
+3. It jumps to the top of the page, then scrolls down while it captures. The icon shows a counter while it works. Don't scroll or switch tabs until it finishes.
 4. A new tab opens with your capture. Click **Download PNG**, **Download PDF**, or **Download HTML backup**.
 
 ## Install it
@@ -44,6 +44,7 @@ Firefox removes "temporary" add-ons when it closes, so you'd repeat these steps 
 ## Good to know
 
 - Browser pages like the new tab page, settings, and the add-on stores can't be captured. Browsers block that for safety.
+- Sites that scroll inside a big box instead of the whole window (many web apps) are captured as one normal page, not as a separate section.
 - Sticky headers and menus appear once at the top instead of repeating down the page.
 - Very long pages stop after 60 screens. Very tall captures download as more than one PNG part, but the PDF is always one file.
 - The HTML backup saves the page's text and layout. Pictures in it still load from the original website, so the PNG or PDF is your real proof.

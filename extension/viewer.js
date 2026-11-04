@@ -68,10 +68,11 @@ function layout(rec, s) {
   y += bannerH;
 
   const tileBlock = (part, x0, f) => ({ y, h: Math.round(part.height * s * f), draw(ctx) {
+    if (part.background) { ctx.fillStyle = part.background; ctx.fillRect(0, 0, W, this.h); }
     for (const t of part.tiles) {
       const c = t.crop;
       ctx.drawImage(t.bmp, Math.round(c.x * s), Math.round(c.y * s), Math.round(c.w * s), Math.round(c.h * s),
-        x0, Math.round(t.destY * s * f), Math.round(c.w * s * f), Math.round(c.h * s * f));
+        x0 + Math.round((t.destX || 0) * s * f), Math.round(t.destY * s * f), Math.round(c.w * s * f), Math.round(c.h * s * f));
     }
   } });
 
