@@ -202,12 +202,10 @@ async function start() {
   const s = rec.main.tiles[0].bmp.width / rec.innerWidth; // screen sharpness (device pixel ratio)
   const plan = layout(rec, s);
 
-  // Browsers limit how tall one picture can be, so very long pages become several PNG parts.
+  // On-screen preview only (browsers limit how tall one picture can be, so long pages show in parts).
   const maxH = Math.min(30000, Math.floor(200e6 / plan.W));
-  const pngs = [];
   for (let y0 = 0; y0 < plan.H; y0 += maxH) {
-    const blob = await toBlob(renderSlice(plan, y0, Math.min(maxH, plan.H - y0)), 'image/png');
-    pngs.push(blob);
+    const blob = await toBlob(renderSlice(plan, y0, Math.min(maxH, plan.H - y0)), 'image/jpeg', 0.85);
     const img = new Image();
     img.src = URL.createObjectURL(blob);
     img.width = Math.round(plan.W / s);
@@ -216,11 +214,7 @@ async function start() {
 
   const notes = [...rec.notes];
   if (rec.sections.length) notes.push(rec.sections.length + ' scroll box' + (rec.sections.length > 1 ? 'es were' : ' was') + ' found and added as numbered sections at the bottom.');
-  if (pngs.length > 1) notes.push('This page is very tall, so the PNG download comes in ' + pngs.length + ' parts.');
   setStatus(notes.join(' '));
-
-  $('png').disabled = false;
-  $('png').onclick = () => pngs.forEach((b, i) => download(b, base + (pngs.length > 1 ? '_part' + (i + 1) : '') + '.png'));
 
   // Make the PDF right away so every file is ready for the evidence pack.
   const pageH = Math.round(plan.W * 1.4142); // A4 shape
@@ -267,7 +261,6 @@ async function start() {
   // Evidence pack: every file, its SHA-256 fingerprint, and a trusted timestamp.
   const srv = rec.server || {};
   const files = [];
-  pngs.forEach((b, i) => files.push({ name: base + (pngs.length > 1 ? '_part' + (i + 1) : '') + '.png', blob: b }));
   files.push({ name: base + '.pdf', blob: pdf });
   files.push({ name: base + '.html', blob: new Blob([saved.html], { type: 'text/html' }) });
   for (const f of files) f.bytes = await bytesOf(f.blob);

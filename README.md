@@ -7,9 +7,9 @@ A browser extension for **Chrome and Firefox** that captures a whole web page, t
 - **Whole page:** scrolls the page for you and stitches it into one tall image. Images, embeds and videos are captured exactly as they look on screen (videos as a still frame).
 - **Proof of where it came from:** a banner across the top shows the website's domain, the full web address, and the date and time of the capture.
 - **Scroll boxes too:** parts of the page that scroll on their own (chat panes, long tables, comment boxes) are marked "Section 1", "Section 2" and so on in the capture, and their full contents are added as numbered sections underneath the main page.
-- **Three ways to save:** PNG (image), PDF, and an HTML backup that stores every picture, style and font inside the file, so it still opens correctly even if the website deletes them.
+- **Two ways to save:** PDF, and an HTML backup that stores every picture, style and font inside the file, so it still opens correctly even if the website deletes them.
 - **Evidence pack:** one .zip holding everything below, named with the date and your case number.
-  - PNG, PDF and the HTML backup
+  - The PDF and the HTML backup
   - `_source.html`: the page source exactly as the website's server sent it
   - `images/`: the original image files from the page
   - `fingerprints.sha256`: a SHA-256 fingerprint for every file
@@ -23,14 +23,14 @@ A browser extension for **Chrome and Firefox** that captures a whole web page, t
 2. Click the PageProof icon in your toolbar (or press **Alt+Shift+P**).
 3. It jumps to the top of the page, then scrolls down while it captures. The icon shows a counter while it works. Don't scroll or switch tabs until it finishes.
 4. A new tab opens with your capture. Fill in **Collected by**, **Case / reference number** and any **Notes** (your name and last case number are remembered).
-5. Then click **Download evidence pack (.zip)** to get everything at once, or download the PNG, PDF or HTML backup on their own.
+5. Then click **Download evidence pack (.zip)** to get everything at once, or download the PDF or HTML backup on their own.
 
 ## Checking a fingerprint later
 
 Each file's SHA-256 fingerprint is listed in `capture-details.txt`. If even one pixel or letter of a file changes, its fingerprint changes. To check a file:
 
-- **Windows:** open Command Prompt and type `certutil -hashfile "C:\path\to\file.png" SHA256`
-- **Mac:** open Terminal and type `shasum -a 256 /path/to/file.png`
+- **Windows:** open Command Prompt and type `certutil -hashfile "C:\path\to\file.pdf" SHA256`
+- **Mac:** open Terminal and type `shasum -a 256 /path/to/file.pdf`
 
 Compare the result with the line in `capture-details.txt`. If they match, the file has not been changed since it was captured.
 
@@ -80,7 +80,7 @@ Firefox removes "temporary" add-ons when it closes, so you'd repeat these steps 
 - Browser pages like the new tab page, settings, and the add-on stores can't be captured. Browsers block that for safety.
 - Sites that scroll inside a big box instead of the whole window (many web apps) are captured as one normal page, not as a separate section.
 - Sticky headers and menus appear once at the top instead of repeating down the page.
-- Very long pages stop after 60 screens. Very tall captures download as more than one PNG part, but the PDF is always one file.
+- Very long pages stop after 60 screens. The PDF is always one file, however long the page.
 - PageProof asks to "access data on all websites" so it can save the page's pictures, ask the server for its details, and get the timestamp. It only does this when you click capture. The only thing sent anywhere else is the fingerprint code, to the timestamp service.
 - Your capture log lives in this browser. Download it as a .csv now and then to keep a copy.
 - Keep your evidence zips unchanged, ideally with a copy on a separate drive. Opening them is fine, but re-saving or editing a file breaks its fingerprint.
