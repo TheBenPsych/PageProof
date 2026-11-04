@@ -3,12 +3,15 @@ if (typeof PP_DB === 'undefined' && typeof importScripts === 'function') importS
 
 const api = globalThis.browser || globalThis.chrome;
 const MAX_PAGE_SHOTS = 60;     // stop after this many screens on very long pages
-const MAX_SECTION_SHOTS = 25;  // per scrollable section
+const MAX_SECTION_SHOTS = 40;  // per scrollable section
+const MAX_SLIDES = 20;         // per carousel
+const SLIDE_MS = 900;          // wait for a carousel to finish sliding
 const SETTLE_MS = 350;         // wait for things to draw after each scroll
 const MIN_GAP_MS = 600;        // browsers allow only ~2 screenshots per second
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let busy = false;
+let stopRequested = false;
 let lastShot = 0;
 
 async function inPage(tabId, name, ...args) {
@@ -28,6 +31,7 @@ async function shoot(windowId) {
 }
 
 function progress(text) {
+  if (stopRequested) return;
   api.action.setBadgeBackgroundColor({ color: '#2563eb' });
   api.action.setBadgeText({ text });
 }
@@ -103,32 +107,89 @@ async function capture(tab) {
       record.main.tiles.push({ src: shot, crop: at.crop, destX: at.crop.x, destY: at.destY });
       record.main.height = Math.max(record.main.height, at.total, at.destY + at.crop.h);
       if (i === 0) await inPage(tabId, 'hideFixed');
-      if (at.done || at.next <= prevNext) break;
+      if (at.grew && !record.notes.some(n => n.includes('kept loading'))) record.notes.push('This page kept loading more content as it scrolled (endless scrolling), so the capture stopped where the page ended when you clicked.');
+      if (stopRequested || at.done || at.next <= prevNext) break;
       prevNext = at.next;
       y = at.next;
       if (i === MAX_PAGE_SHOTS - 1) record.notes.push('This page was very long, so the capture stops after ' + MAX_PAGE_SHOTS + ' screens.');
     }
+    await sleep(400);
+    if (!record.notes.some(n => n.includes('kept loading')) && await inPage(tabId, 'grewNow')) record.notes.push('This page kept loading more content as it scrolled (endless scrolling), so the capture stopped where the page ended when you clicked.');
     record.main.height = Math.min(record.main.height, Math.max(...record.main.tiles.map(t => t.destY + t.crop.h)));
 
-    // 2) Each scrollable box, scrolled from top to bottom.
+    // 2) Extra sections: scroll boxes, carousels, fold-outs, dropdown lists.
     await inPage(tabId, 'removeBadges');
     for (const s of info.sections) {
+      if (stopRequested) break;
       progress('S' + s.n);
-      const sec = { n: s.n, label: s.label, width: 0, height: 0, tiles: [] };
-      let top = 0;
-      for (let i = 0; i < MAX_SECTION_SHOTS; i++) {
-        const at = await inPage(tabId, 'scrollSection', s.n, top, i === 0);
-        if (!at) break;
-        await sleep(SETTLE_MS);
-        const shot = await shoot(windowId);
-        sec.tiles.push({ src: shot, crop: at.crop, destY: at.contentY });
-        sec.width = Math.max(sec.width, at.crop.w);
-        sec.height = Math.max(sec.height, at.contentY + at.crop.h);
-        if (at.scrollTop >= at.maxScroll - 1) break;
-        top = at.scrollTop + at.crop.h;
+      const sec = { n: s.n, kind: s.kind, label: s.label, axes: s.axes, width: 0, height: 0, tiles: [] };
+      const add = (shot, at, x, y) => {
+        sec.tiles.push({ src: shot, crop: at.crop, destX: x, destY: y });
+        sec.width = Math.max(sec.width, x + at.crop.w);
+        sec.height = Math.max(sec.height, y + at.crop.h);
+      };
+
+      if (s.kind === 'select') {
+        sec.options = s.options;
+        record.sections.push(sec);
+        continue;
       }
+
+      if (s.kind === 'scroll') {
+        // Scroll down row by row, and across each row for sideways boxes.
+        let top = 0, shots = 0;
+        rows: for (;;) {
+          let left = 0, at = null;
+          for (;;) {
+            if (stopRequested || shots++ >= MAX_SECTION_SHOTS) break rows;
+            at = await inPage(tabId, 'scrollSection', s.n, left, top, shots === 1);
+            if (!at) break rows;
+            await sleep(SETTLE_MS);
+            add(await shoot(windowId), at, at.contentX, at.contentY);
+            if (at.scrollLeft >= at.maxX - 1) break;
+            left = at.scrollLeft + at.crop.w;
+          }
+          if (at.scrollTop >= at.maxY - 1) break;
+          top = at.scrollTop + at.crop.h;
+        }
+      }
+
+      if (s.kind === 'details') {
+        if (await inPage(tabId, 'openDetails', s.n)) {
+          await sleep(SETTLE_MS);
+          for (let step = 0; step < MAX_SECTION_SHOTS && !stopRequested; step++) {
+            const at = await inPage(tabId, 'sectionPart', s.n, step);
+            if (!at) break;
+            await sleep(SETTLE_MS);
+            add(await shoot(windowId), at, at.contentX, at.contentY);
+            if (at.done) break;
+          }
+          await inPage(tabId, 'closeDetails', s.n);
+        }
+      }
+
+      if (s.kind === 'carousel') {
+        // Click "next" until the slides start repeating. Slides are stacked top to bottom.
+        let y = 0;
+        for (let k = 0; k < MAX_SLIDES && !stopRequested; k++) {
+          if (k > 0) {
+            const moved = await inPage(tabId, 'carouselNext', s.n);
+            if (!moved || !moved.ok) break;
+            await sleep(SLIDE_MS);
+            if (!(await inPage(tabId, 'carouselIsNew', s.n))) break;
+          }
+          const at = await inPage(tabId, 'sectionPart', s.n, 0);
+          if (!at) break;
+          await sleep(SETTLE_MS);
+          add(await shoot(windowId), at, 0, y);
+          y += at.crop.h + 16;
+        }
+        sec.slides = sec.tiles.length;
+      }
+
       if (sec.tiles.length) record.sections.push(sec);
     }
+    if (stopRequested) record.notes.push('You stopped this capture early, so it holds only what was captured up to that point.');
   } finally {
     await inPage(tabId, 'restore').catch(() => {});
   }
@@ -140,8 +201,15 @@ async function capture(tab) {
 }
 
 api.action.onClicked.addListener(async tab => {
-  if (busy) return;
+  if (busy) {
+    // Clicking again during a capture stops it and keeps what was captured so far.
+    stopRequested = true;
+    api.action.setBadgeBackgroundColor({ color: '#e11d48' });
+    api.action.setBadgeText({ text: 'STOP' });
+    return;
+  }
   busy = true;
+  stopRequested = false;
   try {
     await capture(tab);
   } catch (err) {
@@ -149,6 +217,7 @@ api.action.onClicked.addListener(async tab => {
     await api.tabs.create({ url: api.runtime.getURL('viewer.html?error=' + encodeURIComponent(msg)) });
   } finally {
     busy = false;
+    stopRequested = false;
     api.action.setBadgeText({ text: '' });
   }
 });

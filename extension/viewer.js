@@ -121,11 +121,23 @@ function layout(rec, s) {
   blocks.push(main);
   y += main.h;
 
-  // Each scrollable section, under the main capture.
+  // Each extra section, under the main capture.
+  const pad = Math.round(16 * u);
+  const availW = W - pad * 2;
+  const describe = sec => ({
+    scroll: sec.axes && sec.axes.x && !sec.axes.y
+      ? 'Full contents of the side-scrolling area marked "Section ' + sec.n + '" above (shown in rows, left to right).'
+      : 'Full contents of the scroll box marked "Section ' + sec.n + '" in the capture above.',
+    carousel: 'All ' + (sec.slides || sec.tiles.length) + ' slide(s) of the carousel marked "Section ' + sec.n + '" above, shown in order from top to bottom.',
+    details: 'The closed fold-out area marked "Section ' + sec.n + '" above, opened to show what is inside.',
+    select: 'Every choice in the dropdown list marked "Section ' + sec.n + '" above. [x] = the choice selected when captured.'
+  })[sec.kind || 'scroll'];
+
   for (const sec of rec.sections) {
     const headH = Math.round(56 * u);
-    const pad = Math.round(16 * u);
-    const label = 'Section ' + sec.n + ': ' + sec.label;
+    const kindName = { scroll: 'Scroll box', carousel: 'Carousel', details: 'Fold-out', select: 'Dropdown list' }[sec.kind || 'scroll'];
+    const label = 'Section ' + sec.n + ' (' + kindName + '): ' + sec.label;
+    const note = describe(sec);
     blocks.push({ y, h: headH, draw(ctx) {
       ctx.fillStyle = '#f8fafc';
       ctx.fillRect(0, 0, W, headH);
@@ -137,20 +149,63 @@ function layout(rec, s) {
       ctx.fillText(fitText(ctx, label, W - pad * 3), pad + 8 * u, 26 * u);
       ctx.fillStyle = '#475569';
       ctx.font = (13 * u) + 'px system-ui, sans-serif';
-      ctx.fillText('Full contents of the scroll box marked "Section ' + sec.n + '" in the capture above.', pad + 8 * u, 46 * u);
+      ctx.fillText(fitText(ctx, note, W - pad * 3), pad + 8 * u, 46 * u);
     } });
     y += headH;
-    const f = Math.min(1, (W - pad * 2) / (sec.width * s));
-    const body = tileBlock(sec, pad, f);
-    const bodyH = body.h + pad * 2;
+
+    if (sec.kind === 'select') {
+      // Write out the choices in columns.
+      const lineH = Math.round(20 * u);
+      const colW = Math.round(300 * u);
+      const cols = Math.max(1, Math.floor(availW / colW));
+      const perCol = Math.ceil(sec.options.length / cols) || 1;
+      const bodyH = perCol * lineH + pad * 2;
+      blocks.push({ y, h: bodyH, draw(ctx) {
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(0, 0, W, bodyH);
+        ctx.font = (14 * u) + 'px system-ui, sans-serif';
+        sec.options.forEach((o, k) => {
+          const cx = pad + Math.floor(k / perCol) * colW, cy = pad + (k % perCol) * lineH + 14 * u;
+          ctx.fillStyle = o.selected ? '#0f172a' : (o.disabled ? '#94a3b8' : '#334155');
+          ctx.font = (o.selected ? 'bold ' : '') + (14 * u) + 'px system-ui, sans-serif';
+          ctx.fillText(fitText(ctx, (o.selected ? '[x] ' : '[ ] ') + o.text, colW - 10 * u), cx, cy);
+        });
+      } });
+      y += bodyH;
+      continue;
+    }
+
+    // Picture sections. Very wide content is cut into rows that fit the page width.
+    const secW = sec.width * s, secH = sec.height * s;
+    let f = 1, rows = 1;
+    if (secW > availW) {
+      if (secW <= availW * 1.5) f = availW / secW;
+      else rows = Math.ceil(secW / availW);
+    }
+    const rowGap = Math.round(12 * u);
+    const rowH = Math.round(secH * f);
+    const bodyH = rows * rowH + (rows - 1) * rowGap + pad * 2;
     blocks.push({ y, h: bodyH, draw(ctx) {
       ctx.fillStyle = '#f8fafc';
       ctx.fillRect(0, 0, W, bodyH);
-      ctx.translate(0, pad);
-      ctx.beginPath();
-      ctx.rect(pad, 0, W - pad * 2, body.h);
-      ctx.clip();
-      body.draw(ctx);
+      for (let k = 0; k < rows; k++) {
+        ctx.save();
+        ctx.translate(pad, pad + k * (rowH + rowGap));
+        ctx.beginPath();
+        ctx.rect(0, 0, availW, rowH);
+        ctx.clip();
+        for (const t of sec.tiles) {
+          const c = t.crop;
+          ctx.drawImage(t.bmp, Math.round(c.x * s), Math.round(c.y * s), Math.round(c.w * s), Math.round(c.h * s),
+            Math.round(t.destX * s * f) - k * availW, Math.round(t.destY * s * f), Math.round(c.w * s * f), Math.round(c.h * s * f));
+        }
+        ctx.restore();
+        if (k < rows - 1) {
+          ctx.fillStyle = '#e11d48';
+          ctx.font = (11 * u) + 'px system-ui, sans-serif';
+          ctx.fillText('continues below ↓', W - pad - 110 * u, pad + k * (rowH + rowGap) + rowH + 10 * u);
+        }
+      }
     } });
     y += bodyH;
   }
@@ -214,7 +269,7 @@ async function start() {
   }
 
   const notes = [...rec.notes];
-  if (rec.sections.length) notes.push(rec.sections.length + ' scroll box' + (rec.sections.length > 1 ? 'es were' : ' was') + ' found and added as numbered sections at the bottom.');
+  if (rec.sections.length) notes.push(rec.sections.length + ' extra section' + (rec.sections.length > 1 ? 's' : '') + ' (scroll boxes, carousels, fold-outs, dropdown lists) added at the bottom.');
   setStatus(notes.join(' '));
 
   // Make the PDF right away so every file is ready for the evidence pack.
@@ -327,8 +382,8 @@ async function start() {
         'How to check:  see "Checking the trusted timestamp" in the PageProof README.'
       ]),
       '',
-      'Scroll sections captured: ' + (rec.sections.length ? '' : 'none'),
-      ...rec.sections.map(x => '  Section ' + x.n + ': ' + x.label),
+      'Extra sections captured: ' + (rec.sections.length ? '' : 'none'),
+      ...rec.sections.map(x => '  Section ' + x.n + ' (' + (x.kind || 'scroll') + '): ' + x.label + (x.kind === 'carousel' ? ' - ' + x.slides + ' slide(s)' : '')),
       '',
       'FILES AND SHA-256 FINGERPRINTS',
       'If a file is changed in any way, its fingerprint will no longer match.',
