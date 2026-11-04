@@ -18,15 +18,22 @@
       <button id="png" disabled>Download PNG</button>
       <button id="pdf" disabled>Download PDF</button>
       <button id="html" disabled>Download HTML backup</button>
+      <a class="link" href="log.html" target="_blank">Capture log</a>
     </div>
   </header>
   <div id="status"></div>
+  <section id="caseBox" hidden>
+    <label>Collected by <input id="collector" autocomplete="name"></label>
+    <label>Case / reference number <input id="caseRef"></label>
+    <label class="wide">Notes <textarea id="caseNotes" rows="2" placeholder="For example: infringing use of client photo on product page"></textarea></label>
+  </section>
   <details id="detailsBox" hidden><summary>Capture details and fingerprints</summary><pre id="details"></pre></details>
   <main id="preview"></main>
   <script src="db.js"></script>
   <script src="pdf.js"></script>
   <script src="zip.js"></script>
   <script src="archive.js"></script>
+  <script src="tsa.js"></script>
   <script src="viewer.js"></script>
 </body>
 </html>

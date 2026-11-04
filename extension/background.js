@@ -32,6 +32,40 @@ function progress(text) {
   api.action.setBadgeText({ text });
 }
 
+// Ask the website's server for the page again, to record the server's own
+// details (address, clock, response headers) and the page source exactly as sent.
+async function serverCheck(url) {
+  const out = { requestedAt: new Date().toISOString() };
+  let ip = null;
+  const onDone = d => { if (d.tabId === -1 && d.ip) ip = d.ip; };
+  try { api.webRequest.onCompleted.addListener(onDone, { urls: ['<all_urls>'] }); } catch (e) { /* not available */ }
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 20000);
+    const res = await fetch(url, { credentials: 'include', cache: 'no-store', redirect: 'follow', signal: ctl.signal });
+    clearTimeout(timer);
+    out.status = res.status + ' ' + res.statusText;
+    out.finalUrl = res.url;
+    out.headers = [...res.headers.entries()];
+    const buf = new Uint8Array(await res.arrayBuffer());
+    out.source = buf.length <= 30e6 ? buf : null;
+    out.sourceBytes = buf.length;
+  } catch (e) {
+    out.error = String((e && e.message) || e);
+  } finally {
+    await sleep(200);
+    try { api.webRequest.onCompleted.removeListener(onDone); } catch (e) { /* ignore */ }
+  }
+  out.ip = ip;
+  return out;
+}
+
+async function addLog(entry) {
+  const { log = [] } = await api.storage.local.get('log');
+  log.push(entry);
+  await api.storage.local.set({ log });
+}
+
 async function capture(tab) {
   const tabId = tab.id;
   const windowId = tab.windowId;
@@ -54,6 +88,8 @@ async function capture(tab) {
     sections: [],
     notes: []
   };
+
+  const server = serverCheck(info.url);
 
   try {
     // 1) The main page, one screen at a time, starting from the very top.
@@ -96,7 +132,9 @@ async function capture(tab) {
     await inPage(tabId, 'restore').catch(() => {});
   }
 
+  record.server = await server;
   await PP_DB.put(record);
+  await addLog({ id: record.id, time: record.time, url: record.url, title: record.title });
   await api.tabs.create({ url: api.runtime.getURL('viewer.html?id=' + record.id), index: tab.index + 1 });
 }
 

@@ -264,46 +264,113 @@ async function start() {
   if (saved.failed.length) notes.push(saved.failed.length + ' file' + (saved.failed.length > 1 ? 's' : '') + ' could not be saved into the HTML backup (they are listed in capture-details.txt).');
   setStatus(notes.join(' '));
 
-  // Evidence pack: every file plus a details file with each file's SHA-256 fingerprint.
+  // Evidence pack: every file, its SHA-256 fingerprint, and a trusted timestamp.
+  const srv = rec.server || {};
   const files = [];
   pngs.forEach((b, i) => files.push({ name: base + (pngs.length > 1 ? '_part' + (i + 1) : '') + '.png', blob: b }));
   files.push({ name: base + '.pdf', blob: pdf });
   files.push({ name: base + '.html', blob: new Blob([saved.html], { type: 'text/html' }) });
   for (const f of files) f.bytes = await bytesOf(f.blob);
+  if (srv.source) files.push({ name: base + '_source.html', bytes: srv.source });
   saved.images.forEach((img, i) => files.push({ name: imageName(img, i), bytes: img.bytes, url: img.url }));
   for (const f of files) f.hash = await sha256(f.bytes);
 
-  const lines = [
-    'PAGEPROOF CAPTURE RECORD',
-    '========================',
-    '',
-    'Web address:   ' + rec.url,
-    'Domain:        ' + host,
-    'Page title:    ' + (rec.title || '(none)'),
-    'Captured:      ' + formatTime(rec),
-    'Captured UTC:  ' + rec.time,
-    'Time zone:     ' + zoneLabel(rec),
-    'Window size:   ' + rec.viewWidth + ' x ' + rec.viewHeight + ' (screen scale ' + (Math.round(s * 100) / 100) + ')',
-    'Browser:       ' + rec.userAgent,
-    'Tool:          PageProof ' + rec.version + ' (https://github.com/TheBenPsych/PageProof)',
-    '',
-    'Scroll sections captured: ' + (rec.sections.length ? '' : 'none'),
-    ...rec.sections.map(x => '  Section ' + x.n + ': ' + x.label),
-    '',
-    'FILES AND SHA-256 FINGERPRINTS',
-    'If a file is changed in any way, its fingerprint will no longer match.',
-    '',
-    ...files.flatMap(f => [f.hash + '  ' + f.name, ...(f.url ? ['    original: ' + f.url] : [])]),
-    ...(saved.failed.length ? ['', 'COULD NOT BE SAVED (blocked or removed by the website):', ...saved.failed.map(u => '  ' + u)] : []),
-    ''
-  ];
-  const details = new TextEncoder().encode(lines.join('\r\n'));
-  files.push({ name: 'capture-details.txt', bytes: details });
-  const zip = PP_ZIP(files.map(f => ({ name: f.name, bytes: f.bytes })), new Date(rec.time));
-  $('pack').disabled = false;
-  $('pack').onclick = () => download(zip, base + '_evidence.zip');
-  $('details').textContent = lines.join('\n');
+  // One list of all fingerprints (the standard "sha256sum" format), which is what gets timestamped.
+  const fpText = files.map(f => f.hash + '  ' + f.name).join('\n') + '\n';
+  const fpBytes = new TextEncoder().encode(fpText);
+  const fpHash = await sha256(fpBytes);
+  setStatus([...notes, 'Getting a trusted timestamp...'].join(' '));
+  const ts = await PP_TSA(new Uint8Array(await crypto.subtle.digest('SHA-256', fpBytes)));
+  if (ts.error) notes.push('The trusted timestamp could not be added (' + ts.error + '). Everything else is saved.');
+  setStatus(notes.join(' '));
+
+  // Case details: remember the collector's name and last case number for next time.
+  let last = {};
+  try { last = (await api.storage.local.get('lastCase')).lastCase || {}; } catch (e) { /* ignore */ }
+  $('collector').value = last.collector || '';
+  $('caseRef').value = last.caseRef || '';
+  $('caseBox').hidden = false;
+
+  const detailsText = () => {
+    const c = { collector: $('collector').value.trim(), caseRef: $('caseRef').value.trim(), notes: $('caseNotes').value.trim() };
+    const lines = [
+      'PAGEPROOF CAPTURE RECORD',
+      '========================',
+      '',
+      'Web address:   ' + rec.url,
+      'Domain:        ' + host,
+      'Page title:    ' + (rec.title || '(none)'),
+      'Captured:      ' + formatTime(rec),
+      'Captured UTC:  ' + rec.time,
+      'Time zone:     ' + zoneLabel(rec),
+      'Window size:   ' + rec.viewWidth + ' x ' + rec.viewHeight + ' (screen scale ' + (Math.round(s * 100) / 100) + ')',
+      'Browser:       ' + rec.userAgent,
+      'Tool:          PageProof ' + rec.version + ' (https://github.com/TheBenPsych/PageProof)',
+      '',
+      'CASE DETAILS',
+      'Collected by:  ' + (c.collector || '(not entered)'),
+      'Case / ref:    ' + (c.caseRef || '(not entered)'),
+      'Notes:         ' + (c.notes ? c.notes.replace(/\r?\n/g, '\r\n               ') : '(none)'),
+      'Pack saved:    ' + new Date().toISOString() + ' (UTC)',
+      '',
+      'WEBSITE SERVER (asked again at ' + (srv.requestedAt || '?') + ' UTC)',
+      ...(srv.error ? ['Could not reach the server: ' + srv.error] : [
+        'Server IP:     ' + (srv.ip || '(not reported by the browser)'),
+        'Response:      ' + srv.status,
+        'Final address: ' + srv.finalUrl,
+        'Page source:   ' + (srv.source ? base + '_source.html (' + srv.sourceBytes + ' bytes, exactly as sent by the server)' : '(too large to save)'),
+        'Response headers:',
+        ...(srv.headers || []).map(([k, v]) => '  ' + k + ': ' + v)
+      ]),
+      '',
+      'TRUSTED TIMESTAMP',
+      ...(ts.error ? ['Not available: ' + ts.error] : [
+        'Service:       ' + ts.service + ' (' + ts.url + ')',
+        'Signed time:   ' + (ts.time || '(see receipt)') + ' (UTC, from the service\'s clock)',
+        'What was signed: the SHA-256 of fingerprints.sha256 = ' + fpHash,
+        'Receipt:       fingerprints.sha256.tsr (request: fingerprints.sha256.tsq)',
+        'How to check:  see "Checking the trusted timestamp" in the PageProof README.'
+      ]),
+      '',
+      'Scroll sections captured: ' + (rec.sections.length ? '' : 'none'),
+      ...rec.sections.map(x => '  Section ' + x.n + ': ' + x.label),
+      '',
+      'FILES AND SHA-256 FINGERPRINTS',
+      'If a file is changed in any way, its fingerprint will no longer match.',
+      '',
+      ...files.flatMap(f => [f.hash + '  ' + f.name, ...(f.url ? ['    original: ' + f.url] : [])]),
+      ...(saved.failed.length ? ['', 'COULD NOT BE SAVED (blocked or removed by the website):', ...saved.failed.map(u => '  ' + u)] : []),
+      ''
+    ];
+    return { text: lines.join('\r\n'), c };
+  };
+  const showDetails = () => { $('details').textContent = detailsText().text; };
+  ['collector', 'caseRef', 'caseNotes'].forEach(id => $(id).addEventListener('input', showDetails));
+  showDetails();
   $('detailsBox').hidden = false;
+
+  $('pack').disabled = false;
+  $('pack').onclick = async () => {
+    const { text, c } = detailsText();
+    const extra = [
+      { name: 'fingerprints.sha256', bytes: fpBytes },
+      ...(ts.error ? [] : [{ name: 'fingerprints.sha256.tsr', bytes: ts.reply }, { name: 'fingerprints.sha256.tsq', bytes: ts.query }]),
+      { name: 'capture-details.txt', bytes: new TextEncoder().encode(text) }
+    ];
+    const zip = PP_ZIP([...files, ...extra].map(f => ({ name: f.name, bytes: f.bytes })), new Date(rec.time));
+    const zipName = base + (c.caseRef ? '_' + c.caseRef.replace(/[^\w.-]+/g, '_').slice(0, 40) : '') + '_evidence.zip';
+    download(zip, zipName);
+    const zipHash = await sha256(await bytesOf(zip));
+    try {
+      await api.storage.local.set({ lastCase: { collector: c.collector, caseRef: c.caseRef } });
+      const { log = [] } = await api.storage.local.get('log');
+      const entry = log.find(e => e.id === rec.id) || (log.push({ id: rec.id, time: rec.time, url: rec.url, title: rec.title }), log[log.length - 1]);
+      (entry.saves = entry.saves || []).push({ at: new Date().toISOString(), file: zipName, sha256: zipHash, ...c,
+        timestamp: ts.error ? null : ts.time, tsa: ts.service || null });
+      await api.storage.local.set({ log });
+    } catch (e) { /* log is a convenience */ }
+    setStatus('Saved ' + zipName + '. Its fingerprint (' + zipHash.slice(0, 16) + '...) is in your capture log.');
+  };
 
   // Keep only the 5 most recent captures so the browser doesn't fill up.
   const keys = (await PP_DB.keys()).sort();
