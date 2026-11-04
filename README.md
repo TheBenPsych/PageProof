@@ -14,6 +14,7 @@ A browser extension for **Chrome and Firefox** that captures a whole web page, t
   - `images/`: the original image files from the page
   - `fingerprints.sha256`: a SHA-256 fingerprint for every file
   - `fingerprints.sha256.tsr`: a **trusted timestamp** receipt. A free public timestamp service (FreeTSA, with DigiCert as a backup) signs the fingerprint list with its own clock. Only the fingerprint code is sent, never your files. Nobody needs to store anything: the receipt in your zip is the proof.
+  - `README.txt`: a plain-language guide explaining every file and how anyone (like a lawyer or court) can check nothing was changed
   - `capture-details.txt`: web address, page title, time and time zone, window size, browser, your name, case number and notes, and the website server's IP address, clock time and response headers
 - **Capture log:** a running list of every capture and every evidence pack saved (with the pack's own fingerprint). Open it with the **Capture log** link on the capture page, and download it as a spreadsheet (.csv).
 

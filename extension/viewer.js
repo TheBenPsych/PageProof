@@ -348,7 +348,9 @@ async function start() {
     const extra = [
       { name: 'fingerprints.sha256', bytes: fpBytes },
       ...(ts.error ? [] : [{ name: 'fingerprints.sha256.tsr', bytes: ts.reply }, { name: 'fingerprints.sha256.tsq', bytes: ts.query }]),
-      { name: 'capture-details.txt', bytes: new TextEncoder().encode(text) }
+      { name: 'capture-details.txt', bytes: new TextEncoder().encode(text) },
+      { name: 'README.txt', bytes: new TextEncoder().encode(ppReadme({ version: rec.version, url: rec.url, time: rec.time, base,
+        hasSource: !!srv.source, imageCount: saved.images.length, ts })) }
     ];
     const zip = PP_ZIP([...files, ...extra].map(f => ({ name: f.name, bytes: f.bytes })), new Date(rec.time));
     const zipName = base + (c.caseRef ? '_' + c.caseRef.replace(/[^\w.-]+/g, '_').slice(0, 40) : '') + '_evidence.zip';
