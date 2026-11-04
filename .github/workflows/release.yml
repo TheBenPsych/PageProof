@@ -1,0 +1,25 @@
+# Every time the code on "main" changes, this packs the extension into
+# PageProof.zip and puts it on the "Latest build" release page for easy download.
+name: Build download
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pack the extension
+        run: cd extension && zip -r ../PageProof.zip . -x '.*'
+      - name: Publish the "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest PageProof.zip --title "Latest build" --notes "Download PageProof.zip below, unzip it, and follow the install steps in the README."
