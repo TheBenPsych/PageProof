@@ -30,6 +30,7 @@ From top to bottom, the capture page shows:
 | Part | What to do |
 | --- | --- |
 | **Status line** | Read it. It tells you about anything special: sections found, endless scrolling, a timestamp service that didn't answer. |
+| **Wayback Machine box** | It saves a public copy on the Internet Archive by itself (usually under a minute) and puts the link in the case details. If it says it couldn't save, the site probably blocks the Archive (common for Instagram). Your own evidence is unaffected. |
 | **Who hosts this site** | The hosting company, domain registrar and their **abuse contacts**: who your DMCA takedown notice goes to. If the site uses Cloudflare, it says so and points you to Cloudflare's abuse form, which forwards your notice to the real host. |
 | **Case boxes** | Fill these in (next step). |
 | **Capture details and fingerprints** | Click to expand and see the full record that goes into the pack. |
@@ -46,7 +47,7 @@ From top to bottom, the capture page shows:
 
 - **Collected by:** your name. It's remembered for next time.
 - **Case / reference number:** for example `CASE-2026-114`. It's remembered too, and goes at the start of the zip's file name.
-- **Wayback Machine link (optional):** click **Save this page on the Wayback Machine**. It opens archive.org in a new tab. When it finishes, copy the link it gives you (it starts with `web.archive.org/web/`) and paste it here. It's recorded in the pack and the capture log. If the Archive can't save the site (it often can't for Instagram), leave it empty. Your own pack doesn't depend on it.
+- **Wayback Machine link:** filled in by itself when the automatic save works. If it failed, you can click **save this page on the Wayback Machine by hand**, then copy the link archive.org gives you (it starts with `web.archive.org/web/`) and paste it here. Or leave it empty: your own pack doesn't depend on it.
 - **Notes:** what this shows, for example "Client photo used without licence on product page."
 
 ---
@@ -106,9 +107,10 @@ Use this for sweeps, when you have a list of infringing pages.
 1. **Right-click the PageProof icon** and choose **Batch capture (many links)...** (or click **Batch capture** at the top of any PageProof page).
 2. **Paste the links,** one per line. You can paste straight from a spreadsheet column.
 3. Fill in **Collected by**, **Case / reference number** and any **Notes**. They go into every pack.
-4. Click **Start batch.** A separate window opens and visits each link in turn. **Leave it open and don't minimize it.** You can keep working in your other windows.
-5. Watch the table: each link shows *Loading → Capturing → Building pack → Saved* (or *Failed* with the reason, for example a page that's down).
-6. When it says **Done**, click **Download batch report (.csv)** for a spreadsheet of every link and its pack name. Each row also has a **Save on Wayback** link if you want to archive pages by hand.
+4. Choose whether to **also save each page to the Wayback Machine**. It's slower, up to a couple of minutes per link, but you get the Wayback link for each one.
+5. Click **Start batch.** A separate window opens and visits each link in turn. **Leave it open and don't minimize it.** You can keep working in your other windows.
+6. Watch the table: each link shows *Loading → Capturing → Building pack → Saved* (or *Failed* with the reason, for example a page that's down).
+7. When it says **Done**, click **Download batch report (.csv)** for a spreadsheet of every link, its pack name and its Wayback link.
 
 Batch packs are saved automatically to **Downloads/PageProof/&lt;case number&gt;/**, one zip per link, and each appears in the capture log. Click **Stop after the current link** to end a batch early.
 
@@ -153,6 +155,6 @@ PageProof's pages open in light mode. Click **🌙 Dark mode** at the top right 
 | "This page could not be captured" | Browser pages (new tab, settings, the Chrome Web Store) can't be captured. Try a normal website. |
 | The capture shows a pop-up or cookie banner | Close it on the page, then capture again. |
 | Something you need is hidden in a menu, carousel or "show more" | Open it on the page first, then capture. |
-| The Wayback Machine won't save a page | The site may block the Archive (common for Instagram), or the Archive is busy. Leave the link empty; your own pack doesn't depend on it. |
+| The Wayback box says it couldn't save | The site may block the Archive (common for Instagram), or the Archive is busy. Try the "by hand" link later, or rely on your own pack. |
 | A timestamp service "did not answer" | That's fine as long as at least one other service signed. The status line says which ones did. |
 | The capture stopped early | Very long pages stop after 60 screens, and endless pages stop at their original end. The status line explains which. |

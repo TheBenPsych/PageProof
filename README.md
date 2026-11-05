@@ -20,7 +20,7 @@ A browser extension for **Chrome and Firefox** that captures a whole web page, t
   - `README.txt`: a plain-language guide explaining every file and how anyone (like a lawyer or court) can check nothing was changed
   - `VERIFY-THIS-PACK.html`: a built-in checker anyone can double-click to check the pack, with no PageProof or internet needed
   - `capture-details.txt`: web address, page title, time and time zone, window size, browser, your name, case number and notes, and the website server's IP address, clock time and response headers
-- **Wayback Machine link:** the capture page has a one-click link to save the page on the Wayback Machine yourself, and a box to paste the resulting link. It goes into `capture-details.txt`, `README.txt` and the capture log. (Automatic saving was removed because the Archive was too unreliable.)
+- **Wayback Machine copy:** each capture also asks the Internet Archive to save its own public copy of the page, and fills the link into the case details. If the Archive can't save it (some sites, like Instagram, block it), you can save it by hand and paste the link instead. The link goes into `capture-details.txt`, `README.txt` and the capture log. Automatic saving can be turned off with a checkbox.
 - **Who hosts this site:** each capture looks up the public registration records for the site: the hosting company, domain registrar, and their abuse contacts (who a DMCA notice goes to). It's shown on the capture page, written in `capture-details.txt`, and the full records are saved in `lookups/`.
 - **Batch capture:** paste a list of links and PageProof captures each one into its own evidence pack, saved to `Downloads/PageProof/<case number>/`, with a CSV report at the end. Right-click the PageProof icon to open it.
 - **Verify a pack:** drop any evidence pack on this page and it checks every fingerprint and timestamp, then shows a clear green or red result.
@@ -74,7 +74,7 @@ Firefox removes "temporary" add-ons when it closes, so you'd repeat these steps 
 - Carousels, fold-out areas and hover menus aren't opened automatically. Open them to what you need yourself, then press **Alt+Shift+P**.
 - The PDF is always one file, however long the page.
 - PageProof's own pages (capture page and capture log) open in light mode. Use the **Dark mode** button at the top to switch; it remembers your choice. The capture itself always looks exactly like the website.
-- PageProof asks to "access data on all websites" so it can save the page's pictures, ask the server for its details, and get the timestamp. It only does this when you click capture. Besides the fingerprint code (to the timestamp services), the site's domain and server address are looked up in public registration records (rdap.org).
+- PageProof asks to "access data on all websites" so it can save the page's pictures, ask the server for its details, and get the timestamp. It only does this when you click capture. Besides the fingerprint code (to the timestamp services), the page's web address is sent to the Internet Archive for the Wayback copy (unless you turn that off), and the site's domain and server address are looked up in public registration records (rdap.org).
 - Your capture log lives in this browser. Download it as a .csv now and then to keep a copy.
 - Keep your evidence zips unchanged, ideally with a copy on a separate drive. Opening them is fine, but re-saving or editing a file breaks its fingerprint.
 - Videos are saved as the frame showing on screen (and their cover picture in the HTML backup), not the video file itself.

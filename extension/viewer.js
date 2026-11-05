@@ -303,9 +303,56 @@ async function start() {
   $('sub').textContent = rec.url + '  ·  ' + new Date(rec.time).toLocaleString();
 
   let showDetails = null;
-  // Wayback Machine: done by hand (automatic saving was unreliable). The link can be pasted into the case details.
   const wbLink = () => ($('waybackLink').value || '').trim();
   $('waybackSave').href = 'https://web.archive.org/save/' + rec.url;
+  // Wayback Machine: start right away, since it can take a minute.
+  let wb = { state: 'off' };
+  const showWb = () => {
+    const box = $('wayback');
+    box.hidden = false;
+    box.className = 'wb ' + wb.state;
+    box.textContent = '';
+    const label = document.createElement('strong');
+    label.textContent = 'Wayback Machine: ';
+    box.append(label);
+    if (wb.state === 'saving') box.append('saving an independent public copy (usually under a minute)...');
+    else if (wb.state === 'failed') box.append('could not save (' + wb.error + '). Your own evidence pack is unaffected.');
+    else if (wb.state === 'off') {
+      box.append('automatic saving is off. ');
+      const go = document.createElement('button'); go.textContent = 'Save to Wayback now'; go.onclick = runWayback; box.append(go);
+    } else if (wb.state === 'done') {
+      const a = document.createElement('a'); a.href = wb.link; a.target = '_blank'; a.textContent = wb.link; box.append(a, ' ');
+      const copy = document.createElement('button'); copy.textContent = 'Copy link';
+      copy.onclick = async () => { try { await navigator.clipboard.writeText(wb.link); copy.textContent = 'Copied'; } catch (e) { copy.textContent = 'Copy failed'; } };
+      const open = document.createElement('button'); open.textContent = 'Open';
+      open.onclick = () => window.open(wb.link, '_blank');
+      box.append(copy, ' ', open);
+    }
+    const auto = document.createElement('label');
+    auto.className = 'auto';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = autoWb;
+    cb.onchange = async () => { autoWb = cb.checked; try { await api.storage.local.set({ autoWayback: autoWb }); } catch (e) { /* ignore */ } };
+    auto.append(cb, ' Save every capture automatically');
+    box.append(auto);
+    if (showDetails) showDetails();
+  };
+  const runWayback = () => PP_WAYBACK(rec.url, async r => {
+    wb = r;
+    if (r.link && !wbLink()) $('waybackLink').value = r.link;
+    showWb();
+    if (r.link) {
+      try {
+        const { log = [] } = await api.storage.local.get('log');
+        const entry = log.find(e => e.id === rec.id);
+        if (entry) { entry.wayback = r.link; await api.storage.local.set({ log }); }
+      } catch (e) { /* ignore */ }
+    }
+  });
+  let autoWb = true;
+  try { const v = (await api.storage.local.get('autoWayback')).autoWayback; if (v === false) autoWb = false; } catch (e) { /* ignore */ }
+  if (params.get('wb') === '0') autoWb = false;
+  if (params.get('wb') === '1') autoWb = true;
+  if (/^https?:/.test(rec.url) && autoWb) runWayback(); else showWb();
 
   // Who hosts this site (public registration records). Runs alongside everything else.
   const hostingJob = /^https?:/.test(rec.url) ? PP_HOSTING(rec.url, (rec.server || {}).ip).catch(e => ({ files: [], domainError: e.message })) : Promise.resolve(null);
@@ -450,7 +497,10 @@ async function start() {
       '',
       ...hostingLines(hosting),
       'WAYBACK MACHINE (Internet Archive)',
-      wbLink() ? 'Archived copy: ' + wbLink() + '  (entered by the collector)' : 'No Wayback link entered.',
+      wbLink() ? 'Archived copy: ' + wbLink() + (wb.link === wbLink() ? '' : '  (entered by the collector)')
+        : wb.state === 'failed' ? 'Not saved: ' + wb.error
+        : wb.state === 'saving' ? 'Still saving when this pack was made. The link will appear in the PageProof capture log.'
+        : 'Not requested.',
       '',
       'Extra sections captured: ' + (rec.sections.length ? '' : 'none'),
       ...rec.sections.map(x => '  Section ' + x.n + ' (' + (x.kind || 'scroll') + '): ' + x.label),
@@ -504,13 +554,15 @@ async function start() {
   };
   $('pack').onclick = () => savePack(false);
 
-  // Batch mode: fill in the case details, save, report back, close.
+  // Batch mode: fill in the case details, wait for the Wayback copy, save, report back, close.
   if (params.get('auto')) {
     $('collector').value = params.get('collector') || $('collector').value;
     $('caseRef').value = params.get('case') || $('caseRef').value;
     $('caseNotes').value = params.get('notes') || '';
+    const until = Date.now() + 150000;
+    while (wb.state === 'saving' && Date.now() < until) await new Promise(r => setTimeout(r, 2000));
     const zipName = await savePack(true);
-    await reportBatch({ ok: true, zipName });
+    await reportBatch({ ok: true, zipName, wayback: wb.link || '', waybackError: wb.error || '' });
     setTimeout(async () => { try { const me = await api.tabs.getCurrent(); await api.tabs.remove(me.id); } catch (e) { /* leave open */ } }, 3000);
   }
 
