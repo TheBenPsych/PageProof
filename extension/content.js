@@ -11,6 +11,7 @@
   let pageEl = null;      // on sites where the page scrolls inside a big box instead of the window
   let pageElStart = 0;
   let startTotal = 0;     // how tall the page was when capture began (to stop endless scrolling)
+  const unclamped = [];   // descriptions we un-shortened, so we can put them back
   let single = false;     // feeds that show one post per screen (Instagram Reels, TikTok): capture only the one on screen
 
   const instant = { behavior: 'instant' };
@@ -88,6 +89,26 @@
       const r = el.getBoundingClientRect();
       if (r.width < 4 || r.height < 4 || r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw) continue;
       try { el.click(); n++; } catch (e) { /* ignore */ }
+    }
+    // Many sites cut descriptions short with styling (the "…" is drawn by the browser,
+    // not part of the text). Lift that limit on text boxes on screen, so the full text shows.
+    for (const el of document.querySelectorAll('span, div, h1, p')) {
+      const cs = getComputedStyle(el);
+      const clamp = cs.webkitLineClamp && cs.webkitLineClamp !== 'none';
+      const ellipsis = cs.textOverflow === 'ellipsis' && cs.overflow !== 'visible';
+      if (!clamp && !ellipsis) continue;
+      if ((el.textContent || '').trim().length < 30 || el.querySelector('video, img, svg')) continue;
+      if (el.scrollHeight <= el.clientHeight + 2 && el.scrollWidth <= el.clientWidth + 2) continue; // nothing hidden
+      const r = el.getBoundingClientRect();
+      if (r.width < 4 || r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw) continue;
+      unclamped.push([el, el.getAttribute('style')]);
+      el.style.setProperty('-webkit-line-clamp', 'unset', 'important');
+      el.style.setProperty('line-clamp', 'unset', 'important');
+      el.style.setProperty('max-height', 'none', 'important');
+      el.style.setProperty('overflow', 'visible', 'important');
+      el.style.setProperty('text-overflow', 'clip', 'important');
+      el.style.setProperty('white-space', 'normal', 'important');
+      n++;
     }
     // Fallback: a clickable description whose text simply ends in "…".
     if (!n) {
@@ -317,6 +338,8 @@
     removeBadges();
     hidden.forEach(([el, v]) => { el.style.visibility = v; });
     hidden.length = 0;
+    unclamped.forEach(([el, st]) => { if (st === null) el.removeAttribute('style'); else el.setAttribute('style', st); });
+    unclamped.length = 0;
     targets.forEach(t => {
       if (!t.el.isConnected) return;
       if (t.kind === 'scroll') { t.el.scrollTop = t.startTop; t.el.scrollLeft = t.startLeft; }
