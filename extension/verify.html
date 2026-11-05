@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PageProof: verify a pack</title>
+<link rel="icon" href="icons/icon32.png">
+<link rel="stylesheet" href="viewer.css">
+<script src="theme.js"></script>
+<style>
+  .wrap { max-width: 900px; margin: 0 auto; padding: 16px; }
+  .drop { border: 3px dashed #94a3b8; border-radius: 14px; padding: 36px 16px; text-align: center; cursor: pointer; }
+  .drop.over { border-color: var(--accent); background: rgba(37,99,235,.08); }
+  .drop strong { font-size: 18px; }
+  .verdict { margin: 18px 0 8px; padding: 16px; border-radius: 12px; font-size: 18px; font-weight: 700; }
+  .verdict.good { background: rgba(22,163,74,.15); color: #15803d; }
+  .verdict.bad { background: rgba(225,29,72,.14); color: #be123c; }
+  .verdict.warn { background: rgba(234,179,8,.18); color: #a16207; }
+  :root[data-theme="dark"] .verdict.good { color: #4ade80; }
+  :root[data-theme="dark"] .verdict.bad { color: #fb7185; }
+  :root[data-theme="dark"] .verdict.warn { color: #facc15; }
+  .verdict small { display: block; font-weight: 400; font-size: 14px; margin-top: 4px; }
+  ul.checks { list-style: none; padding: 0; margin: 0; }
+  ul.checks li { padding: 8px 0; border-bottom: 1px solid rgba(127,127,127,.25); overflow-wrap: anywhere; font-size: 14px; }
+  .ok::before { content: "\2714  "; color: #16a34a; font-weight: 700; }
+  .no::before { content: "\2716  "; color: #e11d48; font-weight: 700; }
+  .info::before { content: "\2139  "; color: #2563eb; font-weight: 700; }
+  h2 { font-size: 16px; margin: 22px 0 6px; }
+  code { font-size: 12px; }
+</style>
+</head>
+<body>
+  <header>
+    <img src="icons/icon48.png" alt="" width="32" height="32">
+    <div class="who"><div id="domain">Verify a pack</div><div id="sub">Check that an evidence pack hasn't been changed since it was made</div></div>
+    <div class="buttons"><a class="link" href="log.html" target="_blank">Capture log</a></div>
+  </header>
+  <div class="wrap">
+    <label class="drop" id="drop">
+      <strong>Drop a PageProof evidence pack (.zip) here</strong><br>
+      or click to choose one. You can also drop any single file to see its fingerprint.
+      <input type="file" id="pick" hidden>
+    </label>
+    <div id="out"></div>
+  </div>
+  <script src="unzip.js"></script>
+  <script src="tsverify.js"></script>
+  <script src="verify.js"></script>
+</body>
+</html>

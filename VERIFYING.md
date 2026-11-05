@@ -2,6 +2,8 @@
 
 This guide is for anyone who needs to check a PageProof evidence pack: you, a colleague, a lawyer, or the other side.
 
+> **Easiest way:** in PageProof, open **Verify a pack** (a link at the top of the capture page and the capture log) and drop the zip on it. It runs every check below and shows a green "Unchanged" or red "Warning" result. The manual steps below are for people who don't have PageProof, or who want to check independently.
+
 ## 1. What a fingerprint is
 
 A **SHA-256 fingerprint** (also called a "hash") is a 64-character code calculated from every bit of a file. For example:
@@ -24,8 +26,8 @@ A fingerprint doesn't hide or lock anything. The files open normally. It just le
 | --- | --- |
 | `...pdf`, `...html`, `..._source.html`, `images/...` | The evidence itself |
 | `fingerprints.sha256` | One line per evidence file: its fingerprint, then its name |
-| `fingerprints.sha256.tsr` | The **trusted timestamp receipt**: an outside service signed the fingerprint list with its own clock |
-| `fingerprints.sha256.tsq` | The request that was sent to the timestamp service (only the fingerprint, never your files) |
+| `timestamps/digicert.tsr`, `sectigo.tsr`, `freetsa.tsr` | **Trusted timestamp receipts**: up to three independent services each signed the fingerprint list with their own clock |
+| `timestamps/*.tsq` | The requests sent to the timestamp services (only the fingerprint, never your files) |
 | `capture-details.txt` | Everything recorded about the capture, including all fingerprints in readable form |
 | `README.txt` | A plain-language guide for whoever receives the pack |
 
@@ -34,16 +36,16 @@ A fingerprint doesn't hide or lock anything. The files open normally. It just le
 ```
 evidence files ──► each gets a fingerprint ──► all listed in fingerprints.sha256
                                                         │
-                                   fingerprint of that list is signed by the
-                                   timestamp service (FreeTSA / DigiCert)
+                                   fingerprint of that list is signed by
+                                   DigiCert, Sectigo and FreeTSA (separately)
                                                         │
                                                         ▼
-                                           fingerprints.sha256.tsr
+                                          timestamps/*.tsr receipts
 ```
 
 - If someone changes an **evidence file**, its fingerprint no longer matches the line in `fingerprints.sha256`.
 - If someone also edits **`fingerprints.sha256`** to cover it up, the list no longer matches the timestamp receipt.
-- The **receipt** is signed by the timestamp service, so it can't be edited or forged without the check failing.
+- Each **receipt** is signed by its timestamp service, so it can't be edited or forged without the check failing. With several services, the proof doesn't depend on any one company.
 
 So to tamper without being caught, someone would have to break SHA-256 *and* forge the timestamp service's digital signature. In practice, that isn't possible.
 
@@ -79,17 +81,18 @@ Then compare the code with that file's line in `fingerprints.sha256` or `capture
 
 This needs OpenSSL. It's built into Mac. On Windows, it comes with [Git for Windows](https://git-scm.com/download/win), so use the "Git Bash" app.
 
-1. Download the timestamp service's certificate into the unzipped folder:
-   - FreeTSA: [cacert.pem](https://freetsa.org/files/cacert.pem)
-   - If `capture-details.txt` says DigiCert was used: get the root certificate from [DigiCert's root certificates page](https://www.digicert.com/kb/digicert-root-certificates.htm) and use it in place of `cacert.pem`.
-2. In Terminal or Git Bash, inside that folder, run:
+1. Pick one receipt from the `timestamps` folder and download that service's root certificate into the unzipped folder, saved as `cacert.pem`:
+   - `freetsa.tsr`: [cacert.pem](https://freetsa.org/files/cacert.pem)
+   - `digicert.tsr`: "DigiCert Trusted Root G4" from [DigiCert's root certificates page](https://www.digicert.com/kb/digicert-root-certificates.htm)
+   - `sectigo.tsr`: the "USERTrust RSA Certification Authority" root from sectigo.com
+2. In Terminal or Git Bash, inside that folder, run (change `freetsa` to the receipt you picked):
    ```
-   openssl ts -verify -in fingerprints.sha256.tsr -data fingerprints.sha256 -CAfile cacert.pem
+   openssl ts -verify -in timestamps/freetsa.tsr -data fingerprints.sha256 -CAfile cacert.pem
    ```
    `Verification: OK` means the service really signed this exact fingerprint list.
 3. To see the signed date and time:
    ```
-   openssl ts -reply -in fingerprints.sha256.tsr -text
+   openssl ts -reply -in timestamps/freetsa.tsr -text
    ```
    Look for the `Time stamp:` line. It is in UTC.
 
@@ -107,4 +110,6 @@ Each time you save a pack, PageProof records **the whole zip's fingerprint** in 
 
 **Does the timestamp service keep a copy?** No. It only ever saw the fingerprint code, never your files, and it doesn't need to store anything. The receipt in your zip is the proof.
 
-**What if FreeTSA shuts down?** The receipt still checks out, as long as you have its certificate (`cacert.pem`). Keep a copy of the certificate with your case files.
+**What if a timestamp service shuts down?** Its receipt still checks out, as long as you have its root certificate. Keep a copy of the certificates with your case files. And each pack has receipts from more than one service.
+
+**Older packs** (before version 2.0) have a single receipt named `fingerprints.sha256.tsr` in the main folder. Use that file name in the commands above.

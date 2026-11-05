@@ -16,9 +16,11 @@ A browser extension for **Chrome and Firefox** that captures a whole web page, t
   - `_source.html`: the page source exactly as the website's server sent it
   - `images/`: the original image files from the page
   - `fingerprints.sha256`: a SHA-256 fingerprint for every file
-  - `fingerprints.sha256.tsr`: a **trusted timestamp** receipt. A free public timestamp service (FreeTSA, with DigiCert as a backup) signs the fingerprint list with its own clock. Only the fingerprint code is sent, never your files. Nobody needs to store anything: the receipt in your zip is the proof.
+  - `timestamps/`: **trusted timestamp** receipts from DigiCert, Sectigo and FreeTSA. Each free service separately signs the fingerprint list with its own clock. Only the fingerprint code is sent, never your files. Nobody needs to store anything: the receipts in your zip are the proof.
   - `README.txt`: a plain-language guide explaining every file and how anyone (like a lawyer or court) can check nothing was changed
   - `capture-details.txt`: web address, page title, time and time zone, window size, browser, your name, case number and notes, and the website server's IP address, clock time and response headers
+- **Wayback Machine copy:** each capture also asks the Internet Archive to save its own public copy of the page. The link appears on the capture page (with Copy and Open buttons), in `capture-details.txt` and in the capture log. You can turn this off with a checkbox.
+- **Verify a pack:** drop any evidence pack on this page and it checks every fingerprint and timestamp, then shows a clear green or red result.
 - **Capture log:** a running list of every capture and every evidence pack saved (with the pack's own fingerprint). Open it with the **Capture log** link on the capture page, and download it as a spreadsheet (.csv).
 
 ## How to use it
@@ -29,32 +31,11 @@ A browser extension for **Chrome and Firefox** that captures a whole web page, t
 4. A new tab opens with your capture. Fill in **Collected by**, **Case / reference number** and any **Notes** (your name and last case number are remembered).
 5. Then click **Download evidence pack (.zip)** to get everything at once, or download the PDF or HTML backup on their own.
 
-## Checking a fingerprint later
+## Checking a pack
 
-For the full beginner's guide to how fingerprints work and how to spot tampering, see **[VERIFYING.md](VERIFYING.md)**.
+Open **Verify a pack** in PageProof and drop the zip on it. To check without PageProof, see **[VERIFYING.md](VERIFYING.md)**.
 
-Each file's SHA-256 fingerprint is listed in `capture-details.txt`. If even one pixel or letter of a file changes, its fingerprint changes. To check a file:
-
-- **Windows:** open Command Prompt and type `certutil -hashfile "C:\path\to\file.pdf" SHA256`
-- **Mac:** open Terminal and type `shasum -a 256 /path/to/file.pdf`
-
-Compare the result with the line in `capture-details.txt`. If they match, the file has not been changed since it was captured.
-
-## Checking the trusted timestamp
-
-This proves the files existed, unchanged, at the time the service signed. It needs a free tool called OpenSSL (built into Mac and Linux. On Windows it comes with [Git for Windows](https://git-scm.com/download/win), so use "Git Bash").
-
-1. Download the FreeTSA certificate [cacert.pem](https://freetsa.org/files/cacert.pem) into your unzipped evidence folder.
-2. Open Terminal (or Git Bash) in that folder and run:
-   ```
-   openssl ts -verify -in fingerprints.sha256.tsr -data fingerprints.sha256 -CAfile cacert.pem
-   ```
-3. `Verification: OK` means the timestamp is genuine and the fingerprint list hasn't changed.
-4. To check every file against the list in one go: `sha256sum -c fingerprints.sha256` (on Mac: `shasum -a 256 -c fingerprints.sha256`). Every line should say `OK`.
-
-To see the signed time: `openssl ts -reply -in fingerprints.sha256.tsr -text`
-
-If `capture-details.txt` says the backup service DigiCert was used, get its certificate from [DigiCert's root certificates page](https://www.digicert.com/kb/digicert-root-certificates.htm) instead.
+For a step-by-step guide to using PageProof day to day, see **[TUTORIAL.md](TUTORIAL.md)**.
 
 ## Install it
 
@@ -90,7 +71,7 @@ Firefox removes "temporary" add-ons when it closes, so you'd repeat these steps 
 - Carousels, fold-out areas and hover menus aren't opened automatically. Open them to what you need yourself, then press **Alt+Shift+P**.
 - The PDF is always one file, however long the page.
 - PageProof's own pages (capture page and capture log) open in light mode. Use the **Dark mode** button at the top to switch; it remembers your choice. The capture itself always looks exactly like the website.
-- PageProof asks to "access data on all websites" so it can save the page's pictures, ask the server for its details, and get the timestamp. It only does this when you click capture. The only thing sent anywhere else is the fingerprint code, to the timestamp service.
+- PageProof asks to "access data on all websites" so it can save the page's pictures, ask the server for its details, and get the timestamp. It only does this when you click capture. Besides the fingerprint code (to the timestamp services), the page's web address is sent to the Internet Archive for the Wayback copy, unless you turn that off.
 - Your capture log lives in this browser. Download it as a .csv now and then to keep a copy.
 - Keep your evidence zips unchanged, ideally with a copy on a separate drive. Opening them is fine, but re-saving or editing a file breaks its fingerprint.
 - Videos are saved as the frame showing on screen (and their cover picture in the HTML backup), not the video file itself.

@@ -1,9 +1,10 @@
 // The plain-language guide placed in every evidence pack as README.txt.
 function ppReadme(o) {
-  const tsa = o.ts && !o.ts.error;
-  const caUrl = o.ts && o.ts.service === 'DigiCert'
-    ? 'https://www.digicert.com/kb/digicert-root-certificates.htm (DigiCert root certificates)'
-    : 'https://freetsa.org/files/cacert.pem';
+  const stamps = o.stamps || [];
+  const tsa = stamps.length > 0;
+  const certs = { DigiCert: '"DigiCert Trusted Root G4" from https://www.digicert.com/kb/digicert-root-certificates.htm',
+    Sectigo: '"USERTrust RSA Certification Authority" root, from sectigo.com',
+    FreeTSA: 'https://freetsa.org/files/cacert.pem' };
   return [
     'ABOUT THIS EVIDENCE PACK',
     '========================',
@@ -45,13 +46,18 @@ function ppReadme(o) {
     '    image files. If even one letter or pixel of a file changes, its fingerprint',
     '    changes completely.',
     '',
-    ...(tsa ? ['fingerprints.sha256.tsr  and  fingerprints.sha256.tsq',
-      '    A trusted timestamp receipt (and the request that produced it). An independent',
-      '    timestamp service, ' + o.ts.service + ' (' + o.ts.url + '), digitally signed the',
-      '    fingerprint list at ' + (o.ts.time || 'the time shown in the receipt') + ' (UTC), using its own clock.',
+    ...(tsa ? ['timestamps/',
+      '    Trusted timestamp receipts (.tsr) and the requests that produced them (.tsq).',
+      '    Independent timestamp services each digitally signed the fingerprint list,',
+      '    using their own clocks:',
+      ...stamps.map(t => '      ' + t.service + ': ' + (t.time || 'see receipt') + ' (UTC)  ->  timestamps/' + t.file + '.tsr'),
       '    This proves the files existed in exactly this form at that time. Only the',
-      '    fingerprint was sent to the service, never the files themselves.',
+      '    fingerprint was sent to the services, never the files themselves.',
       ''] : ['(No trusted timestamp was available when this pack was made. See capture-details.txt.)', '']),
+    ...(o.wayback && o.wayback.link ? ['WAYBACK MACHINE COPY',
+      '    The Internet Archive also saved its own independent public copy of the page:',
+      '    ' + o.wayback.link,
+      ''] : []),
     'README.txt',
     '    This guide. It is the same for every pack, so it is not part of the fingerprint list.',
     '',
@@ -68,21 +74,25 @@ function ppReadme(o) {
     '  Every line should end in "OK".',
     '',
     ...(tsa ? [
-      'Step 2: Check the trusted timestamp.',
-      '  Download the timestamp service\'s certificate into this folder:',
-      '      ' + caUrl,
-      '  Then run:',
+      'Step 2: Check a trusted timestamp.',
+      '  Download the root certificate of one of the services above into this folder',
+      '  and name it cacert.pem:',
+      ...stamps.map(t => '      ' + t.service + ': ' + certs[t.service]),
+      '  Then run (using that service\'s receipt):',
       '',
-      '      openssl ts -verify -in fingerprints.sha256.tsr -data fingerprints.sha256 -CAfile cacert.pem',
+      '      openssl ts -verify -in timestamps/' + stamps[0].file + '.tsr -data fingerprints.sha256 -CAfile cacert.pem',
       '',
       '  "Verification: OK" means the service really signed this exact fingerprint list.',
       '  To see the signed date and time:',
       '',
-      '      openssl ts -reply -in fingerprints.sha256.tsr -text',
+      '      openssl ts -reply -in timestamps/' + stamps[0].file + '.tsr -text',
       '',
       'Together, steps 1 and 2 show that every file is unchanged since the time signed by',
       'the timestamp service.',
       ''] : []),
+    'EASIEST WAY: the PageProof "Verify a pack" page runs every check for you. Open it',
+    'from the PageProof capture page, then drop this zip on it.',
+    '',
     'HOW TO KEEP THIS PACK SAFE',
     '--------------------------',
     '',

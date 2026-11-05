@@ -2,9 +2,11 @@
 // timestamp service, which signs it with its clock time. The signed receipt (.tsr)
 // is kept in the evidence pack, so the service doesn't need to store anything.
 const PP_TSA = (() => {
+  // Every pack is stamped by all of these at once, so the proof never rests on one company.
   const SERVICES = [
-    { name: 'FreeTSA', url: 'https://freetsa.org/tsr' },
-    { name: 'DigiCert', url: 'http://timestamp.digicert.com' }
+    { name: 'DigiCert', file: 'digicert', url: 'http://timestamp.digicert.com' },
+    { name: 'Sectigo', file: 'sectigo', url: 'http://timestamp.sectigo.com' },
+    { name: 'FreeTSA', file: 'freetsa', url: 'https://freetsa.org/tsr' }
   ];
 
   const concat = arrs => {
@@ -60,24 +62,27 @@ const PP_TSA = (() => {
     return { time: null };
   }
 
-  return async function stamp(hash) {
+  async function stampOne(svc, hash) {
     const query = makeQuery(hash);
-    const errors = [];
-    for (const svc of (globalThis.PP_TSA_SERVICES || SERVICES)) {
-      try {
-        const ctl = new AbortController();
-        const timer = setTimeout(() => ctl.abort(), 20000);
-        const res = await fetch(svc.url, { method: 'POST', body: query, signal: ctl.signal,
-          headers: { 'Content-Type': 'application/timestamp-query' } });
-        clearTimeout(timer);
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const reply = new Uint8Array(await res.arrayBuffer());
-        const { time } = readReply(reply);
-        return { service: svc.name, url: svc.url, time, query, reply };
-      } catch (e) {
-        errors.push(svc.name + ': ' + ((e && e.message) || e));
-      }
+    try {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 25000);
+      const res = await fetch(svc.url, { method: 'POST', body: query, signal: ctl.signal,
+        headers: { 'Content-Type': 'application/timestamp-query' } });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const reply = new Uint8Array(await res.arrayBuffer());
+      const { time } = readReply(reply);
+      return { service: svc.name, file: svc.file || svc.name.toLowerCase(), url: svc.url, time, query, reply };
+    } catch (e) {
+      return { service: svc.name, url: svc.url, error: String((e && e.message) || e) };
     }
-    return { error: errors.join('; ') };
-  };
+  }
+
+  // Returns one result per service: { service, url, time, query, reply } or { service, url, error }.
+  async function stampAll(hash) {
+    return Promise.all((globalThis.PP_TSA_SERVICES || SERVICES).map(svc => stampOne(svc, hash)));
+  }
+
+  return { stampAll, readReply };
 })();

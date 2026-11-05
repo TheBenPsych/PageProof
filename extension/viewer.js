@@ -249,6 +249,53 @@ async function start() {
   $('domain').textContent = host;
   $('sub').textContent = rec.url + '  ·  ' + new Date(rec.time).toLocaleString();
 
+  let showDetails = null;
+  // Wayback Machine: start right away, since it can take a minute.
+  let wb = { state: 'off' };
+  const showWb = () => {
+    const box = $('wayback');
+    box.hidden = false;
+    box.className = 'wb ' + wb.state;
+    box.textContent = '';
+    const label = document.createElement('strong');
+    label.textContent = 'Wayback Machine: ';
+    box.append(label);
+    if (wb.state === 'saving') box.append('saving an independent public copy (usually under a minute)...');
+    else if (wb.state === 'failed') box.append('could not save (' + wb.error + '). Your own evidence pack is unaffected.');
+    else if (wb.state === 'off') {
+      box.append('automatic saving is off. ');
+      const go = document.createElement('button'); go.textContent = 'Save to Wayback now'; go.onclick = runWayback; box.append(go);
+    } else if (wb.state === 'done') {
+      const a = document.createElement('a'); a.href = wb.link; a.target = '_blank'; a.textContent = wb.link; box.append(a, ' ');
+      const copy = document.createElement('button'); copy.textContent = 'Copy link';
+      copy.onclick = async () => { try { await navigator.clipboard.writeText(wb.link); copy.textContent = 'Copied'; } catch (e) { copy.textContent = 'Copy failed'; } };
+      const open = document.createElement('button'); open.textContent = 'Open';
+      open.onclick = () => window.open(wb.link, '_blank');
+      box.append(copy, ' ', open);
+    }
+    const auto = document.createElement('label');
+    auto.className = 'auto';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = autoWb;
+    cb.onchange = async () => { autoWb = cb.checked; try { await api.storage.local.set({ autoWayback: autoWb }); } catch (e) { /* ignore */ } };
+    auto.append(cb, ' Save every capture automatically');
+    box.append(auto);
+    if (showDetails) showDetails();
+  };
+  const runWayback = () => PP_WAYBACK(rec.url, async r => {
+    wb = r;
+    showWb();
+    if (r.link) {
+      try {
+        const { log = [] } = await api.storage.local.get('log');
+        const entry = log.find(e => e.id === rec.id);
+        if (entry) { entry.wayback = r.link; await api.storage.local.set({ log }); }
+      } catch (e) { /* ignore */ }
+    }
+  });
+  let autoWb = true;
+  try { const v = (await api.storage.local.get('autoWayback')).autoWayback; if (v === false) autoWb = false; } catch (e) { /* ignore */ }
+  if (/^https?:/.test(rec.url) && autoWb) runWayback(); else showWb();
+
   setStatus('Stitching the screenshots together...');
   for (const part of [rec.main, ...rec.sections]) {
     for (const t of part.tiles) t.bmp = await loadBitmap(t.src);
@@ -326,9 +373,11 @@ async function start() {
   const fpText = files.map(f => f.hash + '  ' + f.name).join('\n') + '\n';
   const fpBytes = new TextEncoder().encode(fpText);
   const fpHash = await sha256(fpBytes);
-  setStatus([...notes, 'Getting a trusted timestamp...'].join(' '));
-  const ts = await PP_TSA(new Uint8Array(await crypto.subtle.digest('SHA-256', fpBytes)));
-  if (ts.error) notes.push('The trusted timestamp could not be added (' + ts.error + '). Everything else is saved.');
+  setStatus([...notes, 'Getting trusted timestamps...'].join(' '));
+  const stamps = await PP_TSA.stampAll(new Uint8Array(await crypto.subtle.digest('SHA-256', fpBytes)));
+  const good = stamps.filter(t => !t.error);
+  if (!good.length) notes.push('No trusted timestamp could be added (' + stamps.map(t => t.service + ': ' + t.error).join('; ') + '). Everything else is saved.');
+  else if (good.length < stamps.length) notes.push('Timestamped by ' + good.map(t => t.service).join(' and ') + ' (' + stamps.filter(t => t.error).map(t => t.service).join(', ') + ' did not answer).');
   setStatus(notes.join(' '));
 
   // Case details: remember the collector's name and last case number for next time.
@@ -371,14 +420,19 @@ async function start() {
         ...(srv.headers || []).map(([k, v]) => '  ' + k + ': ' + v)
       ]),
       '',
-      'TRUSTED TIMESTAMP',
-      ...(ts.error ? ['Not available: ' + ts.error] : [
-        'Service:       ' + ts.service + ' (' + ts.url + ')',
-        'Signed time:   ' + (ts.time || '(see receipt)') + ' (UTC, from the service\'s clock)',
-        'What was signed: the SHA-256 of fingerprints.sha256 = ' + fpHash,
-        'Receipt:       fingerprints.sha256.tsr (request: fingerprints.sha256.tsq)',
-        'How to check:  see "Checking the trusted timestamp" in the PageProof README.'
-      ]),
+      'TRUSTED TIMESTAMPS',
+      'What was signed: the SHA-256 of fingerprints.sha256 = ' + fpHash,
+      ...stamps.flatMap(t => t.error
+        ? [t.service + ': not available (' + t.error + ')']
+        : [t.service + ': signed ' + (t.time || '(see receipt)') + ' UTC  ->  timestamps/' + t.file + '.tsr  (' + t.url + ')']),
+      'How to check: see "Check B" in VERIFYING.md (https://github.com/TheBenPsych/PageProof/blob/main/VERIFYING.md),',
+      'or open the PageProof "Verify a pack" page and drop this zip on it.',
+      '',
+      'WAYBACK MACHINE (Internet Archive)',
+      wb.state === 'done' ? 'Archived copy: ' + wb.link
+        : wb.state === 'failed' ? 'Not saved: ' + wb.error
+        : wb.state === 'saving' ? 'Still saving when this pack was made. The link will appear in the PageProof capture log.'
+        : 'Not requested.',
       '',
       'Extra sections captured: ' + (rec.sections.length ? '' : 'none'),
       ...rec.sections.map(x => '  Section ' + x.n + ' (' + (x.kind || 'scroll') + '): ' + x.label),
@@ -392,7 +446,7 @@ async function start() {
     ];
     return { text: lines.join('\r\n'), c };
   };
-  const showDetails = () => { $('details').textContent = detailsText().text; };
+  showDetails = () => { $('details').textContent = detailsText().text; };
   ['collector', 'caseRef', 'caseNotes'].forEach(id => $(id).addEventListener('input', showDetails));
   showDetails();
   $('detailsBox').hidden = false;
@@ -402,10 +456,10 @@ async function start() {
     const { text, c } = detailsText();
     const extra = [
       { name: 'fingerprints.sha256', bytes: fpBytes },
-      ...(ts.error ? [] : [{ name: 'fingerprints.sha256.tsr', bytes: ts.reply }, { name: 'fingerprints.sha256.tsq', bytes: ts.query }]),
+      ...good.flatMap(t => [{ name: 'timestamps/' + t.file + '.tsr', bytes: t.reply }, { name: 'timestamps/' + t.file + '.tsq', bytes: t.query }]),
       { name: 'capture-details.txt', bytes: new TextEncoder().encode(text) },
       { name: 'README.txt', bytes: new TextEncoder().encode(ppReadme({ captureId: rec.captureId, version: rec.version, url: rec.url, time: rec.time, base,
-        hasSource: !!srv.source, imageCount: saved.images.length, ts })) }
+        hasSource: !!srv.source, imageCount: saved.images.length, stamps: good, wayback: wb })) }
     ];
     const zip = PP_ZIP([...files, ...extra].map(f => ({ name: f.name, bytes: f.bytes })), new Date(rec.time));
     // Name: CaseID_domain_date_time_CaptureID.zip (case ID first when entered).
@@ -417,7 +471,8 @@ async function start() {
       const { log = [] } = await api.storage.local.get('log');
       const entry = log.find(e => e.id === rec.id) || (log.push({ id: rec.id, time: rec.time, url: rec.url, title: rec.title }), log[log.length - 1]);
       (entry.saves = entry.saves || []).push({ at: new Date().toISOString(), file: zipName, sha256: zipHash, ...c,
-        timestamp: ts.error ? null : ts.time, tsa: ts.service || null });
+        timestamps: good.map(t => t.service + ' ' + (t.time || '')).join('; ') });
+      if (wb.link) entry.wayback = wb.link;
       await api.storage.local.set({ log });
     } catch (e) { /* log is a convenience */ }
     setStatus('Saved ' + zipName + '. Its fingerprint (' + zipHash.slice(0, 16) + '...) is in your capture log.');
