@@ -74,6 +74,7 @@ CASE-2026-114_example.com_2026-11-04_15-17-55_PP-7KQ2MX.zip
 | `fingerprints.sha256` | The fingerprint of every evidence file |
 | `timestamps/` | Signed receipts from independent timestamp services (DigiCert, Sectigo, FreeTSA), proving when the pack existed |
 | `README.txt` | A plain-language explanation for whoever receives the pack |
+| `VERIFY-THIS-PACK.html` | A built-in checker. Anyone can double-click it, even without PageProof or internet, to check the pack |
 
 You can also download just the **PDF** or **HTML backup** with their own buttons. Only the zip carries the fingerprints and timestamps, so always keep the zip.
 
@@ -119,7 +120,7 @@ Use this whenever you or someone else needs to confirm a pack hasn't been change
 
 **Checking a single file** (for example, a PDF someone emailed back to you): first drop the original zip, then drop the single file. PageProof tells you whether it matches a file in that pack.
 
-People without PageProof can check a pack by hand using [VERIFYING.md](VERIFYING.md).
+**People without PageProof** (opposing counsel, a court, a client) can double-click **VERIFY-THIS-PACK.html** inside the pack. It's the same checker and works offline in any browser. They drop the zip on it, or click **Choose the unzipped folder**. To check completely by hand, see [VERIFYING.md](VERIFYING.md).
 
 ---
 

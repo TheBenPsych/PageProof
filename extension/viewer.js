@@ -56,6 +56,26 @@ function imageName(img, i) {
   return 'images/' + String(i + 1).padStart(3, '0') + '_' + name + '.' + (ext || 'bin');
 }
 
+// One self-contained copy of the "Verify a pack" page, placed inside every evidence pack
+// so anyone can double-click it to check the pack, even without PageProof.
+async function standaloneChecker() {
+  const text = async f => (await fetch(f)).text();
+  let html = await text('verify.html');
+  const icon = await (await fetch('icons/icon48.png')).blob();
+  const iconUrl = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(icon); });
+  const inline = async f => '<script>\n' + (await text(f)).replace(/<\/script/gi, '<\\/script') + '\n</script>';
+  const css = await text('viewer.css');
+  html = html.replace('<link rel="stylesheet" href="viewer.css">', () => '<style>\n' + css + '\n</style>');
+  html = html.replace('<link rel="icon" href="icons/icon32.png">', () => '<link rel="icon" href="' + iconUrl + '">');
+  html = html.replace('src="icons/icon48.png"', () => 'src="' + iconUrl + '"');
+  html = html.replace(/<a class="link" href="log\.html"[^>]*>[^<]*<\/a>/, '');
+  const themeJs = await inline('theme.js');
+  html = html.replace('<script src="theme.js"></script>', () => '<script>window.PP_STANDALONE = true;</script>\n' + themeJs);
+  for (const f of ['unzip.js', 'tsverify.js', 'verify.js']) { const js = await inline(f); html = html.replace('<script src="' + f + '"></script>', () => js); }
+  html = html.replace('Check that an evidence pack hasn\'t been changed since it was made', 'Check that this evidence pack hasn\'t been changed since it was made. Nothing leaves your computer.');
+  return html;
+}
+
 const toBlob = (canvas, type, q) => new Promise(r => canvas.toBlob(r, type, q));
 
 async function loadBitmap(src) {
@@ -367,6 +387,7 @@ async function start() {
   for (const f of files) f.bytes = await bytesOf(f.blob);
   if (srv.source) files.push({ name: base + '_source.html', bytes: srv.source });
   saved.images.forEach((img, i) => files.push({ name: imageName(img, i), bytes: img.bytes, url: img.url }));
+  files.push({ name: 'VERIFY-THIS-PACK.html', bytes: new TextEncoder().encode(await standaloneChecker()) });
   for (const f of files) f.hash = await sha256(f.bytes);
 
   // One list of all fingerprints (the standard "sha256sum" format), which is what gets timestamped.

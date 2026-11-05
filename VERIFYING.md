@@ -2,7 +2,9 @@
 
 This guide is for anyone who needs to check a PageProof evidence pack: you, a colleague, a lawyer, or the other side.
 
-> **Easiest way:** in PageProof, open **Verify a pack** (a link at the top of the capture page and the capture log) and drop the zip on it. It runs every check below and shows a green "Unchanged" or red "Warning" result. The manual steps below are for people who don't have PageProof, or who want to check independently.
+> **Easiest way, no PageProof needed:** double-click **VERIFY-THIS-PACK.html** inside the pack. It opens in any web browser, works offline, and runs every check below. Drop the zip on it, or click "Choose the unzipped folder." The checker is itself covered by the pack's fingerprints and timestamps, so it can't be swapped without the check failing.
+>
+> **With PageProof installed:** open **Verify a pack** (a link at the top of the capture page and the capture log) and drop the zip on it. It runs every check below and shows a green "Unchanged" or red "Warning" result. The manual steps below are for people who don't have PageProof, or who want to check independently.
 
 ## 1. What a fingerprint is
 

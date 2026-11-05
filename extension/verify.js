@@ -8,7 +8,11 @@ const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls)
 
 async function checkZip(name, bytes) {
   out.textContent = 'Checking ' + name + '...';
-  const files = await ppUnzip(bytes);
+  return checkFiles(await ppUnzip(bytes), bytes);
+}
+
+// files: Map of path -> bytes. zipBytes: the whole zip (or null when a folder was chosen).
+async function checkFiles(files, zipBytes) {
   const fp = files.get('fingerprints.sha256');
   if (!fp) throw new Error('This zip has no fingerprints.sha256, so it is not a PageProof evidence pack (or it is from a very early version).');
 
@@ -44,13 +48,13 @@ async function checkZip(name, bytes) {
   }
 
   // Files in the zip that the fingerprint list doesn't cover
-  const known = n => listed.has(n) || /^(fingerprints\.sha256|capture-details\.txt|README\.txt)$/.test(n) || /\.ts[qr]$/.test(n);
+  const known = n => listed.has(n) || /^(fingerprints\.sha256|capture-details\.txt|README\.txt)$/.test(n) || /\.ts[qr]$/.test(n) || /(^|\/)\.DS_Store$|(^|\/)Thumbs\.db$/.test(n);
   const extras = [...files.keys()].filter(n => !known(n));
 
   // Is this the exact zip from the capture log?
-  const zipHash = await hex(bytes);
+  const zipHash = zipBytes ? await hex(zipBytes) : null;
   let logMatch = null;
-  try {
+  if (zipHash) try {
     const { log = [] } = await api.storage.local.get('log');
     for (const e of log) for (const s of (e.saves || [])) if (s.sha256 === zipHash) logMatch = { e, s };
   } catch (e) { /* ignore */ }
@@ -91,14 +95,19 @@ async function checkZip(name, bytes) {
   section('Files (' + rows.length + ')', rows);
   section('Trusted timestamps', tsRows.length ? tsRows : [['no', 'No timestamp receipts in this pack.']]);
   if (extras.length) section('Not covered by the fingerprints', extras.map(n => ['info', n + ' (was added to the pack later, or is not part of the evidence)']));
-  section('This zip file', [
+  if (zipHash) section('This zip file', [
     ['info', 'Fingerprint of the whole zip: ' + zipHash],
     logMatch ? ['ok', 'This is the exact zip saved on ' + new Date(logMatch.s.at).toLocaleString() + (logMatch.s.collector ? ' by ' + logMatch.s.collector : '') + ' (found in this browser\'s capture log).']
-      : ['info', 'Not in this browser\'s capture log. That\'s normal if someone else made it, or it was re-zipped.']
+      : ['info', globalThis.PP_STANDALONE ? 'Compare this with the "Pack SHA-256" in the collector\'s PageProof capture log to confirm it is the exact zip they saved.' : 'Not in this browser\'s capture log. That\'s normal if someone else made it, or it was re-zipped.']
   ]);
   const note = el('p', null, 'The timestamp check confirms each receipt matches this fingerprint list and carries a valid signature. For a full check of the signing certificate against the service\'s official root certificate, use the openssl command in VERIFYING.md.');
   note.style.fontSize = '13px'; note.style.opacity = '.8';
   out.append(note);
+  if (globalThis.PP_STANDALONE) {
+    const n2 = el('p', null, 'You are using the checker that came inside this pack. It is covered by the pack\'s own fingerprints and timestamps. For a fully independent check, use the free openssl commands in README.txt, or PageProof\'s own copy at https://github.com/TheBenPsych/PageProof.');
+    n2.style.fontSize = '13px'; n2.style.opacity = '.8';
+    out.append(n2);
+  }
 }
 
 async function checkFile(name, bytes) {
@@ -124,6 +133,33 @@ async function handle(file) {
     out.append(el('div', 'verdict bad', 'Could not check this file: ' + e.message));
   }
 }
+
+// A whole unzipped folder: paths are made relative to the folder.
+async function handleFolder(list) {
+  try {
+    const arr = [...list];
+    if (!arr.length) return;
+    out.textContent = 'Reading ' + arr.length + ' files...';
+    const files = new Map();
+    for (const f of arr) {
+      const rel = (f.webkitRelativePath || f.name).split('/').slice(f.webkitRelativePath ? 1 : 0).join('/');
+      files.set(rel, new Uint8Array(await f.arrayBuffer()));
+    }
+    // If the chosen folder holds the pack one level down, step into it.
+    if (!files.has('fingerprints.sha256')) {
+      const hit = [...files.keys()].find(n => n.endsWith('/fingerprints.sha256'));
+      if (hit) {
+        const pre = hit.slice(0, -'fingerprints.sha256'.length);
+        for (const [k, v] of [...files]) { files.delete(k); if (k.startsWith(pre)) files.set(k.slice(pre.length), v); }
+      }
+    }
+    await checkFiles(files, null);
+  } catch (e) {
+    out.textContent = '';
+    out.append(el('div', 'verdict bad', 'Could not check this folder: ' + e.message));
+  }
+}
+document.getElementById('pickFolder').onchange = e => handleFolder(e.target.files);
 
 const drop = document.getElementById('drop');
 document.getElementById('pick').onchange = e => e.target.files[0] && handle(e.target.files[0]);

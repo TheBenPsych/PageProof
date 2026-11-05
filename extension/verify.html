@@ -8,7 +8,7 @@
 <script src="theme.js"></script>
 <style>
   .wrap { max-width: 900px; margin: 0 auto; padding: 16px; }
-  .drop { border: 3px dashed #94a3b8; border-radius: 14px; padding: 36px 16px; text-align: center; cursor: pointer; }
+  .drop { display: block; border: 3px dashed #94a3b8; border-radius: 14px; padding: 36px 16px; text-align: center; cursor: pointer; }
   .drop.over { border-color: var(--accent); background: rgba(37,99,235,.08); }
   .drop strong { font-size: 18px; }
   .verdict { margin: 18px 0 8px; padding: 16px; border-radius: 12px; font-size: 18px; font-weight: 700; }
@@ -26,6 +26,7 @@
   .info::before { content: "\2139  "; color: #2563eb; font-weight: 700; }
   h2 { font-size: 16px; margin: 22px 0 6px; }
   code { font-size: 12px; }
+  .folderbtn { display: inline-block; padding: 6px 12px; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -40,6 +41,7 @@
       or click to choose one. You can also drop any single file to see its fingerprint.
       <input type="file" id="pick" hidden>
     </label>
+    <p style="text-align:center;margin:10px 0 0">Already unzipped? <label class="folderbtn">Choose the unzipped folder<input type="file" id="pickFolder" webkitdirectory multiple hidden></label></p>
     <div id="out"></div>
   </div>
   <script src="unzip.js"></script>

@@ -18,6 +18,7 @@ A browser extension for **Chrome and Firefox** that captures a whole web page, t
   - `fingerprints.sha256`: a SHA-256 fingerprint for every file
   - `timestamps/`: **trusted timestamp** receipts from DigiCert, Sectigo and FreeTSA. Each free service separately signs the fingerprint list with its own clock. Only the fingerprint code is sent, never your files. Nobody needs to store anything: the receipts in your zip are the proof.
   - `README.txt`: a plain-language guide explaining every file and how anyone (like a lawyer or court) can check nothing was changed
+  - `VERIFY-THIS-PACK.html`: a built-in checker anyone can double-click to check the pack, with no PageProof or internet needed
   - `capture-details.txt`: web address, page title, time and time zone, window size, browser, your name, case number and notes, and the website server's IP address, clock time and response headers
 - **Wayback Machine copy:** each capture also asks the Internet Archive to save its own public copy of the page. The link appears on the capture page (with Copy and Open buttons), in `capture-details.txt` and in the capture log. You can turn this off with a checkbox.
 - **Verify a pack:** drop any evidence pack on this page and it checks every fingerprint and timestamp, then shows a clear green or red result.
