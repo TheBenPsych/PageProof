@@ -303,57 +303,6 @@ async function start() {
   $('sub').textContent = rec.url + '  ·  ' + new Date(rec.time).toLocaleString();
 
   let showDetails = null;
-  const wbLink = () => ($('waybackLink').value || '').trim();
-  $('waybackSave').href = 'https://web.archive.org/save/' + rec.url;
-  // Wayback Machine: start right away, since it can take a minute.
-  let wb = { state: 'off' };
-  const showWb = () => {
-    const box = $('wayback');
-    box.hidden = false;
-    box.className = 'wb ' + wb.state;
-    box.textContent = '';
-    const label = document.createElement('strong');
-    label.textContent = 'Wayback Machine: ';
-    box.append(label);
-    if (wb.state === 'saving') box.append('saving an independent public copy (usually under a minute)...');
-    else if (wb.state === 'failed') box.append('could not save (' + wb.error + '). Your own evidence pack is unaffected.');
-    else if (wb.state === 'off') {
-      box.append('automatic saving is off. ');
-      const go = document.createElement('button'); go.textContent = 'Save to Wayback now'; go.onclick = runWayback; box.append(go);
-    } else if (wb.state === 'done') {
-      const a = document.createElement('a'); a.href = wb.link; a.target = '_blank'; a.textContent = wb.link; box.append(a, ' ');
-      const copy = document.createElement('button'); copy.textContent = 'Copy link';
-      copy.onclick = async () => { try { await navigator.clipboard.writeText(wb.link); copy.textContent = 'Copied'; } catch (e) { copy.textContent = 'Copy failed'; } };
-      const open = document.createElement('button'); open.textContent = 'Open';
-      open.onclick = () => window.open(wb.link, '_blank');
-      box.append(copy, ' ', open);
-    }
-    const auto = document.createElement('label');
-    auto.className = 'auto';
-    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = autoWb;
-    cb.onchange = async () => { autoWb = cb.checked; try { await api.storage.local.set({ autoWayback: autoWb }); } catch (e) { /* ignore */ } };
-    auto.append(cb, ' Save every capture automatically');
-    box.append(auto);
-    if (showDetails) showDetails();
-  };
-  const runWayback = () => PP_WAYBACK(rec.url, async r => {
-    wb = r;
-    if (r.link && !wbLink()) $('waybackLink').value = r.link;
-    showWb();
-    if (r.link) {
-      try {
-        const { log = [] } = await api.storage.local.get('log');
-        const entry = log.find(e => e.id === rec.id);
-        if (entry) { entry.wayback = r.link; await api.storage.local.set({ log }); }
-      } catch (e) { /* ignore */ }
-    }
-  });
-  let autoWb = true;
-  try { const v = (await api.storage.local.get('autoWayback')).autoWayback; if (v === false) autoWb = false; } catch (e) { /* ignore */ }
-  if (params.get('wb') === '0') autoWb = false;
-  if (params.get('wb') === '1') autoWb = true;
-  if (/^https?:/.test(rec.url) && autoWb) runWayback(); else showWb();
-
   // Who hosts this site (public registration records). Runs alongside everything else.
   const hostingJob = /^https?:/.test(rec.url) ? PP_HOSTING(rec.url, (rec.server || {}).ip).catch(e => ({ files: [], domainError: e.message })) : Promise.resolve(null);
 
@@ -496,12 +445,6 @@ async function start() {
       'or open the PageProof "Verify a pack" page and drop this zip on it.',
       '',
       ...hostingLines(hosting),
-      'WAYBACK MACHINE (Internet Archive)',
-      wbLink() ? 'Archived copy: ' + wbLink() + (wb.link === wbLink() ? '' : '  (entered by the collector)')
-        : wb.state === 'failed' ? 'Not saved: ' + wb.error
-        : wb.state === 'saving' ? 'Still saving when this pack was made. The link will appear in the PageProof capture log.'
-        : 'Not requested.',
-      '',
       'Extra sections captured: ' + (rec.sections.length ? '' : 'none'),
       ...rec.sections.map(x => '  Section ' + x.n + ' (' + (x.kind || 'scroll') + '): ' + x.label),
       '',
@@ -515,7 +458,7 @@ async function start() {
     return { text: lines.join('\r\n'), c };
   };
   showDetails = () => { $('details').textContent = detailsText().text; };
-  ['collector', 'caseRef', 'caseNotes', 'waybackLink'].forEach(id => $(id).addEventListener('input', showDetails));
+  ['collector', 'caseRef', 'caseNotes'].forEach(id => $(id).addEventListener('input', showDetails));
   showDetails();
   $('detailsBox').hidden = false;
 
@@ -527,7 +470,7 @@ async function start() {
       ...good.flatMap(t => [{ name: 'timestamps/' + t.file + '.tsr', bytes: t.reply }, { name: 'timestamps/' + t.file + '.tsq', bytes: t.query }]),
       { name: 'capture-details.txt', bytes: new TextEncoder().encode(text) },
       { name: 'README.txt', bytes: new TextEncoder().encode(ppReadme({ captureId: rec.captureId, version: rec.version, url: rec.url, time: rec.time, base,
-        hasSource: !!srv.source, imageCount: saved.images.length, stamps: good, wayback: { link: wbLink() } })) }
+        hasSource: !!srv.source, imageCount: saved.images.length, stamps: good })) }
     ];
     const zip = PP_ZIP([...files, ...extra].map(f => ({ name: f.name, bytes: f.bytes })), new Date(rec.time));
     // Name: CaseID_domain_date_time_CaptureID.zip (case ID first when entered).
@@ -546,41 +489,20 @@ async function start() {
       const entry = log.find(e => e.id === rec.id) || (log.push({ id: rec.id, time: rec.time, url: rec.url, title: rec.title }), log[log.length - 1]);
       (entry.saves = entry.saves || []).push({ at: new Date().toISOString(), file: zipName, sha256: zipHash, ...c,
         timestamps: good.map(t => t.service + ' ' + (t.time || '')).join('; ') });
-      if (wbLink()) entry.wayback = wbLink();
       await api.storage.local.set({ log });
     } catch (e) { /* log is a convenience */ }
     setStatus('Saved ' + zipName + '. Its fingerprint (' + zipHash.slice(0, 16) + '...) is in your capture log.');
     return zipName;
   };
-  // Wait for the Wayback link (up to 90 seconds) so it is inside the pack.
-  const waitForWayback = async seconds => {
-    const until = Date.now() + seconds * 1000;
-    let skip = false;
-    const btn = $('pack'), label = btn.textContent;
-    btn.disabled = true;
-    const box = $('wayback');
-    const skipBtn = document.createElement('button');
-    skipBtn.textContent = "Don't wait, save without it";
-    skipBtn.onclick = () => { skip = true; };
-    while (wb.state === 'saving' && !skip && Date.now() < until) {
-      btn.textContent = 'Waiting for the Wayback link (' + Math.ceil((until - Date.now()) / 1000) + 's)...';
-      if (!box.contains(skipBtn)) box.append(' ', skipBtn);
-      await new Promise(r => setTimeout(r, 1000));
-    }
-    skipBtn.remove();
-    btn.textContent = label;
-    btn.disabled = false;
-  };
-  $('pack').onclick = async () => { await waitForWayback(90); return savePack(false); };
+  $('pack').onclick = () => savePack(false);
 
-  // Batch mode: fill in the case details, wait for the Wayback copy, save, report back, close.
+  // Batch mode: fill in the case details, save, report back, close.
   if (params.get('auto')) {
     $('collector').value = params.get('collector') || $('collector').value;
     $('caseRef').value = params.get('case') || $('caseRef').value;
     $('caseNotes').value = params.get('notes') || '';
-    await waitForWayback(150);
     const zipName = await savePack(true);
-    await reportBatch({ ok: true, zipName, wayback: wb.link || '', waybackError: wb.error || '' });
+    await reportBatch({ ok: true, zipName });
     setTimeout(async () => { try { const me = await api.tabs.getCurrent(); await api.tabs.remove(me.id); } catch (e) { /* leave open */ } }, 3000);
   }
 

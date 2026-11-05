@@ -39,16 +39,13 @@
       <label>Notes (added to every pack) <input type="text" id="notes"></label>
     </div>
     <div class="row">
-      <label class="check"><input type="checkbox" id="wb" checked> Also save each page to the Wayback Machine (slower: about a minute per link)</label>
-    </div>
-    <div class="row">
       <button id="start">Start batch</button>
       <button id="stop" disabled>Stop after the current link</button>
       <button id="report" disabled>Download batch report (.csv)</button>
     </div>
     <p class="tip">A separate PageProof window opens and visits each link. <strong>Leave that window open and don't minimize it</strong> while the batch runs (you can work in other windows). Packs are saved to <code>Downloads/PageProof/&lt;case number&gt;/</code>.</p>
     <div id="summary"></div>
-    <table><thead><tr><th>#</th><th>Link</th><th>Status</th><th>Evidence pack</th><th>Wayback</th></tr></thead><tbody id="rows"></tbody></table>
+    <table><thead><tr><th>#</th><th>Link</th><th>Status</th><th>Evidence pack</th></tr></thead><tbody id="rows"></tbody></table>
   </div>
   <script src="batch.js"></script>
 </body>

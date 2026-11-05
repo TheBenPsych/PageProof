@@ -11,17 +11,14 @@ let stopping = false;
 const batchId = 'b' + Date.now();
 let pending = 0;
 
-function setRow(i, status, cls, pack, wb) {
+function setRow(i, status, cls, pack) {
   const it = items[i];
   it.status = status;
   if (pack !== undefined) it.pack = pack;
-  if (wb !== undefined) it.wayback = wb;
   const tr = $('rows').children[i];
   tr.children[2].textContent = status;
   tr.children[2].className = cls ? 's-' + cls : '';
   tr.children[3].textContent = it.pack || '';
-  tr.children[4].textContent = '';
-  if (it.wayback) { const a = document.createElement('a'); a.href = it.wayback; a.target = '_blank'; a.textContent = 'link'; tr.children[4].append(a); }
 }
 
 function waitForLoad(tabId) {
@@ -37,7 +34,7 @@ function waitForLoad(tabId) {
 api.runtime.onMessage.addListener(msg => {
   if (!msg || msg.type !== 'packDone' || msg.batch !== batchId) return;
   pending--;
-  if (msg.ok) setRow(msg.idx, 'Saved', 'saved', msg.zipName, msg.wayback || (msg.waybackError ? '' : undefined));
+  if (msg.ok) setRow(msg.idx, 'Saved', 'saved', msg.zipName);
   else setRow(msg.idx, 'Failed: ' + msg.error, 'failed');
 });
 
@@ -45,14 +42,14 @@ async function run() {
   const urls = $('urls').value.split(/\s+/).map(u => u.trim()).filter(u => /^https?:\/\//i.test(u));
   if (!urls.length) { alert('Paste at least one link starting with http:// or https://'); return; }
   const auto = { auto: '1', batch: batchId, collector: $('collector').value.trim(), case: $('caseRef').value.trim(),
-    notes: $('notes').value.trim(), wb: $('wb').checked ? '1' : '0' };
+    notes: $('notes').value.trim() };
   try { await api.storage.local.set({ lastCase: { collector: auto.collector, caseRef: auto.case } }); } catch (e) { /* ignore */ }
 
   items = urls.map(url => ({ url, status: 'Waiting' }));
   $('rows').textContent = '';
   items.forEach((it, i) => {
     const tr = document.createElement('tr');
-    for (const v of [i + 1, it.url, 'Waiting', '', '']) { const td = document.createElement('td'); td.textContent = v; tr.append(td); }
+    for (const v of [i + 1, it.url, 'Waiting', '']) { const td = document.createElement('td'); td.textContent = v; tr.append(td); }
     $('rows').append(tr);
   });
   $('start').disabled = true; $('stop').disabled = false; $('report').disabled = true;
@@ -76,7 +73,7 @@ async function run() {
         continue;
       }
       pending++;
-      setRow(i, auto.wb === '1' ? 'Building pack (waiting for Wayback)...' : 'Building pack...', 'busy');
+      setRow(i, 'Building pack...', 'busy');
     }
     const until = Date.now() + 5 * 60 * 1000;
     while (pending > 0 && Date.now() < until) await sleep(1000);
@@ -92,7 +89,7 @@ $('start').onclick = () => run().catch(e => { $('summary').textContent = 'Batch 
 $('stop').onclick = () => { stopping = true; $('stop').disabled = true; $('stop').textContent = 'Stopping...'; };
 $('report').onclick = () => {
   const esc = v => '"' + String(v || '').replace(/"/g, '""') + '"';
-  const csv = [['#', 'Link', 'Status', 'Evidence pack', 'Wayback link'], ...items.map((it, i) => [i + 1, it.url, it.status, it.pack, it.wayback])]
+  const csv = [['#', 'Link', 'Status', 'Evidence pack'], ...items.map((it, i) => [i + 1, it.url, it.status, it.pack])]
     .map(r => r.map(esc).join(',')).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' }));
@@ -105,7 +102,5 @@ $('report').onclick = () => {
     const last = (await api.storage.local.get('lastCase')).lastCase || {};
     $('collector').value = last.collector || '';
     $('caseRef').value = last.caseRef || '';
-    const v = (await api.storage.local.get('autoWayback')).autoWayback;
-    if (v === false) $('wb').checked = false;
   } catch (e) { /* ignore */ }
 })();
