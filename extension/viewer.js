@@ -76,6 +76,39 @@ async function standaloneChecker() {
   return html;
 }
 
+// Plain-text summary of who hosts the site, for capture-details.txt.
+function hostingLines(h) {
+  if (!h) return [];
+  const contact = c => c ? [c.name, ...c.emails, ...c.phones].filter(Boolean).join(', ') : '(not listed)';
+  const lines = ['WHO HOSTS THIS SITE (public RDAP/WHOIS records, looked up ' + new Date().toISOString() + ')'];
+  if (h.ip) lines.push(
+    'Hosting company: ' + (h.ip.host || h.ip.network || '(not listed)') + (h.ip.country ? ' (' + h.ip.country + ')' : ''),
+    'Server network:  ' + h.ip.network + '  ' + h.ip.range,
+    'Host abuse contact: ' + contact(h.ip.abuse));
+  else if (h.ipError) lines.push('Hosting company: lookup failed (' + h.ipError + ')');
+  if (h.domain) lines.push(
+    'Domain:          ' + h.domain.name + (h.domain.created ? ', registered ' + h.domain.created.slice(0, 10) : '') + (h.domain.expires ? ', expires ' + h.domain.expires.slice(0, 10) : ''),
+    'Registrar:       ' + (h.domain.registrar || '(not listed)'),
+    'Registrar abuse contact: ' + contact(h.domain.registrarAbuse),
+    'Domain owner:    ' + (h.domain.registrant || '(hidden for privacy)'),
+    'Name servers:    ' + (h.domain.nameservers.join(', ') || '(not listed)'));
+  else if (h.domainError) lines.push('Domain lookup failed (' + h.domainError + ')');
+  if (h.note) lines.push('Note: ' + h.note);
+  lines.push('Full records: lookups/ folder in this pack.', '');
+  return lines;
+}
+
+function showHosting(h) {
+  const box = $('hosting');
+  box.hidden = false;
+  box.textContent = '';
+  const t = document.createElement('strong');
+  t.textContent = 'Who hosts this site (for takedown notices)';
+  const pre = document.createElement('pre');
+  pre.textContent = hostingLines(h).slice(1, -2).join('\n');
+  box.append(t, pre);
+}
+
 const toBlob = (canvas, type, q) => new Promise(r => canvas.toBlob(r, type, q));
 
 async function loadBitmap(src) {
@@ -314,7 +347,12 @@ async function start() {
   });
   let autoWb = true;
   try { const v = (await api.storage.local.get('autoWayback')).autoWayback; if (v === false) autoWb = false; } catch (e) { /* ignore */ }
+  if (params.get('wb') === '0') autoWb = false;
+  if (params.get('wb') === '1') autoWb = true;
   if (/^https?:/.test(rec.url) && autoWb) runWayback(); else showWb();
+
+  // Who hosts this site (public registration records). Runs alongside everything else.
+  const hostingJob = /^https?:/.test(rec.url) ? PP_HOSTING(rec.url, (rec.server || {}).ip).catch(e => ({ files: [], domainError: e.message })) : Promise.resolve(null);
 
   setStatus('Stitching the screenshots together...');
   for (const part of [rec.main, ...rec.sections]) {
@@ -387,6 +425,11 @@ async function start() {
   for (const f of files) f.bytes = await bytesOf(f.blob);
   if (srv.source) files.push({ name: base + '_source.html', bytes: srv.source });
   saved.images.forEach((img, i) => files.push({ name: imageName(img, i), bytes: img.bytes, url: img.url }));
+  const hosting = await hostingJob;
+  if (hosting) {
+    for (const f of hosting.files) files.push({ name: f.name, bytes: new TextEncoder().encode(f.text) });
+    showHosting(hosting);
+  }
   files.push({ name: 'VERIFY-THIS-PACK.html', bytes: new TextEncoder().encode(await standaloneChecker()) });
   for (const f of files) f.hash = await sha256(f.bytes);
 
@@ -449,6 +492,7 @@ async function start() {
       'How to check: see "Check B" in VERIFYING.md (https://github.com/TheBenPsych/PageProof/blob/main/VERIFYING.md),',
       'or open the PageProof "Verify a pack" page and drop this zip on it.',
       '',
+      ...hostingLines(hosting),
       'WAYBACK MACHINE (Internet Archive)',
       wb.state === 'done' ? 'Archived copy: ' + wb.link
         : wb.state === 'failed' ? 'Not saved: ' + wb.error
@@ -473,7 +517,7 @@ async function start() {
   $('detailsBox').hidden = false;
 
   $('pack').disabled = false;
-  $('pack').onclick = async () => {
+  const savePack = async auto => {
     const { text, c } = detailsText();
     const extra = [
       { name: 'fingerprints.sha256', bytes: fpBytes },
@@ -485,7 +529,13 @@ async function start() {
     const zip = PP_ZIP([...files, ...extra].map(f => ({ name: f.name, bytes: f.bytes })), new Date(rec.time));
     // Name: CaseID_domain_date_time_CaptureID.zip (case ID first when entered).
     const zipName = (c.caseRef ? c.caseRef.replace(/[^\w.-]+/g, '_').slice(0, 40) + '_' : '') + when + '.zip';
-    download(zip, zipName);
+    if (auto && api.downloads) {
+      // Batch captures go straight into a folder per case: Downloads/PageProof/<case>/
+      const folder = 'PageProof/' + ((c.caseRef || 'No case').replace(/[^\w.-]+/g, '_').slice(0, 40));
+      const href = URL.createObjectURL(zip);
+      await api.downloads.download({ url: href, filename: folder + '/' + zipName, saveAs: false, conflictAction: 'uniquify' });
+      setTimeout(() => URL.revokeObjectURL(href), 120000);
+    } else download(zip, zipName);
     const zipHash = await sha256(await bytesOf(zip));
     try {
       await api.storage.local.set({ lastCase: { collector: c.collector, caseRef: c.caseRef } });
@@ -497,11 +547,34 @@ async function start() {
       await api.storage.local.set({ log });
     } catch (e) { /* log is a convenience */ }
     setStatus('Saved ' + zipName + '. Its fingerprint (' + zipHash.slice(0, 16) + '...) is in your capture log.');
+    return zipName;
   };
+  $('pack').onclick = () => savePack(false);
 
-  // Keep only the 5 most recent captures so the browser doesn't fill up.
+  // Batch mode: fill in the case details, wait for the Wayback copy, save, report back, close.
+  if (params.get('auto')) {
+    $('collector').value = params.get('collector') || $('collector').value;
+    $('caseRef').value = params.get('case') || $('caseRef').value;
+    $('caseNotes').value = params.get('notes') || '';
+    const until = Date.now() + 150000;
+    while (wb.state === 'saving' && Date.now() < until) await new Promise(r => setTimeout(r, 2000));
+    const zipName = await savePack(true);
+    await reportBatch({ ok: true, zipName, wayback: wb.link || '', waybackError: wb.error || '' });
+    setTimeout(async () => { try { const me = await api.tabs.getCurrent(); await api.tabs.remove(me.id); } catch (e) { /* leave open */ } }, 3000);
+  }
+
+  // Keep only the 10 most recent captures so the browser doesn't fill up.
   const keys = (await PP_DB.keys()).sort();
-  for (const k of keys.slice(0, -5)) await PP_DB.del(k);
+  for (const k of keys.slice(0, -10)) await PP_DB.del(k);
 }
 
-start().catch(err => setStatus('Something went wrong: ' + err.message, true));
+// Tell the batch capture page how this one went.
+async function reportBatch(info) {
+  if (!params.get('batch')) return;
+  try { await api.runtime.sendMessage({ type: 'packDone', batch: params.get('batch'), idx: +params.get('idx'), ...info }); } catch (e) { /* batch page closed */ }
+}
+
+start().catch(err => {
+  setStatus('Something went wrong: ' + err.message, true);
+  reportBatch({ ok: false, error: err.message });
+});

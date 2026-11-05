@@ -19,11 +19,13 @@
       <button id="pdf" disabled>Download PDF</button>
       <button id="html" disabled>Download HTML backup</button>
       <a class="link" href="log.html" target="_blank">Capture log</a>
+      <a class="link" href="batch.html" target="_blank">Batch capture</a>
       <a class="link" href="verify.html" target="_blank">Verify a pack</a>
     </div>
   </header>
   <div id="status"></div>
   <div id="wayback" hidden></div>
+  <div id="hosting" class="wb" hidden></div>
   <section id="caseBox" hidden>
     <label>Collected by <input id="collector" autocomplete="name"></label>
     <label>Case / reference number <input id="caseRef"></label>
@@ -37,6 +39,7 @@
   <script src="archive.js"></script>
   <script src="tsa.js"></script>
   <script src="wayback.js"></script>
+  <script src="hosting.js"></script>
   <script src="readme-template.js"></script>
   <script src="viewer.js"></script>
 </body>

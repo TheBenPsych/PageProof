@@ -32,6 +32,7 @@ From top to bottom, the capture page shows:
 | --- | --- |
 | **Status line** | Read it. It tells you about anything special: sections found, endless scrolling, a timestamp service that didn't answer. |
 | **Wayback Machine box** | Wait for it to turn green (usually under a minute). Then click **Copy link** to paste the Wayback link into your case notes, or **Open** to view it. If it says it couldn't save, the site probably blocks the Archive. Your own evidence is unaffected. |
+| **Who hosts this site** | The hosting company, domain registrar and their **abuse contacts**: who your DMCA takedown notice goes to. If the site uses Cloudflare, it says so and points you to Cloudflare's abuse form, which forwards your notice to the real host. |
 | **Case boxes** | Fill these in (next step). |
 | **Capture details and fingerprints** | Click to expand and see the full record that goes into the pack. |
 | **Preview** | Scroll through it to make sure the capture shows what you need. |
@@ -72,6 +73,7 @@ CASE-2026-114_example.com_2026-11-04_15-17-55_PP-7KQ2MX.zip
 | `images/` | The original image files from the page (often the infringing images themselves) |
 | `capture-details.txt` | The full record: web address, times, your case details, server IP address, Wayback link and every fingerprint |
 | `fingerprints.sha256` | The fingerprint of every evidence file |
+| `lookups/` | Public registration records (RDAP/WHOIS) for the site's domain and server |
 | `timestamps/` | Signed receipts from independent timestamp services (DigiCert, Sectigo, FreeTSA), proving when the pack existed |
 | `README.txt` | A plain-language explanation for whoever receives the pack |
 | `VERIFY-THIS-PACK.html` | A built-in checker. Anyone can double-click it, even without PageProof or internet, to check the pack |
@@ -98,7 +100,23 @@ Many cases also use a capture of the Wayback Machine page:
 
 ---
 
-## 7. Find past captures: the capture log
+## 7. Capture many links at once: batch capture
+
+Use this for sweeps, when you have a list of infringing pages.
+
+1. **Right-click the PageProof icon** and choose **Batch capture (many links)...** (or click **Batch capture** at the top of any PageProof page).
+2. **Paste the links,** one per line. You can paste straight from a spreadsheet column.
+3. Fill in **Collected by**, **Case / reference number** and any **Notes**. They go into every pack.
+4. Choose whether to **also save each page to the Wayback Machine**. It's slower, about a minute per link, but you get the Wayback link for each one.
+5. Click **Start batch.** A separate window opens and visits each link in turn. **Leave it open and don't minimize it.** You can keep working in your other windows.
+6. Watch the table: each link shows *Loading → Capturing → Building pack → Saved* (or *Failed* with the reason, for example a page that's down).
+7. When it says **Done**, click **Download batch report (.csv)** for a spreadsheet of every link, its pack name and its Wayback link.
+
+Batch packs are saved automatically to **Downloads/PageProof/&lt;case number&gt;/**, one zip per link, and each appears in the capture log. Click **Stop after the current link** to end a batch early.
+
+> **Tip:** pages that need you to log in or close a pop-up first won't look right in a batch. Capture those one at a time instead.
+
+## 8. Find past captures: the capture log
 
 Click **Capture log** at the top of any PageProof page. It lists every capture and every pack saved on this computer: when, which page, the case number, who collected it, the zip's fingerprint, the timestamps and the Wayback link.
 
@@ -106,7 +124,7 @@ Click **Capture log** at the top of any PageProof page. It lists every capture a
 
 ---
 
-## 8. Check a pack later: Verify a pack
+## 9. Check a pack later: Verify a pack
 
 Use this whenever you or someone else needs to confirm a pack hasn't been changed.
 

@@ -68,7 +68,7 @@ async function addLog(entry) {
   await api.storage.local.set({ log });
 }
 
-async function capture(tab) {
+async function capture(tab, auto) {
   const tabId = tab.id;
   const windowId = tab.windowId;
   await api.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
@@ -162,7 +162,9 @@ async function capture(tab) {
   record.server = await server;
   await PP_DB.put(record);
   await addLog({ id: record.id, captureId: record.captureId, time: record.time, url: record.url, title: record.title });
-  await api.tabs.create({ url: api.runtime.getURL('viewer.html?id=' + record.id), index: tab.index + 1 });
+  const q = new URLSearchParams({ id: record.id, ...(auto || {}) });
+  await api.tabs.create({ url: api.runtime.getURL('viewer.html?' + q), index: tab.index + 1, windowId: tab.windowId, active: !auto });
+  return record.id;
 }
 
 api.action.onClicked.addListener(async tab => {
@@ -186,3 +188,40 @@ api.action.onClicked.addListener(async tab => {
     api.action.setBadgeText({ text: '' });
   }
 });
+
+// Batch capture: the batch page asks for one tab to be captured at a time.
+api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (!msg || msg.type !== 'capture') return false;
+  (async () => {
+    if (busy) return { ok: false, error: 'another capture is still running' };
+    busy = true;
+    stopRequested = false;
+    try {
+      const tab = await api.tabs.get(msg.tabId);
+      const id = await capture(tab, msg.auto);
+      return { ok: true, id };
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err) };
+    } finally {
+      busy = false;
+      api.action.setBadgeText({ text: '' });
+    }
+  })().then(sendResponse);
+  return true;
+});
+
+// Right-click the PageProof icon for its other pages.
+const MENU = { batch: ['Batch capture (many links)...', 'batch.html'], log: ['Capture log', 'log.html'], verify: ['Verify a pack', 'verify.html'] };
+api.runtime.onInstalled.addListener(() => {
+  try {
+    api.contextMenus.removeAll(() => {
+      for (const [id, [title]] of Object.entries(MENU)) api.contextMenus.create({ id, title, contexts: ['action'] });
+    });
+  } catch (e) { /* menus not available */ }
+});
+try {
+  api.contextMenus.onClicked.addListener(info => {
+    const m = MENU[info.menuItemId];
+    if (m) api.tabs.create({ url: api.runtime.getURL(m[1]) });
+  });
+} catch (e) { /* menus not available */ }

@@ -21,6 +21,8 @@ A browser extension for **Chrome and Firefox** that captures a whole web page, t
   - `VERIFY-THIS-PACK.html`: a built-in checker anyone can double-click to check the pack, with no PageProof or internet needed
   - `capture-details.txt`: web address, page title, time and time zone, window size, browser, your name, case number and notes, and the website server's IP address, clock time and response headers
 - **Wayback Machine copy:** each capture also asks the Internet Archive to save its own public copy of the page. The link appears on the capture page (with Copy and Open buttons), in `capture-details.txt` and in the capture log. You can turn this off with a checkbox.
+- **Who hosts this site:** each capture looks up the public registration records for the site: the hosting company, domain registrar, and their abuse contacts (who a DMCA notice goes to). It's shown on the capture page, written in `capture-details.txt`, and the full records are saved in `lookups/`.
+- **Batch capture:** paste a list of links and PageProof captures each one into its own evidence pack, saved to `Downloads/PageProof/<case number>/`, with a CSV report at the end. Right-click the PageProof icon to open it.
 - **Verify a pack:** drop any evidence pack on this page and it checks every fingerprint and timestamp, then shows a clear green or red result.
 - **Capture log:** a running list of every capture and every evidence pack saved (with the pack's own fingerprint). Open it with the **Capture log** link on the capture page, and download it as a spreadsheet (.csv).
 
