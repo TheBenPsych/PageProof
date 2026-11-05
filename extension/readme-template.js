@@ -65,7 +65,7 @@ function ppReadme(o) {
       '    fingerprint was sent to the services, never the files themselves.',
       ''] : ['(No trusted timestamp was available when this pack was made. See capture-details.txt.)', '']),
     ...(o.wayback && o.wayback.link ? ['WAYBACK MACHINE COPY',
-      '    The Internet Archive also saved its own independent public copy of the page:',
+      '    The collector also saved a public copy of the page on the Internet Archive:',
       '    ' + o.wayback.link,
       ''] : []),
     'README.txt',
