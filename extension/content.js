@@ -91,6 +91,7 @@
       // "... more", "See more", or (newer Instagram) just "…" at the end of a description.
       if (!/^((…|\.\.\.)?\s*(more|see more|show more)|…|\.\.\.)$/i.test(text)) continue;
       if (el.querySelector('svg') || /option|menu/i.test(el.getAttribute('aria-label') || '')) continue; // not the "more options" menu
+      if (isMenuButton(el)) continue;
       if (el.closest('a[href]:not([href="#"])')) continue;            // never follow a link
       if ([...el.children].some(c => (c.textContent || '').trim() === text)) continue; // click the innermost one
       const r = el.getBoundingClientRect();
@@ -108,6 +109,7 @@
           if (up.getAttribute('role') === 'button' || getComputedStyle(up).cursor === 'pointer') { target = up; break; }
         }
         if (target.closest('a[href]:not([href="#"])')) continue;
+        if (isMenuButton(target)) continue;
         try { target.click(); n++; } catch (e) { /* ignore */ }
       }
     }
@@ -119,6 +121,7 @@
         if (text.length < 20 || text.length > 800 || !/(…|\.\.\.)$/.test(text)) continue;
         if (getComputedStyle(el).cursor !== 'pointer' && el.getAttribute('role') !== 'button') continue;
         if (el.closest('a[href]:not([href="#"])') || el.querySelector('svg, a[href], video')) continue;
+        if (isMenuButton(el)) continue;
         if ([...el.children].some(c => (c.textContent || '').trim() === text)) continue;
         const r = el.getBoundingClientRect();
         if (r.width < 4 || r.height < 4 || r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw) continue;
@@ -126,6 +129,17 @@
       }
     }
     return n;
+  }
+
+  // Side bars and menus have their own "More" buttons (TikTok's opens a settings panel). Skip them.
+  function isMenuButton(el) {
+    if (el.closest('nav, aside, header, [role="navigation"], [role="menu"], [role="menubar"], [role="tablist"]')) return true;
+    for (let up = el, i = 0; up && i < 4; up = up.parentElement, i++) {
+      if (up.hasAttribute('aria-haspopup')) return true;
+      const clickable = /^(BUTTON|A)$/.test(up.tagName) || up.getAttribute('role') === 'button';
+      if (clickable && up.querySelector('svg, img')) return true;   // icon + "More" = a menu item
+    }
+    return false;
   }
 
   function isClamped(el) {
