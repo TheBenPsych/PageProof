@@ -21,7 +21,7 @@ This guide shows how to use PageProof day to day, once it's installed in your br
 
 > **Tip:** On pages that keep loading more posts as you scroll ("endless scrolling"), PageProof stops where the page ended when you clicked, and notes this in the record.
 
-> **Instagram Reels and TikTok:** these show one video per screen, so PageProof captures only the Reel on screen and doesn't scroll on to the next ones. On Instagram, Facebook, TikTok and Threads it also clicks **"... more"** first, so the full post description is in the capture. For a Reel together with its comments, open it as a post instead: change `/reels/` to `/reel/` in the address (for example `instagram.com/reel/CwYkCcxpIeT/`), then capture.
+> **Instagram Reels and TikTok:** these show one video per screen, so PageProof captures only the Reel on screen and doesn't scroll on to the next ones. On Instagram, Facebook, TikTok and Threads it also clicks **"... more"** (or a lone **"…"**) first, so the full post description is in the capture. For a Reel together with its comments, open it as a post instead: change `/reels/` to `/reel/` in the address (for example `instagram.com/reel/CwYkCcxpIeT/`), then capture.
 
 ---
 

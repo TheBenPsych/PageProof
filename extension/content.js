@@ -80,12 +80,28 @@
     for (const el of document.querySelectorAll('span, div, button, a[role="button"], [role="button"]')) {
       if (n >= 5) break;
       const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!/^(…|\.\.\.)?\s*(more|see more|show more)$/i.test(text)) continue;
+      // "... more", "See more", or (newer Instagram) just "…" at the end of a description.
+      if (!/^((…|\.\.\.)?\s*(more|see more|show more)|…|\.\.\.)$/i.test(text)) continue;
+      if (el.querySelector('svg') || /option|menu/i.test(el.getAttribute('aria-label') || '')) continue; // not the "more options" menu
       if (el.closest('a[href]:not([href="#"])')) continue;            // never follow a link
       if ([...el.children].some(c => (c.textContent || '').trim() === text)) continue; // click the innermost one
       const r = el.getBoundingClientRect();
       if (r.width < 4 || r.height < 4 || r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw) continue;
       try { el.click(); n++; } catch (e) { /* ignore */ }
+    }
+    // Fallback: a clickable description whose text simply ends in "…".
+    if (!n) {
+      for (const el of document.querySelectorAll('[role="button"], span, div')) {
+        if (n >= 3) break;
+        const text = (el.textContent || '').trim();
+        if (text.length < 20 || text.length > 800 || !/(…|\.\.\.)$/.test(text)) continue;
+        if (getComputedStyle(el).cursor !== 'pointer' && el.getAttribute('role') !== 'button') continue;
+        if (el.closest('a[href]:not([href="#"])') || el.querySelector('svg, a[href], video')) continue;
+        if ([...el.children].some(c => (c.textContent || '').trim() === text)) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width < 4 || r.height < 4 || r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw) continue;
+        try { el.click(); n++; } catch (e) { /* ignore */ }
+      }
     }
     return n;
   }
