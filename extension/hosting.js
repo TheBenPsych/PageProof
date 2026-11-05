@@ -78,7 +78,10 @@ const PP_HOSTING = (() => {
 
     if (ip) {
       try {
-        const { text, json } = await get(RDAP + '/ip/' + encodeURIComponent(ip));
+        // rdap.org sends us to the right regional registry; ARIN's server is the backup.
+        let r;
+        try { r = await get(RDAP + '/ip/' + ip); } catch (e) { r = await get('https://rdap.arin.net/registry/ip/' + ip); }
+        const { text, json } = r;
         const holder = findRole(json.entities, 'registrant') || findRole(json.entities, 'administrative') || (json.entities || [])[0];
         const abuse = findRole(json.entities, 'abuse');
         result.ip = {

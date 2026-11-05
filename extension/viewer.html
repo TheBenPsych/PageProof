@@ -24,11 +24,11 @@
     </div>
   </header>
   <div id="status"></div>
-  <div id="wayback" hidden></div>
   <div id="hosting" class="wb" hidden></div>
   <section id="caseBox" hidden>
     <label>Collected by <input id="collector" autocomplete="name"></label>
     <label>Case / reference number <input id="caseRef"></label>
+    <label class="wide">Wayback Machine link (optional) <input id="waybackLink" placeholder="Paste the web.archive.org/web/... link here"><span class="hint"><a id="waybackSave" target="_blank" rel="noopener">Save this page on the Wayback Machine</a> (opens archive.org; when it finishes, copy the link it shows and paste it here)</span></label>
     <label class="wide">Notes <textarea id="caseNotes" rows="2" placeholder="For example: infringing use of client photo on product page"></textarea></label>
   </section>
   <details id="detailsBox" hidden><summary>Capture details and fingerprints</summary><pre id="details"></pre></details>
@@ -38,7 +38,6 @@
   <script src="zip.js"></script>
   <script src="archive.js"></script>
   <script src="tsa.js"></script>
-  <script src="wayback.js"></script>
   <script src="hosting.js"></script>
   <script src="readme-template.js"></script>
   <script src="viewer.js"></script>

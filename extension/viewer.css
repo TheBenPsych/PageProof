@@ -31,3 +31,5 @@ a.link { color: #fff; align-self: center; font-weight: 600; font-size: 14px; }
 .wb.failed { background: rgba(225,29,72,.12); }
 .wb button { padding: 4px 10px; font-size: 13px; }
 .wb label.auto { display: block; margin-top: 6px; font-size: 13px; opacity: .85; }
+#caseBox .hint { font-weight: 400; font-size: 12px; opacity: .85; }
+#caseBox .hint a { color: var(--accent); }
