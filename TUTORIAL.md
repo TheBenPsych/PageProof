@@ -56,6 +56,8 @@ From top to bottom, the capture page shows:
 
 Click the green **Download evidence pack (.zip)** button.
 
+If the Wayback Machine is still saving, the button waits for the link (up to 90 seconds) so it ends up inside the pack. If the Archive gives an error, it downloads right away without the link. Click **Don't wait, save without it** to skip waiting.
+
 The file is named:
 
 ```

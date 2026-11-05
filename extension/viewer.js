@@ -552,15 +552,33 @@ async function start() {
     setStatus('Saved ' + zipName + '. Its fingerprint (' + zipHash.slice(0, 16) + '...) is in your capture log.');
     return zipName;
   };
-  $('pack').onclick = () => savePack(false);
+  // Wait for the Wayback link (up to 90 seconds) so it is inside the pack.
+  const waitForWayback = async seconds => {
+    const until = Date.now() + seconds * 1000;
+    let skip = false;
+    const btn = $('pack'), label = btn.textContent;
+    btn.disabled = true;
+    const box = $('wayback');
+    const skipBtn = document.createElement('button');
+    skipBtn.textContent = "Don't wait, save without it";
+    skipBtn.onclick = () => { skip = true; };
+    while (wb.state === 'saving' && !skip && Date.now() < until) {
+      btn.textContent = 'Waiting for the Wayback link (' + Math.ceil((until - Date.now()) / 1000) + 's)...';
+      if (!box.contains(skipBtn)) box.append(' ', skipBtn);
+      await new Promise(r => setTimeout(r, 1000));
+    }
+    skipBtn.remove();
+    btn.textContent = label;
+    btn.disabled = false;
+  };
+  $('pack').onclick = async () => { await waitForWayback(90); return savePack(false); };
 
   // Batch mode: fill in the case details, wait for the Wayback copy, save, report back, close.
   if (params.get('auto')) {
     $('collector').value = params.get('collector') || $('collector').value;
     $('caseRef').value = params.get('case') || $('caseRef').value;
     $('caseNotes').value = params.get('notes') || '';
-    const until = Date.now() + 150000;
-    while (wb.state === 'saving' && Date.now() < until) await new Promise(r => setTimeout(r, 2000));
+    await waitForWayback(150);
     const zipName = await savePack(true);
     await reportBatch({ ok: true, zipName, wayback: wb.link || '', waybackError: wb.error || '' });
     setTimeout(async () => { try { const me = await api.tabs.getCurrent(); await api.tabs.remove(me.id); } catch (e) { /* leave open */ } }, 3000);
