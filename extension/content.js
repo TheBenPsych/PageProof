@@ -11,6 +11,7 @@
   let pageEl = null;      // on sites where the page scrolls inside a big box instead of the window
   let pageElStart = 0;
   let startTotal = 0;     // how tall the page was when capture began (to stop endless scrolling)
+  let single = false;     // feeds that show one post per screen (Instagram Reels, TikTok): capture only the one on screen
 
   const instant = { behavior: 'instant' };
   const scroller = () => document.scrollingElement || document.documentElement;
@@ -69,6 +70,32 @@
     return clean.length > 70 ? clean.slice(0, 67) + '...' : clean;
   }
 
+  // Social sites shorten post descriptions with a "... more" button. Click it so the
+  // full description shows. Only on screen, and only on these sites, so nothing else changes.
+  const SOCIAL = /(^|\.)(instagram|facebook|tiktok|threads)\.(com|net)$/i;
+  function expandMore() {
+    if (!SOCIAL.test(location.hostname)) return 0;
+    const vh = window.innerHeight, vw = document.documentElement.clientWidth;
+    let n = 0;
+    for (const el of document.querySelectorAll('span, div, button, a[role="button"], [role="button"]')) {
+      if (n >= 5) break;
+      const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!/^(…|\.\.\.)?\s*(more|see more|show more)$/i.test(text)) continue;
+      if (el.closest('a[href]:not([href="#"])')) continue;            // never follow a link
+      if ([...el.children].some(c => (c.textContent || '').trim() === text)) continue; // click the innermost one
+      const r = el.getBoundingClientRect();
+      if (r.width < 4 || r.height < 4 || r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw) continue;
+      try { el.click(); n++; } catch (e) { /* ignore */ }
+    }
+    return n;
+  }
+
+  // Does this element snap one item per screen when scrolled up and down?
+  function snapsVertically(el) {
+    const t = getComputedStyle(el).scrollSnapType || '';
+    return /\b(y|block|both)\b/.test(t);
+  }
+
   function prepare(wantHtml) {
     const se = scroller();
     start = { x: window.scrollX, y: window.scrollY };
@@ -125,6 +152,18 @@
       pageEl = found.shift();
       pageElStart = pageEl.scrollTop;
     }
+    // One-post-per-screen feeds (Instagram Reels, TikTok): scrolling only brings the next post,
+    // so keep the post on screen and capture just that.
+    const reelUrl = /(^|\.)instagram\.com$/i.test(location.hostname) && /^\/reels?\//.test(location.pathname)
+      || /(^|\.)tiktok\.com$/i.test(location.hostname);
+    // Only on social sites: ordinary websites with full-screen snapping sections are still captured in full.
+    const snaps = (pageEl && snapsVertically(pageEl)) || snapsVertically(se) || (document.body && snapsVertically(document.body));
+    single = (SOCIAL.test(location.hostname) && snaps)
+      || (reelUrl && (pageEl || se.scrollHeight <= vh + 5 || [...found].some(el => el.scrollHeight >= 2 * el.clientHeight && visibleArea(el) >= 0.3 * vw * vh)));
+    if (single && !pageEl && found.length && visibleArea(found[0]) >= 0.3 * vw * vh && found[0].scrollHeight >= 2 * found[0].clientHeight) {
+      pageEl = found.shift();  // the feed box itself is not a section
+      pageElStart = pageEl.scrollTop;
+    }
 
     found = found.filter(el => visibleArea(el) > 0 || el.getBoundingClientRect().height > 0).slice(0, MAX_SECTIONS);
     targets = found.map(el => {
@@ -163,6 +202,7 @@
       userAgent: navigator.userAgent,
       background: pageBackground(),
       innerWidth: window.innerWidth,
+      single,
       sections: targets.map(t => ({ n: t.n, kind: t.kind, label: t.label, axes: t.axes, options: t.options })),
       html
     };
@@ -176,7 +216,10 @@
   function scrollPage(y) {
     const vw = document.documentElement.clientWidth, vh = window.innerHeight;
     let res;
-    if (!pageEl) {
+    if (single) {
+      // Leave the feed exactly where it is: one screen only.
+      res = { crop: { x: 0, y: 0, w: vw, h: vh }, destY: 0, total: vh, next: vh, done: true, grew: false };
+    } else if (!pageEl) {
       const se = scroller();
       window.scrollTo({ left: 0, top: y, ...instant });
       const live = Math.max(se.scrollHeight, document.body ? document.body.scrollHeight : 0);
@@ -217,6 +260,7 @@
   }
 
   function grewNow() {
+    if (single) return false;
     if (pageEl) return pageEl.scrollHeight > cap(startTotal, pageEl.clientHeight);
     const se = scroller();
     return Math.max(se.scrollHeight, document.body ? document.body.scrollHeight : 0) > cap(startTotal, window.innerHeight);
@@ -261,9 +305,9 @@
       if (!t.el.isConnected) return;
       if (t.kind === 'scroll') { t.el.scrollTop = t.startTop; t.el.scrollLeft = t.startLeft; }
     });
-    if (pageEl && pageEl.isConnected) pageEl.scrollTop = pageElStart;
+    if (pageEl && pageEl.isConnected && !single) pageEl.scrollTop = pageElStart;
     if (start) window.scrollTo({ left: start.x, top: start.y, ...instant });
   }
 
-  window.__pageproof = { prepare, scrollPage, hideFixed, removeBadges, scrollSection, grewNow, restore };
+  window.__pageproof = { expandMore, prepare, scrollPage, hideFixed, removeBadges, scrollSection, grewNow, restore };
 })();

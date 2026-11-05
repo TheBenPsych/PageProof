@@ -72,6 +72,8 @@ async function capture(tab, auto) {
   const tabId = tab.id;
   const windowId = tab.windowId;
   await api.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+  const expanded = await inPage(tabId, 'expandMore');
+  if (expanded) await sleep(800);
   const info = await inPage(tabId, 'prepare', true);
 
   const record = {
@@ -91,6 +93,9 @@ async function capture(tab, auto) {
     sections: [],
     notes: []
   };
+
+  if (expanded) record.notes.push('PageProof clicked "more" to show the full post description.');
+  if (info.single) record.notes.push('This page shows one post per screen (like Instagram Reels), so only the post on screen was captured, not the ones after it.');
 
   const server = serverCheck(info.url);
 
