@@ -9,7 +9,7 @@ A browser extension for **Chrome and Firefox** that captures a whole web page, t
 - **Hidden content too:** anything that doesn't fit on screen is marked "Section 1", "Section 2" and so on in the capture and shown in full underneath:
   - boxes that scroll up and down on their own (like the comments on an Instagram post, chat panes, long tables)
   - **dropdown lists**: every choice is written out, with the selected one marked
-- **Instagram Reels and TikTok:** only the video on screen is captured (no scrolling into the next ones), and "... more" is clicked first so the full post description shows.
+- **Reels, Shorts and TikToks:** on Instagram and Facebook Reels, YouTube Shorts and TikTok, only the video on screen is captured (no scrolling into the next ones), and a shortened description is opened first so the full text shows. Anything PageProof did to the page is written in the pack under "How the capture was taken".
 - **Endless pages:** on sites that keep loading more articles as you scroll, the capture stops where the page ended when you clicked. Click the PageProof icon again at any time to stop a capture early and keep what it has so far.
 - **Two ways to save:** PDF, and an HTML backup that stores every picture, style and font inside the file, so it still opens correctly even if the website deletes them.
 - **Evidence pack:** one .zip holding everything below, named `CaseID_domain_date_time_CaptureID.zip` (for example `CASE-42_traded.co_2026-11-04_15-17-55_PP-7KQ2MX.zip`). Every capture gets its own unique Capture ID, which also appears in the PDF banner, the details file and the capture log.

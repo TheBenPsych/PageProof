@@ -21,7 +21,7 @@ This guide shows how to use PageProof day to day, once it's installed in your br
 
 > **Tip:** On pages that keep loading more posts as you scroll ("endless scrolling"), PageProof stops where the page ended when you clicked, and notes this in the record.
 
-> **Instagram Reels and TikTok:** these show one video per screen, so PageProof captures only the Reel on screen and doesn't scroll on to the next ones. On Instagram, Facebook, TikTok and Threads it also clicks **"... more"** (or a lone **"…"**) first, so the full post description is in the capture. For a Reel together with its comments, open it as a post instead: change `/reels/` to `/reel/` in the address (for example `instagram.com/reel/CwYkCcxpIeT/`), then capture.
+> **Reels, Shorts and TikToks:** Instagram Reels, Facebook Reels, YouTube Shorts and TikTok videos show one video per screen, so PageProof captures only the video on screen and doesn't scroll on to the next ones. It also opens a shortened description first: it clicks **"... more"**, **"See more"** or a lone **"…"**, or clicks the shortened description and waits for it to open. If a description still isn't fully open, click it yourself and capture again: PageProof keeps whatever is open. For an Instagram Reel with its comments, change `/reels/` to `/reel/` in the address (for example `instagram.com/reel/CwYkCcxpIeT/`), then capture.
 
 ---
 
@@ -71,7 +71,7 @@ CASE-2026-114_example.com_2026-11-04_15-17-55_PP-7KQ2MX.zip
 | `...html` | A working copy of the page with all pictures stored inside it, so it opens even if the site deletes everything |
 | `..._source.html` | The page's code, exactly as the website's server sent it |
 | `images/` | The original image files from the page (often the infringing images themselves) |
-| `capture-details.txt` | The full record: web address, times, your case details, server IP address and every fingerprint |
+| `capture-details.txt` | The full record: web address, times, your case details, server IP address, how the capture was taken (for example, if PageProof opened a description) and every fingerprint |
 | `fingerprints.sha256` | The fingerprint of every evidence file |
 | `lookups/` | Public registration records (RDAP/WHOIS) for the site's domain and server |
 | `timestamps/` | Signed receipts from independent timestamp services (DigiCert, Sectigo, FreeTSA), proving when the pack existed |

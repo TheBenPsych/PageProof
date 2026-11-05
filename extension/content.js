@@ -73,7 +73,14 @@
 
   // Social sites shorten post descriptions with a "... more" button. Click it so the
   // full description shows. Only on screen, and only on these sites, so nothing else changes.
-  const SOCIAL = /(^|\.)(instagram|facebook|tiktok|threads)\.(com|net)$/i;
+  const SOCIAL = /(^|\.)(instagram|facebook|tiktok|threads|youtube)\.(com|net)$/i;
+  // Pages that show one short video per screen: Instagram and Facebook Reels, YouTube Shorts, TikTok.
+  function isReelPage() {
+    const h = location.hostname, p = location.pathname;
+    return (/(^|\.)(instagram|facebook)\.com$/i.test(h) && /^\/reels?\//.test(p))
+      || (/(^|\.)youtube\.com$/i.test(h) && /^\/shorts\//.test(p))
+      || (/(^|\.)tiktok\.com$/i.test(h) && (/\/video\//.test(p) || /^\/(foryou|following|explore)?\/?$/.test(p)));
+  }
   function expandMore() {
     if (!SOCIAL.test(location.hostname)) return 0;
     const vh = window.innerHeight, vw = document.documentElement.clientWidth;
@@ -92,7 +99,8 @@
     }
     // Descriptions cut short by styling (the "…" is drawn by the browser): click the
     // description itself, the way a person would, so the site opens it with its own animation.
-    if (!n) {
+    // Only on Reels/Shorts pages, so ordinary feeds (where a click might open a link) are left alone.
+    if (!n && isReelPage()) {
       for (const el of clampedOnScreen()) {
         if (n >= 3) break;
         let target = el;
@@ -104,7 +112,7 @@
       }
     }
     // Fallback: a clickable description whose text simply ends in "…".
-    if (!n) {
+    if (!n && isReelPage()) {
       for (const el of document.querySelectorAll('[role="button"], span, div')) {
         if (n >= 3) break;
         const text = (el.textContent || '').trim();
@@ -138,7 +146,7 @@
   }
   // Last resort, if the site did not open it: lift the styling limit so the full text shows.
   function unclamp() {
-    if (!SOCIAL.test(location.hostname)) return 0;
+    if (!SOCIAL.test(location.hostname) || !isReelPage()) return 0;
     let n = 0;
     for (const el of clampedOnScreen()) {
       unclamped.push([el, el.getAttribute('style')]);
@@ -210,10 +218,9 @@
       pageEl = found.shift();
       pageElStart = pageEl.scrollTop;
     }
-    // One-post-per-screen feeds (Instagram Reels, TikTok): scrolling only brings the next post,
+    // One-post-per-screen feeds (Instagram/Facebook Reels, YouTube Shorts, TikTok): scrolling only brings the next post,
     // so keep the post on screen and capture just that.
-    const reelUrl = /(^|\.)instagram\.com$/i.test(location.hostname) && /^\/reels?\//.test(location.pathname)
-      || /(^|\.)tiktok\.com$/i.test(location.hostname);
+    const reelUrl = isReelPage();
     // Only on social sites: ordinary websites with full-screen snapping sections are still captured in full.
     const snaps = (pageEl && snapsVertically(pageEl)) || snapsVertically(se) || (document.body && snapsVertically(document.body));
     single = (SOCIAL.test(location.hostname) && snaps)

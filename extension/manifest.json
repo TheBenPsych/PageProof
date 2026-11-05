@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PageProof",
-  "version": "2.7.4",
+  "version": "2.8.0",
   "description": "Capture a whole web page as evidence: stamped with its web address and time, saved as PDF and a full HTML backup with images.",
   "icons": {
     "16": "icons/icon16.png",
