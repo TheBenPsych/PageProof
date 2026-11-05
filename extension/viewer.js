@@ -445,6 +445,9 @@ async function start() {
       'or open the PageProof "Verify a pack" page and drop this zip on it.',
       '',
       ...hostingLines(hosting),
+      'HOW THE CAPTURE WAS TAKEN',
+      ...(rec.notes.length ? rec.notes.map(n => '- ' + n) : ['- The page was captured from the top, one screen at a time, exactly as shown.']),
+      '',
       'Extra sections captured: ' + (rec.sections.length ? '' : 'none'),
       ...rec.sections.map(x => '  Section ' + x.n + ' (' + (x.kind || 'scroll') + '): ' + x.label),
       '',
@@ -470,7 +473,7 @@ async function start() {
       ...good.flatMap(t => [{ name: 'timestamps/' + t.file + '.tsr', bytes: t.reply }, { name: 'timestamps/' + t.file + '.tsq', bytes: t.query }]),
       { name: 'capture-details.txt', bytes: new TextEncoder().encode(text) },
       { name: 'README.txt', bytes: new TextEncoder().encode(ppReadme({ captureId: rec.captureId, version: rec.version, url: rec.url, time: rec.time, base,
-        hasSource: !!srv.source, imageCount: saved.images.length, stamps: good })) }
+        hasSource: !!srv.source, imageCount: saved.images.length, stamps: good, notes: rec.notes, hasLookups: !!(hosting && hosting.files && hosting.files.length) })) }
     ];
     const zip = PP_ZIP([...files, ...extra].map(f => ({ name: f.name, bytes: f.bytes })), new Date(rec.time));
     // Name: CaseID_domain_date_time_CaptureID.zip (case ID first when entered).
