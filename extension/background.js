@@ -72,8 +72,11 @@ async function capture(tab, auto) {
   const tabId = tab.id;
   const windowId = tab.windowId;
   await api.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
-  const expanded = await inPage(tabId, 'expandMore');
-  if (expanded) await sleep(800);
+  // Open shortened post descriptions, and give the site's opening animation time to finish.
+  let expanded = await inPage(tabId, 'expandMore');
+  if (expanded) await sleep(1500);
+  const lifted = await inPage(tabId, 'unclamp');
+  if (lifted) { expanded += lifted; await sleep(400); }
   const info = await inPage(tabId, 'prepare', true);
 
   const record = {

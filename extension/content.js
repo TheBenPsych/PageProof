@@ -90,25 +90,18 @@
       if (r.width < 4 || r.height < 4 || r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw) continue;
       try { el.click(); n++; } catch (e) { /* ignore */ }
     }
-    // Many sites cut descriptions short with styling (the "…" is drawn by the browser,
-    // not part of the text). Lift that limit on text boxes on screen, so the full text shows.
-    for (const el of document.querySelectorAll('span, div, h1, p')) {
-      const cs = getComputedStyle(el);
-      const clamp = cs.webkitLineClamp && cs.webkitLineClamp !== 'none';
-      const ellipsis = cs.textOverflow === 'ellipsis' && cs.overflow !== 'visible';
-      if (!clamp && !ellipsis) continue;
-      if ((el.textContent || '').trim().length < 30 || el.querySelector('video, img, svg')) continue;
-      if (el.scrollHeight <= el.clientHeight + 2 && el.scrollWidth <= el.clientWidth + 2) continue; // nothing hidden
-      const r = el.getBoundingClientRect();
-      if (r.width < 4 || r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw) continue;
-      unclamped.push([el, el.getAttribute('style')]);
-      el.style.setProperty('-webkit-line-clamp', 'unset', 'important');
-      el.style.setProperty('line-clamp', 'unset', 'important');
-      el.style.setProperty('max-height', 'none', 'important');
-      el.style.setProperty('overflow', 'visible', 'important');
-      el.style.setProperty('text-overflow', 'clip', 'important');
-      el.style.setProperty('white-space', 'normal', 'important');
-      n++;
+    // Descriptions cut short by styling (the "…" is drawn by the browser): click the
+    // description itself, the way a person would, so the site opens it with its own animation.
+    if (!n) {
+      for (const el of clampedOnScreen()) {
+        if (n >= 3) break;
+        let target = el;
+        for (let up = el, i = 0; up && i < 5; up = up.parentElement, i++) {
+          if (up.getAttribute('role') === 'button' || getComputedStyle(up).cursor === 'pointer') { target = up; break; }
+        }
+        if (target.closest('a[href]:not([href="#"])')) continue;
+        try { target.click(); n++; } catch (e) { /* ignore */ }
+      }
     }
     // Fallback: a clickable description whose text simply ends in "…".
     if (!n) {
@@ -123,6 +116,34 @@
         if (r.width < 4 || r.height < 4 || r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw) continue;
         try { el.click(); n++; } catch (e) { /* ignore */ }
       }
+    }
+    return n;
+  }
+
+  function isClamped(el) {
+    const cs = getComputedStyle(el);
+    const clamp = cs.webkitLineClamp && cs.webkitLineClamp !== 'none';
+    const ellipsis = cs.textOverflow === 'ellipsis' && cs.overflow !== 'visible';
+    if (!clamp && !ellipsis) return false;
+    if ((el.textContent || '').trim().length < 30 || el.querySelector('video, img, svg')) return false;
+    return el.scrollHeight > el.clientHeight + 2 || el.scrollWidth > el.clientWidth + 2;
+  }
+  function clampedOnScreen() {
+    const vh = window.innerHeight, vw = document.documentElement.clientWidth;
+    return [...document.querySelectorAll('span, div, h1, p')].filter(el => {
+      if (!isClamped(el)) return false;
+      const r = el.getBoundingClientRect();
+      return r.width >= 4 && r.bottom >= 0 && r.top <= vh && r.right >= 0 && r.left <= vw;
+    });
+  }
+  // Last resort, if the site did not open it: lift the styling limit so the full text shows.
+  function unclamp() {
+    if (!SOCIAL.test(location.hostname)) return 0;
+    let n = 0;
+    for (const el of clampedOnScreen()) {
+      unclamped.push([el, el.getAttribute('style')]);
+      for (const [k, v] of [['-webkit-line-clamp', 'unset'], ['line-clamp', 'unset'], ['max-height', 'none'], ['overflow', 'visible'], ['text-overflow', 'clip'], ['white-space', 'normal']]) el.style.setProperty(k, v, 'important');
+      n++;
     }
     return n;
   }
@@ -348,5 +369,5 @@
     if (start) window.scrollTo({ left: start.x, top: start.y, ...instant });
   }
 
-  window.__pageproof = { expandMore, prepare, scrollPage, hideFixed, removeBadges, scrollSection, grewNow, restore };
+  window.__pageproof = { expandMore, unclamp, prepare, scrollPage, hideFixed, removeBadges, scrollSection, grewNow, restore };
 })();
