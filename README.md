@@ -31,6 +31,8 @@ A browser extension for **Chrome and Firefox** that captures a whole web page, t
 
 ## Checking a fingerprint later
 
+For the full beginner's guide to how fingerprints work and how to spot tampering, see **[VERIFYING.md](VERIFYING.md)**.
+
 Each file's SHA-256 fingerprint is listed in `capture-details.txt`. If even one pixel or letter of a file changes, its fingerprint changes. To check a file:
 
 - **Windows:** open Command Prompt and type `certutil -hashfile "C:\path\to\file.pdf" SHA256`
