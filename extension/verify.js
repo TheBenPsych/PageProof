@@ -104,7 +104,7 @@ async function checkFiles(files, zipBytes) {
   note.style.fontSize = '13px'; note.style.opacity = '.8';
   out.append(note);
   if (globalThis.PP_STANDALONE) {
-    const n2 = el('p', null, 'You are using the checker that came inside this pack. It is covered by the pack\'s own fingerprints and timestamps. For a fully independent check, use the free openssl commands in README.txt, or PageProof\'s own copy at https://github.com/TheBenPsych/PageProof.');
+    const n2 = el('p', null, 'You are using the checker that came inside this pack. It is covered by the pack\'s own fingerprints and timestamps. For a fully independent check, use the free openssl commands in README.txt.');
     n2.style.fontSize = '13px'; n2.style.opacity = '.8';
     out.append(n2);
   }

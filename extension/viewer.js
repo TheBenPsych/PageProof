@@ -418,7 +418,7 @@ async function start() {
       'Time zone:     ' + zoneLabel(rec),
       'Window size:   ' + rec.viewWidth + ' x ' + rec.viewHeight + ' (screen scale ' + (Math.round(s * 100) / 100) + ')',
       'Browser:       ' + rec.userAgent,
-      'Tool:          PageProof ' + rec.version + ' (https://github.com/TheBenPsych/PageProof)',
+      'Tool:          PageProof ' + rec.version,
       '',
       'CASE DETAILS',
       'Collected by:  ' + (c.collector || '(not entered)'),
@@ -441,7 +441,7 @@ async function start() {
       ...stamps.flatMap(t => t.error
         ? [t.service + ': not available (' + t.error + ')']
         : [t.service + ': signed ' + (t.time || '(see receipt)') + ' UTC  ->  timestamps/' + t.file + '.tsr  (' + t.url + ')']),
-      'How to check: see "Check B" in VERIFYING.md (https://github.com/TheBenPsych/PageProof/blob/main/VERIFYING.md),',
+      'How to check: see "How to check by hand" in README.txt,',
       'or open the PageProof "Verify a pack" page and drop this zip on it.',
       '',
       ...hostingLines(hosting),
