@@ -31,7 +31,7 @@ A browser extension for **Chrome and Firefox** that captures a whole web page, t
 1. Go to any normal website.
 2. Click the PageProof icon in your toolbar (or press **Alt+Shift+P**).
 3. It jumps to the top of the page, then scrolls down while it captures. The icon shows a counter while it works. Don't scroll or switch tabs until it finishes. To stop early, click the icon again.
-4. A new tab opens with your capture. Fill in **Collected by**, **Case / reference number** and any **Notes** (your name and last case number are remembered).
+4. A new tab opens with your capture. Fill in **Collected by**, **Case / reference number** and any **Notes** (your name is remembered; the case number and notes start empty each time).
 5. Then click **Download evidence pack (.zip)** to get everything at once, or download the PDF or HTML backup on their own.
 
 ## Checking a pack

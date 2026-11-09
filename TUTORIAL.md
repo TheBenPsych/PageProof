@@ -47,8 +47,8 @@ From top to bottom, the capture page shows:
 ## 3. Fill in the case details
 
 - **Collected by:** your name. It's remembered for next time.
-- **Case / reference number:** for example `CASE-2026-114`. It's remembered too, and goes at the start of the zip's file name.
-- **Notes:** what this shows, for example "Client photo used without licence on product page."
+- **Case / reference number:** for example `CASE-2026-114`. It starts empty for each capture, so enter it every time. It goes at the start of the zip's file name.
+- **Notes:** what this shows, for example "Client photo used without licence on product page." It starts empty for each capture.
 
 ---
 

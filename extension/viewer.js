@@ -400,7 +400,7 @@ async function start() {
   let last = {};
   try { last = (await api.storage.local.get('lastCase')).lastCase || {}; } catch (e) { /* ignore */ }
   $('collector').value = last.collector || '';
-  $('caseRef').value = last.caseRef || '';
+  $('caseRef').value = '';   // case number and notes start empty for every capture; only the name is remembered
   $('caseBox').hidden = false;
 
   const detailsText = () => {
@@ -487,7 +487,7 @@ async function start() {
     } else download(zip, zipName);
     const zipHash = await sha256(await bytesOf(zip));
     try {
-      await api.storage.local.set({ lastCase: { collector: c.collector, caseRef: c.caseRef } });
+      await api.storage.local.set({ lastCase: { collector: c.collector } });
       const { log = [] } = await api.storage.local.get('log');
       const entry = log.find(e => e.id === rec.id) || (log.push({ id: rec.id, time: rec.time, url: rec.url, title: rec.title }), log[log.length - 1]);
       (entry.saves = entry.saves || []).push({ at: new Date().toISOString(), file: zipName, sha256: zipHash, ...c,

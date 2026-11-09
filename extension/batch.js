@@ -43,7 +43,7 @@ async function run() {
   if (!urls.length) { alert('Paste at least one link starting with http:// or https://'); return; }
   const auto = { auto: '1', batch: batchId, collector: $('collector').value.trim(), case: $('caseRef').value.trim(),
     notes: $('notes').value.trim() };
-  try { await api.storage.local.set({ lastCase: { collector: auto.collector, caseRef: auto.case } }); } catch (e) { /* ignore */ }
+  try { await api.storage.local.set({ lastCase: { collector: auto.collector } }); } catch (e) { /* ignore */ }
 
   items = urls.map(url => ({ url, status: 'Waiting' }));
   $('rows').textContent = '';
@@ -101,6 +101,6 @@ $('report').onclick = () => {
   try {
     const last = (await api.storage.local.get('lastCase')).lastCase || {};
     $('collector').value = last.collector || '';
-    $('caseRef').value = last.caseRef || '';
+    $('caseRef').value = '';
   } catch (e) { /* ignore */ }
 })();
