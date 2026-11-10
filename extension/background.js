@@ -109,6 +109,8 @@ async function capture(tab, auto) {
       progress(String(i + 1));
       const at = await inPage(tabId, 'scrollPage', y);
       await sleep(i === 0 ? SETTLE_MS * 2 : SETTLE_MS);
+      // Some sites (like Google) only make their top bar "stick" after you scroll, so check again before every later screen.
+      if (i > 0) await inPage(tabId, 'hideFixed');
       const shot = await shoot(windowId);
       record.main.tiles.push({ src: shot, crop: at.crop, destX: at.crop.x, destY: at.destY });
       record.main.height = Math.max(record.main.height, at.total, at.destY + at.crop.h);
