@@ -58,7 +58,7 @@ body.with-side { display: flex; align-items: flex-start; }
 #side #domain { font-size: 19px; font-weight: 700; overflow-wrap: anywhere; line-height: 1.3; }
 #side .url { font-size: 12px; opacity: .7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; margin-top: 2px; }
 #side .url:hover { opacity: 1; text-decoration: underline; }
-#side #sub { font-size: 12px; opacity: .7; margin-top: 2px; }
+#side #sub, #side #when { font-size: 12px; opacity: .7; margin-top: 2px; }
 #side .save { width: 100%; padding: 13px; font-size: 16px; }
 #side .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 #side .tile { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 8px; font-size: 15px; background: rgba(255,255,255,.12); }
