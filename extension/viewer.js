@@ -68,7 +68,7 @@ async function standaloneChecker() {
   html = html.replace('<link rel="stylesheet" href="viewer.css">', () => '<style>\n' + css + '\n</style>');
   html = html.replace('<link rel="icon" href="icons/icon32.png">', () => '<link rel="icon" href="' + iconUrl + '">');
   html = html.replace('src="icons/icon48.png"', () => 'src="' + iconUrl + '"');
-  html = html.replace(/<a class="link" href="log\.html"[^>]*>[^<]*<\/a>/, '');
+  html = html.replace(/<a class="link" href="(log|markup)\.html"[^>]*>[^<]*<\/a>/g, '');
   const themeJs = await inline('theme.js');
   html = html.replace('<script src="theme.js"></script>', () => '<script>window.PP_STANDALONE = true;</script>\n' + themeJs);
   for (const f of ['unzip.js', 'tsverify.js', 'verify.js']) { const js = await inline(f); html = html.replace('<script src="' + f + '"></script>', () => js); }
@@ -323,6 +323,28 @@ async function start() {
     $('preview').appendChild(img);
   }
 
+  // "Mark up a copy": hand a copy of the finished picture to the mark-up page. The evidence files are not touched.
+  $('markup').disabled = false;
+  $('markup').onclick = async () => {
+    $('markup').disabled = true;
+    try {
+      const k = Math.min(1, 30000 / plan.H, Math.sqrt(60e6 / (plan.W * plan.H))); // browsers can't draw bigger pictures
+      const c = document.createElement('canvas');
+      c.width = Math.round(plan.W * k);
+      c.height = Math.round(plan.H * k);
+      const ctx = c.getContext('2d');
+      for (let y0 = 0; y0 < plan.H; y0 += maxH) {
+        const h = Math.min(maxH, plan.H - y0);
+        ctx.drawImage(renderSlice(plan, y0, h), 0, Math.round(y0 * k), c.width, Math.round(h * k));
+      }
+      await PP_DB.put({ id: 'markup', blob: await toBlob(c, 'image/png'), meta: {
+        name: base, url: rec.url, host, captured: formatTime(rec), captureId: rec.captureId, scale: s * k } });
+      const url = 'markup.html?from=capture';
+      try { await api.tabs.create({ url: api.runtime.getURL(url) }); } catch (e) { window.open(url, '_blank'); }
+    } catch (e) { setStatus('Could not open the mark-up page: ' + e.message, true); }
+    $('markup').disabled = false;
+  };
+
   const notes = [...rec.notes];
   if (rec.sections.length) notes.push(rec.sections.length + ' extra section' + (rec.sections.length > 1 ? 's' : '') + ' (scroll boxes and dropdown lists) added at the bottom.');
   setStatus(notes.join(' '));
@@ -510,7 +532,7 @@ async function start() {
   }
 
   // Keep only the 10 most recent captures so the browser doesn't fill up.
-  const keys = (await PP_DB.keys()).sort();
+  const keys = (await PP_DB.keys()).filter(k => String(k).startsWith('cap-')).sort();
   for (const k of keys.slice(0, -10)) await PP_DB.del(k);
 }
 

@@ -24,6 +24,7 @@ A browser extension for **Chrome and Firefox** that captures a whole web page, t
 - **Who hosts this site:** each capture looks up the public registration records for the site: the hosting company, domain registrar, and their abuse contacts (who a DMCA notice goes to). It's shown on the capture page, written in `capture-details.txt`, and the full records are saved in `lookups/`.
 - **Batch capture:** paste a list of links and PageProof captures each one into its own evidence pack, saved to `Downloads/PageProof/<case number>/`, with a CSV report at the end. Right-click the PageProof icon to open it.
 - **Verify a pack:** drop any evidence pack on this page and it checks every fingerprint and timestamp, then shows a clear green or red result.
+- **Mark up a copy:** highlight, draw boxes, circles and arrows, or type on a copy of a capture, then copy it to paste into an email or chat, or download it as a picture or PDF. You can pick just part of the page. The copy gets a "Marked-up copy" label and is never added to the evidence pack, so the original stays untouched.
 - **Capture log:** a running list of every capture and every evidence pack saved (with the pack's own fingerprint). Open it with the **Capture log** link on the capture page, and download it as a spreadsheet (.csv).
 
 ## How to use it
