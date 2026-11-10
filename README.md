@@ -74,7 +74,6 @@ Firefox removes "temporary" add-ons when it closes, so you'd repeat these steps 
 - Very long pages stop after 60 screens.
 - Carousels, fold-out areas and hover menus aren't opened automatically. Open them to what you need yourself, then press **Alt+Shift+P**.
 - The PDF is always one file, however long the page.
-- PageProof's own pages (capture page and capture log) open in light mode. Use the **Dark mode** button at the top to switch; it remembers your choice. The capture itself always looks exactly like the website.
 - PageProof asks to "access data on all websites" so it can save the page's pictures, ask the server for its details, and get the timestamp. It only does this when you click capture. Besides the fingerprint code (to the timestamp services), the site's domain and server address are looked up in public registration records (rdap.org).
 - Your capture log lives in this browser. Download it as a .csv now and then to keep a copy.
 - Keep your evidence zips unchanged, ideally with a copy on a separate drive. Opening them is fine, but re-saving or editing a file breaks its fingerprint.
