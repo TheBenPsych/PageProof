@@ -17,12 +17,14 @@
       <div id="when"></div>
     </div>
 
-    <button id="copy" class="main save" disabled title="Copy the marked-up picture so you can paste it into an email or document (Ctrl+C)">📋 Copy image</button>
-    <div class="grid">
-      <button id="png" class="tile" disabled title="Download the marked-up picture"><span>🖼️</span>Picture</button>
-      <button id="pdf" class="tile" disabled title="Download the marked-up copy as a PDF"><span>📄</span>PDF</button>
-      <label class="tile wide filebtn" title="Open an evidence pack (.zip), a PageProof PDF, or any picture to mark up"><span>📂</span>Add image<input type="file" id="pick" accept=".zip,.pdf,image/*" hidden></label>
-    </div>
+    <section class="out">
+      <h3>Share your marked-up copy</h3>
+      <button id="copy" class="main save" disabled title="Copy the marked-up picture so you can paste it into an email or document (Ctrl+C)">📋 Copy image</button>
+      <div class="grid">
+        <button id="png" class="tile small" disabled title="Save the marked-up copy as a picture file">⬇ Save as PNG</button>
+        <button id="pdf" class="tile small" disabled title="Save the marked-up copy as a PDF file">⬇ Save as PDF</button>
+      </div>
+    </section>
 
     <div id="toolbar" hidden>
       <section>
@@ -61,6 +63,7 @@
     </div>
 
     <nav class="links" id="themeSlot">
+      <label class="filebtn" title="Start over with an evidence pack (.zip), a PageProof PDF, or any picture">📂 Open a different capture<input type="file" id="pick" accept=".zip,.pdf,image/*" hidden></label>
       <a href="log.html" target="_blank">📒 Capture log</a>
       <a href="verify.html" target="_blank">✅ Verify a pack</a>
     </nav>
@@ -70,7 +73,7 @@
   <div id="status"></div>
 
   <div class="drop" id="drop" hidden>
-    <button id="addImage" class="main big">📂 Add an image</button>
+    <button id="addImage" class="main big">📂 Open a capture or picture</button>
     <p>Choose a picture, a PageProof evidence pack (.zip) or a PageProof PDF to mark up.<br>You can also drag one onto this page, or paste a picture (Ctrl+V).</p>
   </div>
 
