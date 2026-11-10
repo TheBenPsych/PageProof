@@ -329,7 +329,7 @@
   // so they don't repeat in every slice. Keep anything holding a section.
   function hideFixed() {
     for (const el of document.querySelectorAll('body *')) {
-      if (badges.includes(el)) continue;
+      if (badges.includes(el) || hidden.some(h => h[0] === el)) continue;
       const pos = getComputedStyle(el).position;
       if (pos !== 'fixed' && pos !== 'sticky') continue;
       if (targets.some(t => el.contains(t.el)) || (pageEl && el.contains(pageEl))) continue;
