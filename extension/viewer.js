@@ -102,8 +102,11 @@ function showHosting(h) {
   const box = $('hosting');
   box.hidden = false;
   box.textContent = '';
-  const t = document.createElement('strong');
-  t.textContent = 'Who hosts this site (for takedown notices)';
+  const t = document.createElement('summary');
+  t.textContent = '🏢 Who hosts this site';
+  const short = document.createElement('small');
+  short.textContent = (h.ip && (h.ip.host || h.ip.network)) || (h.domain && h.domain.registrar) || 'For takedown notices';
+  t.append(short);
   const pre = document.createElement('pre');
   pre.textContent = hostingLines(h).slice(1, -2).join('\n');
   box.append(t, pre);
@@ -304,7 +307,10 @@ async function start() {
   pill.textContent = 'Getting ready...';
   $('domain').textContent = host;
   $('domain').append(pill);
-  $('sub').textContent = [rec.url, new Date(rec.time).toLocaleString(), rec.captureId].filter(Boolean).join('  ·  ');
+  $('url').textContent = rec.url;
+  $('url').title = rec.url + '  (click to copy)';
+  $('url').onclick = () => navigator.clipboard.writeText(rec.url).then(() => setStatus('Web address copied.'), () => {});
+  $('sub').textContent = [new Date(rec.time).toLocaleString(), rec.captureId].filter(Boolean).join('  ·  ');
 
   let showDetails = null;
   // Who hosts this site (public registration records). Runs alongside everything else.

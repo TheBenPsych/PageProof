@@ -7,35 +7,44 @@
 <link rel="stylesheet" href="viewer.css">
 <script src="theme.js"></script>
 </head>
-<body>
-  <header>
-    <img src="icons/icon48.png" alt="" width="36" height="36">
-    <div class="who">
-      <div id="domain">PageProof</div>
-      <div id="sub">Getting your capture ready...</div>
+<body class="with-side">
+  <aside id="side">
+    <div class="brand"><img src="icons/icon48.png" alt="" width="22" height="22"> PageProof</div>
+    <div class="site">
+      <div id="domain">Getting ready...</div>
+      <div id="url" class="url" title=""></div>
+      <div id="sub"></div>
     </div>
-    <div class="buttons">
-      <button id="copy" class="ic" disabled title="Copy the whole capture as a picture, to paste into an email, chat or document"><span>📋</span>Copy</button>
-      <button id="markup" class="ic" disabled title="Highlight, draw and type on a copy of this capture"><span>✏️</span>Markup</button>
-      <button id="pdf" class="ic" disabled title="Download just the PDF"><span>📄</span>PDF</button>
-      <button id="html" class="ic" disabled title="Download just the HTML backup"><span>🌐</span>HTML</button>
-      <button id="pack" class="main big" disabled>⬇ Save evidence pack</button>
-      <details class="more"><summary title="More">⋯</summary><div class="menu">
-        <a href="log.html" target="_blank">📒 Capture log</a>
-        <a href="batch.html" target="_blank">📚 Batch capture</a>
-        <a href="verify.html" target="_blank">✅ Verify a pack</a>
-      </div></details>
+
+    <button id="pack" class="main save" disabled>⬇ Save evidence pack</button>
+    <div class="grid">
+      <button id="copy" class="tile" disabled title="Copy the whole capture as a picture, to paste into an email, chat or document"><span>📋</span>Copy</button>
+      <button id="markup" class="tile" disabled title="Highlight, draw and type on a copy of this capture"><span>✏️</span>Markup</button>
+      <button id="pdf" class="tile" disabled title="Download just the PDF"><span>📄</span>PDF</button>
+      <button id="html" class="tile" disabled title="Download just the HTML backup"><span>🌐</span>HTML</button>
     </div>
-  </header>
-  <div id="status"></div>
-  <div id="hosting" class="wb" hidden></div>
-  <section id="caseBox" hidden>
-    <label>Collected by <input id="collector" autocomplete="name"></label>
-    <label>Case / reference number <input id="caseRef"></label>
-    <label class="wide">Notes <textarea id="caseNotes" rows="2" placeholder="For example: infringing use of client photo on product page"></textarea></label>
-  </section>
-  <details id="detailsBox" hidden><summary>Capture details and fingerprints</summary><pre id="details"></pre></details>
-  <main id="preview"></main>
+
+    <section id="caseBox" hidden>
+      <h3>Case details</h3>
+      <label>Collected by <input id="collector" autocomplete="name"></label>
+      <label>Case / reference number <input id="caseRef"></label>
+      <label>Notes <textarea id="caseNotes" rows="2" placeholder="e.g. client photo used on product page"></textarea></label>
+    </section>
+
+    <details id="hosting" class="fold" hidden></details>
+    <details id="detailsBox" class="fold" hidden><summary>🔍 Capture details and fingerprints</summary><pre id="details"></pre></details>
+
+    <nav class="links" id="themeSlot">
+      <a href="log.html" target="_blank">📒 Capture log</a>
+      <a href="batch.html" target="_blank">📚 Batch capture</a>
+      <a href="verify.html" target="_blank">✅ Verify a pack</a>
+    </nav>
+  </aside>
+
+  <div id="content">
+    <div id="status"></div>
+    <main id="preview"></main>
+  </div>
   <script src="db.js"></script>
   <script src="pdf.js"></script>
   <script src="zip.js"></script>
