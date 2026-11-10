@@ -15,7 +15,13 @@
       label();
     };
     label();
-    const bar = document.querySelector('header .buttons');
-    if (bar) bar.append(btn);
+    // Goes in the "more" menu when the page has one, otherwise at the end of the top bar.
+    const menu = document.querySelector('header details.more .menu');
+    if (menu) { btn.className = ''; menu.append(btn); }
+    else { const bar = document.querySelector('header .buttons'); if (bar) bar.append(btn); }
+    // Close the "more" menu when clicking anywhere else.
+    document.addEventListener('click', e => {
+      for (const d of document.querySelectorAll('details.more[open]')) if (!d.contains(e.target)) d.open = false;
+    });
   });
 })();

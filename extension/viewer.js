@@ -299,8 +299,12 @@ async function start() {
   const when = host + '_' + stamp(new Date(rec.time)) + (rec.captureId ? '_' + rec.captureId : '');
   const base = 'PageProof_' + when;
   document.title = 'PageProof: ' + host;
+  const pill = document.createElement('span');
+  pill.className = 'pill wait';
+  pill.textContent = 'Getting ready...';
   $('domain').textContent = host;
-  $('sub').textContent = rec.url + '  ·  ' + new Date(rec.time).toLocaleString();
+  $('domain').append(pill);
+  $('sub').textContent = [rec.url, new Date(rec.time).toLocaleString(), rec.captureId].filter(Boolean).join('  ·  ');
 
   let showDetails = null;
   // Who hosts this site (public registration records). Runs alongside everything else.
@@ -323,20 +327,40 @@ async function start() {
     $('preview').appendChild(img);
   }
 
-  // "Mark up a copy": hand a copy of the finished picture to the mark-up page. The evidence files are not touched.
+  // One picture of the whole capture (made a little smaller if it is too big for the browser to draw).
+  const fullCanvas = () => {
+    const k = Math.min(1, 30000 / plan.H, Math.sqrt(60e6 / (plan.W * plan.H)));
+    const c = document.createElement('canvas');
+    c.width = Math.round(plan.W * k);
+    c.height = Math.round(plan.H * k);
+    const ctx = c.getContext('2d');
+    for (let y0 = 0; y0 < plan.H; y0 += maxH) {
+      const h = Math.min(maxH, plan.H - y0);
+      ctx.drawImage(renderSlice(plan, y0, h), 0, Math.round(y0 * k), c.width, Math.round(h * k));
+    }
+    return { c, k };
+  };
+
+  // "Copy": put the whole capture on the clipboard, to paste into an email, chat or document.
+  $('copy').disabled = false;
+  $('copy').onclick = async () => {
+    const before = $('status').textContent;
+    try {
+      if (!navigator.clipboard || !window.ClipboardItem) throw new Error('this browser cannot copy pictures');
+      setStatus('Copying...');
+      // Passing the picture as a "promise" keeps the browser's permission to copy while it is being made.
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': toBlob(fullCanvas().c, 'image/png') })]);
+      setStatus('Copied! Paste it (Ctrl+V, or Cmd+V on a Mac) into an email, chat or document. To copy just part of the page, use Markup, then "Pick area".');
+    } catch (e) { setStatus('Could not copy the picture (' + e.message + '). Use Markup, then "Download picture" instead.', true); }
+    setTimeout(() => { if ($('status').textContent.startsWith('Copied!')) setStatus(before); }, 12000);
+  };
+
+  // "Markup": hand a copy of the finished picture to the mark-up page. The evidence files are not touched.
   $('markup').disabled = false;
   $('markup').onclick = async () => {
     $('markup').disabled = true;
     try {
-      const k = Math.min(1, 30000 / plan.H, Math.sqrt(60e6 / (plan.W * plan.H))); // browsers can't draw bigger pictures
-      const c = document.createElement('canvas');
-      c.width = Math.round(plan.W * k);
-      c.height = Math.round(plan.H * k);
-      const ctx = c.getContext('2d');
-      for (let y0 = 0; y0 < plan.H; y0 += maxH) {
-        const h = Math.min(maxH, plan.H - y0);
-        ctx.drawImage(renderSlice(plan, y0, h), 0, Math.round(y0 * k), c.width, Math.round(h * k));
-      }
+      const { c, k } = fullCanvas();
       await PP_DB.put({ id: 'markup', blob: await toBlob(c, 'image/png'), meta: {
         name: base, url: rec.url, host, captured: formatTime(rec), captureId: rec.captureId, scale: s * k } });
       const url = 'markup.html?from=capture';
@@ -364,9 +388,10 @@ async function start() {
   // HTML backup with every picture stored inside it.
   let saved = null;
   const buildHtml = async () => {
-    $('html').textContent = 'Saving images...';
-    saved = await PP_ARCHIVE(rec, n => { $('html').textContent = 'Saving images (' + n + ')...'; });
-    $('html').textContent = 'Download HTML backup';
+    const label = $('html').lastChild;
+    label.textContent = 'Saving...';
+    saved = await PP_ARCHIVE(rec, n => { label.textContent = 'Saving ' + n + '...'; });
+    label.textContent = 'HTML';
     $('html').disabled = false;
   };
   $('html').onclick = () => saved && download(new Blob([saved.html], { type: 'text/html' }), base + '.html');
@@ -488,6 +513,8 @@ async function start() {
   $('detailsBox').hidden = false;
 
   $('pack').disabled = false;
+  pill.className = 'pill';
+  pill.textContent = '\u2714 Captured';
   const savePack = async auto => {
     const { text, c } = detailsText();
     const extra = [

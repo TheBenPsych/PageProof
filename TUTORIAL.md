@@ -54,7 +54,7 @@ From top to bottom, the capture page shows:
 
 ## 4. Save the evidence pack
 
-Click the green **Download evidence pack (.zip)** button.
+Click the green **⬇ Save evidence pack** button.
 
 The file is named:
 
@@ -104,7 +104,7 @@ PageProof no longer saves to the Wayback Machine itself, but if you've saved a p
 
 Use this for sweeps, when you have a list of infringing pages.
 
-1. **Right-click the PageProof icon** and choose **Batch capture (many links)...** (or click **Batch capture** at the top of any PageProof page).
+1. **Right-click the PageProof icon** and choose **Batch capture (many links)...** (or open the **⋯** menu at the top of the capture page and click **Batch capture**).
 2. **Paste the links,** one per line. You can paste straight from a spreadsheet column.
 3. Fill in **Collected by**, **Case / reference number** and any **Notes**. They go into every pack.
 4. Click **Start batch.** A separate window opens and visits each link in turn. **Leave it open and don't minimize it.** You can keep working in your other windows.
@@ -117,7 +117,7 @@ Batch packs are saved automatically to **Downloads/PageProof/&lt;case number&gt;
 
 ## 8. Find past captures: the capture log
 
-Click **Capture log** at the top of any PageProof page. It lists every capture and every pack saved on this computer: when, which page, the case number, who collected it, the zip's fingerprint and the timestamps.
+Open the **⋯** menu at the top of the capture page and click **Capture log**. It lists every capture and every pack saved on this computer: when, which page, the case number, who collected it, the zip's fingerprint and the timestamps.
 
 - **Download log (.csv)** opens in Excel. Download it now and then and keep it with your records, since the log lives only in this browser.
 
@@ -127,7 +127,7 @@ Click **Capture log** at the top of any PageProof page. It lists every capture a
 
 Use this whenever you or someone else needs to confirm a pack hasn't been changed.
 
-1. Click **Verify a pack** at the top of the capture page or the capture log.
+1. Open the **⋯** menu at the top of the capture page and click **Verify a pack** (it is also at the top of the capture log).
 2. **Drop the zip** on the box (or click it and choose the file).
 3. Read the result:
    - 🟢 **Unchanged:** every file matches its fingerprint, and the timestamps are valid. It also shows when the services signed it.
@@ -141,12 +141,16 @@ Use this whenever you or someone else needs to confirm a pack hasn't been change
 
 ---
 
-## 10. Point people to the right spot: Mark up a copy
+## 10. Share it or point people to the right spot: Copy and Markup
 
 Use this when you want to show someone exactly where to look, for example in an email to a site owner or a lawyer.
 
-1. On the capture page, click the orange **Mark up a copy** button. A new tab opens with a copy of the capture.
-   (For an older capture, open **Verify a pack** and click **Mark up a capture**, then drop the evidence pack .zip on that page.)
+To send the whole capture as it is, click **📋 Copy** in the top bar of the capture page, then paste (Ctrl+V) into an email or chat.
+
+To draw on it first:
+
+1. On the capture page, click **✏️ Markup** in the top bar. A new tab opens with a copy of the capture.
+   (For an older capture, open the **⋯** menu, click **Verify a pack**, then **Markup a capture**, and drop the evidence pack .zip on that page. **📂 Open file** on the Markup page also opens any other picture, like a screenshot.)
 2. Pick a tool from the bar along the top, then drag on the picture:
    - **Highlight**: a see-through marker, like a highlighter pen.
    - **Box** and **Circle**: draw around something. Hold **Shift** for a perfect square or circle.
@@ -156,8 +160,8 @@ Use this when you want to show someone exactly where to look, for example in an 
    - **Pick area**: drag a box around just the part you want to send. Only that part is copied or downloaded. Click **Use whole page** to go back.
 3. Pick a colour (the round dots) and a size (Thin, Medium, Thick). Made a mistake? Click **Undo** (or press Ctrl+Z).
 4. When you're happy:
-   - Click **Copy image** (or press Ctrl+C), then paste (Ctrl+V) straight into Gmail, Outlook, Word, Slack, and so on.
-   - Or click **Download picture (.png)** or **Download PDF** to save a file you can attach.
+   - Click the green **📋 Copy image** (or press Ctrl+C), then paste (Ctrl+V) straight into Gmail, Outlook, Word, Slack, and so on.
+   - Or click **🖼️ Picture** or **📄 PDF** to save a file you can attach.
 
 Good to know: every marked-up copy has a yellow **"Marked-up copy"** label at the bottom with the web address, capture time and Capture ID, so nobody mistakes it for the original. You can untick **Add "Marked-up copy" label** if you need a clean picture. The marked-up copy is a separate file: it is never put in the evidence pack and doesn't change any fingerprints. Always keep the original evidence pack as your proof.
 

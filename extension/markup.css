@@ -1,7 +1,9 @@
 /* Mark-up page extras (on top of viewer.css). */
 header { position: static; }
-.filebtn { font-weight: 600; padding: 8px 14px; border-radius: 8px; background: #475569; color: #fff; cursor: pointer; }
-.filebtn:hover { filter: brightness(1.1); }
+.filebtn { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 70px; padding: 7px 10px; border-radius: 8px;
+  font-size: 12px; font-weight: 600; background: rgba(255,255,255,.1); color: #fff; cursor: pointer; }
+.filebtn span { font-size: 20px; line-height: 1; }
+.filebtn:hover { background: rgba(255,255,255,.2); }
 #toolbar { position: sticky; top: 0; z-index: 3; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center;
   padding: 8px 16px; background: var(--bg); border-bottom: 1px solid rgba(127,127,127,.3); }
 #toolbar .group { display: flex; flex-wrap: wrap; gap: 4px; }

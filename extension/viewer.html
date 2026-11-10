@@ -9,19 +9,22 @@
 </head>
 <body>
   <header>
-    <img src="icons/icon48.png" alt="" width="32" height="32">
+    <img src="icons/icon48.png" alt="" width="36" height="36">
     <div class="who">
       <div id="domain">PageProof</div>
       <div id="sub">Getting your capture ready...</div>
     </div>
     <div class="buttons">
-      <button id="pack" class="main" disabled>Download evidence pack (.zip)</button>
-      <button id="pdf" disabled>Download PDF</button>
-      <button id="html" disabled>Download HTML backup</button>
-      <button id="markup" class="mark" disabled title="Highlight, draw and type on a copy of this capture, then copy or download it">Mark up a copy</button>
-      <a class="link" href="log.html" target="_blank">Capture log</a>
-      <a class="link" href="batch.html" target="_blank">Batch capture</a>
-      <a class="link" href="verify.html" target="_blank">Verify a pack</a>
+      <button id="copy" class="ic" disabled title="Copy the whole capture as a picture, to paste into an email, chat or document"><span>📋</span>Copy</button>
+      <button id="markup" class="ic" disabled title="Highlight, draw and type on a copy of this capture"><span>✏️</span>Markup</button>
+      <button id="pdf" class="ic" disabled title="Download just the PDF"><span>📄</span>PDF</button>
+      <button id="html" class="ic" disabled title="Download just the HTML backup"><span>🌐</span>HTML</button>
+      <button id="pack" class="main big" disabled>⬇ Save evidence pack</button>
+      <details class="more"><summary title="More">⋯</summary><div class="menu">
+        <a href="log.html" target="_blank">📒 Capture log</a>
+        <a href="batch.html" target="_blank">📚 Batch capture</a>
+        <a href="verify.html" target="_blank">✅ Verify a pack</a>
+      </div></details>
     </div>
   </header>
   <div id="status"></div>

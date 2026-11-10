@@ -447,9 +447,9 @@ async function useImage(source, info) {
   $('board').style.width = Math.round(base.width / (info.scale || 1)) + 'px';
   meta = info;
   marks = []; area = null; selected = null; undoStack = []; redoStack = [];
-  $('domain').textContent = 'Mark up: ' + (meta.host || meta.name || 'capture');
+  $('domain').textContent = 'Markup: ' + (meta.host || meta.name || 'capture');
   $('sub').textContent = [meta.url, meta.captured, meta.captureId].filter(Boolean).join('  ·  ') || meta.name || '';
-  document.title = 'PageProof: mark up ' + (meta.host || meta.name || 'a copy');
+  document.title = 'PageProof: markup ' + (meta.host || meta.name || 'a copy');
   $('drop').hidden = true;
   $('stage').hidden = false;
   $('toolbar').hidden = false;
