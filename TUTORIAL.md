@@ -165,12 +165,6 @@ To draw on it first:
 
 Good to know: every marked-up copy has a yellow **"Marked-up copy"** label at the bottom with the web address, capture time and Capture ID, so nobody mistakes it for the original. You can untick **Add "Marked-up copy" label** if you need a clean picture. The marked-up copy is a separate file: it is never put in the evidence pack and doesn't change any fingerprints. Always keep the original evidence pack as your proof.
 
-## Light or dark mode
-
-PageProof's pages open in light mode. Click **🌙 Dark mode** at the top right to switch. Your captures always show the website exactly as it looked.
-
----
-
 ## Quick troubleshooting
 
 | Problem | What to do |
