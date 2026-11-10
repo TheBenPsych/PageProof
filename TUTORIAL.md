@@ -150,7 +150,7 @@ To send the whole capture as it is, click **📋 Copy** in the top bar of the ca
 To draw on it first:
 
 1. On the capture page, click **✏️ Markup** in the top bar. A new tab opens with a copy of the capture.
-   (For an older capture, open the **⋯** menu, click **Verify a pack**, then **Markup a capture**, and drop the evidence pack .zip on that page. **📂 Open file** on the Markup page also opens any other picture, like a screenshot.)
+   (For an older capture, open the **⋯** menu, click **Verify a pack**, then **Markup a capture**, and click **📂 Add an image** to choose the evidence pack .zip. **Add image** also opens any other picture, like a screenshot.)
 2. Pick a tool from the bar along the top, then drag on the picture:
    - **Highlight**: a see-through marker, like a highlighter pen.
    - **Box** and **Circle**: draw around something. Hold **Shift** for a perfect square or circle.

@@ -18,7 +18,7 @@
     <div class="buttons">
       <button id="png" class="ic" disabled title="Download the marked-up picture"><span>🖼️</span>Picture</button>
       <button id="pdf" class="ic" disabled title="Download the marked-up copy as a PDF"><span>📄</span>PDF</button>
-      <label class="ic filebtn" title="Open an evidence pack (.zip), a PageProof PDF, or any picture to mark up"><span>📂</span>Open file<input type="file" id="pick" accept=".zip,.pdf,image/*" hidden></label>
+      <label class="ic filebtn" title="Open an evidence pack (.zip), a PageProof PDF, or any picture to mark up"><span>📂</span>Add image<input type="file" id="pick" accept=".zip,.pdf,image/*" hidden></label>
       <button id="copy" class="main big" disabled title="Copy the marked-up picture so you can paste it into an email or document (Ctrl+C)">📋 Copy image</button>
       <details class="more"><summary title="More">⋯</summary><div class="menu">
         <a href="log.html" target="_blank">📒 Capture log</a>
@@ -54,10 +54,10 @@
   <div id="status"></div>
   <p id="note" hidden>This is a separate marked-up copy for showing people where to look. Your original evidence pack and its fingerprints are not changed.</p>
 
-  <label class="drop" id="drop" hidden>
-    <strong>Drop a capture here</strong><br>
-    A PageProof evidence pack (.zip), a PageProof PDF, or any picture. You can also click to choose one, or paste a picture (Ctrl+V).
-  </label>
+  <div class="drop" id="drop" hidden>
+    <button id="addImage" class="main big">📂 Add an image</button>
+    <p>Choose a picture, a PageProof evidence pack (.zip) or a PageProof PDF to mark up.<br>You can also drag one onto this page, or paste a picture (Ctrl+V).</p>
+  </div>
 
   <main id="stage" hidden>
     <div id="board">

@@ -572,7 +572,7 @@ document.addEventListener('keydown', e => {
 
 // Drag and drop a file anywhere, or paste a picture.
 const drop = $('drop');
-drop.onclick = () => $('pick').click();
+$('addImage').onclick = () => $('pick').click();
 document.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
 document.addEventListener('dragleave', () => drop.classList.remove('over'));
 document.addEventListener('drop', e => {
