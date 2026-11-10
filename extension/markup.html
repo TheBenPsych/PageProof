@@ -8,51 +8,66 @@
 <link rel="stylesheet" href="markup.css">
 <script src="theme.js"></script>
 </head>
-<body>
-  <header>
-    <img src="icons/icon48.png" alt="" width="32" height="32">
-    <div class="who">
+<body class="with-side">
+  <aside id="side">
+    <div class="brand"><img src="icons/icon48.png" alt="" width="22" height="22"> PageProof Markup</div>
+    <div class="site">
       <div id="domain">Markup</div>
-      <div id="sub">Highlight, draw boxes, circles and arrows, or type on a copy of a capture</div>
+      <div id="sub" class="url">Highlight, draw and type on a copy of a capture</div>
+      <div id="when"></div>
     </div>
-    <div class="buttons">
-      <button id="png" class="ic" disabled title="Download the marked-up picture"><span>🖼️</span>Picture</button>
-      <button id="pdf" class="ic" disabled title="Download the marked-up copy as a PDF"><span>📄</span>PDF</button>
-      <label class="ic filebtn" title="Open an evidence pack (.zip), a PageProof PDF, or any picture to mark up"><span>📂</span>Add image<input type="file" id="pick" accept=".zip,.pdf,image/*" hidden></label>
-      <button id="copy" class="main big" disabled title="Copy the marked-up picture so you can paste it into an email or document (Ctrl+C)">📋 Copy image</button>
-      <details class="more"><summary title="More">⋯</summary><div class="menu">
-        <a href="log.html" target="_blank">📒 Capture log</a>
-        <a href="verify.html" target="_blank">✅ Verify a pack</a>
-      </div></details>
-    </div>
-  </header>
 
-  <div id="toolbar" hidden>
-    <div class="group" id="tools" role="radiogroup" aria-label="Tool">
-      <button data-tool="highlight" title="Highlighter (H)">🖍 Highlight</button>
-      <button data-tool="rect" title="Box (B). Hold Shift for a square">▭ Box</button>
-      <button data-tool="ellipse" title="Circle (C). Hold Shift for a perfect circle">◯ Circle</button>
-      <button data-tool="arrow" title="Arrow (A)">➜ Arrow</button>
-      <button data-tool="text" title="Type text (T). Click where you want it">T Text</button>
-      <button data-tool="move" title="Move or delete a marking (M)">✥ Move</button>
-      <button data-tool="area" title="Copy only part of the page: drag a box around the part you want (S)">⬚ Pick area</button>
+    <button id="copy" class="main save" disabled title="Copy the marked-up picture so you can paste it into an email or document (Ctrl+C)">📋 Copy image</button>
+    <div class="grid">
+      <button id="png" class="tile" disabled title="Download the marked-up picture"><span>🖼️</span>Picture</button>
+      <button id="pdf" class="tile" disabled title="Download the marked-up copy as a PDF"><span>📄</span>PDF</button>
+      <label class="tile wide filebtn" title="Open an evidence pack (.zip), a PageProof PDF, or any picture to mark up"><span>📂</span>Add image<input type="file" id="pick" accept=".zip,.pdf,image/*" hidden></label>
     </div>
-    <div class="group" id="colors" aria-label="Colour"></div>
-    <div class="group" id="sizes" aria-label="Size">
-      <button data-size="1">Thin</button><button data-size="2">Medium</button><button data-size="3">Thick</button>
-    </div>
-    <div class="group">
-      <button id="undo" title="Undo (Ctrl+Z)">↶ Undo</button>
-      <button id="redo" title="Redo (Ctrl+Y)">↷ Redo</button>
-      <button id="del" title="Delete the selected marking (Delete key)" disabled>🗑 Delete</button>
-      <button id="clearArea" hidden>Use whole page</button>
-      <button id="clearAll">Clear all</button>
-    </div>
-    <label class="check"><input type="checkbox" id="label" checked> Add "Marked-up copy" label</label>
-  </div>
 
+    <div id="toolbar" hidden>
+      <section>
+        <h3>Tools</h3>
+        <div class="grid" id="tools" role="radiogroup" aria-label="Tool">
+          <button class="tile" data-tool="highlight" title="Highlighter (H)"><span>🖍️</span>Highlight</button>
+          <button class="tile" data-tool="rect" title="Box (B). Hold Shift for a square"><span>▭</span>Box</button>
+          <button class="tile" data-tool="ellipse" title="Circle (C). Hold Shift for a perfect circle"><span>◯</span>Circle</button>
+          <button class="tile" data-tool="arrow" title="Arrow (A)"><span>➜</span>Arrow</button>
+          <button class="tile" data-tool="text" title="Type text (T). Click where you want it"><span>🔤</span>Text</button>
+          <button class="tile" data-tool="move" title="Move or delete a marking (M)"><span>✋</span>Move</button>
+          <button class="tile wide" data-tool="area" title="Copy only part of the page: drag a box around the part you want (S)"><span>⬚</span>Pick area to copy</button>
+        </div>
+      </section>
+      <section>
+        <h3>Colour</h3>
+        <div class="swatches" id="colors" aria-label="Colour"></div>
+      </section>
+      <section>
+        <h3>Size</h3>
+        <div class="seg" id="sizes" aria-label="Size">
+          <button data-size="1">Thin</button><button data-size="2">Medium</button><button data-size="3">Thick</button>
+        </div>
+      </section>
+      <section>
+        <div class="grid">
+          <button class="tile small" id="undo" title="Undo (Ctrl+Z)">↶ Undo</button>
+          <button class="tile small" id="redo" title="Redo (Ctrl+Y)">↷ Redo</button>
+          <button class="tile small" id="del" title="Delete the selected marking (Delete key)" disabled>🗑 Delete</button>
+          <button class="tile small" id="clearAll">✖ Clear all</button>
+          <button class="tile small wide" id="clearArea" hidden>↔ Use whole page</button>
+        </div>
+      </section>
+      <label class="check"><input type="checkbox" id="label" checked> Add "Marked-up copy" label</label>
+      <p id="note" hidden>This is a separate copy. Your original evidence pack and its fingerprints are not changed.</p>
+    </div>
+
+    <nav class="links" id="themeSlot">
+      <a href="log.html" target="_blank">📒 Capture log</a>
+      <a href="verify.html" target="_blank">✅ Verify a pack</a>
+    </nav>
+  </aside>
+
+  <div id="content">
   <div id="status"></div>
-  <p id="note" hidden>This is a separate marked-up copy for showing people where to look. Your original evidence pack and its fingerprints are not changed.</p>
 
   <div class="drop" id="drop" hidden>
     <button id="addImage" class="main big">📂 Add an image</button>
@@ -65,6 +80,7 @@
       <canvas id="ink"></canvas>
     </div>
   </main>
+  </div>
 
   <script src="db.js"></script>
   <script src="pdf.js"></script>

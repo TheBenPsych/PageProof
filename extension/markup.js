@@ -447,8 +447,10 @@ async function useImage(source, info) {
   $('board').style.width = Math.round(base.width / (info.scale || 1)) + 'px';
   meta = info;
   marks = []; area = null; selected = null; undoStack = []; redoStack = [];
-  $('domain').textContent = 'Markup: ' + (meta.host || meta.name || 'capture');
-  $('sub').textContent = [meta.url, meta.captured, meta.captureId].filter(Boolean).join('  ·  ') || meta.name || '';
+  $('domain').textContent = meta.host || meta.name || 'Picture';
+  $('sub').textContent = meta.url || meta.name || '';
+  $('sub').title = meta.url || meta.name || '';
+  $('when').textContent = [meta.captured, meta.captureId].filter(Boolean).join('  ·  ');
   document.title = 'PageProof: markup ' + (meta.host || meta.name || 'a copy');
   $('drop').hidden = true;
   $('stage').hidden = false;

@@ -16,7 +16,7 @@
     };
     label();
     // Goes in the "more" menu when the page has one, otherwise at the end of the top bar.
-    const menu = document.querySelector('header details.more .menu');
+    const menu = document.getElementById('themeSlot') || document.querySelector('header details.more .menu');
     if (menu) { btn.className = ''; menu.append(btn); }
     else { const bar = document.querySelector('header .buttons'); if (bar) bar.append(btn); }
     // Close the "more" menu when clicking anywhere else.

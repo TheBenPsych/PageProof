@@ -104,7 +104,7 @@ PageProof no longer saves to the Wayback Machine itself, but if you've saved a p
 
 Use this for sweeps, when you have a list of infringing pages.
 
-1. **Right-click the PageProof icon** and choose **Batch capture (many links)...** (or open the **⋯** menu at the top of the capture page and click **Batch capture**).
+1. **Right-click the PageProof icon** and choose **Batch capture (many links)...** (or click **Batch capture** at the bottom of the left bar on the capture page).
 2. **Paste the links,** one per line. You can paste straight from a spreadsheet column.
 3. Fill in **Collected by**, **Case / reference number** and any **Notes**. They go into every pack.
 4. Click **Start batch.** A separate window opens and visits each link in turn. **Leave it open and don't minimize it.** You can keep working in your other windows.
@@ -117,7 +117,7 @@ Batch packs are saved automatically to **Downloads/PageProof/&lt;case number&gt;
 
 ## 8. Find past captures: the capture log
 
-Open the **⋯** menu at the top of the capture page and click **Capture log**. It lists every capture and every pack saved on this computer: when, which page, the case number, who collected it, the zip's fingerprint and the timestamps.
+Click **Capture log** at the bottom of the left bar on the capture page. It lists every capture and every pack saved on this computer: when, which page, the case number, who collected it, the zip's fingerprint and the timestamps.
 
 - **Download log (.csv)** opens in Excel. Download it now and then and keep it with your records, since the log lives only in this browser.
 
@@ -127,7 +127,7 @@ Open the **⋯** menu at the top of the capture page and click **Capture log**. 
 
 Use this whenever you or someone else needs to confirm a pack hasn't been changed.
 
-1. Open the **⋯** menu at the top of the capture page and click **Verify a pack** (it is also at the top of the capture log).
+1. Click **Verify a pack** at the bottom of the left bar on the capture page (it is also at the top of the capture log).
 2. **Drop the zip** on the box (or click it and choose the file).
 3. Read the result:
    - 🟢 **Unchanged:** every file matches its fingerprint, and the timestamps are valid. It also shows when the services signed it.
@@ -145,13 +145,13 @@ Use this whenever you or someone else needs to confirm a pack hasn't been change
 
 Use this when you want to show someone exactly where to look, for example in an email to a site owner or a lawyer.
 
-To send the whole capture as it is, click **📋 Copy** in the top bar of the capture page, then paste (Ctrl+V) into an email or chat.
+To send the whole capture as it is, click **📋 Copy** in the left bar of the capture page, then paste (Ctrl+V) into an email or chat.
 
 To draw on it first:
 
-1. On the capture page, click **✏️ Markup** in the top bar. A new tab opens with a copy of the capture.
-   (For an older capture, open the **⋯** menu, click **Verify a pack**, then **Markup a capture**, and click **📂 Add an image** to choose the evidence pack .zip. **Add image** also opens any other picture, like a screenshot.)
-2. Pick a tool from the bar along the top, then drag on the picture:
+1. On the capture page, click **✏️ Markup** in the left bar. A new tab opens with a copy of the capture.
+   (For an older capture, click **Verify a pack** at the bottom of the left bar, then **Markup a capture**, and click **📂 Add an image** to choose the evidence pack .zip. **Add image** also opens any other picture, like a screenshot.)
+2. Pick a tool from the **Tools** buttons in the left bar, then drag on the picture:
    - **Highlight**: a see-through marker, like a highlighter pen.
    - **Box** and **Circle**: draw around something. Hold **Shift** for a perfect square or circle.
    - **Arrow**: drag from where the arrow starts to where it points.
