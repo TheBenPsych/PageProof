@@ -150,7 +150,7 @@ To send the whole capture as it is, click **📋 Copy** in the left bar of the c
 To draw on it first:
 
 1. On the capture page, click **✏️ Markup** in the left bar. A new tab opens with a copy of the capture.
-   (For an older capture, click **Verify a pack** at the bottom of the left bar, then **Markup a capture**, and click **📂 Add an image** to choose the evidence pack .zip. **Add image** also opens any other picture, like a screenshot.)
+   (For an older capture, click **Verify a pack** at the bottom of the left bar, then **Markup a capture**, and click **📂 Open a capture or picture** to choose the evidence pack .zip. It also opens any other picture, like a screenshot. To switch to a different one later, click **📂 Open a different capture** at the bottom of the Markup bar.)
 2. Pick a tool from the **Tools** buttons in the left bar, then drag on the picture:
    - **Highlight**: a see-through marker, like a highlighter pen.
    - **Box** and **Circle**: draw around something. Hold **Shift** for a perfect square or circle.
@@ -161,7 +161,7 @@ To draw on it first:
 3. Pick a colour (the round dots) and a size (Thin, Medium, Thick). Made a mistake? Click **Undo** (or press Ctrl+Z).
 4. When you're happy:
    - Click the green **📋 Copy image** (or press Ctrl+C), then paste (Ctrl+V) straight into Gmail, Outlook, Word, Slack, and so on.
-   - Or click **🖼️ Picture** or **📄 PDF** to save a file you can attach.
+   - Or click **⬇ Save as PNG** or **⬇ Save as PDF** to save a file you can attach.
 
 Good to know: every marked-up copy has a yellow **"Marked-up copy"** label at the bottom with the web address, capture time and Capture ID, so nobody mistakes it for the original. You can untick **Add "Marked-up copy" label** if you need a clean picture. The marked-up copy is a separate file: it is never put in the evidence pack and doesn't change any fingerprints. Always keep the original evidence pack as your proof.
 

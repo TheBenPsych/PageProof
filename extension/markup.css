@@ -1,6 +1,8 @@
 /* Markup page extras (on top of viewer.css, which has the side bar). */
 #side .grid .wide { grid-column: span 2; }
-#side .filebtn { border-radius: 8px; font-weight: 600; color: #fff; cursor: pointer; }
+#side .links .filebtn { display: block; padding: 7px 8px; border-radius: 6px; color: #e2e8f0; font-size: 14px; font-weight: 600; cursor: pointer; }
+#side .links .filebtn:hover { background: rgba(255,255,255,.12); }
+#side section.out { display: flex; flex-direction: column; gap: 8px; }
 #side .tile.small { padding: 8px; font-size: 13px; }
 #side .tile.on { background: #2563eb; box-shadow: 0 0 0 2px #93c5fd inset; }
 #toolbar { display: flex; flex-direction: column; gap: 12px; }
