@@ -141,6 +141,26 @@ Use this whenever you or someone else needs to confirm a pack hasn't been change
 
 ---
 
+## 10. Point people to the right spot: Mark up a copy
+
+Use this when you want to show someone exactly where to look, for example in an email to a site owner or a lawyer.
+
+1. On the capture page, click the orange **Mark up a copy** button. A new tab opens with a copy of the capture.
+   (For an older capture, open **Verify a pack** and click **Mark up a capture**, then drop the evidence pack .zip on that page.)
+2. Pick a tool from the bar along the top, then drag on the picture:
+   - **Highlight**: a see-through marker, like a highlighter pen.
+   - **Box** and **Circle**: draw around something. Hold **Shift** for a perfect square or circle.
+   - **Arrow**: drag from where the arrow starts to where it points.
+   - **Text**: click where you want words, type, then press **Enter**. Click your text again to change it.
+   - **Move**: click a marking to pick it, drag to move it, or press **Delete** to remove it. Clicking a colour changes the picked marking's colour.
+   - **Pick area**: drag a box around just the part you want to send. Only that part is copied or downloaded. Click **Use whole page** to go back.
+3. Pick a colour (the round dots) and a size (Thin, Medium, Thick). Made a mistake? Click **Undo** (or press Ctrl+Z).
+4. When you're happy:
+   - Click **Copy image** (or press Ctrl+C), then paste (Ctrl+V) straight into Gmail, Outlook, Word, Slack, and so on.
+   - Or click **Download picture (.png)** or **Download PDF** to save a file you can attach.
+
+Good to know: every marked-up copy has a yellow **"Marked-up copy"** label at the bottom with the web address, capture time and Capture ID, so nobody mistakes it for the original. You can untick **Add "Marked-up copy" label** if you need a clean picture. The marked-up copy is a separate file: it is never put in the evidence pack and doesn't change any fingerprints. Always keep the original evidence pack as your proof.
+
 ## Light or dark mode
 
 PageProof's pages open in light mode. Click **🌙 Dark mode** at the top right to switch. Your captures always show the website exactly as it looked.

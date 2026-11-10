@@ -1,0 +1,24 @@
+/* Mark-up page extras (on top of viewer.css). */
+header { position: static; }
+.filebtn { font-weight: 600; padding: 8px 14px; border-radius: 8px; background: #475569; color: #fff; cursor: pointer; }
+.filebtn:hover { filter: brightness(1.1); }
+#toolbar { position: sticky; top: 0; z-index: 3; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center;
+  padding: 8px 16px; background: var(--bg); border-bottom: 1px solid rgba(127,127,127,.3); }
+#toolbar .group { display: flex; flex-wrap: wrap; gap: 4px; }
+#toolbar button { padding: 6px 10px; font-size: 14px; background: rgba(127,127,127,.18); color: var(--ink); }
+#toolbar button.on { background: var(--accent); color: #fff; }
+#toolbar button.swatch { width: 30px; height: 30px; padding: 0; border-radius: 50%; border: 3px solid transparent; }
+#toolbar button.swatch.on { border-color: var(--ink); box-shadow: 0 0 0 2px var(--bg) inset; }
+.check { font-size: 14px; display: flex; gap: 6px; align-items: center; }
+#note { margin: 0 16px 10px; font-size: 13px; opacity: .8; }
+.drop { display: block; max-width: 700px; margin: 24px auto; border: 3px dashed #94a3b8; border-radius: 14px; padding: 36px 16px; text-align: center; cursor: pointer; }
+.drop.over { border-color: var(--accent); background: rgba(37,99,235,.08); }
+.drop strong { font-size: 18px; }
+#stage { padding: 0 16px 40px; display: flex; justify-content: center; }
+#board { position: relative; max-width: 100%; box-shadow: 0 2px 12px rgba(0,0,0,.25); background: #fff; touch-action: none; }
+#board canvas { display: block; width: 100%; height: auto; }
+#ink { position: absolute; inset: 0; height: 100% !important; cursor: crosshair; }
+#ink.move { cursor: grab; }
+#ink.text { cursor: text; }
+#board textarea { position: absolute; z-index: 2; min-width: 120px; padding: 2px 4px; border: 2px dashed var(--accent); border-radius: 4px;
+  background: rgba(255,255,255,.9); font-weight: 700; font-family: system-ui, sans-serif; line-height: 1.2; resize: both; outline: none; overflow: hidden; }
