@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PageProof</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="head">
+    <img src="icons/icon48.png" alt="" width="22" height="22"><b>PageProof</b><span class="sp"></span>
+    <details class="more" id="more"><summary title="More">⋯</summary>
+      <div class="menu">
+        <button data-page="batch.html">📚 Batch capture</button>
+        <button data-page="compare.html">🔀 Compare two pictures</button>
+        <button data-page="verify.html">✅ Verify a pack</button>
+        <button data-page="log.html">📒 Capture log</button>
+      </div>
+    </details>
+  </div>
+
+  <div id="home">
+    <button class="opt cap" id="cap" autofocus><span class="e">📸</span><span><b>Capture this page</b><small>Save the whole page as evidence</small></span></button>
+    <button class="opt ins" id="ins"><span class="e">🔍</span><span><b>Inspect a picture</b><small>See the hidden data inside a picture</small></span></button>
+    <p class="tip" id="tip"></p>
+  </div>
+
+  <div id="ways" hidden>
+    <p class="q">How do you want to pick the picture?</p>
+    <button class="way" id="wPick"><span class="e">🎯</span><span><b>Click a picture on this page</b><small>Point at it and click, like a highlighter</small></span></button>
+    <button class="way" id="wAll"><span class="e">🖼️</span><span><b>Show all pictures on this page</b><small>See them side by side and choose one</small></span></button>
+    <button class="way" id="wUp"><span class="e">📁</span><span><b>Upload from my computer</b><small>Or drag it in, or paste it</small></span></button>
+    <button class="back" id="back">← Back</button>
+  </div>
+
+  <div id="busy" hidden>
+    <p><b>A capture is running.</b> It scrolls the page one screen at a time.</p>
+    <button class="opt stop" id="stop"><span class="e">⏹</span><span><b>Stop and keep what's captured</b></span></button>
+  </div>
+
+  <p id="err" hidden></p>
+  <script src="popup.js"></script>
+</body>
+</html>

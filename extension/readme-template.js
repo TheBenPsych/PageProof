@@ -2,9 +2,6 @@
 function ppReadme(o) {
   const stamps = o.stamps || [];
   const tsa = stamps.length > 0;
-  const certs = { DigiCert: '"DigiCert Trusted Root G4" from https://www.digicert.com/kb/digicert-root-certificates.htm',
-    Sectigo: '"USERTrust RSA Certification Authority" root, from sectigo.com',
-    FreeTSA: 'https://freetsa.org/files/cacert.pem' };
   return [
     'ABOUT THIS EVIDENCE PACK',
     '========================',
@@ -47,6 +44,11 @@ function ppReadme(o) {
       '    The original image files (' + o.imageCount + ') downloaded from the page. Where each came',
       '    from is listed in capture-details.txt.',
       ''] : []),
+    ...(o.imageData ? ['image-data.txt',
+      '    The hidden data found inside each of those image files: camera, date, place,',
+      '    editing software, author and copyright notice. ' + o.imageData,
+      '    Many websites remove this data when pictures are uploaded, so "none" is common.',
+      ''] : []),
     ...(o.hasLookups ? ['lookups/',
       '    Public registration records (RDAP, the official replacement for WHOIS) for the',
       '    website\'s domain and server: who hosts the site, the domain registrar, and their',
@@ -76,6 +78,17 @@ function ppReadme(o) {
     'README.txt',
     '    This guide. It is the same for every pack, so it is not part of the fingerprint list.',
     '',
+    ...ppReadmeChecks(stamps),
+  ].join('\r\n');
+}
+
+// The "how to check by hand" and "keep it safe" part, shared by page and image packs.
+function ppReadmeChecks(stamps) {
+  const tsa = stamps.length > 0;
+  const certs = { DigiCert: '"DigiCert Trusted Root G4" from https://www.digicert.com/kb/digicert-root-certificates.htm',
+    Sectigo: '"USERTrust RSA Certification Authority" root, from sectigo.com',
+    FreeTSA: 'https://freetsa.org/files/cacert.pem' };
+  return [
     'HOW TO CHECK BY HAND (INDEPENDENT OF PAGEPROOF)',
     '-----------------------------------------------',
     '',
@@ -113,5 +126,76 @@ function ppReadme(o) {
     '- Keep a second copy on a separate drive or other storage.',
     '- The fingerprint of this whole zip is recorded in the collector\'s PageProof capture log.',
     ''
+  ];
+}
+
+// README.txt for an Image Inspector evidence pack (one picture and its hidden data).
+function ppImageReadme(o) {
+  const stamps = o.stamps || [];
+  return [
+    'ABOUT THIS EVIDENCE PACK',
+    '========================',
+    '',
+    'This folder is a record of one picture and the hidden data stored inside it,',
+    'made with the PageProof Image Inspector ' + o.version + ', a browser extension.',
+    '',
+    '  Capture ID:   ' + (o.captureId || '(none)'),
+    '  Picture:      ' + o.source,
+    ...(o.page ? ['  Found on:     ' + o.page] : []),
+    '  Collected:    ' + o.time + ' (UTC)',
+    '',
+    'EASIEST WAY TO CHECK THIS PACK',
+    '------------------------------',
+    'Double-click VERIFY-THIS-PACK.html. It opens in your web browser (no internet or',
+    'installation needed). Drop this zip file onto it, or click "Choose the unzipped folder"',
+    'and pick this folder. You get a green "Unchanged" or a red "Warning" result.',
+    '',
+    'WHAT EACH FILE IS',
+    '-----------------',
+    '',
+    o.original,
+    '    The picture file itself, exactly as ' + (o.fromWeb ? 'the website sent it' : 'it was added') + ', byte for byte. Nothing',
+    '    was converted, resized or re-saved, so all its hidden data is still inside.',
+    '',
+    o.base + '.pdf',
+    '    A report: the picture, where it came from, and its hidden data (camera, date,',
+    '    place, software, author and copyright, edit history, Content Credentials).',
+    '',
+    'image-data.txt',
+    '    Every hidden data field found in the picture, as plain text.',
+    '',
+    'VERIFY-THIS-PACK.html',
+    '    A checker that runs every fingerprint and timestamp check in your browser. It is',
+    '    itself covered by the fingerprints and timestamps, so it cannot be swapped unnoticed.',
+    '',
+    'capture-details.txt',
+    '    Where the picture came from and when, ' + (o.fromWeb ? 'the website server\'s response, ' : '') + 'the case details,',
+    '    and a fingerprint for every file.',
+    '',
+    'fingerprints.sha256',
+    '    A SHA-256 fingerprint (a unique 64-character code) for each file above. If even',
+    '    one byte of a file changes, its fingerprint changes completely.',
+    '',
+    ...(stamps.length ? ['timestamps/',
+      '    Trusted timestamp receipts (.tsr) and the requests that produced them (.tsq).',
+      '    Independent timestamp services each digitally signed the fingerprint list:',
+      ...stamps.map(t => '      ' + t.service + ': ' + (t.time || 'see receipt') + ' (UTC)  ->  timestamps/' + t.file + '.tsr'),
+      '    Only the fingerprint was sent to the services, never the files themselves.',
+      ''] : ['(No trusted timestamp was available when this pack was made. See capture-details.txt.)', '']),
+    'README.txt',
+    '    This guide. It is not part of the fingerprint list.',
+    '',
+    'ABOUT HIDDEN DATA',
+    '-----------------',
+    '',
+    'Cameras, phones and editing programs store details inside picture files: the camera',
+    'model and serial number, the date and place a photo was taken, the software used,',
+    'and the author and copyright notice. Many websites and social networks remove this',
+    'data when a picture is uploaded, and screenshots never have it. So "no hidden data"',
+    'usually means the file was re-uploaded or screenshotted, not that it is the original.',
+    'Hidden data can be edited by anyone with the right software, so treat it as one',
+    'piece of evidence, not proof on its own.',
+    '',
+    ...ppReadmeChecks(stamps),
   ].join('\r\n');
 }

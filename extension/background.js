@@ -177,14 +177,15 @@ async function capture(tab, auto) {
   return record.id;
 }
 
-api.action.onClicked.addListener(async tab => {
-  if (busy) {
-    // Clicking again during a capture stops it and keeps what was captured so far.
-    stopRequested = true;
-    api.action.setBadgeBackgroundColor({ color: '#e11d48' });
-    api.action.setBadgeText({ text: 'STOP' });
-    return;
-  }
+function requestStop() {
+  // Stopping a capture keeps what was captured so far.
+  stopRequested = true;
+  api.action.setBadgeBackgroundColor({ color: '#e11d48' });
+  api.action.setBadgeText({ text: 'STOP' });
+}
+
+async function startCapture(tab) {
+  if (busy) return requestStop();
   busy = true;
   stopRequested = false;
   try {
@@ -197,6 +198,55 @@ api.action.onClicked.addListener(async tab => {
     stopRequested = false;
     api.action.setBadgeText({ text: '' });
   }
+}
+
+// The keyboard shortcut (Alt+Shift+P) captures straight away, without the menu.
+try {
+  api.commands.onCommand.addListener(async cmd => {
+    if (cmd !== 'capture-page') return;
+    const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+    if (tab) startCapture(tab);
+  });
+} catch (e) { /* no shortcuts */ }
+
+// ---------- Image Inspector ----------
+// Save the picture list and open the Inspector page next to the website's tab.
+async function openInspector(rec, tab) {
+  const id = 'insp-' + Date.now();
+  await PP_DB.put({ id, time: new Date().toISOString(), ...rec });
+  const keys = (await PP_DB.keys()).filter(k => String(k).startsWith('insp-')).sort();
+  for (const k of keys.slice(0, -20)) await PP_DB.del(k);
+  const opts = { url: api.runtime.getURL('inspect.html?id=' + id) };
+  if (tab) { opts.index = tab.index + 1; opts.windowId = tab.windowId; }
+  await api.tabs.create(opts);
+}
+
+async function inPicker(tabId, fn) {
+  await api.scripting.executeScript({ target: { tabId }, files: ['picker.js'] });
+  const [res] = await api.scripting.executeScript({ target: { tabId }, func: fn });
+  return res ? res.result : undefined;
+}
+
+// Messages from the icon menu and the picture picker.
+api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (!msg) return false;
+  const jobs = {
+    status: async () => ({ busy }),
+    stop: async () => { if (busy) requestStop(); return { ok: true }; },
+    captureTab: async () => { startCapture(await api.tabs.get(msg.tabId)); return { ok: true }; },
+    pick: async () => { await inPicker(msg.tabId, () => window.__ppPick.start()); return { ok: true }; },
+    inspectAll: async () => {
+      const tab = await api.tabs.get(msg.tabId);
+      const found = await inPicker(msg.tabId, () => window.__ppPick.all());
+      await openInspector({ mode: 'all', ...found }, tab);
+      return { ok: true };
+    },
+    inspect: async () => { await openInspector({ mode: 'one', page: msg.page, title: msg.title, items: msg.items }, sender.tab); return { ok: true }; }
+  };
+  const job = jobs[msg.type];
+  if (!job) return false;
+  job().catch(err => ({ ok: false, error: String((err && err.message) || err) })).then(sendResponse);
+  return true;
 });
 
 // Batch capture: the batch page asks for one tab to be captured at a time.
@@ -226,11 +276,34 @@ api.runtime.onInstalled.addListener(() => {
   try {
     api.contextMenus.removeAll(() => {
       for (const [id, [title]] of Object.entries(MENU)) api.contextMenus.create({ id, title, contexts: ['action'] });
+      api.contextMenus.create({ id: 'inspectImage', title: 'Inspect with PageProof', contexts: ['image'] });
     });
   } catch (e) { /* menus not available */ }
 });
 try {
-  api.contextMenus.onClicked.addListener(info => {
+  api.contextMenus.onClicked.addListener(async (info, tab) => {
+    if (info.menuItemId === 'inspectImage') {
+      let src = info.srcUrl;
+      // Pictures that only exist inside the page must be read there.
+      if (src && src.startsWith('blob:') && tab) {
+        try {
+          const [r] = await api.scripting.executeScript({ target: { tabId: tab.id }, args: [src], func: async u => {
+            const b = await (await fetch(u)).blob();
+            return new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b); });
+          } });
+          if (r && r.result) src = r.result;
+        } catch (e) { /* keep the blob address */ }
+      }
+      let item = { src };
+      if (tab && !src.startsWith('data:')) {
+        try {
+          await api.scripting.executeScript({ target: { tabId: tab.id }, files: ['picker.js'] });
+          const [r] = await api.scripting.executeScript({ target: { tabId: tab.id }, args: [src], func: u => window.__ppPick.bestFor(u) });
+          if (r && r.result) item = { ...r.result, src };
+        } catch (e) { /* use the address as it is */ }
+      }
+      return openInspector({ mode: 'one', page: info.pageUrl, title: tab ? tab.title : '', items: [item] }, tab);
+    }
     const m = MENU[info.menuItemId];
     if (m) api.tabs.create({ url: api.runtime.getURL(m[1]) });
   });

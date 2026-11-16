@@ -2,7 +2,7 @@
 
 # PageProof
 
-A browser extension for **Chrome and Firefox** that captures a whole web page, top to bottom, in one picture.
+A browser extension for **Chrome and Firefox** that captures a whole web page, top to bottom, in one picture, and shows the hidden data inside pictures (camera, date, place, author, copyright).
 
 - **Whole page:** scrolls the page for you and stitches it into one tall image. Images, embeds and videos are captured exactly as they look on screen (videos as a still frame).
 - **Proof of where it came from:** a banner across the top shows the website's domain, the full web address, and the date and time of the capture.
@@ -10,28 +10,31 @@ A browser extension for **Chrome and Firefox** that captures a whole web page, t
   - boxes that scroll up and down on their own (like the comments on an Instagram post, chat panes, long tables)
   - **dropdown lists**: every choice is written out, with the selected one marked
 - **Reels, Shorts and TikToks:** on Instagram and Facebook Reels, YouTube Shorts and TikTok, only the video on screen is captured (no scrolling into the next ones), and a shortened description is opened first so the full text shows. Anything PageProof did to the page is written in the pack under "How the capture was taken".
-- **Endless pages:** on sites that keep loading more articles as you scroll, the capture stops where the page ended when you clicked. Click the PageProof icon again at any time to stop a capture early and keep what it has so far.
+- **Endless pages:** on sites that keep loading more articles as you scroll, the capture stops where the page ended when you clicked. To stop a capture early, click the PageProof icon and choose **Stop and keep what's captured**.
 - **Two ways to save:** PDF, and an HTML backup that stores every picture, style and font inside the file, so it still opens correctly even if the website deletes them.
 - **Evidence pack:** one .zip holding everything below, named `CaseID_domain_date_time_CaptureID.zip` (for example `CASE-42_traded.co_2026-11-04_15-17-55_PP-7KQ2MX.zip`). Every capture gets its own unique Capture ID, which also appears in the PDF banner, the details file and the capture log.
   - The PDF and the HTML backup
   - `_source.html`: the page source exactly as the website's server sent it
   - `images/`: the original image files from the page
+  - `image-data.txt`: the hidden data found inside each of those pictures (camera, date, place, editing software, author, copyright). The PDF gets an extra last page listing the pictures that still have hidden data.
   - `fingerprints.sha256`: a SHA-256 fingerprint for every file
   - `timestamps/`: **trusted timestamp** receipts from DigiCert, Sectigo and FreeTSA. Each free service separately signs the fingerprint list with its own clock. Only the fingerprint code is sent, never your files. Nobody needs to store anything: the receipts in your zip are the proof.
   - `README.txt`: a plain-language guide explaining every file and how anyone (like a lawyer or court) can check nothing was changed
   - `VERIFY-THIS-PACK.html`: a built-in checker anyone can double-click to check the pack, with no PageProof or internet needed
   - `capture-details.txt`: web address, page title, time and time zone, window size, browser, your name, case number and notes, and the website server's IP address, clock time and response headers
 - **Who hosts this site:** each capture looks up the public registration records for the site: the hosting company, domain registrar, and their abuse contacts (who a DMCA notice goes to). It's shown on the capture page, written in `capture-details.txt`, and the full records are saved in `lookups/`.
-- **Batch capture:** paste a list of links and PageProof captures each one into its own evidence pack, saved to `Downloads/PageProof/<case number>/`, with a CSV report at the end. Right-click the PageProof icon to open it.
+- **Batch capture:** paste a list of links and PageProof captures each one into its own evidence pack, saved to `Downloads/PageProof/<case number>/`, with a CSV report at the end. Open it from the **⋯** menu after clicking the PageProof icon (or right-click the icon).
 - **Verify a pack:** drop any evidence pack on this page and it checks every fingerprint and timestamp, then shows a clear green or red result.
 - **Copy and Markup:** **Copy** puts the whole capture on your clipboard to paste anywhere. **Markup** lets you highlight, draw boxes, circles and arrows, or type on a copy of a capture, then copy it to paste into an email or chat, or download it as a picture or PDF. You can pick just part of the page. The copy gets a "Marked-up copy" label and is never added to the evidence pack, so the original stays untouched.
+- **Image Inspector:** click the PageProof icon, then **Inspect a picture**. Pick a picture by pointing at it on the page (like uBlock's element picker), choose from **all the pictures on the page** (each marked if it still has hidden data), upload one from your computer, or right-click any picture and choose **Inspect with PageProof**. PageProof downloads the original file (the biggest version the site offers), then shows a plain-English summary ("Taken on a Canon EOS R6 on 3 Jun 2025 by J. Rivera..."), the camera, date, GPS place, editing software, author and copyright, plus folded lists of every EXIF, IPTC and XMP field, the edit history and Content Credentials (C2PA, including signs of AI). A yellow warning shows when the data has been stripped. Save a **PDF report** or an **evidence pack** (the untouched original file, the PDF, the data as text, fingerprints, trusted timestamps, README and the offline checker).
+- **Compare two pictures:** like superimposing in Photoshop. Put your client's original in box 1 and the copy in box 2. **Line them up automatically** resizes and moves the copy onto the original (it handles resized and cropped copies) and gives a match score. Then fade between them with the slider, **Slide aside and back**, drag or nudge with the arrow keys, or switch to the **Difference** view (black where they match). Save it as a PDF (both pictures, the overlay at 0%, 50% and 100%, and the difference view), a picture, or a short video. Open it from the Image Inspector (**Compare with the original**) or the **⋯** menu.
 - **Capture log:** a running list of every capture and every evidence pack saved (with the pack's own fingerprint). Open it from the left bar on the capture page, and download it as a spreadsheet (.csv).
 
 ## How to use it
 
 1. Go to any normal website.
-2. Click the PageProof icon in your toolbar (or press **Alt+Shift+P**).
-3. It jumps to the top of the page, then scrolls down while it captures. The icon shows a counter while it works. Don't scroll or switch tabs until it finishes. To stop early, click the icon again.
+2. Click the PageProof icon in your toolbar, then the green **Capture this page** (or press **Alt+Shift+P** to capture straight away, without the menu).
+3. It jumps to the top of the page, then scrolls down while it captures. The icon shows a counter while it works. Don't scroll or switch tabs until it finishes. To stop early, click the icon and choose **Stop and keep what's captured**.
 4. A new tab opens with your capture. Fill in **Collected by**, **Case / reference number** and any **Notes** (your name is remembered; the case number and notes start empty each time).
 5. Then click the green **⬇ Save evidence pack** to get everything at once, or click **PDF** or **HTML** to download one file on its own.
 

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PageProof Compare</title>
+<link rel="icon" href="icons/icon32.png">
+<link rel="stylesheet" href="viewer.css">
+<link rel="stylesheet" href="inspect.css">
+<link rel="stylesheet" href="compare.css">
+<script src="theme.js"></script>
+</head>
+<body class="with-side">
+  <aside id="side">
+    <div class="brand"><img src="icons/icon48.png" alt="" width="22" height="22"> PageProof Compare</div>
+    <div class="site">
+      <div id="domain">Same picture?</div>
+      <div id="sub">Lay the copy over the original and line them up, like in Photoshop.</div>
+    </div>
+
+    <div class="slot" id="slotA" data-k="A">
+      <div class="th"><span>1</span></div>
+      <div class="info"><b>Original</b><small class="nm">Your client's picture</small>
+        <label class="pickbtn">Choose…<input type="file" accept="image/*,.tif,.tiff,.avif" hidden></label></div>
+    </div>
+    <div class="slot" id="slotB" data-k="B">
+      <div class="th"><span>2</span></div>
+      <div class="info"><b>Copy</b><small class="nm">The one found online</small>
+        <label class="pickbtn">Choose…<input type="file" accept="image/*,.tif,.tiff,.avif" hidden></label></div>
+    </div>
+
+    <button id="auto" class="main save" disabled title="Resize and move the copy so it sits exactly on the original">✨ Line them up automatically</button>
+    <div id="score" class="card" hidden></div>
+
+    <section class="card ctl" id="controls">
+      <h3>Copy on top</h3>
+      <div class="opRow"><span>Original</span><input type="range" id="opacity" min="0" max="100" value="50" disabled><span>Copy</span></div>
+      <div class="opVal" id="opVal">50% see-through</div>
+      <div class="seg" id="modes">
+        <button data-mode="overlay" class="on">Overlay</button><button data-mode="diff" title="Black where the two pictures are the same">Difference</button><button data-mode="side">Side by side</button>
+      </div>
+      <div class="grid">
+        <button id="aside" class="tile small" disabled title="Slide the copy off to the side, then back into place">↔ Slide aside and back</button>
+        <button id="fade" class="tile small" disabled title="Fade between the original and the copy, over and over">▶ Play fade</button>
+        <button id="smaller" class="tile small" disabled title="Make the copy a little smaller">− Smaller</button>
+        <button id="bigger" class="tile small" disabled title="Make the copy a little bigger">+ Bigger</button>
+      </div>
+      <div class="scaleVal" id="scaleVal"></div>
+    </section>
+
+    <section class="card">
+      <h3>Save the comparison</h3>
+      <div class="grid three">
+        <button id="sPdf" class="tile small" disabled title="A PDF with both pictures, the overlay at 0%, 50% and 100%, and the difference view">📄 PDF</button>
+        <button id="sPng" class="tile small" disabled title="A picture of what you see now">🖼️ Picture</button>
+        <button id="sVid" class="tile small" disabled title="A short video of the copy fading in and sliding into place">🎬 Video</button>
+      </div>
+    </section>
+
+    <nav class="links">
+      <a href="inspect.html" target="_blank">🔍 Image Inspector</a>
+      <a href="verify.html" target="_blank">✅ Verify a pack</a>
+      <a href="log.html" target="_blank">📒 Capture log</a>
+    </nav>
+  </aside>
+
+  <div id="content">
+    <div id="status"></div>
+    <main id="stage">
+      <div id="empty">
+        <div class="ph">🔀</div>
+        <h2>Is it the same picture?</h2>
+        <p>Add your client's <b>original</b> and the <b>copy</b> you found, using the two boxes on the left.<br>
+          You can also drag pictures onto them, or paste with <kbd>Ctrl</kbd>+<kbd>V</kbd>.</p>
+        <p class="alt">Then click <b>Line them up automatically</b>, or drag the copy into place yourself.</p>
+      </div>
+      <canvas id="view" hidden tabindex="0"></canvas>
+      <p id="hint" hidden>Drag the copy to move it. Arrow keys nudge it 1 pixel (hold Shift for 10). The dashed orange line shows the copy's edges.</p>
+    </main>
+  </div>
+
+  <script src="db.js"></script>
+  <script src="pdf.js"></script>
+  <script src="report.js"></script>
+  <script src="compare.js"></script>
+</body>
+</html>
