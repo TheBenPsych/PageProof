@@ -56,26 +56,6 @@ function imageName(img, i) {
   return 'images/' + String(i + 1).padStart(3, '0') + '_' + name + '.' + (ext || 'bin');
 }
 
-// One self-contained copy of the "Verify a pack" page, placed inside every evidence pack
-// so anyone can double-click it to check the pack, even without PageProof.
-async function standaloneChecker() {
-  const text = async f => (await fetch(f)).text();
-  let html = await text('verify.html');
-  const icon = await (await fetch('icons/icon48.png')).blob();
-  const iconUrl = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(icon); });
-  const inline = async f => '<script>\n' + (await text(f)).replace(/<\/script/gi, '<\\/script') + '\n</script>';
-  const css = await text('viewer.css');
-  html = html.replace('<link rel="stylesheet" href="viewer.css">', () => '<style>\n' + css + '\n</style>');
-  html = html.replace('<link rel="icon" href="icons/icon32.png">', () => '<link rel="icon" href="' + iconUrl + '">');
-  html = html.replace('src="icons/icon48.png"', () => 'src="' + iconUrl + '"');
-  html = html.replace(/<a class="link" href="(log|markup)\.html"[^>]*>[^<]*<\/a>/g, '');
-  const themeJs = await inline('theme.js');
-  html = html.replace('<script src="theme.js"></script>', () => '<script>window.PP_STANDALONE = true;</script>\n' + themeJs);
-  for (const f of ['unzip.js', 'tsverify.js', 'verify.js']) { const js = await inline(f); html = html.replace('<script src="' + f + '"></script>', () => js); }
-  html = html.replace('Check that an evidence pack hasn\'t been changed since it was made', 'Check that this evidence pack hasn\'t been changed since it was made. Nothing leaves your computer.');
-  return html;
-}
-
 // Plain-text summary of who hosts the site, for capture-details.txt.
 function hostingLines(h) {
   if (!h) return [];
@@ -387,7 +367,7 @@ async function start() {
     const jpg = await toBlob(renderSlice(plan, y0, h), 'image/jpeg', 0.92);
     pages.push({ jpeg: await bytesOf(jpg), width: plan.W, height: h });
   }
-  const pdf = makePdf(pages, { title: 'PageProof capture of ' + host, subject: rec.url + ' captured ' + rec.time });
+  let pdf = makePdf(pages, { title: 'PageProof capture of ' + host, subject: rec.url + ' captured ' + rec.time });
   $('pdf').disabled = false;
   $('pdf').onclick = () => download(pdf, base + '.pdf');
 
@@ -422,6 +402,50 @@ async function start() {
   if (saved.failed.length) notes.push(saved.failed.length + ' file' + (saved.failed.length > 1 ? 's' : '') + ' could not be saved into the HTML backup (they are listed in capture-details.txt).');
   setStatus(notes.join(' '));
 
+  // Hidden data (camera, date, author, copyright...) inside every picture saved from the page.
+  let imageData = null;
+  if (saved.images.length) {
+    setStatus([...notes, 'Reading the hidden data in ' + saved.images.length + ' picture' + (saved.images.length > 1 ? 's' : '') + '...'].join(' '));
+    const results = [];
+    for (const [i, img] of saved.images.entries()) {
+      let meta = null;
+      try { meta = await PP_META.read(img.bytes); } catch (e) { /* not a picture we can read */ }
+      results.push({ name: imageName(img, i), url: img.url, meta });
+    }
+    const withData = results.filter(r => r.meta && r.meta.summary.level !== 'none');
+    const owners = results.filter(r => r.meta && r.meta.summary.namesOwner);
+    const ai = results.filter(r => r.meta && r.meta.summary.ai.length);
+    const line = withData.length + ' of ' + results.length + ' picture' + (results.length > 1 ? 's' : '') + ' still ' + (withData.length === 1 ? 'has' : 'have') + ' hidden data' +
+      (owners.length ? ', ' + owners.length + ' name' + (owners.length === 1 ? 's' : '') + ' an author or copyright owner' : '') +
+      (ai.length ? ', ' + ai.length + ' show' + (ai.length === 1 ? 's' : '') + ' signs of AI' : '') + '.';
+    const text = ['HIDDEN DATA IN THE PICTURES SAVED FROM THIS PAGE', '='.repeat(48), '', 'Page: ' + rec.url, 'Capture ID: ' + (rec.captureId || '-'), line, '',
+      'Pictures with hidden data are listed first, with everything found. The images/ folder holds the files themselves.', '',
+      ...[...withData, ...results.filter(r => !withData.includes(r))].map(r => r.meta
+        ? PP_META.toText(r.meta, { title: r.name, url: r.url, brief: r.meta.summary.level === 'none' })
+        : r.name + '\r\n  (not a picture file PageProof can read)\r\n  Found at: ' + r.url + '\r\n')].join('\r\n');
+    imageData = { line, text };
+    notes.push('Pictures: ' + line);
+    setStatus(notes.join(' '));
+
+    // Add a page (or more) about it at the end of the PDF.
+    try {
+      const S = r => r.meta.summary;
+      const items = [{ p: line, bold: true }, { p: 'Cameras, phones and editing programs store details inside picture files. Many websites remove them when pictures are uploaded, so "none" is common. Every picture file is in the images/ folder of the evidence pack, and everything found is listed in image-data.txt.', color: '#475569' }];
+      for (const r of withData.slice(0, 60)) items.push({ h: r.name.replace(/^images\//, '') }, { kv: [
+        ['In short', S(r).sentence],
+        ['Found at', r.url.startsWith('data:') ? '(stored inside the page)' : r.url],
+        ['Camera', [S(r).camera, S(r).lens].filter(Boolean).join(' · ')], ['Taken', S(r).taken],
+        ['Place (GPS)', S(r).gps ? S(r).gps.lat + ', ' + S(r).gps.lon : ''], ['Edited with', S(r).software],
+        ['Creator', S(r).creator, !!S(r).creator], ['Copyright', S(r).copyright, !!S(r).copyright], ['Credit line', S(r).credit, !!S(r).credit],
+        ['Usage terms', S(r).terms], ['Signs of AI', S(r).ai.join('; ')], ['Size', r.meta.width ? r.meta.width + ' x ' + r.meta.height + ' ' + r.meta.format : r.meta.format]
+      ] });
+      if (withData.length > 60) items.push({ p: (withData.length - 60) + ' more pictures with hidden data are listed in image-data.txt.' });
+      const extra = PP_REPORT.render({ title: 'Hidden data in the pictures', subtitle: [host + '  ·  ' + rec.url, 'Captured ' + formatTime(rec), 'Capture ID ' + (rec.captureId || '-') + '  ·  PageProof ' + rec.version],
+        footer: 'PageProof  ·  ' + (rec.captureId || '') + '  ·  ' + host, items });
+      pdf = makePdf([...pages, ...await PP_REPORT.pdfPages(extra)], { title: 'PageProof capture of ' + host, subject: rec.url + ' captured ' + rec.time });
+    } catch (e) { /* the PDF without the extra page is still fine */ }
+  }
+
   // Evidence pack: every file, its SHA-256 fingerprint, and a trusted timestamp.
   const srv = rec.server || {};
   const files = [];
@@ -430,6 +454,7 @@ async function start() {
   for (const f of files) f.bytes = await bytesOf(f.blob);
   if (srv.source) files.push({ name: base + '_source.html', bytes: srv.source });
   saved.images.forEach((img, i) => files.push({ name: imageName(img, i), bytes: img.bytes, url: img.url }));
+  if (imageData) files.push({ name: 'image-data.txt', bytes: new TextEncoder().encode(imageData.text) });
   const hosting = await hostingJob;
   if (hosting) {
     for (const f of hosting.files) files.push({ name: f.name, bytes: new TextEncoder().encode(f.text) });
@@ -498,6 +523,7 @@ async function start() {
       'or open the PageProof "Verify a pack" page and drop this zip on it.',
       '',
       ...hostingLines(hosting),
+      ...(imageData ? ['HIDDEN DATA IN THE PICTURES', imageData.line, 'Everything found is in image-data.txt.', ''] : []),
       'HOW THE CAPTURE WAS TAKEN',
       ...(rec.notes.length ? rec.notes.map(n => '- ' + n) : ['- The page was captured from the top, one screen at a time, exactly as shown.']),
       '',
@@ -528,7 +554,7 @@ async function start() {
       ...good.flatMap(t => [{ name: 'timestamps/' + t.file + '.tsr', bytes: t.reply }, { name: 'timestamps/' + t.file + '.tsq', bytes: t.query }]),
       { name: 'capture-details.txt', bytes: new TextEncoder().encode(text) },
       { name: 'README.txt', bytes: new TextEncoder().encode(ppReadme({ captureId: rec.captureId, version: rec.version, url: rec.url, time: rec.time, base,
-        hasSource: !!srv.source, imageCount: saved.images.length, stamps: good, notes: rec.notes, hasLookups: !!(hosting && hosting.files && hosting.files.length) })) }
+        hasSource: !!srv.source, imageCount: saved.images.length, imageData: imageData && imageData.line, stamps: good, notes: rec.notes, hasLookups: !!(hosting && hosting.files && hosting.files.length) })) }
     ];
     const zip = PP_ZIP([...files, ...extra].map(f => ({ name: f.name, bytes: f.bytes })), new Date(rec.time));
     // Name: CaseID_domain_date_time_CaptureID.zip (case ID first when entered).

@@ -14,9 +14,9 @@ This guide shows how to use PageProof day to day, once it's installed in your br
 
 1. **Open the page** with the infringing content in a normal tab.
 2. **Get it ready.** Close pop-ups and cookie banners, and open anything you need to show, like a menu or the right carousel slide. PageProof captures what's on screen, plus anything below it.
-3. **Click the PageProof icon** (or press **Alt+Shift+P**).
+3. **Click the PageProof icon**, then the green **📸 Capture this page**. (Or press **Alt+Shift+P** to capture straight away, without the menu.)
 4. **Hands off.** PageProof jumps to the top and scrolls down by itself. The icon shows a counter (1, 2, 3...) while it works. Don't scroll, click, or switch tabs until it finishes.
-   - Need to stop? **Click the icon again.** It stops and keeps everything captured so far.
+   - Need to stop? **Click the icon again** and choose **Stop and keep what's captured**.
 5. A new tab opens: the **capture page**.
 
 > **Tip:** On pages that keep loading more posts as you scroll ("endless scrolling"), PageProof stops where the page ended when you clicked, and notes this in the record.
@@ -104,7 +104,7 @@ PageProof no longer saves to the Wayback Machine itself, but if you've saved a p
 
 Use this for sweeps, when you have a list of infringing pages.
 
-1. **Right-click the PageProof icon** and choose **Batch capture (many links)...** (or click **Batch capture** at the bottom of the left bar on the capture page).
+1. **Click the PageProof icon**, then **⋯** at the top right, and choose **Batch capture** (or right-click the icon) (or click **Batch capture** at the bottom of the left bar on the capture page).
 2. **Paste the links,** one per line. You can paste straight from a spreadsheet column.
 3. Fill in **Collected by**, **Case / reference number** and any **Notes**. They go into every pack.
 4. Click **Start batch.** A separate window opens and visits each link in turn. **Leave it open and don't minimize it.** You can keep working in your other windows.
@@ -165,6 +165,54 @@ To draw on it first:
 
 Good to know: every marked-up copy has a yellow **"Marked-up copy"** label at the bottom with the web address, capture time and Capture ID, so nobody mistakes it for the original. You can untick **Add "Marked-up copy" label** if you need a clean picture. The marked-up copy is a separate file: it is never put in the evidence pack and doesn't change any fingerprints. Always keep the original evidence pack as your proof.
 
+## 11. Look inside a picture: the Image Inspector
+
+Cameras, phones and editing programs store hidden details inside picture files: the camera, the date and place a photo was taken, the editing software, and often the photographer's name and copyright notice. If an infringing site still has your client's name inside the file, that's strong evidence.
+
+**Getting a picture in.** Click the PageProof icon, then **🔍 Inspect a picture**, and choose how:
+
+- **🎯 Click a picture on this page.** The page dims a little and every picture lights up with a blue box and its size as you point at it. Click the one you want. Press **Esc** to cancel.
+- **🖼️ Show all pictures on this page.** A new tab lists every picture on the page, biggest first. Each one is tagged **✓ Hidden data**, **A little data** or **No data** (a **©** means it names an author or copyright owner). Click one to inspect it, and use **⬅ All pictures on the page** at the bottom of the left bar to go back.
+- **📁 Upload from my computer.** Click **➕ Add a picture**, drag a file onto the page, or paste with Ctrl+V. (Pasted pictures never keep hidden data, so add the file itself when you can.)
+- **Shortcut:** right-click any picture on a website and choose **Inspect with PageProof**.
+
+For pictures on websites, PageProof downloads the original file from the site, not a screenshot. When the page shows a small version, it fetches the biggest version the site has, because it usually keeps more data. The record lists both addresses.
+
+**Reading the result.** The left bar shows:
+
+- **In short:** one plain-English sentence, for example *"Taken on a Canon EOS R6 on 3 Jun 2025 by J. Rivera, with the GPS location recorded. Edited in Lightroom Classic, then Photoshop. Copyright notice: ..."*
+- **What the file says:** camera, date taken, place (with a **Map ↗** link), editing software, creator and copyright (in yellow), size, and the file's SHA-256 fingerprint (click to copy).
+- A **yellow warning** when there is no hidden data. That usually means a screenshot or a re-upload, which is worth noting in itself.
+- A **purple box** when there are signs of AI (Content Credentials or AI-tool settings in the file).
+- Folded lists you can open: **All camera data (EXIF)**, **Author and copyright (IPTC)**, **Adobe data and edit history (XMP)**, **Content Credentials (C2PA)**, and **Where it came from** (the address, page, and the website server's answer).
+
+**Saving it.** Fill in the case details, then click:
+
+- **⬇ Save evidence pack**: a zip with `original/` (the file exactly as downloaded, byte for byte), the PDF report, `image-data.txt`, `capture-details.txt`, fingerprints, trusted timestamps, `README.txt` and `VERIFY-THIS-PACK.html`. The **Verify a pack** page checks it like any other pack.
+- **📄 PDF**: the report on its own. Page 1 has the banner, the "In short" sentence, the picture and where it came from. The next pages list all the hidden data.
+- **🖼️ Original** downloads the untouched file; **📋 Copy** and **✏️ Markup** work like on the capture page.
+
+Hidden data can be edited with the right software, so treat it as one piece of evidence, not proof on its own.
+
+**Page captures do this too.** Every normal page capture now reads the hidden data in all the pictures it saves. The pack gets `image-data.txt`, the status line says something like *"3 of 12 pictures still have hidden data, 1 names an author or copyright owner"*, and the PDF gets a last page listing those pictures.
+
+## 12. Show it's the same photo: Compare
+
+This does what you'd do in Photoshop: put the copy on top of the original, turn down its opacity, and nudge it aside and back to show everything lines up.
+
+1. Open it from the Image Inspector (**🔀 Compare with the original**: the picture you were inspecting goes in as the copy), or click the PageProof icon, then **⋯**, then **Compare two pictures**.
+2. Put your client's **Original** in box 1 and the **Copy** in box 2 (click **Choose…**, or drag a picture onto the box).
+3. Click **✨ Line them up automatically**. PageProof tries different sizes and positions, slides the copy into place, and shows a **match score** (for example *"Very likely the same photo, 99% match"*). It works for copies that were resized, cropped or recompressed.
+4. Show it:
+   - Move the **slider** from Original to Copy to fade between them. If it's the same photo, nothing doubles up.
+   - **↔ Slide aside and back** moves the copy off to the side and back into place.
+   - **▶ Play fade** fades back and forth until you click it again.
+   - **Difference** turns everything that matches black, so only real changes (an added logo, cropped edges) show up bright.
+   - Fine-tune by dragging the copy, with the arrow keys (Shift for bigger steps), or with **− Smaller** / **+ Bigger**.
+5. Save it: **📄 PDF** (both pictures side by side, file details and fingerprints, the overlay at 0%, 50% and 100%, and the difference view), **🖼️ Picture** (what you see now), or **🎬 Video** (a 9-second clip of the copy fading in, sliding aside and back, then the difference view; .webm plays in any browser and in VLC).
+
+The match score is a guide. The overlay pictures are what to show.
+
 ## Quick troubleshooting
 
 | Problem | What to do |
@@ -172,5 +220,7 @@ Good to know: every marked-up copy has a yellow **"Marked-up copy"** label at th
 | "This page could not be captured" | Browser pages (new tab, settings, the Chrome Web Store) can't be captured. Try a normal website. |
 | The capture shows a pop-up or cookie banner | Close it on the page, then capture again. |
 | Something you need is hidden in a menu, carousel or "show more" | Open it on the page first, then capture. |
+| The Image Inspector says "Could not download this picture" | Some websites block downloads. Right-click the picture, choose **Save image as...**, then add the saved file with **Inspect another picture**. |
+| Alt+Shift+P opens the menu instead of capturing | Go to `chrome://extensions/shortcuts` and set **Capture the whole page straight away** to Alt+Shift+P. |
 | A timestamp service "did not answer" | That's fine as long as at least one other service signed. The status line says which ones did. |
 | The capture stopped early | Very long pages stop after 60 screens, and endless pages stop at their original end. The status line explains which. |

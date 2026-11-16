@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "PageProof",
-  "version": "3.2.3",
-  "description": "Capture a whole web page as evidence: stamped with its web address and time, saved as PDF and a full HTML backup with images.",
+  "version": "3.3.0",
+  "description": "Capture a whole web page as evidence, or inspect the hidden data inside a picture. Saved as PDF and evidence packs with fingerprints and timestamps.",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -10,7 +10,8 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "PageProof: capture this whole page",
+    "default_title": "PageProof",
+    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png"
@@ -33,11 +34,11 @@
     "clipboardWrite"
   ],
   "commands": {
-    "_execute_action": {
+    "capture-page": {
       "suggested_key": {
         "default": "Alt+Shift+P"
       },
-      "description": "Capture the whole page"
+      "description": "Capture the whole page straight away"
     }
   },
   "browser_specific_settings": {
