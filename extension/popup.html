@@ -7,20 +7,17 @@
 </head>
 <body>
   <div class="head">
-    <img src="icons/icon48.png" alt="" width="22" height="22"><b>PageProof</b><span class="sp"></span>
-    <details class="more" id="more"><summary title="More">⋯</summary>
-      <div class="menu">
-        <button data-page="batch.html">📚 Batch capture</button>
-        <button data-page="compare.html">🔀 Compare two pictures</button>
-        <button data-page="verify.html">✅ Verify a pack</button>
-        <button data-page="log.html">📒 Capture log</button>
-      </div>
-    </details>
-  </div>
+    <img src="icons/icon48.png" alt="" width="22" height="22"><b>PageProof</b></div>
 
   <div id="home">
     <button class="opt cap" id="cap" autofocus><span class="e">📸</span><span><b>Capture this page</b><small>Save the whole page as evidence</small></span></button>
     <button class="opt ins" id="ins"><span class="e">🔍</span><span><b>Inspect a picture</b><small>See the hidden data inside a picture</small></span></button>
+    <div class="tools">
+      <button class="tool" data-page="batch.html"><span class="e">📚</span><span><b>Batch capture</b><small>Capture a list of links in one go</small></span></button>
+      <button class="tool" data-page="compare.html"><span class="e">🔀</span><span><b>Compare two pictures</b><small>Show a copy matches the original</small></span></button>
+      <button class="tool" data-page="verify.html"><span class="e">✅</span><span><b>Verify a pack</b><small>Check a pack hasn&#39;t been changed</small></span></button>
+      <button class="tool" data-page="log.html"><span class="e">📒</span><span><b>Capture log</b><small>Find and download past captures</small></span></button>
+    </div>
     <p class="tip" id="tip"></p>
   </div>
 

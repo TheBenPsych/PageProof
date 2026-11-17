@@ -43,7 +43,6 @@ $('wUp').onclick = async () => {
 };
 $('stop').onclick = async () => { await api.runtime.sendMessage({ type: 'stop' }); window.close(); };
 for (const b of document.querySelectorAll('[data-page]')) b.onclick = async () => { await api.tabs.create({ url: api.runtime.getURL(b.dataset.page) }); window.close(); };
-document.addEventListener('click', e => { if (!$('more').contains(e.target)) $('more').open = false; });
 
 (async () => {
   try {
