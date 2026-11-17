@@ -47,6 +47,19 @@
       <div class="scaleVal" id="scaleVal"></div>
     </section>
 
+    <section class="card ctl" id="shape">
+      <h3>Size and shape</h3>
+      <p class="shHint">Line them up automatically sets these for you. Adjust by hand if a copy was stretched, squashed or tilted.</p>
+      <label class="shRow"><span>Size</span><input type="range" id="shSize" min="-3000" max="3000" step="1" value="0" disabled><b id="shSizeV">100%</b></label>
+      <label class="shRow"><span>Width</span><input type="range" id="shW" min="600" max="1600" step="1" value="1000" disabled title="Stretch the copy wider or narrower"><b id="shWV">100%</b></label>
+      <label class="shRow"><span>Height</span><input type="range" id="shH" min="600" max="1600" step="1" value="1000" disabled title="Stretch the copy taller or shorter"><b id="shHV">100%</b></label>
+      <label class="shRow"><span>Turn</span><input type="range" id="shR" min="-200" max="200" step="1" value="0" disabled title="Turn the copy a little, in tenths of a degree"><b id="shRV">0.0°</b></label>
+      <div class="shBottom">
+        <label class="shFlip"><input type="checkbox" id="shFlip" disabled> Mirrored</label>
+        <button id="shReset" class="pickbtn" disabled title="Undo any stretch, turn, slant or mirror (keeps the size)">Reset shape</button>
+      </div>
+    </section>
+
     <section class="card">
       <h3>Save the comparison</h3>
       <div class="grid three">
