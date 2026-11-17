@@ -216,6 +216,35 @@ This does what you'd do in Photoshop: put the copy on top of the original, turn 
 
 The score is a guide. The overlay pictures are what to show. If the copy's colours were changed, the Difference view shows a faint tint over the photo instead of pure black; edges that line up still disappear.
 
+## 13. Change file types, join PDFs, make files smaller: Convert files
+
+Click the PageProof icon, then **🔄 Convert files**. Everything happens on your computer. Nothing is uploaded to a website, so client files stay private.
+
+1. Click **➕ Add files** (or drag files onto the page, or paste with Ctrl+V). You can add one file or many, of different kinds.
+2. PageProof works out what the files are and shows only what makes sense under **What do you want to do?**
+3. Pick a job, set the options in the left bar, and press the big green button.
+
+What each job does:
+
+- **Change the file type** (pictures): turn JPG, PNG, WebP, GIF, BMP, AVIF, TIFF or iPhone HEIC photos into **JPG, PNG, WebP, GIF, BMP or PDF**. *Keep the date and camera details* copies the hidden camera data into the new JPG.
+- **Make them smaller** (pictures and PDFs): pick a limit (**Email 10 MB**, **Court e-filing 5 MB**, **1 MB**) and PageProof finds the best quality that fits. The slider goes from *Smallest* to *Best quality*. Each file shows its new size, and **Check** opens it so you can look before you save. In PDFs only the pictures are squeezed, so the text stays sharp and searchable.
+- **Rotate, crop or resize** (pictures): turn left or right, flip, drag the white corners to crop (pick **Square**, **4 : 3** or **16 : 9** to keep a shape), and type a new width or height. Tick **Do the same to all** to change every picture the same way.
+- **Join into one PDF** (PDFs and pictures): **1** tick the files you want in it, **2** use ▲ ▼ to put them in order, **3** press **Save one PDF**. Point at a page to turn it ↻ or remove it ✕. Pictures become pages, and each file gets a bookmark.
+- **Split or pick pages** (PDFs): click pages to tick them, or type page numbers like `1-3, 7`. Save them as one PDF or one PDF per page.
+- **Save as PDF** (Word, old Word .doc, RTF, OpenOffice, text files, Excel, CSV, emails, Mac files): check the preview, then press **Save as PDF**. For documents and emails a print box opens: set **Destination** to **Save as PDF** and press **Save**. The text stays real text, so it can be searched and copied. Old .doc files only show their words (open them in Word and save as .docx for the exact layout).
+
+**How to save them:** when there are several new files, choose **📁 Separate files** (they all go straight into Downloads) or **📦 One ZIP**. Your original files are never changed. You always get new copies.
+
+## 14. Open files your computer can't: Open odd files
+
+Click the PageProof icon, then **🗂️ Open odd files**, and add the file. Click a file on the left to see inside it.
+
+- **Outlook emails (.msg) and saved emails (.eml):** shows the sender, recipients, date and message. Attachments can be saved or opened right there. Pictures from the internet are not loaded unless you click **Load pictures from the internet**, so the sender can't tell you opened it. **Save as PDF** keeps a copy of the email.
+- **ZIP, RAR, 7-Zip and TAR archives:** lists every file inside. **Save** or **Open** any one of them, or **Save everything as a normal ZIP** that Windows can open. (Archives locked with a password can't be opened.)
+- **Mac Pages, Numbers and Keynote:** shows the preview the Mac saved inside the file, and saves it as PDF. Newer Mac files only keep a picture of the first page or slide, so for every page ask the sender for a PDF (File, Export To, PDF).
+- **iPhone HEIC photos, TIFF and AVIF pictures:** shows the picture and saves it as JPG, PNG or PDF.
+- **Files with the wrong name:** if a file is really a picture or PDF with a different ending, PageProof says so and opens it anyway.
+
 ## Quick troubleshooting
 
 | Problem | What to do |
