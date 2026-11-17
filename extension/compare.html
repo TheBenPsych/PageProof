@@ -36,7 +36,7 @@
       <div class="opRow"><span>Original</span><input type="range" id="opacity" min="0" max="100" value="50" disabled><span>Copy</span></div>
       <div class="opVal" id="opVal">50% see-through</div>
       <div class="seg" id="modes">
-        <button data-mode="overlay" class="on">Overlay</button><button data-mode="diff" title="Black where the two pictures are the same">Difference</button><button data-mode="side">Side by side</button>
+        <button data-mode="overlay" class="on">Overlay</button><button data-mode="diff" title="Black where the two pictures are the same">Difference</button><button data-mode="tint" title="Original in blue, copy in orange: grey where they line up">Colour check</button><button data-mode="side">Side by side</button>
       </div>
       <div class="grid">
         <button id="aside" class="tile small" disabled title="Slide the copy off to the side, then back into place">↔ Slide aside and back</button>
@@ -87,7 +87,7 @@
         <p class="alt">Then click <b>Line them up automatically</b>, or drag the copy into place yourself.</p>
       </div>
       <canvas id="view" hidden tabindex="0"></canvas>
-      <p id="hint" hidden>Drag the copy to move it. Arrow keys nudge it 1 pixel (hold Shift for 10). The dashed orange line shows the copy's edges.</p>
+      <p id="hint" hidden>Drag the copy to move it. Arrow keys nudge it 1 pixel (hold Shift for 10). The solid blue line is the original's edge, the dashed orange line the copy's.</p>
     </main>
   </div>
 
