@@ -104,7 +104,7 @@ PageProof no longer saves to the Wayback Machine itself, but if you've saved a p
 
 Use this for sweeps, when you have a list of infringing pages.
 
-1. **Click the PageProof icon**, then **⋯** at the top right, and choose **Batch capture** (or right-click the icon) (or click **Batch capture** at the bottom of the left bar on the capture page).
+1. **Click the PageProof icon** and choose **Batch capture** (or right-click the icon, or click **Batch capture** at the bottom of the left bar on the capture page).
 2. **Paste the links,** one per line. You can paste straight from a spreadsheet column.
 3. Fill in **Collected by**, **Case / reference number** and any **Notes**. They go into every pack.
 4. Click **Start batch.** A separate window opens and visits each link in turn. **Leave it open and don't minimize it.** You can keep working in your other windows.
@@ -200,7 +200,7 @@ Hidden data can be edited with the right software, so treat it as one piece of e
 
 This does what you'd do in Photoshop: put the copy on top of the original, turn down its opacity, and nudge it aside and back to show everything lines up.
 
-1. Open it from the Image Inspector (**🔀 Compare with the original**: the picture you were inspecting goes in as the copy), or click the PageProof icon, then **⋯**, then **Compare two pictures**.
+1. Open it from the Image Inspector (**🔀 Compare with the original**: the picture you were inspecting goes in as the copy), or click the PageProof icon, then **Compare two pictures**.
 2. Put your client's **Original** in box 1 and the **Copy** in box 2 (click **Choose…**, or drag a picture onto the box).
 3. Click **✨ Line them up automatically**. PageProof finds the same sharp details (corners, edges, lettering) in both pictures, works out the size, shape and position where they agree, and slides the copy into place. It works when the copy was resized, heavily zoomed or cropped, stretched wider or taller, tilted, mirrored, blurred, recompressed, colour-changed, or has a headline, logo, watermark or caption over part of it (for example a newspaper front page or a social media post). The status line then says what was done to the copy, for example *"resized to 83%, stretched to 86% width, turned 8° anticlockwise, mirrored left to right"*.
    The score says how much of the area the two pictures share lines up detail for detail, for example *"Very likely the same photo, 100% lines up"*, or for a front page with a big headline *"Very likely the same photo, with things added on top, 42% lines up"*. Parts covered by a headline simply don't count as lining up.
