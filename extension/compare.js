@@ -5,6 +5,7 @@ const api = globalThis.browser || globalThis.chrome;
 const P = { A: null, B: null };            // A = original, B = copy: { bitmap, name, bytes, sha, src }
 let T = PP_ALIGN.place();                  // where the copy sits, in the original's pixels (see align.js)
 let opacity = 0.5, mode = 'overlay';
+const BLUE = '#2563eb', ORANGE = '#f59e0b';
 let WS = 1;                                 // working scale (big photos are drawn smaller)
 let PADX = 0, PADY = 0;                     // room around the original to slide the copy aside
 let scoreInfo = null, fading = false, busyAnim = false;
@@ -92,13 +93,46 @@ function paint(ctx, W, H, k, o, m, opts = {}) {
     const x0 = (W - (wa + wb) * sc - gap) / 2, y0 = (H - h * sc) / 2;
     ctx.drawImage(A, x0, y0, wa * sc, h * sc);
     ctx.drawImage(B, x0 + wa * sc + gap, y0, wb * sc, h * sc);
+    ctx.lineWidth = Math.max(2, 3 * k * 1.5);
+    ctx.strokeStyle = BLUE; ctx.strokeRect(x0, y0, wa * sc, h * sc);
+    ctx.setLineDash([10 * Math.max(1, k * 2), 6 * Math.max(1, k * 2)]);
+    ctx.strokeStyle = ORANGE; ctx.strokeRect(x0 + wa * sc + gap, y0, wb * sc, h * sc);
+    ctx.setLineDash([]);
     label(ctx, 'ORIGINAL', x0 + 6, y0 + 6, '#2563eb', k);
     label(ctx, 'COPY', x0 + wa * sc + gap + 6, y0 + 6, '#f59e0b', k);
     ctx.restore();
     return;
   }
-  ctx.drawImage(A, ox * k, oy * k, A.width * k, A.height * k);
-  if (m === 'diff') {
+  if (m === 'tint') {
+    // Colour check: the original in blue tones, the copy in orange tones, added together.
+    // Where the two line up they cancel out to plain grey; anything off shows up blue or orange.
+    // The copy's brightness and contrast are first matched to the original's (copies are often
+    // brightened or colour-graded), so only real differences show.
+    const layer = drawIt => {
+      const c = document.createElement('canvas'); c.width = W; c.height = H;
+      const t = c.getContext('2d', { willReadFrequently: true }); t.imageSmoothingQuality = 'high'; drawIt(t);
+      return t.getImageData(0, 0, W, H);
+    };
+    const da = layer(t => t.drawImage(A, ox * k, oy * k, A.width * k, A.height * k)).data;
+    const db = layer(t => PP_ALIGN.drawCopy(t, B, T, k, ox, oy)).data;
+    const gray = (d, i) => 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    let n = 0, sa = 0, sb = 0, saa = 0, sbb = 0;
+    for (let i = 0; i < da.length; i += 16) if (da[i + 3] > 250 && db[i + 3] > 250) { const p = gray(da, i), q = gray(db, i); n++; sa += p; sb += q; saa += p * p; sbb += q * q; }
+    const ma = n ? sa / n : 128, mb = n ? sb / n : 128;
+    const gain = n ? Math.sqrt(Math.max(1, saa / n - ma * ma) / Math.max(1, sbb / n - mb * mb)) : 1;
+    const out = ctx.createImageData(W, H), o2 = out.data;
+    for (let i = 0; i < o2.length; i += 4) {
+      const ha = da[i + 3] / 255, hb = db[i + 3] / 255;
+      if (!ha && !hb) continue;
+      const ga = ha ? gray(da, i) : 0, gb = hb ? Math.max(0, Math.min(255, (gray(db, i) - mb) * gain + ma)) : 0;
+      // original = blue (0, 0.5, 1), copy = orange (1, 0.5, 0); added together, equal = grey
+      o2[i] = gb * hb; o2[i + 1] = (ga * ha + gb * hb) / 2; o2[i + 2] = ga * ha; o2[i + 3] = 255 * Math.max(ha, hb);
+    }
+    const c = document.createElement('canvas'); c.width = W; c.height = H; c.getContext('2d').putImageData(out, 0, 0);
+    ctx.drawImage(c, 0, 0);
+  } else ctx.drawImage(A, ox * k, oy * k, A.width * k, A.height * k);
+  if (m === 'tint') { /* drawn above */ }
+  else if (m === 'diff') {
     ctx.save();
     ctx.beginPath(); ctx.rect(ox * k, oy * k, A.width * k, A.height * k); ctx.clip();
     ctx.globalCompositeOperation = 'difference';
@@ -110,15 +144,17 @@ function paint(ctx, W, H, k, o, m, opts = {}) {
     ctx.globalAlpha = 1;
   }
   if (opts.edges !== false) {
-    ctx.setLineDash([10 * Math.max(1, k * 2), 6 * Math.max(1, k * 2)]);
+    // The original gets a solid blue edge, the copy a dashed orange one, matching their labels.
     ctx.lineWidth = Math.max(2, 3 * k * 1.5);
-    ctx.strokeStyle = '#f59e0b'; PP_ALIGN.drawCopy(ctx, B, T, k, ox, oy, true);
+    ctx.strokeStyle = BLUE; ctx.strokeRect(ox * k, oy * k, A.width * k, A.height * k);
+    ctx.setLineDash([10 * Math.max(1, k * 2), 6 * Math.max(1, k * 2)]);
+    ctx.strokeStyle = ORANGE; PP_ALIGN.drawCopy(ctx, B, T, k, ox, oy, true);
     ctx.setLineDash([]);
   }
   if (opts.labels !== false) {
-    label(ctx, 'ORIGINAL', ox * k + 6, oy * k + 6, '#2563eb', k);
+    label(ctx, 'ORIGINAL', ox * k + 6, oy * k + 6, BLUE, k);
     const bl = PP_ALIGN.mapPoint(T, B, T.flip ? B.width : 0, B.height);   // the copy's bottom-left corner as shown
-    if (m !== 'diff') label(ctx, 'COPY ' + Math.round(o * 100) + '%', (ox + bl.x) * k + 6, (oy + bl.y) * k - 6 - Math.max(18, 26 * k * 1.5), '#f59e0b', k);
+    if (m !== 'diff') label(ctx, m === 'tint' ? 'COPY' : 'COPY ' + Math.round(o * 100) + '%', (ox + bl.x) * k + 6, (oy + bl.y) * k - 6 - Math.max(18, 26 * k * 1.5), ORANGE, k);
   }
   ctx.restore();
 }
@@ -133,7 +169,7 @@ function label(ctx, text, x, y, color, k) {
 function draw() {
   if (!P.A || !P.B) return;
   paint(view.getContext('2d'), view.width, view.height, WS, opacity, mode);
-  $('opVal').textContent = mode === 'diff' ? 'Difference view: black means the same' : Math.round(opacity * 100) + '% copy, ' + (100 - Math.round(opacity * 100)) + '% original';
+  $('opVal').textContent = mode === 'diff' ? 'Difference view: black means the same' : mode === 'tint' ? 'Colour check: grey means the same, blue or orange edges mean off' : Math.round(opacity * 100) + '% copy, ' + (100 - Math.round(opacity * 100)) + '% original';
   $('scaleVal').textContent = 'Moved ' + Math.round(T.x) + ', ' + Math.round(T.y) + ' px' + (T.k ? ' · slanted ' + Math.abs(T.k * 100).toFixed(1) + '%' : '');
   syncShape();
 }
@@ -195,7 +231,7 @@ $('shFlip').onchange = () => reshape({ flip: $('shFlip').checked });
 $('shReset').onclick = () => reshape({ w: 1, h: 1, r: 0, k: 0, flip: false });
 $('smaller').onclick = () => resize(1 / 1.01);
 $('bigger').onclick = () => resize(1.01);
-$('opacity').oninput = () => { opacity = $('opacity').value / 100; if (mode === 'diff') setMode('overlay'); draw(); };
+$('opacity').oninput = () => { opacity = $('opacity').value / 100; if (mode === 'diff' || mode === 'tint') setMode('overlay'); draw(); };
 function setMode(m) { mode = m; for (const b of $('modes').children) b.classList.toggle('on', b.dataset.mode === m); draw(); }
 for (const b of $('modes').children) b.onclick = () => setMode(b.dataset.mode);
 
@@ -334,6 +370,9 @@ $('sPdf').onclick = async () => {
       { h: 'Difference view' },
       { p: 'The copy is subtracted from the original. Where the two pictures are the same the result is black; anything different shows up bright.', color: '#475569' },
       { image: frame(1, 'diff', 1400), maxH: 700, caption: 'Black = identical. Bright = different (edits, added logos, cropping edges)' },
+      { h: 'Colour check' },
+      { p: 'The original is shown in blue tones and the copy in orange tones, added together. Where the two pictures line up they cancel out to plain grey; anything that is off or different shows up blue or orange.', color: '#475569' },
+      { image: frame(1, 'tint', 1400), maxH: 700, caption: 'Grey = the same. Blue = only in the original. Orange = only in the copy' },
       { p: 'The score is a guide worked out by PageProof. The overlay pictures are what to show.', color: '#64748b' }
     ];
     const pages = PP_REPORT.render({ title: 'Picture comparison', subtitle: ['Original: ' + A.name + '   ·   Copy: ' + B.name, now.toLocaleString(), 'PageProof Compare'],
@@ -362,7 +401,8 @@ $('sVid').onclick = async () => {
     const show = (o, m) => paint(ctx, c.width, c.height, k, o, m, at);
     show(0, 'overlay');
     const stream = c.captureStream(30);
-    const type = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+    // MP4 plays everywhere (Windows, Mac, phones, PowerPoint). Older browsers can only make WebM.
+    const type = ['video/mp4;codecs=avc1.42E01E', 'video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t)) || '';
     const rec = new MediaRecorder(stream, type ? { mimeType: type, videoBitsPerSecond: 6e6 } : {});
     const chunks = []; rec.ondataavailable = e => e.data.size && chunks.push(e.data);
     const done = new Promise(r => { rec.onstop = r; });
@@ -383,7 +423,7 @@ $('sVid').onclick = async () => {
     rec.stop(); await done;
     const ext = (rec.mimeType || type).includes('mp4') ? 'mp4' : 'webm';
     download(new Blob(chunks, { type: rec.mimeType || type || 'video/webm' }), baseName() + '.' + ext);
-    setStatus('Video saved to your Downloads (.' + ext + ', plays in any web browser and VLC).');
+    setStatus('Video saved to your Downloads (.' + ext + (ext === 'mp4' ? ', plays on Windows, Mac, phones and in PowerPoint' : ', plays in any web browser and VLC; update your browser to get MP4') + ').');
   } catch (e) { setStatus('Could not record the video: ' + e.message, true); }
   busyAnim = false; $('sVid').disabled = false; draw();
 };

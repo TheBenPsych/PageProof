@@ -208,10 +208,11 @@ This does what you'd do in Photoshop: put the copy on top of the original, turn 
    - Move the **slider** from Original to Copy to fade between them. If it's the same photo, nothing doubles up.
    - **↔ Slide aside and back** moves the copy off to the side and back into place.
    - **▶ Play fade** fades back and forth until you click it again.
+   - **Colour check** shows the original in blue tones and the copy in orange tones. Where they line up they cancel out to plain grey; anything off shows blue or orange ghost edges.
    - **Difference** turns everything that matches black, so only real changes (an added logo, cropped edges) show up bright.
    - Fine-tune by dragging the copy, with the arrow keys (Shift for bigger steps), or with **− Smaller** / **+ Bigger**.
    - **Size and shape** sliders: **Size**, **Width** (stretch sideways), **Height** (stretch up and down) and **Turn**, plus a **Mirrored** tick box. Auto line-up sets them for you; move them by hand if needed. **Reset shape** undoes any stretch, turn or mirror.
-5. Save it: **📄 PDF** (both pictures side by side, file details and fingerprints, the overlay at 0%, 50% and 100%, and the difference view), **🖼️ Picture** (what you see now), or **🎬 Video** (a 9-second clip of the copy fading in, sliding aside and back, then the difference view; .webm plays in any browser and in VLC).
+5. Save it: **📄 PDF** (both pictures side by side, file details and fingerprints, the overlay at 0%, 50% and 100%, the difference view and the colour check), **🖼️ Picture** (what you see now), or **🎬 Video** (a 9-second MP4 clip of the copy fading in, sliding aside and back, then the difference view; it plays on Windows, Mac, phones and in PowerPoint).
 
 The score is a guide. The overlay pictures are what to show. If the copy's colours were changed, the Difference view shows a faint tint over the photo instead of pure black; edges that line up still disappear.
 
