@@ -202,7 +202,8 @@ This does what you'd do in Photoshop: put the copy on top of the original, turn 
 
 1. Open it from the Image Inspector (**🔀 Compare with the original**: the picture you were inspecting goes in as the copy), or click the PageProof icon, then **⋯**, then **Compare two pictures**.
 2. Put your client's **Original** in box 1 and the **Copy** in box 2 (click **Choose…**, or drag a picture onto the box).
-3. Click **✨ Line them up automatically**. PageProof tries different sizes and positions, slides the copy into place, and shows a **match score** (for example *"Very likely the same photo, 99% match"*). It works for copies that were resized, cropped or recompressed.
+3. Click **✨ Line them up automatically**. PageProof finds the same sharp details (corners, edges, lettering) in both pictures, works out the size and position where they agree, and slides the copy into place. It works when the copy was resized, heavily zoomed or cropped, recompressed, colour-changed, or has a headline, logo or caption printed over part of it (for example a newspaper front page or a social media post).
+   The score says how much of the area the two pictures share lines up detail for detail, for example *"Very likely the same photo, 100% lines up"*, or for a front page with a big headline *"Very likely the same photo, with things added on top, 42% lines up"*. Parts covered by a headline simply don't count as lining up.
 4. Show it:
    - Move the **slider** from Original to Copy to fade between them. If it's the same photo, nothing doubles up.
    - **↔ Slide aside and back** moves the copy off to the side and back into place.
@@ -211,7 +212,7 @@ This does what you'd do in Photoshop: put the copy on top of the original, turn 
    - Fine-tune by dragging the copy, with the arrow keys (Shift for bigger steps), or with **− Smaller** / **+ Bigger**.
 5. Save it: **📄 PDF** (both pictures side by side, file details and fingerprints, the overlay at 0%, 50% and 100%, and the difference view), **🖼️ Picture** (what you see now), or **🎬 Video** (a 9-second clip of the copy fading in, sliding aside and back, then the difference view; .webm plays in any browser and in VLC).
 
-The match score is a guide. The overlay pictures are what to show.
+The score is a guide. The overlay pictures are what to show. If the copy's colours were changed, the Difference view shows a faint tint over the photo instead of pure black; edges that line up still disappear.
 
 ## Quick troubleshooting
 

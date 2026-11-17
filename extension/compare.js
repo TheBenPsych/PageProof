@@ -195,84 +195,16 @@ $('fade').onclick = async () => {
 };
 
 // ---------- lining up automatically ----------
-function grayOf(bitmap, w, h) {
-  w = Math.max(1, Math.round(w)); h = Math.max(1, Math.round(h));
-  const c = document.createElement('canvas'); c.width = w; c.height = h;
-  const ctx = c.getContext('2d', { willReadFrequently: true });
-  ctx.drawImage(bitmap, 0, 0, w, h);
-  const d = ctx.getImageData(0, 0, w, h).data, g = new Float32Array(w * h);
-  for (let i = 0, j = 0; j < g.length; i += 4, j++) g[j] = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-  return { w, h, g };
-}
-// Average difference where the two overlap (lower = better), with the copy at (ox, oy).
-function cost(a, b, ox, oy, stride, minFrac) {
-  const x0 = Math.max(0, ox), x1 = Math.min(a.w, ox + b.w), y0 = Math.max(0, oy), y1 = Math.min(a.h, oy + b.h);
-  if (x1 <= x0 || y1 <= y0) return Infinity;
-  if ((x1 - x0) * (y1 - y0) < minFrac * Math.min(a.w * a.h, b.w * b.h)) return Infinity;
-  let sum = 0, n = 0;
-  for (let y = y0; y < y1; y += stride) {
-    const ar = y * a.w, br = (y - oy) * b.w - ox;
-    for (let x = x0; x < x1; x += stride) { sum += Math.abs(a.g[ar + x] - b.g[br + x]); n++; }
-  }
-  return sum / n;
-}
-// How alike they are where they overlap: correlation, 1 = identical.
-function likeness(a, b, ox, oy) {
-  const x0 = Math.max(0, ox), x1 = Math.min(a.w, ox + b.w), y0 = Math.max(0, oy), y1 = Math.min(a.h, oy + b.h);
-  if (x1 <= x0 || y1 <= y0) return { r: 0, overlap: 0 };
-  let n = 0, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0;
-  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
-    const p = a.g[y * a.w + x], q = b.g[(y - oy) * b.w + (x - ox)];
-    n++; sa += p; sb += q; saa += p * p; sbb += q * q; sab += p * q;
-  }
-  const cov = sab / n - (sa / n) * (sb / n), va = saa / n - (sa / n) ** 2, vb = sbb / n - (sb / n) ** 2;
-  const r = va > 1 && vb > 1 ? cov / Math.sqrt(va * vb) : (Math.abs(sa / n - sb / n) < 3 ? 1 : 0);
-  return { r, overlap: ((x1 - x0) * (y1 - y0)) / (b.w * b.h), overlapA: ((x1 - x0) * (y1 - y0)) / (a.w * a.h) };
-}
-
-async function autoAlign() {
-  const A = P.A.bitmap, B = P.B.bitmap, big = Math.max(A.width, A.height);
-  // Search coarse to fine: many sizes and positions on tiny versions, then refine on bigger ones.
-  const levels = [{ L: 48, sRange: [0.2, 1.6], sSteps: 34, off: null, stride: 1 },
-    { L: 160, sSpan: 0.06, sSteps: 13, off: 6, stride: 2 },
-    { L: 420, sSpan: 0.015, sSteps: 7, off: 3, stride: 2 }];
-  let best = null;
-  for (const lv of levels) {
-    const f = lv.L / big;
-    const a = grayOf(A, A.width * f, A.height * f);
-    const fitW = A.width / B.width;
-    const scales = [];
-    if (!best) {
-      const [lo, hi] = lv.sRange;
-      for (let i = 0; i < lv.sSteps; i++) scales.push(fitW * lo * Math.pow(hi / lo, i / (lv.sSteps - 1)));
-      scales.push(fitW, A.height / B.height);
-    } else for (let i = 0; i < lv.sSteps; i++) scales.push(best.s * (1 - lv.sSpan + 2 * lv.sSpan * i / (lv.sSteps - 1)));
-    let lvBest = null;
-    for (const s of scales) {
-      const b = grayOf(B, B.width * s * f, B.height * s * f);
-      if (b.w < 4 || b.h < 4) continue;
-      let xs, ys;
-      if (!best) { xs = [-Math.floor(b.w * 0.6), a.w - Math.ceil(b.w * 0.4)]; ys = [-Math.floor(b.h * 0.6), a.h - Math.ceil(b.h * 0.4)]; }
-      else { const cx = Math.round(best.x * f), cy = Math.round(best.y * f); xs = [cx - lv.off, cx + lv.off]; ys = [cy - lv.off, cy + lv.off]; }
-      for (let oy = ys[0]; oy <= ys[1]; oy++) for (let ox = xs[0]; ox <= xs[1]; ox++) {
-        const c = cost(a, b, ox, oy, lv.stride, 0.35);
-        if (!lvBest || c < lvBest.c) lvBest = { c, s, x: ox / f, y: oy / f };
-      }
-      await sleep(0);
-    }
-    if (lvBest) best = lvBest;
-  }
-  return best;
-}
-
+// The work is done in align.js (PP_ALIGN): it finds matching details in both pictures,
+// so it copes with crops, big size changes and headlines or logos printed over the copy.
 $('auto').onclick = async () => {
   $('auto').disabled = true;
   $('auto').textContent = '⏳ Lining up...';
-  setStatus('Trying different sizes and positions...');
+  setStatus('Looking for the same details in both pictures...');
   try {
     const t0 = performance.now();
-    const best = await autoAlign();
-    if (!best || !isFinite(best.c)) throw new Error('no position fits');
+    const best = await PP_ALIGN.align(P.A.bitmap, P.B.bitmap, t => setStatus(t));
+    if (!best) throw new Error('no position fits');
     // Animate the copy sliding into place.
     const from = { ...T }, steps = 30;
     if (mode === 'side') setMode('overlay');
@@ -283,30 +215,34 @@ $('auto').onclick = async () => {
     }
     T = { s: best.s, x: best.x, y: best.y }; draw();
     await rescore();
-    setStatus('Lined up in ' + ((performance.now() - t0) / 1000).toFixed(1) + ' s. Move the slider to fade between them, or try "Slide aside and back". You can still drag the copy to fine-tune it.');
+    const secs = ((performance.now() - t0) / 1000).toFixed(1);
+    if (scoreInfo.verdict[0] === 'bad') setStatus('Could not find this photo inside the copy (' + secs + ' s). If you are sure it is there, drag the copy into place and use + Bigger / − Smaller.', true);
+    else setStatus('Lined up in ' + secs + ' s' + (best.how === 'details' ? ', using ' + best.inliers + ' matching details' : '') + '. Move the slider to fade between them, or try "Slide aside and back". You can still drag the copy to fine-tune it.');
   } catch (e) { setStatus('Could not line them up automatically (' + e.message + '). Drag the copy into place instead.', true); }
   $('auto').disabled = false;
   $('auto').textContent = '✨ Line them up automatically';
 };
 
+// The score only looks at the area where the two pictures overlap, split into small squares.
+// Squares covered by a headline, logo or caption just don't count as matching; they don't
+// pull the rest down.
 async function rescore() {
   if (!P.A || !P.B) return;
-  const A = P.A.bitmap, B = P.B.bitmap, f = 360 / Math.max(A.width, A.height);
-  const a = grayOf(A, A.width * f, A.height * f), b = grayOf(B, B.width * T.s * f, B.height * T.s * f);
-  const L = likeness(a, b, Math.round(T.x * f), Math.round(T.y * f));
-  const pct = Math.max(0, Math.round(L.r * 1000) / 10);
-  const verdict = L.overlap < 0.3 ? ['bad', 'The copy is mostly off the original', 'Line them up first.']
-    : pct >= 95 ? ['good', 'Very likely the same photo', 'They match almost pixel for pixel where they overlap.']
-    : pct >= 85 ? ['good', 'Probably the same photo', 'Small differences, such as resizing, recompression or colour edits.']
-    : pct >= 60 ? ['mid', 'Some likeness', 'Check the overlay by eye. They may not be lined up exactly yet.']
+  const S = PP_ALIGN.score(P.A.bitmap, P.B.bitmap, T);
+  const pct = Math.round(S.lines * 100), strength = Math.round(S.strength * 100);
+  const enough = S.matched >= 25;
+  const verdict = (S.overlap < 0.1 && S.overlapA < 0.05) || S.textured + S.flat < 6 ? ['bad', 'The copy is mostly off the original', 'Line them up first.']
+    : pct >= 85 && S.strength >= 0.8 ? ['good', 'Very likely the same photo', 'They match detail for detail wherever they overlap.']
+    : pct >= 25 && enough && S.strength >= 0.75 ? ['good', 'Very likely the same photo, with things added on top', pct + '% of the area they share lines up detail for detail. The rest differs, usually a headline, logo, caption or crop added to the copy. The Difference view shows those parts in bright.']
+    : pct >= 10 ? ['mid', 'Partly lines up', 'Check the overlay by eye. They may not be lined up exactly yet, or only part of the photo was used.']
     : ['bad', 'Probably not lined up, or not the same photo', 'Try "Line them up automatically", or drag the copy into place.'];
-  scoreInfo = { pct, verdict, overlap: L.overlap, overlapA: L.overlapA };
+  scoreInfo = { pct, strength, verdict, overlap: S.overlap, overlapA: S.overlapA };
   const box = $('score');
   box.hidden = false; box.className = 'card ' + verdict[0];
   box.innerHTML = '';
   const b1 = document.createElement('b'); b1.textContent = verdict[1];
-  const p = document.createElement('div'); p.className = 'pct'; p.textContent = pct + '% match';
-  const sm = document.createElement('small'); sm.textContent = verdict[2] + ' The copy covers ' + Math.round(Math.min(1, L.overlapA) * 100) + '% of the original. The score is a guide; the overlay is what to show.';
+  const p = document.createElement('div'); p.className = 'pct'; p.textContent = pct + '% lines up';
+  const sm = document.createElement('small'); sm.textContent = verdict[2] + ' The copy covers ' + Math.round(Math.min(1, S.overlapA) * 100) + '% of the original. The score is a guide; the overlay is what to show.';
   box.append(b1, p, sm);
 }
 let rescoreTimer = 0;
@@ -345,13 +281,14 @@ $('sPdf').onclick = async () => {
     if (!scoreInfo) await rescore();
     const A = P.A, B = P.B, now = new Date();
     const items = [
-      { p: 'In short: ' + scoreInfo.verdict[1] + ' (' + scoreInfo.pct + '% match where they overlap). ' + scoreInfo.verdict[2], box: '#eff6ff', color: '#1e3a8a' },
+      { p: 'In short: ' + scoreInfo.verdict[1] + ' (' + scoreInfo.pct + '% of the shared area lines up). ' + scoreInfo.verdict[2], box: '#eff6ff', color: '#1e3a8a' },
       { h: 'The two pictures' }, { image: sideBySide(1400), maxH: 520 },
       { kv: [
         ['Original', A.name + '  (' + A.bitmap.width + ' x ' + A.bitmap.height + ')'], ['Original from', A.src], ['Original SHA-256', A.sha],
         ['Copy', B.name + '  (' + B.bitmap.width + ' x ' + B.bitmap.height + ')'], ['Copy from', B.src], ['Copy SHA-256', B.sha],
         ['How the copy was placed', 'Resized to ' + (T.s * 100).toFixed(1) + '% and moved ' + Math.round(T.x) + ', ' + Math.round(T.y) + ' pixels (in the original\'s pixels), so it sits on top of the original'],
-        ['Match score', scoreInfo.pct + '% (correlation of brightness where they overlap; 100% = identical)'],
+        ['Lines up', scoreInfo.pct + '% of the area the two pictures share (split into small squares, each compared on its own; parts covered by headlines or logos count as not lining up)'],
+        ['Match where it lines up', scoreInfo.strength + '% (average correlation of brightness in the squares that line up; 100% = identical)'],
         ['Copy covers', Math.round(Math.min(1, scoreInfo.overlapA) * 100) + '% of the original'],
         ['Made', now.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'long' }) + ' with PageProof ' + api.runtime.getManifest().version]
       ] },
@@ -363,7 +300,7 @@ $('sPdf').onclick = async () => {
       { h: 'Difference view' },
       { p: 'The copy is subtracted from the original. Where the two pictures are the same the result is black; anything different shows up bright.', color: '#475569' },
       { image: frame(1, 'diff', 1400), maxH: 700, caption: 'Black = identical. Bright = different (edits, added logos, cropping edges)' },
-      { p: 'The match score is a guide worked out by PageProof. The overlay pictures are what to show.', color: '#64748b' }
+      { p: 'The score is a guide worked out by PageProof. The overlay pictures are what to show.', color: '#64748b' }
     ];
     const pages = PP_REPORT.render({ title: 'Picture comparison', subtitle: ['Original: ' + A.name + '   ·   Copy: ' + B.name, now.toLocaleString(), 'PageProof Compare'],
       footer: 'PageProof Compare  ·  ' + A.name + ' vs ' + B.name, items });
@@ -379,30 +316,35 @@ $('sVid').onclick = async () => {
   busyAnim = true; $('sVid').disabled = true;
   setStatus('Recording a short video (about 9 seconds)...');
   try {
-    const c = frame(0, 'overlay', 1280);
-    const ctx = c.getContext('2d');
-    const A = P.A.bitmap, B = P.B.bitmap;
+    const A = P.A.bitmap, B = P.B.bitmap, slide = A.width * 0.25;
+    // The frame is big enough to hold the copy when it slides aside.
     const L = Math.min(0, T.x), Tp = Math.min(0, T.y), m2 = Math.round(Math.max(A.width, A.height) * 0.02);
-    const k = c.width / (Math.max(A.width, T.x + B.width * T.s) - L + m2 * 2);
+    const Rt = Math.max(A.width, T.x + slide + B.width * T.s), Bt = Math.max(A.height, T.y + B.height * T.s);
+    const w = Rt - L + m2 * 2, h = Bt - Tp + m2 * 2, k = Math.min(1, 1280 / Math.max(w, h));
+    const c = document.createElement('canvas'); c.width = Math.round(w * k / 2) * 2; c.height = Math.round(h * k / 2) * 2;
+    const ctx = c.getContext('2d');
     const at = { ox: m2 - L, oy: m2 - Tp };
     const show = (o, m) => paint(ctx, c.width, c.height, k, o, m, at);
+    show(0, 'overlay');
     const stream = c.captureStream(30);
     const type = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'].find(t => MediaRecorder.isTypeSupported(t)) || '';
     const rec = new MediaRecorder(stream, type ? { mimeType: type, videoBitsPerSecond: 6e6 } : {});
     const chunks = []; rec.ondataavailable = e => e.data.size && chunks.push(e.data);
     const done = new Promise(r => { rec.onstop = r; });
     rec.start(200);
-    const tween = async (ms, fn) => { const t0 = performance.now(); for (;;) { const t = Math.min(1, (performance.now() - t0) / ms); fn(t); if (t >= 1) break; await new Promise(r => requestAnimationFrame(r)); } };
-    show(0, 'overlay'); await sleep(800);
-    await tween(1800, t => show(t, 'overlay'));
-    await sleep(500);
+    // Redraw on every tick, even while holding still: a canvas that doesn't change records no
+    // frames, which made the pauses (and the difference view at the end) vanish from the video.
+    const tween = async (ms, fn) => { const t0 = performance.now(); for (;;) { const t = Math.min(1, (performance.now() - t0) / ms); fn(t); if (t >= 1) break; await sleep(33); } };
     const keepX = T.x;
-    await tween(900, t => { T.x = keepX + A.width * 0.25 * Math.sin(t * Math.PI / 2); show(0.6, 'overlay'); });
-    await sleep(400);
-    await tween(900, t => { T.x = keepX + A.width * 0.25 * Math.cos(t * Math.PI / 2); show(0.6, 'overlay'); });
+    await tween(800, () => show(0, 'overlay'));
+    await tween(1800, t => show(t, 'overlay'));
+    await tween(500, () => show(1, 'overlay'));
+    await tween(900, t => { T.x = keepX + slide * Math.sin(t * Math.PI / 2); show(0.6, 'overlay'); });
+    await tween(400, () => show(0.6, 'overlay'));
+    await tween(900, t => { T.x = keepX + slide * Math.cos(t * Math.PI / 2); show(0.6, 'overlay'); });
     T.x = keepX;
     await tween(1500, t => show(0.6 - 0.6 * t, 'overlay'));
-    show(1, 'diff'); await sleep(1600);
+    await tween(2000, () => show(1, 'diff'));
     rec.stop(); await done;
     const ext = (rec.mimeType || type).includes('mp4') ? 'mp4' : 'webm';
     download(new Blob(chunks, { type: rec.mimeType || type || 'video/webm' }), baseName() + '.' + ext);
