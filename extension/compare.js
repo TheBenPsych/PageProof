@@ -3,7 +3,7 @@
 const $ = id => document.getElementById(id);
 const api = globalThis.browser || globalThis.chrome;
 const P = { A: null, B: null };            // A = original, B = copy: { bitmap, name, bytes, sha, src }
-let T = { s: 1, x: 0, y: 0 };              // where the copy sits, in the original's pixels
+let T = PP_ALIGN.place();                  // where the copy sits, in the original's pixels (see align.js)
 let opacity = 0.5, mode = 'overlay';
 let WS = 1;                                 // working scale (big photos are drawn smaller)
 let PADX = 0, PADY = 0;                     // room around the original to slide the copy aside
@@ -66,9 +66,9 @@ function start() {
   view.width = Math.round((A.width + PADX * 2) * WS);
   view.height = Math.round((A.height + PADY * 2) * WS);
   // Start with the copy stretched to the original's width, at the top left.
-  T = { s: A.width / B.width, x: 0, y: 0 };
+  T = PP_ALIGN.place({ s: A.width / B.width });
   $('empty').hidden = true; view.hidden = false; $('hint').hidden = false;
-  for (const id of ['auto', 'opacity', 'aside', 'fade', 'smaller', 'bigger', 'sPdf', 'sPng', 'sVid']) $(id).disabled = false;
+  for (const id of ['auto', 'opacity', 'aside', 'fade', 'smaller', 'bigger', 'sPdf', 'sPng', 'sVid', 'shSize', 'shW', 'shH', 'shR', 'shFlip', 'shReset']) $(id).disabled = false;
   if (!window.MediaRecorder || !view.captureStream) { $('sVid').disabled = true; $('sVid').title = 'This browser cannot record video'; }
   setStatus('Click "Line them up automatically", or drag the copy into place yourself.');
   draw();
@@ -98,27 +98,27 @@ function paint(ctx, W, H, k, o, m, opts = {}) {
     return;
   }
   ctx.drawImage(A, ox * k, oy * k, A.width * k, A.height * k);
-  const bx = (ox + T.x) * k, by = (oy + T.y) * k, bw = B.width * T.s * k, bh = B.height * T.s * k;
   if (m === 'diff') {
     ctx.save();
     ctx.beginPath(); ctx.rect(ox * k, oy * k, A.width * k, A.height * k); ctx.clip();
     ctx.globalCompositeOperation = 'difference';
-    ctx.drawImage(B, bx, by, bw, bh);
+    PP_ALIGN.drawCopy(ctx, B, T, k, ox, oy);
     ctx.restore();
   } else {
     ctx.globalAlpha = o;
-    ctx.drawImage(B, bx, by, bw, bh);
+    PP_ALIGN.drawCopy(ctx, B, T, k, ox, oy);
     ctx.globalAlpha = 1;
   }
   if (opts.edges !== false) {
     ctx.setLineDash([10 * Math.max(1, k * 2), 6 * Math.max(1, k * 2)]);
     ctx.lineWidth = Math.max(2, 3 * k * 1.5);
-    ctx.strokeStyle = '#f59e0b'; ctx.strokeRect(bx, by, bw, bh);
+    ctx.strokeStyle = '#f59e0b'; PP_ALIGN.drawCopy(ctx, B, T, k, ox, oy, true);
     ctx.setLineDash([]);
   }
   if (opts.labels !== false) {
     label(ctx, 'ORIGINAL', ox * k + 6, oy * k + 6, '#2563eb', k);
-    if (m !== 'diff') label(ctx, 'COPY ' + Math.round(o * 100) + '%', bx + 6, by + bh - 6 - Math.max(18, 26 * k * 1.5), '#f59e0b', k);
+    const bl = PP_ALIGN.mapPoint(T, B, T.flip ? B.width : 0, B.height);   // the copy's bottom-left corner as shown
+    if (m !== 'diff') label(ctx, 'COPY ' + Math.round(o * 100) + '%', (ox + bl.x) * k + 6, (oy + bl.y) * k - 6 - Math.max(18, 26 * k * 1.5), '#f59e0b', k);
   }
   ctx.restore();
 }
@@ -134,7 +134,18 @@ function draw() {
   if (!P.A || !P.B) return;
   paint(view.getContext('2d'), view.width, view.height, WS, opacity, mode);
   $('opVal').textContent = mode === 'diff' ? 'Difference view: black means the same' : Math.round(opacity * 100) + '% copy, ' + (100 - Math.round(opacity * 100)) + '% original';
-  $('scaleVal').textContent = 'Copy size: ' + (T.s * 100).toFixed(1) + '% · moved ' + Math.round(T.x) + ', ' + Math.round(T.y) + ' px';
+  $('scaleVal').textContent = 'Moved ' + Math.round(T.x) + ', ' + Math.round(T.y) + ' px' + (T.k ? ' · slanted ' + Math.abs(T.k * 100).toFixed(1) + '%' : '');
+  syncShape();
+}
+// How the copy was changed, in plain words, for the PDF and the status line.
+function describeShape() {
+  const bits = ['resized to ' + (T.s * 100).toFixed(1) + '%'];
+  if (T.w !== 1) bits.push('stretched to ' + (T.w * 100).toFixed(1) + '% width');
+  if (T.h !== 1) bits.push('stretched to ' + (T.h * 100).toFixed(1) + '% height');
+  if (T.r) bits.push('turned ' + Math.abs(T.r).toFixed(1) + '° ' + (T.r > 0 ? 'clockwise' : 'anticlockwise'));
+  if (T.k) bits.push('slanted ' + Math.abs(T.k * 100).toFixed(1) + '%');
+  if (T.flip) bits.push('mirrored left to right');
+  return bits.join(', ');
 }
 
 // ---------- moving the copy by hand ----------
@@ -160,7 +171,28 @@ view.addEventListener('keydown', e => {
   if (!mv) return;
   e.preventDefault(); T.x += mv[0]; T.y += mv[1]; draw(); rescoreSoon();
 });
-const resize = f => { const B = P.B.bitmap; const cx = T.x + B.width * T.s / 2, cy = T.y + B.height * T.s / 2; T.s *= f; T.x = cx - B.width * T.s / 2; T.y = cy - B.height * T.s / 2; draw(); rescoreSoon(); };
+const reshape = change => { T = PP_ALIGN.reshape(T, P.B.bitmap, change); draw(); rescoreSoon(); };
+const resize = f => reshape({ s: T.s * f });
+
+// ---------- size and shape sliders, for copies that were stretched, squashed or turned ----------
+// Size works on a doubling scale, so one slider goes from 1/8 to 8 times.
+const sizeToSlider = s => Math.round(Math.log2(s) * 1000), sliderToSize = v => Math.pow(2, v / 1000);
+let syncing = false;
+function syncShape() {
+  syncing = true;
+  $('shSize').value = sizeToSlider(T.s); $('shSizeV').textContent = (T.s * 100).toFixed(1) + '%';
+  $('shW').value = Math.round(T.w * 1000); $('shWV').textContent = (T.w * 100).toFixed(1) + '%';
+  $('shH').value = Math.round(T.h * 1000); $('shHV').textContent = (T.h * 100).toFixed(1) + '%';
+  $('shR').value = Math.round(T.r * 10); $('shRV').textContent = (T.r > 0 ? '+' : '') + T.r.toFixed(1) + '°';
+  $('shFlip').checked = !!T.flip;
+  syncing = false;
+}
+$('shSize').oninput = () => { if (!syncing) reshape({ s: sliderToSize(+$('shSize').value) }); };
+$('shW').oninput = () => { if (!syncing) reshape({ w: $('shW').value / 1000 }); };
+$('shH').oninput = () => { if (!syncing) reshape({ h: $('shH').value / 1000 }); };
+$('shR').oninput = () => { if (!syncing) reshape({ r: $('shR').value / 10 }); };
+$('shFlip').onchange = () => reshape({ flip: $('shFlip').checked });
+$('shReset').onclick = () => reshape({ w: 1, h: 1, r: 0, k: 0, flip: false });
 $('smaller').onclick = () => resize(1 / 1.01);
 $('bigger').onclick = () => resize(1.01);
 $('opacity').oninput = () => { opacity = $('opacity').value / 100; if (mode === 'diff') setMode('overlay'); draw(); };
@@ -210,14 +242,15 @@ $('auto').onclick = async () => {
     if (mode === 'side') setMode('overlay');
     for (let i = 1; i <= steps; i++) {
       const e = 1 - Math.pow(1 - i / steps, 3);
-      T = { s: from.s + (best.s - from.s) * e, x: from.x + (best.x - from.x) * e, y: from.y + (best.y - from.y) * e };
+      const mix = key => from[key] + (best[key] - from[key]) * e;
+      T = PP_ALIGN.place({ s: mix('s'), w: mix('w'), h: mix('h'), r: mix('r'), k: mix('k'), x: mix('x'), y: mix('y'), flip: best.flip });
       draw(); await sleep(16);
     }
-    T = { s: best.s, x: best.x, y: best.y }; draw();
+    T = PP_ALIGN.place({ s: best.s, w: best.w, h: best.h, r: best.r, k: best.k, flip: best.flip, x: best.x, y: best.y }); draw();
     await rescore();
     const secs = ((performance.now() - t0) / 1000).toFixed(1);
     if (scoreInfo.verdict[0] === 'bad') setStatus('Could not find this photo inside the copy (' + secs + ' s). If you are sure it is there, drag the copy into place and use + Bigger / − Smaller.', true);
-    else setStatus('Lined up in ' + secs + ' s' + (best.how === 'details' ? ', using ' + best.inliers + ' matching details' : '') + '. Move the slider to fade between them, or try "Slide aside and back". You can still drag the copy to fine-tune it.');
+    else setStatus('Lined up in ' + secs + ' s' + (best.how === 'details' ? ', using ' + best.inliers + ' matching details' : '') + '. The copy was ' + describeShape() + '. Move the slider to fade between them, or try "Slide aside and back". You can still drag the copy to fine-tune it.');
   } catch (e) { setStatus('Could not line them up automatically (' + e.message + '). Drag the copy into place instead.', true); }
   $('auto').disabled = false;
   $('auto').textContent = '✨ Line them up automatically';
@@ -234,7 +267,7 @@ async function rescore() {
   const verdict = (S.overlap < 0.1 && S.overlapA < 0.05) || S.textured + S.flat < 6 ? ['bad', 'The copy is mostly off the original', 'Line them up first.']
     : pct >= 85 && S.strength >= 0.8 ? ['good', 'Very likely the same photo', 'They match detail for detail wherever they overlap.']
     : pct >= 25 && enough && S.strength >= 0.75 ? ['good', 'Very likely the same photo, with things added on top', pct + '% of the area they share lines up detail for detail. The rest differs, usually a headline, logo, caption or crop added to the copy. The Difference view shows those parts in bright.']
-    : pct >= 10 ? ['mid', 'Partly lines up', 'Check the overlay by eye. They may not be lined up exactly yet, or only part of the photo was used.']
+    : pct >= 15 ? ['mid', 'Partly lines up', 'Check the overlay by eye. They may not be lined up exactly yet, or only part of the photo was used.']
     : ['bad', 'Probably not lined up, or not the same photo', 'Try "Line them up automatically", or drag the copy into place.'];
   scoreInfo = { pct, strength, verdict, overlap: S.overlap, overlapA: S.overlapA };
   const box = $('score');
@@ -252,8 +285,9 @@ const rescoreSoon = () => { clearTimeout(rescoreTimer); rescoreTimer = setTimeou
 // One frame, cropped to the original plus wherever the copy sits.
 function frame(o, m, maxSide = 1600, labels = true) {
   const A = P.A.bitmap, B = P.B.bitmap;
-  const L = Math.min(0, T.x), Tp = Math.min(0, T.y);
-  const R = Math.max(A.width, T.x + B.width * T.s), Bt = Math.max(A.height, T.y + B.height * T.s);
+  const bb = PP_ALIGN.bounds(T, B);
+  const L = Math.min(0, bb.x0), Tp = Math.min(0, bb.y0);
+  const R = Math.max(A.width, bb.x1), Bt = Math.max(A.height, bb.y1);
   const m2 = Math.round(Math.max(A.width, A.height) * 0.02);
   const w = R - L + m2 * 2, h = Bt - Tp + m2 * 2;
   const k = Math.min(1, maxSide / Math.max(w, h));
@@ -286,7 +320,7 @@ $('sPdf').onclick = async () => {
       { kv: [
         ['Original', A.name + '  (' + A.bitmap.width + ' x ' + A.bitmap.height + ')'], ['Original from', A.src], ['Original SHA-256', A.sha],
         ['Copy', B.name + '  (' + B.bitmap.width + ' x ' + B.bitmap.height + ')'], ['Copy from', B.src], ['Copy SHA-256', B.sha],
-        ['How the copy was placed', 'Resized to ' + (T.s * 100).toFixed(1) + '% and moved ' + Math.round(T.x) + ', ' + Math.round(T.y) + ' pixels (in the original\'s pixels), so it sits on top of the original'],
+        ['How the copy was placed', describeShape().replace(/^./, c => c.toUpperCase()) + ', and moved ' + Math.round(T.x) + ', ' + Math.round(T.y) + ' pixels (in the original\'s pixels), so it sits on top of the original'],
         ['Lines up', scoreInfo.pct + '% of the area the two pictures share (split into small squares, each compared on its own; parts covered by headlines or logos count as not lining up)'],
         ['Match where it lines up', scoreInfo.strength + '% (average correlation of brightness in the squares that line up; 100% = identical)'],
         ['Copy covers', Math.round(Math.min(1, scoreInfo.overlapA) * 100) + '% of the original'],
@@ -318,8 +352,9 @@ $('sVid').onclick = async () => {
   try {
     const A = P.A.bitmap, B = P.B.bitmap, slide = A.width * 0.25;
     // The frame is big enough to hold the copy when it slides aside.
-    const L = Math.min(0, T.x), Tp = Math.min(0, T.y), m2 = Math.round(Math.max(A.width, A.height) * 0.02);
-    const Rt = Math.max(A.width, T.x + slide + B.width * T.s), Bt = Math.max(A.height, T.y + B.height * T.s);
+    const bb = PP_ALIGN.bounds(T, B);
+    const L = Math.min(0, bb.x0), Tp = Math.min(0, bb.y0), m2 = Math.round(Math.max(A.width, A.height) * 0.02);
+    const Rt = Math.max(A.width, bb.x1 + slide), Bt = Math.max(A.height, bb.y1);
     const w = Rt - L + m2 * 2, h = Bt - Tp + m2 * 2, k = Math.min(1, 1280 / Math.max(w, h));
     const c = document.createElement('canvas'); c.width = Math.round(w * k / 2) * 2; c.height = Math.round(h * k / 2) * 2;
     const ctx = c.getContext('2d');

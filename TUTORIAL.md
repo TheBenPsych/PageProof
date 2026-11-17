@@ -202,7 +202,7 @@ This does what you'd do in Photoshop: put the copy on top of the original, turn 
 
 1. Open it from the Image Inspector (**🔀 Compare with the original**: the picture you were inspecting goes in as the copy), or click the PageProof icon, then **⋯**, then **Compare two pictures**.
 2. Put your client's **Original** in box 1 and the **Copy** in box 2 (click **Choose…**, or drag a picture onto the box).
-3. Click **✨ Line them up automatically**. PageProof finds the same sharp details (corners, edges, lettering) in both pictures, works out the size and position where they agree, and slides the copy into place. It works when the copy was resized, heavily zoomed or cropped, recompressed, colour-changed, or has a headline, logo or caption printed over part of it (for example a newspaper front page or a social media post).
+3. Click **✨ Line them up automatically**. PageProof finds the same sharp details (corners, edges, lettering) in both pictures, works out the size, shape and position where they agree, and slides the copy into place. It works when the copy was resized, heavily zoomed or cropped, stretched wider or taller, tilted, mirrored, blurred, recompressed, colour-changed, or has a headline, logo, watermark or caption over part of it (for example a newspaper front page or a social media post). The status line then says what was done to the copy, for example *"resized to 83%, stretched to 86% width, turned 8° anticlockwise, mirrored left to right"*.
    The score says how much of the area the two pictures share lines up detail for detail, for example *"Very likely the same photo, 100% lines up"*, or for a front page with a big headline *"Very likely the same photo, with things added on top, 42% lines up"*. Parts covered by a headline simply don't count as lining up.
 4. Show it:
    - Move the **slider** from Original to Copy to fade between them. If it's the same photo, nothing doubles up.
@@ -210,6 +210,7 @@ This does what you'd do in Photoshop: put the copy on top of the original, turn 
    - **▶ Play fade** fades back and forth until you click it again.
    - **Difference** turns everything that matches black, so only real changes (an added logo, cropped edges) show up bright.
    - Fine-tune by dragging the copy, with the arrow keys (Shift for bigger steps), or with **− Smaller** / **+ Bigger**.
+   - **Size and shape** sliders: **Size**, **Width** (stretch sideways), **Height** (stretch up and down) and **Turn**, plus a **Mirrored** tick box. Auto line-up sets them for you; move them by hand if needed. **Reset shape** undoes any stretch, turn or mirror.
 5. Save it: **📄 PDF** (both pictures side by side, file details and fingerprints, the overlay at 0%, 50% and 100%, and the difference view), **🖼️ Picture** (what you see now), or **🎬 Video** (a 9-second clip of the copy fading in, sliding aside and back, then the difference view; .webm plays in any browser and in VLC).
 
 The score is a guide. The overlay pictures are what to show. If the copy's colours were changed, the Difference view shows a faint tint over the photo instead of pure black; edges that line up still disappear.

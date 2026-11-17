@@ -34,3 +34,10 @@
 #view.drag { cursor: grabbing; }
 #view:focus-visible { box-shadow: 0 0 0 3px #f59e0b; }
 #hint { font-size: 13px; color: #64748b; margin: 10px 0 0; text-align: center; }
+.shHint { font-size: 12px; opacity: .75; margin: -2px 0 2px; }
+.shRow { display: grid; grid-template-columns: 46px 1fr 52px; align-items: center; gap: 6px; font-size: 12px; }
+.shRow input { width: 100%; accent-color: #f59e0b; }
+.shRow b { font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+.shBottom { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+.shFlip { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.shBottom .pickbtn { margin: 0; }

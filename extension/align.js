@@ -121,7 +121,9 @@ const PP_ALIGN = (() => {
   }
   // Points + fingerprints at many sizes. x, y are given back in the full picture's pixels.
   function features(bitmap, maxSide) {
-    const f0 = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    // Big pictures are shrunk to save time; very small ones (thumbnails) are enlarged so their
+    // details are big enough to fingerprint.
+    const big = Math.max(bitmap.width, bitmap.height), f0 = big < 450 ? 450 / big : Math.min(1, maxSide / big);
     let im = grayOf(bitmap, bitmap.width * f0, bitmap.height * f0);
     const xs = [], ys = [], descs = [];
     for (let lv = 0, scale = f0; lv < 12; lv++) {
@@ -156,58 +158,160 @@ const PP_ALIGN = (() => {
     return out;
   }
 
-  // ---------- 4. RANSAC: the one size + position most pairs agree on ----------
-  // Model: a point (bx, by) on the copy lands at (s*bx + tx, s*by + ty) on the original.
-  function fit(ms) {
+  // ---------- placements ----------
+  // Where the copy sits on the original, in the original's pixels:
+  //   s    = overall size, w / h = extra stretch sideways / up-down (1 = none),
+  //   r    = turn in degrees (around the copy's centre), k = slant (0 = none),
+  //   flip = mirrored left-right, x, y = top-left corner of the copy before turning.
+  const place = (o = {}) => ({ s: 1, w: 1, h: 1, r: 0, k: 0, flip: false, x: 0, y: 0, ...o });
+  const sizes = (T, B) => ({ bw: B.width * T.s * T.w, bh: B.height * T.s * T.h });
+  // Draws the copy onto ctx. k = canvas pixels per original pixel, (ox, oy) = where the original's corner is.
+  function drawCopy(ctx, B, T, k, ox = 0, oy = 0, outline = false) {
+    const { bw, bh } = sizes(T, B);
+    ctx.save();
+    ctx.translate((ox + T.x + bw / 2) * k, (oy + T.y + bh / 2) * k);
+    ctx.rotate(T.r * Math.PI / 180);
+    if (T.k) ctx.transform(1, 0, T.k, 1, 0, 0);
+    if (outline) ctx.strokeRect(-bw * k / 2, -bh * k / 2, bw * k, bh * k);
+    else { if (T.flip) ctx.scale(-1, 1); ctx.drawImage(B, -bw * k / 2, -bh * k / 2, bw * k, bh * k); }
+    ctx.restore();
+  }
+  // The box (in the original's pixels) that holds the copy, turned or not.
+  // Where a point (u, v) of the copy lands on the original.
+  function mapPoint(T, B, u, v) {
+    const { bw, bh } = sizes(T, B), a = T.r * Math.PI / 180;
+    const uu = T.flip ? B.width - u : u;
+    let lx = (uu / B.width - 0.5) * bw, ly = (v / B.height - 0.5) * bh;
+    lx += T.k * ly;
+    return { x: T.x + bw / 2 + lx * Math.cos(a) - ly * Math.sin(a), y: T.y + bh / 2 + lx * Math.sin(a) + ly * Math.cos(a) };
+  }
+  function bounds(T, B) {
+    const ps = [[0, 0], [B.width, 0], [0, B.height], [B.width, B.height]].map(([u, v]) => mapPoint(T, B, u, v));
+    return { x0: Math.min(...ps.map(p => p.x)), y0: Math.min(...ps.map(p => p.y)), x1: Math.max(...ps.map(p => p.x)), y1: Math.max(...ps.map(p => p.y)) };
+  }
+  // Change size / shape / turn while keeping the copy's centre where it is.
+  function reshape(T, B, change) {
+    const o = sizes(T, B), cx = T.x + o.bw / 2, cy = T.y + o.bh / 2, N = { ...T, ...change }, n = sizes(N, B);
+    N.x = cx - n.bw / 2; N.y = cy - n.bh / 2;
+    return N;
+  }
+
+  // ---------- 4. RANSAC: the one size + shape + position most pairs agree on ----------
+  // Model (affine): a point (bx, by) on the copy lands at (a*bx + b*by + tx, c*bx + d*by + ty).
+  function solve3(M, v) {   // 3 x 3 linear system
+    const [a, b, c, d, e, f, g, h, i] = M, det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+    if (Math.abs(det) < 1e-9) return null;
+    return [(v[0] * (e * i - f * h) - b * (v[1] * i - f * v[2]) + c * (v[1] * h - e * v[2])) / det,
+      (a * (v[1] * i - f * v[2]) - v[0] * (d * i - f * g) + c * (d * v[2] - v[1] * g)) / det,
+      (a * (e * v[2] - v[1] * h) - b * (d * v[2] - v[1] * g) + v[0] * (d * h - e * g)) / det];
+  }
+  function fitAffine(ms) {
+    let xx = 0, xy = 0, yy = 0, x1 = 0, y1 = 0, n = ms.length, ux = 0, uy = 0, u1 = 0, vx = 0, vy = 0, v1 = 0;
+    for (const m of ms) {
+      xx += m.bx * m.bx; xy += m.bx * m.by; yy += m.by * m.by; x1 += m.bx; y1 += m.by;
+      ux += m.ax * m.bx; uy += m.ax * m.by; u1 += m.ax; vx += m.ay * m.bx; vy += m.ay * m.by; v1 += m.ay;
+    }
+    const N = [xx, xy, x1, xy, yy, y1, x1, y1, n], p = solve3(N, [ux, uy, u1]), q = solve3(N, [vx, vy, v1]);
+    return p && q ? { a: p[0], b: p[1], tx: p[2], c: q[0], d: q[1], ty: q[2] } : null;
+  }
+  // Only resized and moved: a point lands at (s*bx + tx, s*by + ty).
+  function fitUniform(ms) {
+    if (ms.length < 2) return null;
     let ax = 0, ay = 0, bx = 0, by = 0;
     for (const m of ms) { ax += m.ax; ay += m.ay; bx += m.bx; by += m.by; }
     ax /= ms.length; ay /= ms.length; bx /= ms.length; by /= ms.length;
     let num = 0, den = 0;
     for (const m of ms) { num += (m.bx - bx) * (m.ax - ax) + (m.by - by) * (m.ay - ay); den += (m.bx - bx) ** 2 + (m.by - by) ** 2; }
-    const s = den > 0 ? num / den : 1;
-    return { s, x: ax - s * bx, y: ay - s * by };
+    if (!(den > 0) || num <= 0) return null;
+    const s = num / den;
+    return { a: s, b: 0, c: 0, d: s, tx: ax - s * bx, ty: ay - s * by };
   }
-  const inliersOf = (ms, M, thr) => ms.filter(m => Math.hypot(M.s * m.bx + M.x - m.ax, M.s * m.by + M.y - m.ay) < thr);
+  const err = (M, m) => Math.hypot(M.a * m.bx + M.b * m.by + M.tx - m.ax, M.c * m.bx + M.d * m.by + M.ty - m.ay);
+  // Turns an affine model into a placement: size, stretch, turn. Tiny turns and stretches are
+  // set to exactly none, so a plain copy reads as plainly resized.
+  function toPlace(M, B, flip) {
+    // M = turn(r) x [[sx, sh], [0, sy]]: size, stretch, slant, then turn. Any affine fits this exactly.
+    let r = Math.atan2(M.c, M.a), sx, sy, sh;
+    if (Math.abs(r) < 0.2 * Math.PI / 180) { r = 0; sx = M.a; sh = M.b; sy = M.d; }
+    else { sx = Math.hypot(M.a, M.c); sh = (M.a * M.b + M.c * M.d) / sx; sy = (M.a * M.d - M.b * M.c) / sx; }
+    let k = sy ? sh / sy : 0;
+    if (Math.abs(k) < 0.004) k = 0;
+    const cxA = M.a * B.width / 2 + M.b * B.height / 2 + M.tx, cyA = M.c * B.width / 2 + M.d * B.height / 2 + M.ty;
+    const T = Math.abs(sx / sy - 1) < 0.005 ? place({ s: Math.sqrt(sx * sy), r: r * 180 / Math.PI, k, flip })
+      : place({ s: sy, w: sx / sy, r: r * 180 / Math.PI, k, flip });
+    const { bw, bh } = sizes(T, B);
+    T.x = cxA - bw / 2; T.y = cyA - bh / 2;
+    T.ok = sx > 0 && sy > 0 && sx / sy > 0.5 && sx / sy < 2 && Math.abs(r) < 0.35 && Math.abs(k) < 0.3;
+    return T;
+  }
   function ransac(ms, thr, minDist) {
     if (ms.length < 4) return null;
     let s0 = 0x2545f491;
     const rnd = n => { s0 ^= s0 << 13; s0 ^= s0 >>> 17; s0 ^= s0 << 5; return (s0 >>> 0) % n; };
     let best = null, bestN = 0;
-    for (let it = 0; it < 4000; it++) {
+    for (let it = 0; it < 6000; it++) {
       const p = ms[rnd(ms.length)], q = ms[rnd(ms.length)];
-      const db = Math.hypot(p.bx - q.bx, p.by - q.by), da = Math.hypot(p.ax - q.ax, p.ay - q.ay);
+      const dbx = q.bx - p.bx, dby = q.by - p.by, dax = q.ax - p.ax, day = q.ay - p.ay;
+      const db = Math.hypot(dbx, dby), da = Math.hypot(dax, day);
       if (db < minDist || da < 1) continue;
-      const s = da / db;
-      if (s < 0.02 || s > 50) continue;
-      // Pictures here are never turned, so both pairs must point the same way.
-      const ang = Math.atan2(p.ay - q.ay, p.ax - q.ax) - Math.atan2(p.by - q.by, p.bx - q.bx);
-      if (Math.abs(Math.atan2(Math.sin(ang), Math.cos(ang))) > 0.08) continue;
-      const M = { s, x: p.ax - s * p.bx, y: p.ay - s * p.by };
+      let M;
+      if (it % 2 === 0) {
+        // guess 1: resized and maybe turned a little (up to 20 degrees)
+        const s = da / db, ang = Math.atan2(day, dax) - Math.atan2(dby, dbx), r = Math.atan2(Math.sin(ang), Math.cos(ang));
+        if (s < 0.02 || s > 50 || Math.abs(r) > 0.35) continue;
+        const cs = s * Math.cos(r), sn = s * Math.sin(r);
+        M = { a: cs, b: -sn, c: sn, d: cs };
+      } else {
+        // guess 2: stretched wider or taller, not turned
+        if (Math.abs(dbx) < minDist || Math.abs(dby) < minDist) continue;
+        const sx = dax / dbx, sy = day / dby;
+        if (sx < 0.02 || sy < 0.02 || sx / sy < 0.5 || sx / sy > 2) continue;
+        M = { a: sx, b: 0, c: 0, d: sy };
+      }
+      M.tx = p.ax - M.a * p.bx - M.b * p.by; M.ty = p.ay - M.c * p.bx - M.d * p.by;
       let n = 0;
-      for (const m of ms) if (Math.hypot(s * m.bx + M.x - m.ax, s * m.by + M.y - m.ay) < thr) n++;
+      for (const m of ms) if (err(M, m) < thr) n++;
       if (n > bestN) { bestN = n; best = M; }
     }
     if (!best) return null;
-    let inl = inliersOf(ms, best, thr), M = best;
-    for (let k = 0; k < 3 && inl.length >= 3; k++) { M = fit(inl); inl = inliersOf(ms, M, thr * (k ? 0.6 : 1)); }
-    return { ...M, inliers: inl.length, matches: ms.length };
+    let M = best, inl = ms.filter(m => err(M, m) < thr);
+    for (let k = 0; k < 4 && inl.length >= 4; k++) {
+      const F = fitAffine(inl); if (!F) break;
+      M = F; inl = ms.filter(m => err(M, m) < thr * (k ? 0.6 : 1));
+    }
+    return { M, inl, inliers: inl.length, matches: ms.length };
   }
 
   // ---------- 5. how well they line up: small squares compared one by one ----------
-  // Only the area where the two pictures overlap counts, and a square where the copy has
-  // something printed over it (a headline, a logo) simply doesn't match; it doesn't drag
-  // the matching squares down.
-  function tiles(a, b, ox, oy, size) {
-    const x0 = Math.max(0, ox), x1 = Math.min(a.w, ox + b.w), y0 = Math.max(0, oy), y1 = Math.min(a.h, oy + b.h);
-    const res = { textured: 0, matched: 0, flat: 0, flatSame: 0, sumR: 0, overlap: 0, overlapA: 0 };
-    if (x1 - x0 < size || y1 - y0 < size) return res;
-    res.overlap = ((x1 - x0) * (y1 - y0)) / (b.w * b.h); res.overlapA = ((x1 - x0) * (y1 - y0)) / (a.w * a.h);
-    for (let ty = y0; ty + size <= y1; ty += size) for (let tx = x0; tx + size <= x1; tx += size) {
-      let n = 0, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0;
-      for (let y = ty; y < ty + size; y++) {
-        const ar = y * a.w, br = (y - oy) * b.w - ox;
-        for (let x = tx; x < tx + size; x++) { const p = a.g[ar + x], q = b.g[br + x]; n++; sa += p; sb += q; saa += p * p; sbb += q * q; sab += p * q; }
+  // The copy is drawn onto a canvas the size of the original, exactly where it sits.
+  // Only the area where the two overlap counts, and a square where the copy has something
+  // printed over it (a headline, a logo) simply doesn't match; it doesn't drag the rest down.
+  function render(B, T, w, h, f) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.imageSmoothingQuality = 'high';
+    drawCopy(ctx, B, T, f);
+    const d = ctx.getImageData(0, 0, w, h).data, g = new Float32Array(w * h), m = new Uint8Array(w * h);
+    for (let i = 0, j = 0; j < g.length; i += 4, j++) {
+      g[j] = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      m[j] = d[i + 3] > 250 ? 1 : 0;
+    }
+    return { w, h, g, m };
+  }
+  function tiles(a, b, size) {
+    const res = { textured: 0, matched: 0, flat: 0, flatSame: 0, sumR: 0, inside: 0 };
+    for (let ty = 0; ty + size <= a.h; ty += size) for (let tx = 0; tx + size <= a.w; tx += size) {
+      let n = 0, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0, out = false;
+      for (let y = ty; y < ty + size && !out; y++) {
+        const row = y * a.w;
+        for (let x = tx; x < tx + size; x++) {
+          const i = row + x;
+          if (!b.m[i]) { out = true; break; }
+          const p = a.g[i], q = b.g[i]; n++; sa += p; sb += q; saa += p * p; sbb += q * q; sab += p * q;
+        }
       }
+      if (out) continue;
+      res.inside++;
       const ma = sa / n, mb = sb / n, va = saa / n - ma * ma, vb = sbb / n - mb * mb;
       if (va < 25 && vb < 25) { res.flat++; if (Math.abs(ma - mb) < 25) res.flatSame++; continue; }
       res.textured++;
@@ -221,32 +325,36 @@ const PP_ALIGN = (() => {
     const total = t.textured + t.flat * 0.25;
     return total ? (t.matched + t.flatSame * 0.25) / total : 0;
   }
-  // Score a placement T = {s, x, y} (in the original's pixels).
+  // Score a placement T (in the original's pixels).
   function score(Abm, Bbm, T, side = 480) {
     const f = side / Math.max(Abm.width, Abm.height);
-    const a = grayOf(Abm, Abm.width * f, Abm.height * f), b = grayOf(Bbm, Bbm.width * T.s * f, Bbm.height * T.s * f);
-    const t = tiles(a, b, Math.round(T.x * f), Math.round(T.y * f), 12);
-    return { ...t, lines: grade(t), strength: t.matched ? t.sumR / t.matched : 0 };
+    const a = grayOf(Abm, Abm.width * f, Abm.height * f), b = render(Bbm, T, a.w, a.h, f);
+    const t = tiles(a, b, 12);
+    let inside = 0; for (let i = 0; i < b.m.length; i++) inside += b.m[i];
+    const { bw, bh } = sizes(T, Bbm);
+    return { ...t, overlap: inside / Math.max(1, bw * bh * f * f), overlapA: inside / (a.w * a.h), lines: grade(t), strength: t.matched ? t.sumR / t.matched : 0 };
   }
 
-  // Nudge the size and position by a pixel or two, keeping whatever lines up best.
-  async function refine(Abm, Bbm, T) {
-    const side = Math.min(900, Math.max(Abm.width, Abm.height)), f = side / Math.max(Abm.width, Abm.height);
+  // Nudge the position, size, stretch and turn a little at a time, keeping whatever lines up best.
+  async function refine(Abm, Bbm, T0) {
+    const side = Math.min(720, Math.max(Abm.width, Abm.height)), f = side / Math.max(Abm.width, Abm.height);
     const a = grayOf(Abm, Abm.width * f, Abm.height * f);
-    let best = { ...T, v: -1 };
-    for (const ds of [-0.006, -0.003, 0, 0.003, 0.006]) {
-      const s = T.s * (1 + ds), b = grayOf(Bbm, Bbm.width * s * f, Bbm.height * s * f);
-      // keep the copy's centre fixed while changing its size
-      const cx = T.x + Bbm.width * T.s / 2, cy = T.y + Bbm.height * T.s / 2;
-      const bx = (cx - Bbm.width * s / 2) * f, by = (cy - Bbm.height * s / 2) * f;
-      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
-        const ox = Math.round(bx) + dx, oy = Math.round(by) + dy;
-        const t = tiles(a, b, ox, oy, 16), v = t.sumR;
-        if (v > best.v) best = { s, x: ox / f, y: oy / f, v };
+    const val = T => tiles(a, render(Bbm, T, a.w, a.h, f), 16).sumR;
+    let T = { ...T0 }, best = val(T);
+    const steps = { x: 2 / f, y: 2 / f, s: 0.006, w: T.w !== 1 ? 0.006 : 0, r: T.r !== 0 ? 0.3 : 0, k: T.k !== 0 ? 0.005 : 0 };
+    for (let round = 0; round < 5; round++) {
+      for (const k of ['x', 'y', 's', 'w', 'r', 'k']) {
+        if (!steps[k]) continue;
+        for (const dir of [1, -1]) {
+          const ch = k === 's' || k === 'w' ? { [k]: T[k] * (1 + dir * steps[k]) } : { [k]: T[k] + dir * steps[k] };
+          const N = k === 'x' || k === 'y' ? { ...T, ...ch } : reshape(T, Bbm, ch), v = val(N);
+          if (v > best) { best = v; T = N; break; }
+        }
       }
+      for (const k in steps) steps[k] /= 2;
       await new Promise(r => setTimeout(r, 0));
     }
-    return best.v > 0 ? { s: best.s, x: best.x, y: best.y } : T;
+    return T;
   }
 
   // ---------- the old way, kept as a backup: whole-picture search ----------
@@ -289,35 +397,57 @@ const PP_ALIGN = (() => {
       }
       if (lvBest) best = lvBest;
     }
-    return best && isFinite(best.c) ? { s: best.s, x: best.x, y: best.y } : null;
+    return best && isFinite(best.c) ? place({ s: best.s, x: best.x, y: best.y }) : null;
   }
 
   // ---------- putting it together ----------
-  // Returns { s, x, y, how, inliers, sc } or null. progress(text) gets plain-English updates.
+  function mirrored(B) {
+    const c = document.createElement('canvas'); c.width = B.width; c.height = B.height;
+    const ctx = c.getContext('2d'); ctx.translate(B.width, 0); ctx.scale(-1, 1); ctx.drawImage(B, 0, 0);
+    return createImageBitmap(c);
+  }
+  // Returns a placement plus { how, inliers, sc } or null. progress(text) gets plain-English updates.
   async function align(A, B, progress = () => {}) {
-    const tries = [];
+    const tries = [], tick = () => new Promise(r => setTimeout(r, 0));
     progress('Finding details in both pictures...');
-    const FA = features(A, 900); await new Promise(r => setTimeout(r, 0));
-    const FB = features(B, 900);
-    progress('Pairing up matching details...');
-    const ms = await match(FA, FB);
+    const FA = features(A, 900); await tick();
     const thr = Math.max(3 / FA.f0, Math.max(A.width, A.height) * 0.012);
-    const R1 = ransac(ms, thr, 20 / FB.f0);
-    if (R1 && R1.inliers >= 6) {
+    const viaDetails = async (Bimg, flip) => {
+      const FB = features(Bimg, 900); await tick();
+      progress(flip ? 'Checking whether the copy was mirrored...' : 'Pairing up matching details...');
+      const ms = await match(FA, FB);
+      const R1 = ransac(ms, thr, 20 / FB.f0);
+      if (!R1 || R1.inliers < 6) return;
       progress('Fine-tuning the position...');
-      const T = await refine(A, B, R1);
-      tries.push({ ...T, how: 'details', inliers: R1.inliers, matches: R1.matches, sc: score(A, B, T) });
-    }
+      const T0 = toPlace(R1.M, B, flip), cands = [];
+      if (T0.ok) cands.push(T0);
+      // Also try the plain answer (only resized and moved). With few details to go on, a
+      // stretch or turn can be noise, so the plain answer wins unless the other lines up clearly better.
+      if (!T0.ok || T0.w !== 1 || T0.r !== 0 || T0.k) {
+        const U = fitUniform(R1.inl); if (U) cands.push(toPlace(U, B, flip));
+      }
+      let pick = null;
+      for (const C of cands) {
+        const T = await refine(A, B, C), sc = score(A, B, T);
+        const plain = T.w === 1 && T.r === 0 && !T.k;
+        if (!pick || sc.lines > pick.sc.lines + (plain ? -0.02 : 0.02)) pick = { ...T, sc };
+      }
+      if (pick) tries.push({ ...pick, how: 'details', inliers: R1.inliers, matches: R1.matches });
+    };
+    const best = () => tries.reduce((p, q) => (!p || q.sc.lines > p.sc.lines ? q : p), null);
+    // Many matching details that line up closely = no doubt; no need to try the slower ways.
+    const sure = () => { const b = best(); return b && (b.sc.lines >= 0.5 || (b.inliers >= 40 && b.sc.strength >= 0.85 && b.sc.lines >= 0.25)); };
+    await viaDetails(B, false);
+    // Copies are sometimes mirrored to dodge detection. Try that if the straight way didn't fit well.
+    if (!sure()) await viaDetails(await mirrored(B), true);
     // Backup: the whole-picture search, for plain resized copies with few sharp details.
-    if (!tries.length || tries[0].sc.lines < 0.5) {
+    if (!sure()) {
       progress('Trying different sizes and positions...');
       const W = await wholeSearch(A, B);
       if (W) tries.push({ ...W, how: 'whole', sc: score(A, B, W) });
     }
-    if (!tries.length) return null;
-    tries.sort((p, q) => q.sc.lines - p.sc.lines);
-    return tries[0];
+    return best();
   }
 
-  return { align, score, grayOf };
+  return { align, score, grayOf, place, drawCopy, bounds, reshape, sizes, mapPoint };
 })();
