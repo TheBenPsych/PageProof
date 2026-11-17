@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PageProof Convert files</title>
+<link rel="icon" href="icons/icon32.png">
+<link rel="stylesheet" href="viewer.css">
+<link rel="stylesheet" href="convert.css">
+<script src="theme.js"></script>
+</head>
+<body class="with-side">
+  <aside id="side">
+    <div class="brand"><img src="icons/icon48.png" alt="" width="22" height="22"> <span id="brandName">PageProof Convert</span></div>
+    <div class="site">
+      <div id="domain">Convert files</div>
+      <div id="sub" class="sub"></div>
+    </div>
+    <div id="safe" class="safe">🔒 Everything happens on this computer. Your files are never uploaded to a website.</div>
+
+    <section id="taskBox" class="card" hidden>
+      <h3>What do you want to do?</h3>
+      <div id="tasks"></div>
+    </section>
+    <section id="optBox" class="card" hidden></section>
+    <section id="howBox" class="card" hidden>
+      <div class="lab">How to save them</div>
+      <div class="how">
+        <button id="hSep" data-how="sep">📁 Separate files<small>All at once, into Downloads</small></button>
+        <button id="hZip" data-how="zip">📦 One ZIP<small>Easy to email or store</small></button>
+      </div>
+    </section>
+    <button id="go" class="main save" hidden></button>
+    <div id="goNote" class="gonote" hidden></div>
+
+    <nav class="links">
+      <a href="#" id="addMore" hidden>➕ Add more files</a>
+      <a href="#" id="startOver" hidden>🗑️ Start over</a>
+      <a href="#" id="switchMode"></a>
+      <a href="compare.html" target="_blank">🔀 Compare two pictures</a>
+      <a href="verify.html" target="_blank">✅ Verify a pack</a>
+      <a href="log.html" target="_blank">📒 Capture log</a>
+    </nav>
+    <input type="file" id="pick" multiple hidden>
+  </aside>
+
+  <div id="content">
+    <div id="status"></div>
+    <div id="view"></div>
+  </div>
+
+  <script src="zip.js"></script>
+  <script src="unzip.js"></script>
+  <script src="cv-libs.js"></script>
+  <script src="cv-img.js"></script>
+  <script src="cv-pdf.js"></script>
+  <script src="cv-doc.js"></script>
+  <script src="cv-open.js"></script>
+  <script src="convert.js"></script>
+</body>
+</html>

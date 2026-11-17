@@ -1,0 +1,14 @@
+Helper libraries used by "Convert files" and "Open odd files".
+They run only inside the browser. Nothing is sent anywhere.
+
+pdf-lib 1.17.1            (pdf-lib.min.js)           MIT       https://github.com/Hopding/pdf-lib
+pdf.js 3.11.174           (pdf.min.js, pdf.worker.min.js)  Apache-2.0  https://github.com/mozilla/pdf.js
+libheif-js 1.23.5         (libheif-bundle.js)        LGPL-3.0  https://github.com/catdad-experiments/libheif-js (libheif: https://github.com/strukturag/libheif)
+docx-preview 0.4.1        (docx-preview.min.js)      Apache-2.0  https://github.com/VolodymyrBaydalka/docxjs
+JSZip 3.10.2              (jszip.min.js)             MIT or GPL-3.0  https://github.com/Stuk/jszip
+SheetJS xlsx 0.18.5       (xlsx.full.min.js)         Apache-2.0  https://sheetjs.com
+@kenjiuno/msgreader 1.29.0 (msgreader.min.js, bundled with the "buffer" and "iconv-lite" packages)  Apache-2.0 / MIT  https://github.com/HiraokaHyperTools/msgreader
+libarchive.js 2.0.2       (libarchive/)              MIT (libarchive: BSD-2-Clause)  https://github.com/nika-begiashvili/libarchivejs
+gifenc 1.0.3              (gifenc.min.js)            MIT       https://github.com/mattdesl/gifenc
+UTIF.js 3.1.0             (UTIF.js)                  MIT       https://github.com/photopea/UTIF.js
+pako 2.2.0                (pako.min.js)              MIT and Zlib  https://github.com/nodeca/pako
