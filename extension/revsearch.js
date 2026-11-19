@@ -91,7 +91,7 @@ const page = q => api.runtime.getURL('revsearch.html' + (q ? '?' + q : ''));
 
 async function getSettings() {
   const s = (await api.storage.local.get('rsSettings')).rsSettings || {};
-  return { engines: { google: true, yandex: true, bing: true, ...(s.engines || {}) }, speed: SPEED[s.speed] ? s.speed : 'normal', closeTabs: s.closeTabs !== false };   // on unless switched off: fewer open tabs = faster
+  return { engines: { google: true, yandex: true, bing: true, ...(s.engines || {}) }, speed: SPEED[s.speed] ? s.speed : 'normal', closeTabs: true };   // always: every open search tab costs memory
 }
 const setSettings = s => api.storage.local.set({ rsSettings: s });
 
@@ -219,8 +219,6 @@ async function setupSide() {
   const speed = h('div', { class: 'card' }, h('h3', { text: 'Speed' }),
     h('div', { class: 'seg' }, Object.entries(SPEED).map(([k, v]) => h('button', { class: s.speed === k ? 'on' : '', text: v.label, onclick: () => { s.speed = k; save(); } }))),
     h('p', { class: 'hint', text: SPEED[s.speed].hint }));
-  const tabs = h('div', { class: 'card' }, h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: s.closeTabs, onchange: ev => { s.closeTabs = ev.target.checked; save(); } }), 'Close search tabs when done'),
-    h('p', { class: 'hint', text: s.closeTabs ? 'On: only the PageProof results tab stays open. You can still open each search again from the results.' : 'Off: you keep a Google, Yandex and Bing tab for each picture, grouped by colour.' }));
   const n = draft.length, nEng = Object.values(s.engines).filter(Boolean).length;
   const secs = Math.round(n * (SPEED[s.speed].gap[0] + SPEED[s.speed].gap[1]) / 2000 / SPEED[s.speed].per + 15);
   const go = h('button', { class: 'big', disabled: !n || !nEng, text: '🔎 Search ' + (n ? plural(n, 'picture') : 'pictures'), onclick: async () => {
@@ -230,7 +228,7 @@ async function setupSide() {
     else go.disabled = false;
   } });
   side(h('div', {}, h('div', { id: 'domain', text: 'Reverse image search' }), h('div', { id: 'sub', text: 'Search many pictures at once on Google, Yandex and Bing.' })),
-    engines, speed, tabs, go,
+    engines, speed, go,
     n ? h('p', { class: 'hint', style: 'margin:-4px 0 0;text-align:center', text: 'About ' + (secs < 90 ? secs + ' seconds' : Math.round(secs / 60) + ' minutes') + ' for ' + plural(n, 'picture') + ' on ' + plural(nEng, 'site') }) : null,
     h('div', { class: 'links' },
       h('a', { href: page('view=folder'), text: '📂 My pictures folder' }),
@@ -376,7 +374,11 @@ function finishTask(t, state, why) {
   if (t.captcha) { t.captcha = false; updatePause(t.engine); }
   if (picDone(t.p)) folderNote(t.p);
   saveJob(); renderSoon();
-  if (job.closeTabs && state === 'done') api.tabs.remove(t.tabId).catch(() => {});
+  // Search tabs are the big memory cost (each one is a full Google/Yandex/Bing page), so a
+  // finished one is closed at once. A failed one is kept so you can look at it, but put to
+  // sleep (discarded): it stays in the tab strip and uses almost no memory until clicked.
+  if (state === 'fail') { if (api.tabs.discard) api.tabs.discard(t.tabId).then(d => { if (d) run.tabId = d.id; }).catch(() => {}); }
+  else api.tabs.remove(t.tabId).catch(() => {});
   t.done();
 }
 
