@@ -253,6 +253,39 @@ const RS_REJECT = {
   },
 };
 
+// ---------- what PageProof remembers about each picture ----------
+// For each picture (by its fingerprint): every link found before, when it was first seen, and
+// how well its picture matched. Kept in the browser AND as one small file per picture in
+// Documents\PageProof\Memory, so updates or even a reinstall never lose it.
+const RS_MEM = {
+  async dir() {
+    const d = await RS_DOCS.dir();
+    if (!d) return null;
+    try { return await d.getDirectoryHandle('Memory', { create: true }); } catch (e) { return null; }
+  },
+  async get(hash) {
+    let rec = null;
+    try { rec = await RS_DB.get('seen', hash); } catch (e) { /* none */ }
+    if (rec) return rec;
+    try {                                                   // not in the browser (reinstalled?): read the file
+      const d = await RS_MEM.dir();
+      if (!d) return null;
+      rec = JSON.parse(await (await (await d.getFileHandle(hash.slice(0, 32) + '.json')).getFile()).text());
+      if (rec && rec.urls) { await RS_DB.put('seen', hash, rec); return rec; }
+    } catch (e) { /* no file */ }
+    return null;
+  },
+  async put(hash, rec) {
+    await RS_DB.put('seen', hash, rec);
+    try {
+      const d = await RS_MEM.dir();
+      if (!d) return;
+      const w = await (await d.getFileHandle(hash.slice(0, 32) + '.json', { create: true })).createWritable();
+      await w.write(JSON.stringify(rec)); await w.close();
+    } catch (e) { /* file copy is a backup only */ }
+  },
+};
+
 // ---------- small helpers ----------
 const RS_UTIL = {
   async sha256(blob) {
