@@ -282,6 +282,10 @@ api.runtime.onInstalled.addListener(() => {
       api.contextMenus.create({ id: 'inspectImage', title: 'Inspect picture', contexts: WEB });
       api.contextMenus.create({ id: 'jpgImage', title: 'Save picture as JPG', contexts: WEB });
       api.contextMenus.create({ id: 'openImage', title: 'Open picture in new tab', contexts: WEB });
+      api.contextMenus.create({ id: 'reverse', title: 'Reverse image search', contexts: WEB });
+      api.contextMenus.create({ id: 'revGoogle', parentId: 'reverse', title: 'Google Lens', contexts: WEB });
+      api.contextMenus.create({ id: 'revYandex', parentId: 'reverse', title: 'Yandex', contexts: WEB });
+      api.contextMenus.create({ id: 'revBoth', parentId: 'reverse', title: 'Both (two tabs)', contexts: WEB });
       api.contextMenus.create({ id: 'webSep', type: 'separator', contexts: WEB });
       api.contextMenus.create({ id: 'savePage', title: 'Save page as evidence', contexts: WEB });
     });
@@ -466,7 +470,7 @@ try {
       if (busy) return note(tab, 0, { kind: 'bad', title: 'A capture is already running', lines: ['Wait for it to finish, or click the PageProof icon to stop it.'] });
       return startCapture(tab);
     }
-    if (id === 'inspectImage' || id === 'jpgImage' || id === 'openImage') {
+    if (['inspectImage', 'jpgImage', 'openImage', 'revGoogle', 'revYandex', 'revBoth'].includes(id)) {
       if (!tab) return;
       const found = await rightClickedPicture(info, tab);
       if (!found.item) {
@@ -483,6 +487,18 @@ try {
         const url = item.best || item.src;
         if (url.startsWith('blob:')) return openInspector({ mode: 'one', page: info.pageUrl, title: tab.title, items: [item] }, tab);
         return api.tabs.create({ url, index: tab.index + 1, windowId: tab.windowId, openerTabId: tab.id });
+      }
+      if (id.startsWith('rev')) {
+        // The search sites download the picture from its web address, so it needs a real one.
+        const url = /^https?:/.test(item.best || '') ? item.best : item.src;
+        if (!/^https?:/.test(url)) {
+          return note(tab, 0, { kind: 'bad', title: 'This picture has no web address to search', lines: ['It only exists inside this page. Use Save picture as JPG, then upload the file on images.google.com or yandex.com/images.'] });
+        }
+        const e = encodeURIComponent(url);
+        const sites = { revGoogle: ['https://lens.google.com/uploadbyurl?url=' + e], revYandex: ['https://yandex.com/images/search?rpt=imageview&url=' + e] };
+        sites.revBoth = [sites.revYandex[0], sites.revGoogle[0]];
+        for (const s2 of sites[id]) await api.tabs.create({ url: s2, index: tab.index + 1, windowId: tab.windowId, openerTabId: tab.id });
+        return;
       }
       try { await saveAsJpg(item, info, tab, big); } catch (err) {
         note(tab, info.frameId, { kind: 'bad', title: 'Could not save as JPG', lines: [String((err && err.message) || err), 'You can still use Inspect picture, or the browser\'s own "Save image as...".'] });
