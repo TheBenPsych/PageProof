@@ -166,3 +166,5 @@ h2.sec { margin: 6px 0 0; font-size: 18px; }
   .tr { grid-template-columns: 52px 1fr 1fr 34px; }
   .tr > :nth-child(4), .tr > :nth-child(5) { display: none; }
 }
+.row .act button.trash { color: #b91c1c; border-color: #fecaca; font-size: 16px; padding: 5px 11px; }
+.row .act button.trash:hover { background: #fef2f2; }

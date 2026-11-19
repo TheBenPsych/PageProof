@@ -272,7 +272,7 @@ Click the PageProof icon and choose **Reverse image search**.
 4. Pick a picture on the left to see every link found for it, grouped by site:
    - PageProof does not trust the search sites' own "exact match" labels. It downloads every copy it found and lines it up with your picture, the same way the Compare page does, then sorts each link into:
      - **✅ Same photo**: many details line up. This is your photo, even if it was cropped, resized, mirrored, colour-changed or had text put over it. This is the list shown first.
-     - **Maybe**: some details line up. Worth a quick look.
+     - **Maybe**: a few details line up. Worth a quick look. Same-photo checks also look at the middle of your picture, so a different photo taken in front of the same logo wall or backdrop is not counted as the same photo.
      - **Can't check**: the site would not let PageProof download the picture (Facebook, Instagram and so on). Open the link to look yourself.
      - **Different photo**: nothing lines up. Usually just a similar-looking picture. Hidden unless you pick it.
    - The number next to a same-photo link (for example "Same photo · 64% lines up") shows how much of the shared area matches. A low number there is normal when the copy has big headlines or text over it.
@@ -280,9 +280,10 @@ Click the PageProof icon and choose **Reverse image search**.
    - **Size**: the copy's size, flagged **bigger than yours** or **cropped** when that is the case.
    - **New**: links that were not there the last time you searched the same picture. Links you have seen before say "Seen before" with the date they were first found.
    - Which site found it (Google, Yandex, Bing).
-5. **Hide this site** hides that site for every picture, now and in future searches (good for Pinterest, stock photo sites and so on). **Mark allowed** is for your own site and licensees: they still show, with a green **Allowed** label.
-6. Tick the links that matter and press **Capture ticked pages**. They open in batch capture (section 7), ready to save as evidence packs.
-7. **Save results** downloads a PDF report and a spreadsheet of everything found.
+5. **🗑 (trash can)** rejects one link: you checked it and it is not a problem. It never shows again for that picture, and it is saved in `Documents\PageProof\rejected-links.txt`. To bring one back, pick the **🗑 Rejected** filter and press **↩ Put back** (or delete its line from the file).
+6. **Hide this site** hides that site for every picture, now and in future searches (good for Pinterest, stock photo sites and so on). To hide a whole kind of site, type its ending with a dot on the **Hidden and allowed sites** page, for example `.gov` or `.edu`. **Mark allowed** is for your own site and licensees: they still show, with a green **Allowed** label.
+7. Tick the links that matter and press **Capture ticked pages**. They open in batch capture (section 7), ready to save as evidence packs.
+8. **Save results** downloads a PDF report and a spreadsheet of everything found.
 
 **"Are you a robot" checks.** The searches run in your own browser, a few at a time with short pauses, which keeps these rare. If one appears anyway, PageProof pauses only that site, shows you the tab and waits. Tick the box and it carries on by itself. If a site keeps asking, press **Skip** and use **Search the rest** later.
 

@@ -299,7 +299,10 @@ const PP_ALIGN = (() => {
     return { w, h, g, m };
   }
   function tiles(a, b, size) {
-    const res = { textured: 0, matched: 0, flat: 0, flatSame: 0, sumR: 0, inside: 0 };
+    // midTex/midMatched: the same count for the middle of the original only, where the subject
+    // usually is. Two different photos taken in front of the same backdrop (sponsor wall, logo
+    // pattern) line up around the edges but not in the middle.
+    const res = { textured: 0, matched: 0, flat: 0, flatSame: 0, sumR: 0, inside: 0, midTex: 0, midMatched: 0 };
     for (let ty = 0; ty + size <= a.h; ty += size) for (let tx = 0; tx + size <= a.w; tx += size) {
       let n = 0, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0, out = false;
       for (let y = ty; y < ty + size && !out; y++) {
@@ -317,6 +320,8 @@ const PP_ALIGN = (() => {
       res.textured++;
       const r = va > 4 && vb > 4 ? (sab / n - ma * mb) / Math.sqrt(va * vb) : 0;
       if (r > 0.6) { res.matched++; res.sumR += r; }
+      const cx = (tx + size / 2) / a.w, cy = (ty + size / 2) / a.h;
+      if (cx > 0.3 && cx < 0.7 && cy > 0.2 && cy < 0.8) { res.midTex++; if (r > 0.6) res.midMatched++; }
     }
     return res;
   }

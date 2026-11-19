@@ -40,15 +40,18 @@ const RS_SITE = {
     try { return new URL(url).hostname.toLowerCase().replace(/^(www\d?|m|mobile)\./, ''); } catch (e) { return ''; }
   },
   // Turn whatever someone typed ("https://www.Pinterest.com/pin/1") into "pinterest.com".
+  // A whole ending works too: ".gov", "*.gov" or "gov.uk" style endings typed with a dot first.
   tidy(text) {
     let t = String(text || '').trim().toLowerCase();
     if (!t || t.startsWith('#')) return '';
+    const end = /^\*?\.([a-z0-9-]+(\.[a-z0-9-]+)*)$/.exec(t);
+    if (end) return '.' + end[1];
     if (!/^[a-z]+:\/\//.test(t)) t = 'http://' + t;
     const h = RS_SITE.of(t);
     return /^[a-z0-9.-]+\.[a-z]{2,}$/.test(h) ? h : '';
   },
   // Does this link's site fall under a listed site? (facebook.com covers m.facebook.com too)
-  inList(site, list) { return list.some(d => site === d || site.endsWith('.' + d)); },
+  inList(site, list) { return list.some(d => d.startsWith('.') ? site.endsWith(d) : site === d || site.endsWith('.' + d)); },
 };
 
 // ---------- the Documents\PageProof folder ----------
@@ -99,7 +102,7 @@ const RS_LISTS = {
   hidden: [], allowed: [], fileState: 'none',
   FILES: { hidden: 'hidden-sites.txt', allowed: 'allowed-sites.txt' },
   HEAD: {
-    hidden: '# PageProof hidden sites, one per line.\n# Links from these sites never show in reverse search results.\n# Lines starting with # are notes and are ignored.\n',
+    hidden: '# PageProof hidden sites, one per line.\n# Links from these sites never show in reverse search results.\n# Start a line with a dot to hide a whole ending, for example .gov or .edu\n# Lines starting with # are notes and are ignored.\n',
     allowed: '# PageProof allowed sites, one per line (your own site, licensees...).\n# Links from these sites still show, with a green "Allowed" label.\n# Lines starting with # are notes and are ignored.\n',
   },
   parse(text) { return [...new Set(String(text || '').split(/\r?\n/).map(RS_SITE.tidy).filter(Boolean))]; },
@@ -121,6 +124,7 @@ const RS_LISTS = {
       await api.storage.local.set({ rsHidden: RS_LISTS.hidden, rsAllowed: RS_LISTS.allowed });
       RS_LISTS.wrote = wrote;
     }
+    await RS_REJECT.load();
     return RS_LISTS;
   },
   async save() {
@@ -146,6 +150,53 @@ const RS_LISTS = {
   },
   isHidden: site => RS_SITE.inList(site, RS_LISTS.hidden),
   isAllowed: site => RS_SITE.inList(site, RS_LISTS.allowed),
+};
+
+// ---------- rejected links (the trash can) ----------
+// One line per link you have looked at and ruled out: "link | picture name".
+// Kept in rejected-links.txt next to the site lists, so it survives updates too.
+const RS_REJECT = {
+  items: [], FILE: 'rejected-links.txt',
+  HEAD: '# PageProof rejected links, one per line: link | picture name\n# These links never show again for that picture (leave the picture name off to reject the link for every picture).\n# Delete a line to bring a link back. Lines starting with # are notes.\n',
+  parse(text) {
+    const out = [];
+    for (const line of String(text || '').split(/\r?\n/)) {
+      const t = line.trim();
+      if (!t || t.startsWith('#')) continue;
+      const [url, pic] = t.split(/\s+\|\s+/);
+      if (/^https?:\/\//i.test(url)) out.push({ url, pic: (pic || '').trim() });
+    }
+    return out;
+  },
+  text() { return RS_REJECT.HEAD + RS_REJECT.items.map(r => r.url + (r.pic ? ' | ' + r.pic : '')).join('\n') + '\n'; },
+  async load() {
+    const api = globalThis.browser || globalThis.chrome;
+    RS_REJECT.items = (await api.storage.local.get('rsRejected')).rsRejected || [];
+    if ((await RS_DOCS.state()) === 'granted') {
+      const t = await RS_DOCS.readText(RS_REJECT.FILE);
+      if (t !== null) RS_REJECT.items = RS_REJECT.parse(t);
+      else await RS_DOCS.writeText(RS_REJECT.FILE, RS_REJECT.text());
+      await api.storage.local.set({ rsRejected: RS_REJECT.items });
+    }
+    RS_REJECT._keys = null;
+  },
+  async save() {
+    const api = globalThis.browser || globalThis.chrome;
+    RS_REJECT._keys = null;
+    await api.storage.local.set({ rsRejected: RS_REJECT.items });
+    if ((await RS_DOCS.state()) === 'granted') await RS_DOCS.writeText(RS_REJECT.FILE, RS_REJECT.text());
+  },
+  is(url, pic) {
+    if (!RS_REJECT._keys) RS_REJECT._keys = RS_REJECT.items.map(r => ({ k: RS_UTIL.key(r.url), pic: r.pic }));
+    const k = RS_UTIL.key(url);
+    return RS_REJECT._keys.some(r => r.k === k && (!r.pic || r.pic === pic));
+  },
+  async add(url, pic) { if (!RS_REJECT.is(url, pic)) RS_REJECT.items.push({ url, pic: pic || '' }); await RS_REJECT.save(); },
+  async remove(url, pic) {
+    const k = RS_UTIL.key(url);
+    RS_REJECT.items = RS_REJECT.items.filter(r => !(RS_UTIL.key(r.url) === k && (!r.pic || r.pic === pic)));
+    await RS_REJECT.save();
+  },
 };
 
 // ---------- small helpers ----------
