@@ -320,6 +320,7 @@ async function rightClickedPicture(info, tab) {
         if (r) item = { ...r, src };
       } catch (e) { /* use the address as it is */ }
     }
+    item.others = await inFrame(tab, frameId, ['picker.js'], (a, b) => window.__ppPick.variants([a, b].filter(Boolean)), [item.src, item.best || '']).catch(() => []) || [];
     return { item };
   }
   try {
@@ -327,6 +328,7 @@ async function rightClickedPicture(info, tab) {
       const p = window.__ppRC.point();
       if (!p) return { error: 'nopoint' };
       const item = await window.__ppPick.under(p.x, p.y);
+      if (item) item.others = window.__ppPick.variants([item.src, item.best].filter(Boolean));
       return item ? { item } : { error: 'none' };
     }) || { error: 'none' };
   } catch (e) {
@@ -357,6 +359,36 @@ async function pictureFile(url, tab, frameId) {
   return await (await fetch(dataUrl)).blob();
 }
 
+// The same picture is often on the page in several sizes. Download each one and keep the biggest.
+async function largest(item, tab, frameId) {
+  const first = [item.best, item.src].filter(Boolean);
+  const urls = [...new Set([...first, ...(item.others || [])])].slice(0, 12);
+  let win = null, shape = 0, tried = 0;
+  for (const url of urls) {
+    try {
+      const mine = first.includes(url);
+      const blob = mine ? await pictureFile(url, tab, frameId) : await (async () => {
+        const r = await fetch(url, { credentials: 'include' });
+        if (!r.ok) throw new Error('no');
+        return r.blob();
+      })();
+      const bmp = await createImageBitmap(blob);
+      const ratio = bmp.width / bmp.height;
+      // Only count other copies with the same shape, so a different picture with a similar name is never picked.
+      if (mine && !shape) shape = ratio;
+      if (!mine && shape && Math.abs(ratio - shape) / shape > 0.03) { bmp.close && bmp.close(); continue; }
+      tried++;
+      const area = bmp.width * bmp.height;
+      if (!win || area > win.area || (area === win.area && blob.size > win.blob.size)) {
+        if (win && win.bmp.close) win.bmp.close();
+        win = { url, blob, bmp, area };
+      } else if (bmp.close) bmp.close();
+    } catch (e) { /* not a picture, or blocked: skip it */ }
+  }
+  if (win) win.tried = tried;
+  return win;
+}
+
 const blobToDataUrl = b => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(b); });
 
 // A short, safe file name: website_picturename.jpg
@@ -372,12 +404,26 @@ function jpgName(url, page) {
   return ((host || 'picture') + '_' + (base || 'picture-' + stamp)).replace(/[^\w.\-]+/g, '_') + '.jpg';
 }
 
-async function saveAsJpg(item, info, tab) {
+// Wait (up to 10 minutes, while you choose a name) until the download finishes or is cancelled.
+function waitForDownload(id) {
+  return new Promise(resolve => {
+    let over = false;
+    const finish = async () => {
+      if (over) return;
+      const [d] = await api.downloads.search({ id });
+      if (!d || d.state === 'complete' || d.state === 'interrupted') { over = true; api.downloads.onChanged.removeListener(onCh); clearTimeout(t); resolve(d || null); }
+    };
+    const onCh = ch => { if (ch.id === id && ch.state) finish(); };
+    const t = setTimeout(() => { over = true; api.downloads.onChanged.removeListener(onCh); resolve(null); }, 600000);
+    api.downloads.onChanged.addListener(onCh);
+    finish();
+  });
+}
+
+async function saveAsJpg(item, info, tab, big) {
   const frameId = info.frameId || 0;
-  const url = item.best || item.src;
-  const blob = await pictureFile(url, tab, frameId);
-  let bmp;
-  try { bmp = await createImageBitmap(blob); } catch (e) { throw new Error('This picture is in a format PageProof can\'t turn into a JPG (' + (blob.type || 'unknown type') + ').'); }
+  if (!big) throw new Error('The website would not let PageProof download this picture.');
+  const { url, blob, bmp } = big;
   const { width: w, height: h } = bmp;
   const was = (blob.type.split('/')[1] || 'picture').replace('jpeg', 'jpg').replace('svg+xml', 'svg').toUpperCase();
   let jpg = blob;
@@ -396,12 +442,17 @@ async function saveAsJpg(item, info, tab) {
 
   const filename = jpgName(url, info.pageUrl || tab.url);
   const href = typeof URL.createObjectURL === 'function' ? URL.createObjectURL(jpg) : await blobToDataUrl(jpg);
-  const id = await api.downloads.download({ url: href, filename, conflictAction: 'uniquify', saveAs: false });
-  if (href.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(href), 120000);
+  // The Save As window opens so you can pick the folder and rename the file.
+  let id;
+  try { id = await api.downloads.download({ url: href, filename, conflictAction: 'uniquify', saveAs: true }); } catch (e) { return; /* you pressed Cancel */ }
+  if (href.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(href), 600000);
+  const done = await waitForDownload(id);
+  if (!done || done.state !== 'complete') return; // cancelled in the Save As window
+  const savedAs = (done.filename || filename).split(/[\\/]/).pop();
   const kb = jpg.size >= 1048576 ? (jpg.size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(jpg.size / 1024)) + ' KB';
   note(tab, frameId, {
     kind: 'ok', title: '✓ Saved as JPG', thumb,
-    lines: [filename, `${w} × ${h} · ${kb} · in your Downloads folder`, blob.type === 'image/jpeg' ? 'It was already a JPG, so it was saved untouched.' : `Turned from ${was} into JPG.`],
+    lines: [savedAs, `${w} × ${h} · ${kb}` + (big.tried > 1 ? ` · biggest of ${big.tried} copies on the page` : ''), blob.type === 'image/jpeg' ? 'It was already a JPG, so it was saved untouched.' : `Turned from ${was} into JPG.`],
     links: [{ label: 'Show in folder', msg: { type: 'showDownload', id } },
       { label: 'Inspect it', msg: { type: 'inspect', page: info.pageUrl || tab.url, title: tab.title, items: [item] } }]
   });
@@ -423,13 +474,17 @@ try {
         return note(tab, info.frameId, { kind: 'bad', title: t, lines: [l] });
       }
       const item = found.item;
+      const big = await largest(item, tab, info.frameId || 0);
+      if (big && !big.url.startsWith('data:') && big.url !== item.src) item.best = big.url;
+      delete item.others;
+      if (big && id !== 'jpgImage' && big.bmp.close) big.bmp.close();
       if (id === 'inspectImage') return openInspector({ mode: 'one', page: info.pageUrl, title: tab.title, items: [item] }, tab);
       if (id === 'openImage') {
         const url = item.best || item.src;
         if (url.startsWith('blob:')) return openInspector({ mode: 'one', page: info.pageUrl, title: tab.title, items: [item] }, tab);
         return api.tabs.create({ url, index: tab.index + 1, windowId: tab.windowId, openerTabId: tab.id });
       }
-      try { await saveAsJpg(item, info, tab); } catch (err) {
+      try { await saveAsJpg(item, info, tab, big); } catch (err) {
         note(tab, info.frameId, { kind: 'bad', title: 'Could not save as JPG', lines: [String((err && err.message) || err), 'You can still use Inspect picture, or the browser\'s own "Save image as...".'] });
       }
       return;
