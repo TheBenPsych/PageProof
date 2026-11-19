@@ -174,7 +174,7 @@ Cameras, phones and editing programs store hidden details inside picture files: 
 - **🎯 Click a picture on this page.** The page dims a little and every picture lights up with a blue box and its size as you point at it. Click the one you want. Press **Esc** to cancel.
 - **🖼️ Show all pictures on this page.** A new tab lists every picture on the page, biggest first. Each one is tagged **✓ Hidden data**, **A little data** or **No data** (a **©** means it names an author or copyright owner). Click one to inspect it, and use **⬅ All pictures on the page** at the bottom of the left bar to go back.
 - **📁 Upload from my computer.** Click **➕ Add a picture**, drag a file onto the page, or paste with Ctrl+V. (Pasted pictures never keep hidden data, so add the file itself when you can.)
-- **Shortcut:** right-click any picture on a website and choose **Inspect with PageProof**.
+- **Shortcut:** right-click any picture on a website and choose **PageProof ▸ Inspect picture** (see section 15).
 
 For pictures on websites, PageProof downloads the original file from the site, not a screenshot. When the page shows a small version, it fetches the biggest version the site has, because it usually keeps more data. The record lists both addresses.
 
@@ -244,6 +244,19 @@ Click the PageProof icon, then **🗂️ Open odd files**, and add the file. Cli
 - **Mac Pages, Numbers and Keynote:** shows the preview the Mac saved inside the file, and saves it as PDF. Newer Mac files only keep a picture of the first page or slide, so for every page ask the sender for a PDF (File, Export To, PDF).
 - **iPhone HEIC photos, TIFF and AVIF pictures:** shows the picture and saves it as JPG, PNG or PDF.
 - **Files with the wrong name:** if a file is really a picture or PDF with a different ending, PageProof says so and opens it anyway.
+
+## 15. The right-click menu
+
+Right-click anywhere on a website and point at **PageProof**. You get the same four choices everywhere:
+
+- **Inspect picture:** opens the Image Inspector (section 11) for the picture you right-clicked.
+- **Save picture as JPG:** saves the biggest version of the picture straight into your **Downloads** folder as a normal .jpg, named after the website and the picture. WebP, PNG, AVIF and GIF pictures are turned into JPG (see-through parts become white). A picture that is already a JPG is saved untouched. A small note in the bottom-right corner confirms it, with **Show in folder** and **Inspect it**.
+- **Open picture in new tab:** opens just the picture, at the biggest size, in a tab next to the page. The address bar shows the picture's own web address, ready to copy.
+- **Save page as evidence:** does exactly what the green **Capture** button does.
+
+**Instagram, Facebook and similar sites.** These sites lay an invisible sheet over their photos, so the browser's own picture options (like "Open image in new tab") don't appear. PageProof looks underneath the spot you right-clicked and finds the real photo anyway. Just right-click on the photo and use the PageProof choices.
+
+If the note says **Please reload this page once**, PageProof was installed or updated after the page opened. Press F5 and right-click again. If it says **No picture found here**, right-click right on top of the picture.
 
 ## Quick troubleshooting
 

@@ -241,6 +241,7 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       await openInspector({ mode: 'all', ...found }, tab);
       return { ok: true };
     },
+    showDownload: async () => { try { await api.downloads.show(msg.id); } catch (e) { /* file moved */ } return { ok: true }; },
     inspect: async () => { await openInspector({ mode: 'one', page: msg.page, title: msg.title, items: msg.items }, sender.tab); return { ok: true }; }
   };
   const job = jobs[msg.type];
@@ -272,39 +273,168 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // Right-click the PageProof icon for its other pages.
 const MENU = { batch: ['Batch capture (many links)...', 'batch.html'], log: ['Capture log', 'log.html'], verify: ['Verify a pack', 'verify.html'] };
+// Right-click on a website: the browser groups these under its own "PageProof" entry.
+const WEB = ['page', 'selection', 'link', 'image', 'video', 'audio', 'frame', 'editable'];
 api.runtime.onInstalled.addListener(() => {
   try {
     api.contextMenus.removeAll(() => {
       for (const [id, [title]] of Object.entries(MENU)) api.contextMenus.create({ id, title, contexts: ['action'] });
-      api.contextMenus.create({ id: 'inspectImage', title: 'Inspect with PageProof', contexts: ['image'] });
+      api.contextMenus.create({ id: 'inspectImage', title: 'Inspect picture', contexts: WEB });
+      api.contextMenus.create({ id: 'jpgImage', title: 'Save picture as JPG', contexts: WEB });
+      api.contextMenus.create({ id: 'openImage', title: 'Open picture in new tab', contexts: WEB });
+      api.contextMenus.create({ id: 'webSep', type: 'separator', contexts: WEB });
+      api.contextMenus.create({ id: 'savePage', title: 'Save page as evidence', contexts: WEB });
     });
   } catch (e) { /* menus not available */ }
 });
+
+// Run a small job inside the frame that was right-clicked.
+async function inFrame(tab, frameId, files, func, args = []) {
+  const target = { tabId: tab.id, frameIds: [frameId || 0] };
+  if (files) await api.scripting.executeScript({ target, files });
+  if (!func) return undefined;
+  const [r] = await api.scripting.executeScript({ target, func, args });
+  return r ? r.result : undefined;
+}
+const note = (tab, frameId, o) => inFrame(tab, 0, ['rclick.js'], o2 => window.__ppRC.toast(o2), [o]).catch(() => {});
+
+// Which picture was right-clicked? Either the browser tells us (a normal picture), or we look
+// under the spot that was clicked (pictures hidden under a see-through cover, like Instagram).
+async function rightClickedPicture(info, tab) {
+  const frameId = info.frameId || 0;
+  if (info.mediaType === 'image' && info.srcUrl) {
+    let src = info.srcUrl;
+    if (src.startsWith('blob:')) {
+      try {
+        const r = await inFrame(tab, frameId, null, async u => {
+          const b = await (await fetch(u)).blob();
+          return new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b); });
+        }, [src]);
+        if (r) src = r;
+      } catch (e) { /* keep the blob address */ }
+    }
+    let item = { src };
+    if (!src.startsWith('data:')) {
+      try {
+        const r = await inFrame(tab, frameId, ['picker.js'], u => window.__ppPick.bestFor(u), [src]);
+        if (r) item = { ...r, src };
+      } catch (e) { /* use the address as it is */ }
+    }
+    return { item };
+  }
+  try {
+    return await inFrame(tab, frameId, ['rclick.js', 'picker.js'], async () => {
+      const p = window.__ppRC.point();
+      if (!p) return { error: 'nopoint' };
+      const item = await window.__ppPick.under(p.x, p.y);
+      return item ? { item } : { error: 'none' };
+    }) || { error: 'none' };
+  } catch (e) {
+    return { error: 'blocked' };
+  }
+}
+
+const NO_PICTURE = {
+  none: ['No picture found here', 'Right-click right on top of the picture and try again.'],
+  nopoint: ['Please reload this page once', 'PageProof was just installed or updated, so it missed your right-click. Reload the page (F5), then right-click the picture again.'],
+  blocked: ['PageProof can\'t reach this page', 'Browsers don\'t let extensions work on some pages (like the Chrome Web Store or the browser\'s own pages).']
+};
+
+// Get a picture's file. The extension can usually download it directly; if the website refuses,
+// ask the page itself (it is already allowed to see its own pictures).
+async function pictureFile(url, tab, frameId) {
+  try {
+    const r = await fetch(url, { credentials: 'include' });
+    if (r.ok) { const b = await r.blob(); if (b.size) return b; }
+  } catch (e) { /* try from the page */ }
+  const dataUrl = await inFrame(tab, frameId, null, async u => {
+    try {
+      const b = await (await fetch(u)).blob();
+      return await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b); });
+    } catch (e) { return ''; }
+  }, [url]).catch(() => '');
+  if (!dataUrl) throw new Error('The website would not let PageProof download this picture.');
+  return await (await fetch(dataUrl)).blob();
+}
+
+const blobToDataUrl = b => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(b); });
+
+// A short, safe file name: website_picturename.jpg
+function jpgName(url, page) {
+  let host = '', base = '';
+  try { host = new URL(page).hostname.replace(/^www\./, ''); } catch (e) { /* none */ }
+  try {
+    const u = new URL(url);
+    if (u.protocol === 'http:' || u.protocol === 'https:') base = decodeURIComponent(u.pathname.split('/').pop() || '');
+  } catch (e) { /* none */ }
+  base = base.replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[^\w\-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '_');
+  return ((host || 'picture') + '_' + (base || 'picture-' + stamp)).replace(/[^\w.\-]+/g, '_') + '.jpg';
+}
+
+async function saveAsJpg(item, info, tab) {
+  const frameId = info.frameId || 0;
+  const url = item.best || item.src;
+  const blob = await pictureFile(url, tab, frameId);
+  let bmp;
+  try { bmp = await createImageBitmap(blob); } catch (e) { throw new Error('This picture is in a format PageProof can\'t turn into a JPG (' + (blob.type || 'unknown type') + ').'); }
+  const { width: w, height: h } = bmp;
+  const was = (blob.type.split('/')[1] || 'picture').replace('jpeg', 'jpg').replace('svg+xml', 'svg').toUpperCase();
+  let jpg = blob;
+  if (blob.type !== 'image/jpeg') {
+    // See-through parts become white, like a printed page.
+    const c = new OffscreenCanvas(w, h), g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.drawImage(bmp, 0, 0);
+    jpg = await c.convertToBlob({ type: 'image/jpeg', quality: 0.92 });
+  }
+  // A small preview for the note in the corner.
+  const tw = 128, th = Math.max(1, Math.round(h * tw / w));
+  const tc = new OffscreenCanvas(tw, th), tg = tc.getContext('2d');
+  tg.fillStyle = '#fff'; tg.fillRect(0, 0, tw, th); tg.drawImage(bmp, 0, 0, tw, th);
+  const thumb = await blobToDataUrl(await tc.convertToBlob({ type: 'image/jpeg', quality: 0.7 }));
+  bmp.close && bmp.close();
+
+  const filename = jpgName(url, info.pageUrl || tab.url);
+  const href = typeof URL.createObjectURL === 'function' ? URL.createObjectURL(jpg) : await blobToDataUrl(jpg);
+  const id = await api.downloads.download({ url: href, filename, conflictAction: 'uniquify', saveAs: false });
+  if (href.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(href), 120000);
+  const kb = jpg.size >= 1048576 ? (jpg.size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(jpg.size / 1024)) + ' KB';
+  note(tab, frameId, {
+    kind: 'ok', title: '✓ Saved as JPG', thumb,
+    lines: [filename, `${w} × ${h} · ${kb} · in your Downloads folder`, blob.type === 'image/jpeg' ? 'It was already a JPG, so it was saved untouched.' : `Turned from ${was} into JPG.`],
+    links: [{ label: 'Show in folder', msg: { type: 'showDownload', id } },
+      { label: 'Inspect it', msg: { type: 'inspect', page: info.pageUrl || tab.url, title: tab.title, items: [item] } }]
+  });
+}
+
 try {
   api.contextMenus.onClicked.addListener(async (info, tab) => {
-    if (info.menuItemId === 'inspectImage') {
-      let src = info.srcUrl;
-      // Pictures that only exist inside the page must be read there.
-      if (src && src.startsWith('blob:') && tab) {
-        try {
-          const [r] = await api.scripting.executeScript({ target: { tabId: tab.id }, args: [src], func: async u => {
-            const b = await (await fetch(u)).blob();
-            return new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b); });
-          } });
-          if (r && r.result) src = r.result;
-        } catch (e) { /* keep the blob address */ }
-      }
-      let item = { src };
-      if (tab && !src.startsWith('data:')) {
-        try {
-          await api.scripting.executeScript({ target: { tabId: tab.id }, files: ['picker.js'] });
-          const [r] = await api.scripting.executeScript({ target: { tabId: tab.id }, args: [src], func: u => window.__ppPick.bestFor(u) });
-          if (r && r.result) item = { ...r.result, src };
-        } catch (e) { /* use the address as it is */ }
-      }
-      return openInspector({ mode: 'one', page: info.pageUrl, title: tab ? tab.title : '', items: [item] }, tab);
+    const id = info.menuItemId;
+    if (id === 'savePage') {
+      if (!tab) return;
+      if (busy) return note(tab, 0, { kind: 'bad', title: 'A capture is already running', lines: ['Wait for it to finish, or click the PageProof icon to stop it.'] });
+      return startCapture(tab);
     }
-    const m = MENU[info.menuItemId];
+    if (id === 'inspectImage' || id === 'jpgImage' || id === 'openImage') {
+      if (!tab) return;
+      const found = await rightClickedPicture(info, tab);
+      if (!found.item) {
+        const [t, l] = NO_PICTURE[found.error] || NO_PICTURE.none;
+        return note(tab, info.frameId, { kind: 'bad', title: t, lines: [l] });
+      }
+      const item = found.item;
+      if (id === 'inspectImage') return openInspector({ mode: 'one', page: info.pageUrl, title: tab.title, items: [item] }, tab);
+      if (id === 'openImage') {
+        const url = item.best || item.src;
+        if (url.startsWith('blob:')) return openInspector({ mode: 'one', page: info.pageUrl, title: tab.title, items: [item] }, tab);
+        return api.tabs.create({ url, index: tab.index + 1, windowId: tab.windowId, openerTabId: tab.id });
+      }
+      try { await saveAsJpg(item, info, tab); } catch (err) {
+        note(tab, info.frameId, { kind: 'bad', title: 'Could not save as JPG', lines: [String((err && err.message) || err), 'You can still use Inspect picture, or the browser\'s own "Save image as...".'] });
+      }
+      return;
+    }
+    const m = MENU[id];
     if (m) api.tabs.create({ url: api.runtime.getURL(m[1]) });
   });
 } catch (e) { /* menus not available */ }
