@@ -91,7 +91,7 @@ const page = q => api.runtime.getURL('revsearch.html' + (q ? '?' + q : ''));
 
 async function getSettings() {
   const s = (await api.storage.local.get('rsSettings')).rsSettings || {};
-  return { engines: { google: true, yandex: true, bing: true, ...(s.engines || {}) }, speed: SPEED[s.speed] ? s.speed : 'normal', closeTabs: !!s.closeTabs };
+  return { engines: { google: true, yandex: true, bing: true, ...(s.engines || {}) }, speed: SPEED[s.speed] ? s.speed : 'normal', closeTabs: s.closeTabs !== false };   // on unless switched off: fewer open tabs = faster
 }
 const setSettings = s => api.storage.local.set({ rsSettings: s });
 
@@ -300,10 +300,10 @@ function saveJob(now) {
   clearTimeout(saveTimer);
   const go = () => RS_DB.put('jobs', job.id, job).catch(() => {});
   if (now) return go();
-  saveTimer = setTimeout(go, 800);
+  saveTimer = setTimeout(go, 4000);                 // the search holds your pictures, so saving it is not free
 }
 let renderTimer = null;
-function renderSoon() { if (renderTimer) return; renderTimer = setTimeout(() => { renderTimer = null; renderResults(); }, 250); }
+function renderSoon() { if (renderTimer) return; renderTimer = setTimeout(() => { renderTimer = null; renderResults(); }, 1000); }
 
 const runList = p => job.engines.map(e => p.runs[e]);
 const picDone = p => runList(p).every(r => !['wait', 'go', 'captcha'].includes(r.state));
@@ -1000,6 +1000,7 @@ async function initResults() {
   scoreAll();
   if (!job.started) runJob();
   window.addEventListener('beforeunload', e => { if (R.running) { e.preventDefault(); e.returnValue = ''; } });
+  window.addEventListener('pagehide', () => { if (saveTimer) saveJob(true); });
 }
 
 // =====================================================================================
