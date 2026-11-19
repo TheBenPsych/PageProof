@@ -77,7 +77,32 @@ const RS_SITE = {
   // Does this link's site fall under a listed site? (facebook.com covers m.facebook.com too)
   inList(site, list) { return list.some(d => !d.includes('/') && (d.startsWith('.') ? site.endsWith(d) : site === d || site.endsWith('.' + d))); },
   // The list entry that covers this link (whole site, ending, or site.com/part), if any.
-  entryFor(site, url, list) { return list.find(d => d.includes('/') ? !!url && RS_SITE.underPath(url, d) : RS_SITE.inList(site, [d])); },
+  // Lists can hold thousands of entries, so they are indexed once: whole sites by name, endings
+  // (.gov) in a short list, and site parts (x.com/name) grouped by site.
+  entryFor(site, url, list) {
+    let ix = RS_SITE._ix.get(list);
+    if (!ix || ix.n !== list.length) {
+      ix = { n: list.length, sites: new Set(), ends: [], parts: new Map() };
+      for (const d of list) {
+        if (d.includes('/')) { const host = d.slice(0, d.indexOf('/')); if (!ix.parts.has(host)) ix.parts.set(host, []); ix.parts.get(host).push(d); }
+        else if (d.startsWith('.')) ix.ends.push(d);
+        else ix.sites.add(d);
+      }
+      RS_SITE._ix.set(list, ix);
+    }
+    // the site itself, then each shorter ending of it (m.facebook.com -> facebook.com -> com)
+    const labels = site.split('.');
+    for (let i = 0; i < labels.length - 1; i++) { const d = labels.slice(i).join('.'); if (ix.sites.has(d)) return d; }
+    const end = ix.ends.find(e => site.endsWith(e));
+    if (end) return end;
+    if (url) for (let i = 0; i < labels.length - 1; i++) {
+      const ps = ix.parts.get(labels.slice(i).join('.'));
+      const hit = ps && ps.find(d => RS_SITE.underPath(url, d));
+      if (hit) return hit;
+    }
+    return undefined;
+  },
+  _ix: new WeakMap(),
 };
 
 // ---------- the Documents\PageProof folder ----------
