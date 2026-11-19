@@ -567,13 +567,15 @@ const VERDICT = {
 async function scoreAll() {
   if (R.scoring) return;
   R.scoring = true;
-  try { await Promise.all([scoreWorker(), scoreWorker(), scoreWorker(), scoreWorker()]); } finally { R.scoring = false; }
+  // 6 at a time: downloads overlap well; more than that mostly waits on the computer itself.
+  try { await Promise.all(Array.from({ length: 6 }, scoreWorker)); } finally { R.scoring = false; }
 }
 async function scoreWorker() {
   {
     while (R.scoreQ.length) {
       // Exact matches and the picture on screen go first.
-      R.scoreQ.sort((a, b) => (b.pic === R.sel) - (a.pic === R.sel) || b.exact - a.exact);
+      // The picture on screen first, then the others in order, finishing one list before the next.
+      R.scoreQ.sort((a, b) => (b.pic === R.sel) - (a.pic === R.sel) || a.pic - b.pic || b.exact - a.exact);
       const l = R.scoreQ.shift();
       if (l.sv === SCORE_VERSION) continue;
       const p = job.pics[l.pic];
