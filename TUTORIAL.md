@@ -269,7 +269,7 @@ Click the PageProof icon and choose **Reverse image search**.
    - The first tab is the PageProof results page.
    - Each picture gets its own coloured, numbered tab group with a Google, Yandex and Bing tab. These are the same pages you would get searching by hand.
    - Leave the window open until the progress bar on the left finishes. About 2 to 3 minutes for 30 pictures.
-4. Pick a picture on the left to see every link found for it, grouped by site:
+4. Pick a picture on the left to see every link found for it, grouped by site. Under each picture on the left, **⏳ Checking matches · 12 left** means PageProof is still comparing the copies it found; **✓ All checked · ready to review** means that picture's list is final. If you open **Hidden and allowed sites** or **Past searches** while a search runs, use **↩ Back to search results** to return to it (the search keeps going in its own tab).
    - PageProof does not trust the search sites' own "exact match" labels. It downloads every copy it found and lines it up with your picture, the same way the Compare page does, then sorts each link into:
      - **✅ Same photo**: many details line up. This is your photo, even if it was cropped, resized, mirrored, colour-changed or had text put over it. This is the list shown first.
      - **Maybe**: a few details line up. Worth a quick look. Same-photo checks also look at the middle of your picture, so a different photo taken in front of the same logo wall or backdrop is not counted as the same photo.
@@ -281,7 +281,7 @@ Click the PageProof icon and choose **Reverse image search**.
    - **New**: links that were not there the last time you searched the same picture. Links you have seen before say "Seen before" with the date they were first found.
    - Which site found it (Google, Yandex, Bing).
 5. **🗑 (trash can)** rejects one link: you checked it and it is not a problem. It never shows again for that picture, and it is saved in `Documents\PageProof\rejected-links.txt`. To bring one back, pick the **🗑 Rejected** filter and press **↩ Put back** (or delete its line from the file).
-6. **Hide this site** hides that site for every picture, now and in future searches (good for Pinterest, stock photo sites and so on). To hide a whole kind of site, type its ending with a dot on the **Hidden and allowed sites** page, for example `.gov` or `.edu`. **Mark allowed** is for your own site and licensees: they still show, with a green **Allowed** label.
+6. **Hide this site** hides that site for every picture, now and in future searches (good for Pinterest, stock photo sites and so on). To hide a whole kind of site, type its ending with a dot on the **Hidden and allowed sites** page, for example `.gov` or `.edu`. To hide just one account or section of a site, press the small red **🚫 Hide x.com/nypostsports** under a link, or type it the same way on that page (for example `x.com/nypostsports` or `example.com/forum`). The rest of the site still shows. **Mark allowed** is for your own site and licensees: they still show, with a green **Allowed** label.
 7. Tick the links that matter and press **Capture ticked pages**. They open in batch capture (section 7), ready to save as evidence packs.
 8. **Save results** downloads a PDF report and a spreadsheet of everything found.
 

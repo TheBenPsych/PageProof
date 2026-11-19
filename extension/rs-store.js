@@ -48,10 +48,36 @@ const RS_SITE = {
     if (end) return '.' + end[1];
     if (!/^[a-z]+:\/\//.test(t)) t = 'http://' + t;
     const h = RS_SITE.of(t);
-    return /^[a-z0-9.-]+\.[a-z]{2,}$/.test(h) ? h : '';
+    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(h)) return '';
+    // "x.com/nypostsports" or "site.com/forum": only that part of the site.
+    let path = '';
+    try { path = decodeURIComponent(new URL(t).pathname).replace(/\/+$/, ''); } catch (e) { /* none */ }
+    return path && path !== '/' ? h + path : h;
+  },
+  // Does a link fall under a "site.com/part" entry?
+  underPath(url, entry) {
+    const i = entry.indexOf('/');
+    if (i < 0) return false;
+    const host = entry.slice(0, i), path = entry.slice(i);
+    let u; try { u = new URL(url); } catch (e) { return false; }
+    const site = RS_SITE.of(url);
+    if (!(site === host || site.endsWith('.' + host))) return false;
+    let p = u.pathname; try { p = decodeURIComponent(p); } catch (e) { /* keep */ }
+    p = p.toLowerCase();
+    return p === path || p.startsWith(path + '/');
+  },
+  // The part worth offering to hide: the account on social sites, or a forum section.
+  part(url) {
+    try {
+      const u = new URL(url), seg = u.pathname.split('/').filter(Boolean)[0];
+      if (!seg || /^(status|statuses|p|pin|pins|reel|reels|watch|shorts|video|videos|photo|photos|post|posts|news|article|articles|story|stories|search|explore|i|hashtag|tag|tags|en|us|uk|www|amp|images|img|media|wp-content|uploads|\d+)$/i.test(seg) || seg.length > 40 || /\.[a-z]{2,4}$/i.test(seg)) return '';
+      return RS_SITE.of(url) + '/' + seg.toLowerCase();
+    } catch (e) { return ''; }
   },
   // Does this link's site fall under a listed site? (facebook.com covers m.facebook.com too)
-  inList(site, list) { return list.some(d => d.startsWith('.') ? site.endsWith(d) : site === d || site.endsWith('.' + d)); },
+  inList(site, list) { return list.some(d => !d.includes('/') && (d.startsWith('.') ? site.endsWith(d) : site === d || site.endsWith('.' + d))); },
+  // The list entry that covers this link (whole site, ending, or site.com/part), if any.
+  entryFor(site, url, list) { return list.find(d => d.includes('/') ? !!url && RS_SITE.underPath(url, d) : RS_SITE.inList(site, [d])); },
 };
 
 // ---------- the Documents\PageProof folder ----------
@@ -102,7 +128,7 @@ const RS_LISTS = {
   hidden: [], allowed: [], fileState: 'none',
   FILES: { hidden: 'hidden-sites.txt', allowed: 'allowed-sites.txt' },
   HEAD: {
-    hidden: '# PageProof hidden sites, one per line.\n# Links from these sites never show in reverse search results.\n# Start a line with a dot to hide a whole ending, for example .gov or .edu\n# Lines starting with # are notes and are ignored.\n',
+    hidden: '# PageProof hidden sites, one per line.\n# Links from these sites never show in reverse search results.\n# Start a line with a dot to hide a whole ending, for example .gov or .edu\n# Add a part after the site to hide only that part, for example x.com/nypostsports or example.com/forum\n# Lines starting with # are notes and are ignored.\n',
     allowed: '# PageProof allowed sites, one per line (your own site, licensees...).\n# Links from these sites still show, with a green "Allowed" label.\n# Lines starting with # are notes and are ignored.\n',
   },
   parse(text) { return [...new Set(String(text || '').split(/\r?\n/).map(RS_SITE.tidy).filter(Boolean))]; },
@@ -148,8 +174,8 @@ const RS_LISTS = {
     RS_LISTS[kind] = RS_LISTS[kind].filter(d => d !== site);
     await RS_LISTS.save();
   },
-  isHidden: site => RS_SITE.inList(site, RS_LISTS.hidden),
-  isAllowed: site => RS_SITE.inList(site, RS_LISTS.allowed),
+  isHidden: (site, url) => !!RS_SITE.entryFor(site, url, RS_LISTS.hidden),
+  isAllowed: (site, url) => !!RS_SITE.entryFor(site, url, RS_LISTS.allowed),
 };
 
 // ---------- rejected links (the trash can) ----------

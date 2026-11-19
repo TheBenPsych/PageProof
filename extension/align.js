@@ -412,10 +412,15 @@ const PP_ALIGN = (() => {
     return createImageBitmap(c);
   }
   // Returns a placement plus { how, inliers, sc } or null. progress(text) gets plain-English updates.
-  async function align(A, B, progress = () => {}) {
+  // opts.fast (reverse search, many copies to check): reuse the original's details between
+  // calls and skip the slow whole-picture search, which only helps plain copies with few details.
+  const featCache = new WeakMap();
+  async function align(A, B, progress = () => {}, opts = {}) {
     const tries = [], tick = () => new Promise(r => setTimeout(r, 0));
     progress('Finding details in both pictures...');
-    const FA = features(A, 900); await tick();
+    let FA = opts.fast && featCache.get(A);
+    if (!FA) { FA = features(A, 900); if (opts.fast) featCache.set(A, FA); }
+    await tick();
     const thr = Math.max(3 / FA.f0, Math.max(A.width, A.height) * 0.012);
     const viaDetails = async (Bimg, flip) => {
       const FB = features(Bimg, 900); await tick();
@@ -446,7 +451,7 @@ const PP_ALIGN = (() => {
     // Copies are sometimes mirrored to dodge detection. Try that if the straight way didn't fit well.
     if (!sure()) await viaDetails(await mirrored(B), true);
     // Backup: the whole-picture search, for plain resized copies with few sharp details.
-    if (!sure()) {
+    if (!sure() && !opts.fast) {
       progress('Trying different sizes and positions...');
       const W = await wholeSearch(A, B);
       if (W) tries.push({ ...W, how: 'whole', sc: score(A, B, W) });
