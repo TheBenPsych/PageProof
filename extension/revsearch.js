@@ -1108,6 +1108,7 @@ async function chooseOtherFolder() {
 // =====================================================================================
 // View 4: hidden and allowed sites
 // =====================================================================================
+let LISTQ = '';
 async function renderLists() {
   await RS_LISTS.load();
   const st = RS_LISTS.fileState;
@@ -1126,12 +1127,22 @@ async function renderLists() {
       h('button', { class: 'ghost', text: '📂 Load a file', title: 'Adds the sites in a hidden-sites.txt or allowed-sites.txt file', onclick: () => $('listLoad').click() })),
     h('p', { class: 'hint', text: 'Load a file adds its sites (a file called allowed-sites.txt goes to Allowed, anything else to Hidden). Nothing is removed unless you press ✕.' }),
     h('div', { class: 'links' }, h('a', { href: page(), text: '🔎 Reverse image search' }), h('a', { href: page('view=folder'), text: '📂 My pictures folder' })));
-  const input = h('input', { type: 'text', placeholder: 'Type a site (pinterest.com), an ending (.gov) or a part (x.com/nypostsports)' });
-  const add = async kind => { if (await RS_LISTS.add(kind, input.value)) { input.value = ''; renderLists(); } else input.focus(); };
+  const input = h('input', { type: 'text', value: LISTQ, placeholder: 'Type a site (pinterest.com), an ending (.gov) or a part (x.com/nypostsports)' });
+  const add = async kind => { if (await RS_LISTS.add(kind, input.value)) { LISTQ = ''; renderLists(); } else input.focus(); };
   input.addEventListener('keydown', e => { if (e.key === 'Enter') add('hidden'); });
-  const rows = (kind, empty) => RS_LISTS[kind].length ? h('div', { class: 'site' + (kind === 'allowed' ? ' allowed' : '') },
-    RS_LISTS[kind].map(d => h('div', { class: 'lrow' }, h('b', { text: d }), h('button', { class: 'btn', text: kind === 'hidden' ? '✕ Show again' : '✕ Remove', onclick: () => RS_LISTS.remove(kind, d).then(renderLists) }))))
-    : h('div', { class: 'none', text: empty });
+  // Long lists (thousands of sites) show the newest 300; typing in the box above finds any of them.
+  const SHOW = 300;
+  const rows = (kind, empty) => {
+    if (!RS_LISTS[kind].length) return h('div', { class: 'none', text: empty });
+    const q = LISTQ.trim().toLowerCase();
+    const all = RS_LISTS[kind].filter(d => !q || d.includes(q)).reverse();
+    return h('div', { class: 'site' + (kind === 'allowed' ? ' allowed' : '') },
+      all.slice(0, SHOW).map(d => h('div', { class: 'lrow' }, h('b', { text: d }), h('button', { class: 'btn', text: kind === 'hidden' ? '✕ Show again' : '✕ Remove', onclick: () => RS_LISTS.remove(kind, d).then(renderLists) }))),
+      all.length > SHOW ? h('div', { class: 'lrow', style: 'color:#64748b' }, 'Showing the newest ' + SHOW + ' of ' + all.length.toLocaleString() + '. Type in the box above to find one.') : null,
+      q && !all.length ? h('div', { class: 'lrow', style: 'color:#64748b' }, 'None match "' + q + '".') : null);
+  };
+  let typing;
+  input.addEventListener('input', () => { clearTimeout(typing); typing = setTimeout(() => { LISTQ = input.value; renderLists().then(() => { const i = document.querySelector('.addsite input'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }); }, 300); });
   $('main').replaceChildren(
     h('div', {}, h('h1', { text: plural(RS_LISTS.hidden.length, 'hidden site') }), h('p', { class: 'lead', text: 'Each site is one line in the text file. A whole site is hidden, including its www and mobile versions (m.facebook.com).' })),
     h('div', { class: 'addsite' }, input, h('button', { class: 'btn blue', text: '🚫 Hide it', onclick: () => add('hidden') }), h('button', { class: 'btn', style: 'color:#166534;border-color:#86efac', text: '✓ Allow it', onclick: () => add('allowed') })),
@@ -1172,7 +1183,8 @@ $('listLoad').addEventListener('change', async e => {
   if (!f) return;
   const kind = /allow/i.test(f.name) ? 'allowed' : 'hidden';
   const sites = RS_LISTS.parse(await f.text());
-  for (const s of sites) if (!RS_LISTS[kind].includes(s)) RS_LISTS[kind].push(s);
+  const have = new Set(RS_LISTS[kind]);
+  for (const s of sites) if (!have.has(s)) { have.add(s); RS_LISTS[kind].push(s); }
   await RS_LISTS.save();
   renderLists();
 });
