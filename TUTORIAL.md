@@ -247,11 +247,12 @@ Click the PageProof icon, then **🗂️ Open odd files**, and add the file. Cli
 
 ## 15. The right-click menu
 
-Right-click anywhere on a website and point at **PageProof**. You get the same four choices everywhere:
+Right-click anywhere on a website and point at **PageProof**. You get the same five choices everywhere:
 
 - **Inspect picture:** opens the Image Inspector (section 11) for the picture you right-clicked.
 - **Save picture as JPG:** PageProof looks for every size of the same picture on the page, keeps the biggest, and opens the **Save As** window so you can pick the folder and type your own file name (it suggests one made from the website and picture name). WebP, PNG, AVIF and GIF pictures are turned into JPG (see-through parts become white). A picture that is already a JPG is saved untouched. A small note in the bottom-right corner confirms it, with **Show in folder** and **Inspect it**.
 - **Open picture in new tab:** opens just the picture, at the biggest size, in a tab next to the page. The address bar shows the picture's own web address, ready to copy.
+- **Reverse image search ▸ Google Lens / Yandex / Both:** opens a new tab that searches the web for other copies of the picture (the biggest version PageProof found). **Both** opens two tabs. Good for finding where else a photo has been posted.
 - **Save page as evidence:** does exactly what the green **Capture** button does.
 
 **Instagram, Facebook and similar sites.** These sites lay an invisible sheet over their photos, so the browser's own picture options (like "Open image in new tab") don't appear. PageProof looks underneath the spot you right-clicked and finds the real photo anyway. Just right-click on the photo and use the PageProof choices.
