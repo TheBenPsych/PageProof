@@ -298,7 +298,7 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ task: true, stage: t.stage });
     return false;
   }
-  if (msg.type === 'rsStage') t.stage = msg.stage;
+  if (msg.type === 'rsStage') { t.stage = msg.stage; if (msg.more) t.deadline = Date.now() + TASK_TIMEOUT; }
   else if (msg.type === 'rsCaptcha') onCaptcha(t);
   else if (msg.type === 'rsResults') onResults(t, msg);
   else if (msg.type === 'rsFail') finishTask(t, 'fail', msg.why || 'Something went wrong on the page');
@@ -648,7 +648,7 @@ function rowFor(p, l) {
       title: l.pct + '% of the area the two pictures share lines up detail for detail, with ' + l.inl + ' matching details found in both. A lower % on a "Same photo" means things were added on top (a headline, logo or border) or it was cropped.',
       text: v === 'same' ? (l.pct >= 85 ? l.pct + '% match' : 'Same photo · ' + l.pct + '% lines up') : l.pct + '% match' });
   const sz = v === 'same' || v === 'maybe' ? sizeNote(p, l) : { text: '' };
-  return h('div', { class: 'row' + (l.firstSeen || v === 'no' ? ' seen' : '') + (allowed ? ' allowed' : '') },
+  return h('div', { class: 'row' + (v === 'no' ? ' seen' : '') + (allowed ? ' allowed' : '') },
     h('input', { type: 'checkbox', checked: R.ticked.has(id), onchange: e => { if (e.target.checked) R.ticked.add(id); else R.ticked.delete(id); renderSelbar(); } }),
     (l.thumb || l.img) ? h('img', { class: 'th', src: l.thumb || l.img, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer', onerror: e => e.target.replaceWith(h('div', { class: 'th' })) }) : h('div', { class: 'th' }),
     h('div', { class: 't' }, h('a', { href: l.url, target: '_blank', rel: 'noreferrer', text: l.title || l.url, title: l.title || l.url }),
