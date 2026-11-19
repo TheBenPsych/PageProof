@@ -278,7 +278,7 @@ Click the PageProof icon and choose **Reverse image search**.
    - The number next to a same-photo link (for example "Same photo · 64% lines up") shows how much of the shared area matches. A low number there is normal when the copy has big headlines or text over it.
    - **🔀 Compare** opens your picture and that copy on the Compare page, already lined up, so you can check it by eye and save a PDF or video.
    - **Size**: the copy's size, flagged **bigger than yours** or **cropped** when that is the case.
-   - **New**: links that were not there the last time you searched the same picture. Links you have seen before are faded.
+   - **New**: links that were not there the last time you searched the same picture. Links you have seen before say "Seen before" with the date they were first found.
    - Which site found it (Google, Yandex, Bing).
 5. **Hide this site** hides that site for every picture, now and in future searches (good for Pinterest, stock photo sites and so on). **Mark allowed** is for your own site and licensees: they still show, with a green **Allowed** label.
 6. Tick the links that matter and press **Capture ticked pages**. They open in batch capture (section 7), ready to save as evidence packs.

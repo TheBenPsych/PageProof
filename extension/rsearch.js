@@ -49,6 +49,7 @@
 
   async function upload(pic) {
     const file = await pictureFile(pic);
+    try { sessionStorage.removeItem('ppGoogleExact'); } catch (e) { /* fine */ }
     await send({ type: 'rsStage', stage: 'results' });
     if (engine === 'google') {
       // Google Lens's own upload form. Same thing that happens when you drop a picture on Lens.
@@ -96,8 +97,13 @@
     try { return OWN.test(new URL(r).hostname) ? '' : r; } catch (e) { return ''; }
   };
   const sizeIn = text => {
-    const m = /(\d{2,5})\s*[×xX]\s*(\d{2,5})/.exec(text || '');
-    return m ? { w: +m[1], h: +m[2] } : {};
+    // "1,024x682" or "1024 × 682". Ignore numbers glued to other digits (post ids and so on).
+    const n = '(\\d{1,2},\\d{3}|\\d{2,5})';
+    for (const m of String(text || '').matchAll(new RegExp('(?<![\\d,.])' + n + '\\s*[×xX]\\s*' + n + '(?![\\d,])', 'g'))) {
+      const w = +m[1].replace(',', ''), h = +m[2].replace(',', '');
+      if (w >= 50 && h >= 50 && w <= 20000 && h <= 20000) return { w, h };
+    }
+    return {};
   };
   const imgSrc = img => {
     if (!img) return '';
@@ -180,6 +186,19 @@
     await settle();
     if (robotCheck()) return send({ type: 'rsCaptcha' });
     let links = engine === 'yandex' ? yandexLinks() : engine === 'bing' ? bingLinks() : [];
+    if (engine === 'google') {
+      const u = new URL(location.href);
+      if (u.searchParams.get('udm') === '48') {
+        sessionStorage.setItem('ppGoogleExact', JSON.stringify(genericLinks(true)));
+        send({ type: 'rsStage', stage: 'results', more: true });
+        u.searchParams.set('udm', '26'); location.replace(u.href); return;
+      }
+      let exact = [];
+      try { exact = JSON.parse(sessionStorage.getItem('ppGoogleExact') || '[]'); } catch (e) { /* none */ }
+      sessionStorage.removeItem('ppGoogleExact');
+      // Visual matches can be long and mostly look-alikes: keep the top 60. The line-up check hides the different photos.
+      links = exact.concat(genericLinks(false).slice(0, 60));
+    }
     if (!links.length) links = genericLinks(engine !== 'bing');
     // Drop duplicates and tiny junk.
     const seen = new Set();
@@ -193,8 +212,13 @@
     if (engine === 'google') {
       if (u.hostname.startsWith('lens.')) return 'wait';
       if (u.pathname !== '/search') return 'wait';
-      if (u.searchParams.get('udm') !== '48') { u.searchParams.set('udm', '48'); location.replace(u.href); return 'moved'; }
-      return 'read';
+      // Two pages: first Google's "Exact matches" (udm=48), then its "Visual matches" (udm=26),
+      // which lists many more pages. PageProof's own line-up check sorts out which are really the same photo.
+      const udm = u.searchParams.get('udm');
+      const haveExact = sessionStorage.getItem('ppGoogleExact') !== null;
+      if (udm === '48' || (udm === '26' && haveExact)) return 'read';
+      u.searchParams.set('udm', haveExact ? '26' : '48');
+      location.replace(u.href); return 'moved';
     }
     if (engine === 'yandex') {
       if (!u.searchParams.get('cbir_id')) return 'wait';
