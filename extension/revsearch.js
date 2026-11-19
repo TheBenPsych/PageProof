@@ -542,7 +542,9 @@ async function scoreLink(l) {
 // around the edges but not in the middle: real copies 0.49 to 1.0 there (0.49 = headline over
 // the middle), same-backdrop different photos about 0.3.
 const SCORE_VERSION = 3;
+const userNo = l => !!(l.url && job && job.pics[l.pic] && RS_REJECT.notMatch(l.url, job.pics[l.pic].name));
 function verdict(l) {
+  if (userNo(l)) return 'no';
   if (l.sv !== SCORE_VERSION) return l.pct === null ? 'cant' : 'pending';
   if (l.pct === null || l.pct < 0) return 'cant';
   if (l.mid !== null && l.mid !== undefined && l.mid < 0.35) return 'no';
@@ -631,6 +633,14 @@ const isSame = l => verdict(l) === 'same';
 function linkScore(l) { return VERDICT[verdict(l)].rank * 1000 + (l.isNew ? 500 : 0) + (l.pct > 0 ? l.pct : 0); }
 
 const isRejected = (p, l) => RS_REJECT.is(l.url, p.name);
+// Keep the numbers of links you said were not a match, to tune the checker from later.
+async function learnFrom(l, was) {
+  try {
+    const st = (await api.storage.local.get('rsLearn')).rsLearn || [];
+    st.push({ pct: l.pct, inl: l.inl, tiles: l.tiles, str: l.str, mid: l.mid, was, site: l.site, at: Date.now() });
+    await api.storage.local.set({ rsLearn: st.slice(-500) });
+  } catch (e) { /* not important */ }
+}
 function visibleLinks(p, opts = {}) {
   return p.links.filter(l => {
     if (isRejected(p, l) !== (R.filter === 'rejected' && !opts.raw)) return false;
@@ -728,13 +738,17 @@ function rowFor(p, l) {
     h('div', { class: 'tags' },
       hidden ? h('span', { class: 'tag hid', text: 'Hidden' }) : null,
       l.isNew ? h('span', { class: 'tag new', text: 'New' }) : null,
-      h('span', { class: 'tag ' + VERDICT[v].cls, text: VERDICT[v].tag }),
+      h('span', { class: 'tag ' + VERDICT[v].cls, text: userNo(l) ? 'You: not a match' : VERDICT[v].tag }),
       l.engines.map(e => h('span', { class: 'tag ' + e, text: ENGINES[e].short })),
       h('span', { class: 'act' }, h('button', { text: 'Open', onclick: () => openTab(l.url) }),
         isRejected(p, l)
           ? h('button', { text: '↩ Put back', title: 'Take this link out of rejected-links.txt', onclick: async () => { await RS_REJECT.remove(l.url, p.name); renderResults(); } })
-          : h('button', { class: 'trash', text: '🗑', title: 'Reject this link: you checked it and it is not a problem. It is saved in rejected-links.txt and never shows again for this picture.',
+          : h('button', { class: 'trash', text: '🗑', title: 'Throw this link away: you do not want it (licensed, not worth chasing...). It is saved in rejected-links.txt and never shows again for this picture.',
             onclick: async () => { R.ticked.delete(id); await RS_REJECT.add(l.url, p.name); renderResults(); } }),
+        userNo(l)
+          ? h('button', { text: '↩ It is a match', title: 'Undo "Not a match"', onclick: async () => { await RS_REJECT.remove(l.url, p.name, 'nomatch'); renderResults(); } })
+          : v !== 'no' && !isRejected(p, l) ? h('button', { class: 'nomatch', text: '✕ Not a match', title: 'It is a different photo. It moves to "Different photo", is saved in rejected-links.txt, and PageProof keeps its numbers to learn from.',
+            onclick: async () => { R.ticked.delete(id); await learnFrom(l, v); await RS_REJECT.add(l.url, p.name, 'nomatch'); renderResults(); } }) : null,
         v !== 'cant' && v !== 'pending' ? h('button', { text: '🔀 Compare', title: 'Lay the copy over your picture on the Compare page', onclick: () => compareLink(p, l) }) : null,
         h('button', { text: '📸 Capture', title: 'Save this page as an evidence pack (batch capture)', onclick: () => captureLinks([l.url]) }))));
 }

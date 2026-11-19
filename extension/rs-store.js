@@ -183,18 +183,18 @@ const RS_LISTS = {
 // Kept in rejected-links.txt next to the site lists, so it survives updates too.
 const RS_REJECT = {
   items: [], FILE: 'rejected-links.txt',
-  HEAD: '# PageProof rejected links, one per line: link | picture name\n# These links never show again for that picture (leave the picture name off to reject the link for every picture).\n# Delete a line to bring a link back. Lines starting with # are notes.\n',
+  HEAD: '# PageProof rejected links, one per line: link | picture name | reason\n# Reason "not a match" = you said it is a different photo (it moves to Different photo).\n# No reason = you do not want it (it never shows again for that picture).\n# Leave the picture name empty to apply to every picture.\n# Delete a line to bring a link back. Lines starting with # are notes.\n',
   parse(text) {
     const out = [];
     for (const line of String(text || '').split(/\r?\n/)) {
       const t = line.trim();
       if (!t || t.startsWith('#')) continue;
-      const [url, pic] = t.split(/\s+\|\s+/);
-      if (/^https?:\/\//i.test(url)) out.push({ url, pic: (pic || '').trim() });
+      const [url, pic, why] = t.split(/\s*\|\s*/);
+      if (/^https?:\/\//i.test(url)) out.push({ url, pic: (pic || '').trim(), why: /not a match/i.test(why || '') ? 'nomatch' : '' });
     }
     return out;
   },
-  text() { return RS_REJECT.HEAD + RS_REJECT.items.map(r => r.url + (r.pic ? ' | ' + r.pic : '')).join('\n') + '\n'; },
+  text() { return RS_REJECT.HEAD + RS_REJECT.items.map(r => r.url + ' | ' + (r.pic || '') + (r.why === 'nomatch' ? ' | not a match' : '')).join('\n') + '\n'; },
   async load() {
     const api = globalThis.browser || globalThis.chrome;
     RS_REJECT.items = (await api.storage.local.get('rsRejected')).rsRejected || [];
@@ -212,15 +212,18 @@ const RS_REJECT = {
     await api.storage.local.set({ rsRejected: RS_REJECT.items });
     if ((await RS_DOCS.state()) === 'granted') await RS_DOCS.writeText(RS_REJECT.FILE, RS_REJECT.text());
   },
-  is(url, pic) {
-    if (!RS_REJECT._keys) RS_REJECT._keys = RS_REJECT.items.map(r => ({ k: RS_UTIL.key(r.url), pic: r.pic }));
+  // why: '' = trash (do not want it), 'nomatch' = not the same photo.
+  find(url, pic, why) {
+    if (!RS_REJECT._keys) RS_REJECT._keys = RS_REJECT.items.map(r => ({ k: RS_UTIL.key(r.url), pic: r.pic, why: r.why || '' }));
     const k = RS_UTIL.key(url);
-    return RS_REJECT._keys.some(r => r.k === k && (!r.pic || r.pic === pic));
+    return RS_REJECT._keys.some(r => r.k === k && (!r.pic || r.pic === pic) && r.why === (why || ''));
   },
-  async add(url, pic) { if (!RS_REJECT.is(url, pic)) RS_REJECT.items.push({ url, pic: pic || '' }); await RS_REJECT.save(); },
-  async remove(url, pic) {
+  is(url, pic) { return RS_REJECT.find(url, pic, ''); },
+  notMatch(url, pic) { return RS_REJECT.find(url, pic, 'nomatch'); },
+  async add(url, pic, why) { if (!RS_REJECT.find(url, pic, why)) RS_REJECT.items.push({ url, pic: pic || '', why: why || '' }); await RS_REJECT.save(); },
+  async remove(url, pic, why) {
     const k = RS_UTIL.key(url);
-    RS_REJECT.items = RS_REJECT.items.filter(r => !(RS_UTIL.key(r.url) === k && (!r.pic || r.pic === pic)));
+    RS_REJECT.items = RS_REJECT.items.filter(r => !(RS_UTIL.key(r.url) === k && (!r.pic || r.pic === pic) && (r.why || '') === (why || '')));
     await RS_REJECT.save();
   },
 };
