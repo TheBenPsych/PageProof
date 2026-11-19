@@ -14,7 +14,12 @@ const PP_ARCHIVE = (() => {
   }
 
   return async function archive(rec, onProgress) {
-    const doc = new DOMParser().parseFromString(rec.html, 'text/html');
+    // The page's own inline code (onclick="...", onload="...") is renamed while PageProof works
+    // on the copy, so Chrome does not log "inline event handler blocked" errors, then put back
+    // exactly as it was. Nothing from the page ever runs here.
+    const MARK = { on: 'data-pp-was-on-', On: 'data-pp-was-up-on-', ON: 'data-pp-was-upup-on-', oN: 'data-pp-was-onup-' };
+    const doc = new DOMParser().parseFromString(rec.html.replace(/(\s)(on)([a-z]+\s*=)/gi, (m, sp, on, rest) => sp + MARK[on] + rest), 'text/html');
+    const putBack = html => Object.entries(MARK).reduce((t, [on, mark]) => t.split(mark).join(on), html);
     const cache = new Map();
     const images = [];       // { url, bytes, type } for the evidence folder
     const failed = new Set();
@@ -106,7 +111,7 @@ const PP_ARCHIVE = (() => {
     const header = '<!DOCTYPE html>\n<!-- Saved by PageProof ' + rec.version + ' from ' + rec.url +
       ' at ' + rec.time + ' (UTC). Pictures, styles and fonts are stored inside this file. -->\n';
     return {
-      html: header + doc.documentElement.outerHTML,
+      html: header + putBack(doc.documentElement.outerHTML),
       images,
       failed: [...failed]
     };
