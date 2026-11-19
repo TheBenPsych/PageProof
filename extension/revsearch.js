@@ -529,6 +529,7 @@ async function origBitmap(p) {
   const b = await createImageBitmap(p.blob);
   const f = Math.min(1, 640 / Math.max(b.width, b.height));
   const s = await createImageBitmap(b, { resizeWidth: Math.max(1, Math.round(b.width * f)), resizeHeight: Math.max(1, Math.round(b.height * f)), resizeQuality: 'high' });
+  b.close && b.close();
   return (R.origBmp[p.i] = s);
 }
 async function fetchPicture(url) {
@@ -539,9 +540,18 @@ async function fetchPicture(url) {
     if (!r.ok) return null;
     const b = await r.blob();
     if (b.size > 25e6) return null;
-    return await createImageBitmap(b);
+    // Shrink straight away and free the full-size copy: a big photo takes 50-100 MB of memory
+    // once opened, and the check only ever looks at it 640 pixels wide.
+    const big = await createImageBitmap(b);
+    const f = Math.min(1, 640 / Math.max(big.width, big.height));
+    if (f >= 1) return { bmp: big, w: big.width, h: big.height };
+    const bmp = await createImageBitmap(big, { resizeWidth: Math.max(1, Math.round(big.width * f)), resizeHeight: Math.max(1, Math.round(big.height * f)), resizeQuality: 'high' });
+    const out = { bmp, w: big.width, h: big.height };
+    big.close && big.close();
+    return out;
   } catch (e) { return null; } finally { clearTimeout(timer); }
 }
+const freePic = x => { try { x && x.bmp.close && x.bmp.close(); } catch (e) { /* already freed */ } };
 // Line one found picture up with yours and note how well it fits.
 async function measure(p, bmp) {
   const f = Math.min(1, 640 / Math.max(bmp.width, bmp.height));
@@ -566,20 +576,21 @@ async function scoreLink(l) {
   let quick = null;
   if (l.thumb && l.thumb !== l.img) {
     const tb = await fetchPicture(l.thumb);
-    if (tb && Math.min(tb.width, tb.height) >= 80) {
-      quick = await measure(p, tb);
-      if (verdict(quick) === 'no') { Object.assign(l, quick); return; }
-    }
+    if (tb && Math.min(tb.w, tb.h) >= 80) quick = await measure(p, tb.bmp);
+    freePic(tb);
+    if (quick && verdict(quick) === 'no') { Object.assign(l, quick); return; }
   }
   const full = l.img ? await fetchPicture(l.img) : null;
   if (full) {
-    if (!l.w) { l.w = full.width; l.h = full.height; }
-    Object.assign(l, await measure(p, full));
+    if (!l.w) { l.w = full.w; l.h = full.h; }
+    const m = await measure(p, full.bmp);
+    freePic(full);
+    Object.assign(l, m);
     return;
   }
   if (quick) { Object.assign(l, quick); return; }
   const tb = l.thumb ? await fetchPicture(l.thumb) : null;
-  if (tb) { Object.assign(l, await measure(p, tb)); return; }
+  if (tb) { const m = await measure(p, tb.bmp); freePic(tb); Object.assign(l, m); return; }
   l.pct = -1; l.sv = SCORE_VERSION;
 }
 
@@ -1022,7 +1033,8 @@ async function picsDir() {
 
 // Every picture in the folder, including folders inside it (Client > Year > Day > picture).
 // Each picture is known by its path inside the folder, like "Smith/2024/May 3/photo.jpg".
-async function folderPictures(dir) {
+const FOLDER_SCAN = { dir: null, at: 0, files: [] };
+async function folderPictures(dir, fresh) {
   const out = [], notes = new Map();
   try {
     const [keys, vals] = await Promise.all([RS_DB.keys('folder'), RS_DB.all('folder')]);
@@ -1039,10 +1051,18 @@ async function folderPictures(dir) {
     for await (const [name, handle] of d.entries()) {
       if (name.startsWith('.') || name.startsWith('$')) continue;
       if (handle.kind === 'directory') { if (depth < 8) await walk(handle, prefix + name + '/', depth + 1); }
-      else if (RS_UTIL.IMAGE_EXT.test(name)) out.push({ name: prefix + name, file: name, handle, note: notes.get(prefix + name) || {} });
+      else if (RS_UTIL.IMAGE_EXT.test(name)) files.push({ name: prefix + name, file: name, handle });
     }
   };
-  await walk(dir, '', 0);
+  // Going through thousands of files takes a while, so the list is kept for 10 minutes
+  // (changing a setting or pressing Refresh after a search does not walk the folder again).
+  // Opening the page again, or "Look for new pictures", always reads it fresh.
+  let files;
+  let same = false;
+  try { same = !fresh && FOLDER_SCAN.dir && Date.now() - FOLDER_SCAN.at < 600000 && await dir.isSameEntry(FOLDER_SCAN.dir); } catch (e) { /* re-read */ }
+  if (same) files = FOLDER_SCAN.files;
+  else { files = []; await walk(dir, '', 0); Object.assign(FOLDER_SCAN, { dir, at: Date.now(), files }); }
+  for (const f of files) out.push({ ...f, note: notes.get(f.name) || {} });
   // Due order: never checked first, then the ones checked longest ago.
   out.sort((a, b) => (a.note.lastChecked || '').localeCompare(b.note.lastChecked || '') || a.name.localeCompare(b.name));
   return out;
@@ -1054,7 +1074,7 @@ async function getDaily() {
 }
 
 let folderFilter = 'all', FOLDERQ = '';
-async function renderFolder(autoStart) {
+async function renderFolder(autoStart, fresh) {
   const F = await picsDir();
   const daily = await getDaily();
   const setDaily = async ch => { await api.storage.local.set({ rsDaily: { ...daily, ...ch } }); renderFolder(); };
@@ -1080,7 +1100,7 @@ async function renderFolder(autoStart) {
     return;
   }
   if (!(await api.storage.local.get('rsDaily')).rsDaily) await api.storage.local.set({ rsDaily: daily });   // turns the daily reminder on
-  const pics = await folderPictures(F.dir);
+  const pics = await folderPictures(F.dir, fresh);
   const checkedToday = pics.filter(x => (x.note.lastChecked || '').slice(0, 10) === today).length;
   const due = pics.filter(x => (x.note.lastChecked || '').slice(0, 10) !== today);
   const todays = due.slice(0, Math.max(0, daily.perDay - checkedToday));
@@ -1088,10 +1108,14 @@ async function renderFolder(autoStart) {
   const withNew = pics.filter(x => x.note.newLinks > 0).length;
   const last = pics.map(x => x.note.lastChecked || '').sort().pop();
   const cycle = Math.max(1, Math.ceil(pics.length / daily.perDay));
-  const start = async () => {
-    banner([h('b', { text: 'Getting ' + plural(todays.length, 'picture') + ' ready…' })], 'info');
+  // "Check more now": after today's share is done, the next batch in the same order
+  // (never checked first, then oldest), as many as the pictures-per-day setting.
+  const extra = todays.length ? [] : due.slice(0, daily.perDay);
+  const start = async list => {
+    list = Array.isArray(list) ? list : todays;
+    banner([h('b', { text: 'Getting ' + plural(list.length, 'picture') + ' ready…' })], 'info');
     const ready = [];
-    for (const x of todays) {
+    for (const x of list) {
       try { const p = await prepare(await x.handle.getFile()); if (!p.error) { p.folderKey = x.name; ready.push(p); } } catch (e) { /* unreadable */ }
     }
     if (!ready.length) { banner([h('b', { text: 'None of today\'s pictures could be opened.' })], 'bad'); return; }
@@ -1102,7 +1126,8 @@ async function renderFolder(autoStart) {
   side(h('div', {}, h('div', { id: 'domain', text: 'My pictures folder' }), h('div', { id: 'sub', class: 'path', text: '📂 ' + F.label })),
     h('div', { class: 'card' }, h('div', { style: 'font-size:14px' }, h('b', { text: plural(pics.length, 'picture') }), never ? ' · ' + never + ' never checked' : ''),
       h('div', { class: 'hint', style: 'margin-top:2px', text: last ? 'Last check: ' + new Date(last).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Not checked yet' })),
-    h('button', { class: 'big', disabled: !todays.length, text: todays.length ? '🔎 Check today\'s ' + todays.length : '✓ All done for today', onclick: start }),
+    h('button', { class: 'big', disabled: !todays.length, text: todays.length ? '🔎 Check today\'s ' + todays.length : '✓ All done for today', onclick: () => start(todays) }),
+    extra.length ? h('button', { class: 'btn', style: 'width:100%;margin-top:6px', text: '＋ Check ' + extra.length + ' more now', title: 'Searches the next ' + extra.length + ' pictures in line, even though today\'s are done', onclick: () => start(extra) }) : null,
     h('p', { class: 'hint', style: 'margin:-4px 0 0;text-align:center', text: 'New pictures first, then the ones checked longest ago.' + (pics.length ? ' All ' + pics.length + ' get checked ' + (cycle === 1 ? 'every day' : 'every ' + cycle + ' days') + '.' : '') }),
     h('div', { class: 'card' }, h('h3', { text: 'Every day' }), h('div', { class: 'radio' },
       h('label', {}, h('input', { type: 'radio', name: 'dm', checked: daily.mode === 'remind', onchange: () => setDaily({ mode: 'remind' }) }), 'Remind me at'),
@@ -1112,7 +1137,7 @@ async function renderFolder(autoStart) {
       h('p', { class: 'hint', text: 'Chrome has to be open. A reminder is safest: you are there if Google asks for a robot check.' })),
     h('div', { class: 'card' }, h('h3', { text: 'Pictures per day' }), h('div', { class: 'seg' }, [15, 30, 50].map(n => h('button', { class: daily.perDay === n ? 'on' : '', text: n, onclick: () => setDaily({ perDay: n }) })))),
     h('div', { class: 'links' },
-      h('button', { text: '📂 Use a different folder', onclick: chooseOtherFolder }),
+      h('button', { text: '🔄 Look for new pictures', title: 'Reads the folder again, for pictures you added in Windows', onclick: () => { banner(null); renderFolder(false, true); } }),
       h('button', { text: '📂 Use a different folder…', title: 'Point PageProof at any folder, for example your client folders. Folders inside it (client > year > day) are included. Nothing is copied.', onclick: chooseOtherFolder }),
       F.custom ? h('button', { text: '📂 Go back to Documents\\PageProof\\My pictures', onclick: async () => { await RS_DB.del('handles', 'pics'); renderFolder(); } }) : null,
       h('a', { href: page(), text: '🔎 Reverse image search' }),
@@ -1136,7 +1161,7 @@ async function renderFolder(autoStart) {
     }
     banner(added ? [h('b', { text: plural(added, 'picture') + ' added to ' + F.label + '.' }), same ? ' ' + plural(same, 'picture was', 'pictures were') + ' already there.' : '', ' New pictures are checked first.']
       : [h('b', { text: same === 1 ? 'That picture is already in your folder.' : 'Those pictures are already in your folder.' })], 'info');
-    renderFolder();
+    renderFolder(false, true);
   };
   folderAddFiles = addFiles;
   const nextCheck = idx => {
@@ -1178,7 +1203,7 @@ async function chooseOtherFolder() {
   try {
     const d = await window.showDirectoryPicker({ id: 'pageproof-pics', mode: 'readwrite' });
     await RS_DB.put('handles', 'pics', d);
-    renderFolder();
+    renderFolder(false, true);
   } catch (e) { /* closed the picker */ }
 }
 
