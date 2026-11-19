@@ -579,7 +579,6 @@ async function scoreWorker() {
       const l = R.scoreQ.shift();
       if (l.sv === SCORE_VERSION) continue;
       const p = job.pics[l.pic];
-      if (p.links.filter(x => x.sv === SCORE_VERSION).length >= 150) { l.pct = null; l.sv = SCORE_VERSION; continue; }   // enough for one picture
       await scoreLink(l);
       saveJob(); renderSoon();
       await sleep(30);
@@ -944,7 +943,7 @@ async function initResults() {
       else if (rec && p.prevSnapshot) R.prev[p.i] = p.prevSnapshot;
     } catch (e) { /* ignore */ }
     if (!p.prevSnapshot && R.prev[p.i]) p.prevSnapshot = { lastSearched: R.prev[p.i].lastSearched, urls: R.prev[p.i].urls };
-    for (const l of p.links) { l.pic = p.i; if (l.sv !== SCORE_VERSION) R.scoreQ.push(l); }   // older searches get re-checked
+    for (const l of p.links) { l.pic = p.i; if (l.sv !== SCORE_VERSION || l.pct === null) R.scoreQ.push(l); }   // older searches (and links an old version skipped) get checked
   }
   // Pages reopened later: anything that was mid-search is marked as not finished.
   for (const p of job.pics) for (const e of job.engines) if (['go', 'captcha'].includes(p.runs[e].state)) { p.runs[e].state = 'fail'; p.runs[e].why = 'The results window was closed or reloaded during this search.'; }
