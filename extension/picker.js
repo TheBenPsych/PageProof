@@ -178,5 +178,22 @@
     return p ? clean(p) : null;
   }
 
-  window.__ppPick = { start, all, bestFor, stop: () => active && active.stop() };
+  // For the right-click menu on sites that hide pictures under a see-through cover (Instagram):
+  // look through everything stacked under the spot that was right-clicked and take the first picture.
+  async function under(x, y) {
+    for (const el of document.elementsFromPoint(x, y)) {
+      if (/^PAGEPROOF-/.test(el.tagName) || el === document.documentElement || el === document.body) continue;
+      const p = pictureOf(el);
+      if (p) { const c = clean(p); c.src = await portable(c.src); return c; }
+    }
+    // Some covers switch off "pointer" hits for the picture itself; check every picture on screen too.
+    const hits = [...document.querySelectorAll('img, video[poster]')].filter(el => {
+      const r = el.getBoundingClientRect();
+      return r.width > 30 && r.height > 30 && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    }).map(pictureOf).filter(Boolean).sort((a, b) => a.rect.width * a.rect.height - b.rect.width * b.rect.height);
+    if (hits[0]) { const c = clean(hits[0]); c.src = await portable(c.src); return c; }
+    return null;
+  }
+
+  window.__ppPick = { start, all, bestFor, under, stop: () => active && active.stop() };
 })();
