@@ -68,5 +68,6 @@
     timer = setTimeout(() => host && host.remove(), kind === 'ok' ? 6000 : 9000);
   }
 
-  window.__ppRC = { point, toast };
+  const hide = () => { clearTimeout(timer); if (host) host.remove(); host = null; };
+  window.__ppRC = { point, toast, hide };
 })();
