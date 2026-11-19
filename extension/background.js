@@ -375,32 +375,40 @@ async function pictureFile(url, tab, frameId) {
 }
 
 // The same picture is often on the page in several sizes. Download each one and keep the biggest.
+// Download with a time limit, so one slow copy can't hold everything up.
+async function quickFetch(url, ms) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  try {
+    const r = await fetch(url, { credentials: 'include', signal: ctl.signal });
+    if (!r.ok) throw new Error('no');
+    return await r.blob();
+  } finally { clearTimeout(t); }
+}
+
 async function largest(item, tab, frameId) {
   const first = [item.best, item.src].filter(Boolean);
   const urls = [...new Set([...first, ...(item.others || [])])].slice(0, 12);
-  let win = null, shape = 0, tried = 0;
-  for (const url of urls) {
+  // Fetch all the copies at the same time.
+  const got = await Promise.all(urls.map(async url => {
+    const mine = first.includes(url);
     try {
-      const mine = first.includes(url);
-      const blob = mine ? await pictureFile(url, tab, frameId) : await (async () => {
-        const r = await fetch(url, { credentials: 'include' });
-        if (!r.ok) throw new Error('no');
-        return r.blob();
-      })();
+      let blob;
+      if (mine) {
+        try { blob = await quickFetch(url, 8000); } catch (e) { blob = await pictureFile(url, tab, frameId); }
+      } else blob = await quickFetch(url, 5000);
       const bmp = await createImageBitmap(blob);
-      const ratio = bmp.width / bmp.height;
-      // Only count other copies with the same shape, so a different picture with a similar name is never picked.
-      if (mine && !shape) shape = ratio;
-      if (!mine && shape && Math.abs(ratio - shape) / shape > 0.03) { bmp.close && bmp.close(); continue; }
-      tried++;
-      const area = bmp.width * bmp.height;
-      if (!win || area > win.area || (area === win.area && blob.size > win.blob.size)) {
-        if (win && win.bmp.close) win.bmp.close();
-        win = { url, blob, bmp, area };
-      } else if (bmp.close) bmp.close();
-    } catch (e) { /* not a picture, or blocked: skip it */ }
-  }
-  if (win) win.tried = tried;
+      return { url, blob, bmp, mine, area: bmp.width * bmp.height, ratio: bmp.width / bmp.height };
+    } catch (e) { return null; } // not a picture, too slow, or blocked: skip it
+  }));
+  const ok = got.filter(Boolean);
+  const ref = ok.find(g => g.mine);
+  // Only count other copies with the same shape, so a different picture with a similar name is never picked.
+  const fits = ok.filter(g => g.mine || (ref && Math.abs(g.ratio - ref.ratio) / ref.ratio <= 0.03));
+  let win = null;
+  for (const g of fits) if (!win || g.area > win.area || (g.area === win.area && g.blob.size > win.blob.size)) win = g;
+  for (const g of ok) if (g !== win && g.bmp.close) g.bmp.close();
+  if (win) win.tried = fits.length;
   return win;
 }
 
@@ -489,7 +497,11 @@ try {
         return note(tab, info.frameId, { kind: 'bad', title: t, lines: [l] });
       }
       const item = found.item;
+      // Show a note if finding the biggest copy takes more than a moment.
+      const wait = setTimeout(() => note(tab, 0, { kind: 'ok', title: '⏳ Finding the biggest copy of this picture...', lines: ['This takes a few seconds on busy pages.'] }), 500);
       const big = await largest(item, tab, info.frameId || 0);
+      clearTimeout(wait);
+      if (id !== 'jpgImage') inFrame(tab, 0, null, () => window.__ppRC && window.__ppRC.hide()).catch(() => {});
       if (big && !big.url.startsWith('data:') && big.url !== item.src) item.best = big.url;
       delete item.others;
       if (big && id !== 'jpgImage' && big.bmp.close) big.bmp.close();
