@@ -483,19 +483,27 @@ async function scoreLink(l) {
     l.inl = best && best.inliers || 0;                      // matching details found in both pictures
     l.tiles = best ? best.sc.matched : 0;                   // small squares that line up
     l.str = best ? +best.sc.strength.toFixed(2) : 0;        // how closely they line up
-  } catch (e) { l.pct = 0; l.inl = 0; l.tiles = 0; l.str = 0; }
+    // Share of the middle of your picture (where the subject usually is) that lines up.
+    l.mid = best && best.sc.midTex >= 8 ? +(best.sc.midMatched / best.sc.midTex).toFixed(2) : null;
+  } catch (e) { l.pct = 0; l.inl = 0; l.tiles = 0; l.str = 0; l.mid = null; }
   l.sv = SCORE_VERSION;
 }
 
 // Is it the same photo? Tested on real copies (cropped, resized, colour-graded, mirrored, tiny
 // thumbnails, a headline printed over 40% of it) against different photos of the same kind:
 // real copies share dozens of matching details (31 to 400+), different photos share under 10.
-const SCORE_VERSION = 2;
+// Two different photos in front of the same backdrop (sponsor wall, logo pattern) line up
+// around the edges but not in the middle: real copies 0.49 to 1.0 there (0.49 = headline over
+// the middle), same-backdrop different photos about 0.3.
+const SCORE_VERSION = 3;
 function verdict(l) {
   if (l.sv !== SCORE_VERSION) return l.pct === null ? 'cant' : 'pending';
   if (l.pct === null || l.pct < 0) return 'cant';
-  if ((l.inl >= 15 && l.tiles >= 20 && l.str >= 0.8) || (l.pct >= 85 && l.str >= 0.8)) return 'same';
-  if (l.inl >= 8 || l.pct >= 60) return 'maybe';
+  if (l.mid !== null && l.mid !== undefined && l.mid < 0.35) return 'no';
+  const midOk = l.mid === null || l.mid === undefined || l.mid >= 0.42;
+  if (midOk && ((l.inl >= 15 && l.tiles >= 20 && l.str >= 0.8) || (l.pct >= 85 && l.str >= 0.8 && l.inl >= 10))) return 'same';
+  // A high % on its own means nothing: two different photos can "line up" over a tiny shared patch.
+  if (l.inl >= 11 && l.tiles >= 12) return 'maybe';
   return 'no';
 }
 const VERDICT = {
@@ -505,10 +513,14 @@ const VERDICT = {
   cant: { tag: "Can't check", cls: 'sim', rank: 1 },
   no: { tag: 'Different photo', cls: 'sim', rank: 0 },
 };
+// Checks every picture's links in the background, three at a time, the picture on screen first.
 async function scoreAll() {
   if (R.scoring) return;
   R.scoring = true;
-  try {
+  try { await Promise.all([scoreWorker(), scoreWorker(), scoreWorker()]); } finally { R.scoring = false; }
+}
+async function scoreWorker() {
+  {
     while (R.scoreQ.length) {
       // Exact matches and the picture on screen go first.
       R.scoreQ.sort((a, b) => (b.pic === R.sel) - (a.pic === R.sel) || b.exact - a.exact);
@@ -520,7 +532,7 @@ async function scoreAll() {
       saveJob(); renderSoon();
       await sleep(30);
     }
-  } finally { R.scoring = false; }
+  }
 }
 
 // ---------- running the whole search ----------
@@ -570,8 +582,10 @@ function sizeNote(p, l) {
 const isSame = l => verdict(l) === 'same';
 function linkScore(l) { return VERDICT[verdict(l)].rank * 1000 + (l.isNew ? 500 : 0) + (l.pct > 0 ? l.pct : 0); }
 
+const isRejected = (p, l) => RS_REJECT.is(l.url, p.name);
 function visibleLinks(p, opts = {}) {
   return p.links.filter(l => {
+    if (isRejected(p, l) !== (R.filter === 'rejected' && !opts.raw)) return false;
     const hidden = RS_LISTS.isHidden(l.site);
     if (hidden && !(opts.withHidden ?? R.showHidden)) return false;
     if (opts.raw) return true;
@@ -646,7 +660,7 @@ function rowFor(p, l) {
     : v === 'cant' ? h('span', { class: 'pct no', title: 'The site would not let PageProof download its picture, so it could not be compared. Open it to look yourself.', text: l.pct === null ? 'Not checked' : 'Picture blocked' })
     : h('span', { class: 'pct ' + (v === 'same' ? 'hi' : v === 'maybe' ? 'mid' : 'lo'),
       title: l.pct + '% of the area the two pictures share lines up detail for detail, with ' + l.inl + ' matching details found in both. A lower % on a "Same photo" means things were added on top (a headline, logo or border) or it was cropped.',
-      text: v === 'same' ? (l.pct >= 85 ? l.pct + '% match' : 'Same photo · ' + l.pct + '% lines up') : l.pct + '% match' });
+      text: v === 'same' ? (l.pct >= 85 ? l.pct + '% match' : 'Same photo · ' + l.pct + '% lines up') : v === 'maybe' ? 'A few details match' : 'No match' });
   const sz = v === 'same' || v === 'maybe' ? sizeNote(p, l) : { text: '' };
   return h('div', { class: 'row' + (v === 'no' ? ' seen' : '') + (allowed ? ' allowed' : '') },
     h('input', { type: 'checkbox', checked: R.ticked.has(id), onchange: e => { if (e.target.checked) R.ticked.add(id); else R.ticked.delete(id); renderSelbar(); } }),
@@ -660,6 +674,10 @@ function rowFor(p, l) {
       h('span', { class: 'tag ' + VERDICT[v].cls, text: VERDICT[v].tag }),
       l.engines.map(e => h('span', { class: 'tag ' + e, text: ENGINES[e].short })),
       h('span', { class: 'act' }, h('button', { text: 'Open', onclick: () => openTab(l.url) }),
+        isRejected(p, l)
+          ? h('button', { text: '↩ Put back', title: 'Take this link out of rejected-links.txt', onclick: async () => { await RS_REJECT.remove(l.url, p.name); renderResults(); } })
+          : h('button', { class: 'trash', text: '🗑', title: 'Reject this link: you checked it and it is not a problem. It is saved in rejected-links.txt and never shows again for this picture.',
+            onclick: async () => { R.ticked.delete(id); await RS_REJECT.add(l.url, p.name); renderResults(); } }),
         v !== 'cant' && v !== 'pending' ? h('button', { text: '🔀 Compare', title: 'Lay the copy over your picture on the Compare page', onclick: () => compareLink(p, l) }) : null,
         h('button', { text: '📸 Capture', title: 'Save this page as an evidence pack (batch capture)', onclick: () => captureLinks([l.url]) }))));
 }
@@ -711,6 +729,7 @@ function renderResults() {
   if (document.activeElement && document.activeElement.id === 'rtext' && $('rlist')) { renderList(); renderSelbar(); return; }
   const all = visibleLinks(p, { raw: true, withHidden: false });
   const cnt = k => all.filter(l => verdict(l) === k).length;
+  const nRej = p.links.filter(l => isRejected(p, l)).length;
   const nNew = all.filter(l => l.isNew && verdict(l) !== 'no').length, nSame = cnt('same'), nPend = cnt('pending');
   const prev = R.prev[p.i] && R.prev[p.i].lastSearched;
   const hiddenHere = [...new Set(p.links.filter(l => RS_LISTS.isHidden(l.site)).map(l => RS_LISTS.hidden.find(d => RS_SITE.inList(l.site, [d]))))];
@@ -735,6 +754,7 @@ function renderResults() {
       problems.length ? h('p', { class: 'note', text: [...new Set(problems)].join(' ') }) : null)),
     h('div', { class: 'ftabs' }, fbtn('same', '✅ Same photo ' + nSame + (nPend ? ' (checking…)' : '')), fbtn('maybe', 'Maybe ' + cnt('maybe')), fbtn('cant', "Can't check " + cnt('cant')),
       fbtn('no', 'Different photo ' + cnt('no')), fbtn('new', '⭐ New ' + nNew, 'newf'), fbtn('all', 'All ' + all.length),
+      nRej || R.filter === 'rejected' ? fbtn('rejected', '🗑 Rejected ' + nRej) : null,
       h('span', { class: 'sp' }),
       job.engines.map(e => h('button', { class: R.engineFilter.has(e) ? 'on' : '', text: ENGINES[e].short, title: 'Only links found by ' + ENGINES[e].short + ' (click again to undo)',
         onclick: () => { if (R.engineFilter.has(e)) R.engineFilter.delete(e); else R.engineFilter.add(e); renderResults(); } })),
@@ -1014,7 +1034,7 @@ async function renderLists() {
   await RS_LISTS.load();
   const st = RS_LISTS.fileState;
   const fileCard = h('div', { class: 'card' }, h('h3', { text: 'Saved files' }),
-    h('div', { class: 'path' }, '📄 Documents\\PageProof\\hidden-sites.txt', h('br'), '📄 Documents\\PageProof\\allowed-sites.txt'),
+    h('div', { class: 'path' }, '📄 Documents\\PageProof\\hidden-sites.txt', h('br'), '📄 Documents\\PageProof\\allowed-sites.txt', h('br'), '📄 Documents\\PageProof\\rejected-links.txt (' + plural(RS_REJECT.items.length, 'link') + ' rejected with 🗑)'),
     h('div', { class: st === 'granted' ? 'ok' : 'warn', style: 'margin-top:4px;font-size:13px', text: st === 'granted' ? '✓ Found and in use' : st === 'prompt' ? 'Needs one click on Allow' : RS_DOCS.supported ? 'Not set up yet' : 'Not available in this browser' }),
     h('p', { class: 'hint', text: st === 'granted' ? 'PageProof reads both files every time it searches, so changes you make in Notepad count straight away.' : 'Until then the lists are kept inside the browser only.' }));
   const firstBtn = !RS_DOCS.supported ? null : st === 'granted'
@@ -1028,7 +1048,7 @@ async function renderLists() {
       h('button', { class: 'ghost', text: '📂 Load a file', title: 'Adds the sites in a hidden-sites.txt or allowed-sites.txt file', onclick: () => $('listLoad').click() })),
     h('p', { class: 'hint', text: 'Load a file adds its sites (a file called allowed-sites.txt goes to Allowed, anything else to Hidden). Nothing is removed unless you press ✕.' }),
     h('div', { class: 'links' }, h('a', { href: page(), text: '🔎 Reverse image search' }), h('a', { href: page('view=folder'), text: '📂 My pictures folder' })));
-  const input = h('input', { type: 'text', placeholder: 'Type a site, like pinterest.com' });
+  const input = h('input', { type: 'text', placeholder: 'Type a site (pinterest.com) or an ending (.gov)' });
   const add = async kind => { if (await RS_LISTS.add(kind, input.value)) { input.value = ''; renderLists(); } else input.focus(); };
   input.addEventListener('keydown', e => { if (e.key === 'Enter') add('hidden'); });
   const rows = (kind, empty) => RS_LISTS[kind].length ? h('div', { class: 'site' + (kind === 'allowed' ? ' allowed' : '') },
