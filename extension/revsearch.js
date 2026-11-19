@@ -956,6 +956,7 @@ const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, 
 const sha256 = async bytes => hex(await crypto.subtle.digest('SHA-256', bytes));
 const matchId = async (p, l) => 'PP-S-' + (await sha256(new TextEncoder().encode(p.hash + '|' + l.url))).slice(0, 8).toUpperCase();
 const niceBytes = n => n >= 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1e3)) + ' kB';
+const dayText = d => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
 const nowText = d => d.toLocaleString(undefined, { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
 
 async function grabCopy(l) {
@@ -1023,8 +1024,12 @@ async function sightingPage(p, l, ours) {
   let y = 140;
   font(34, true); x.fillStyle = v === 'same' ? '#15803d' : v === 'maybe' ? '#b45309' : '#0f172a';
   x.fillText(wrap((v === 'same' ? 'Same photo found on ' : v === 'maybe' ? 'Possible copy found on ' : 'Found on ') + l.site, W - 2 * M, 1)[0], M, y);
-  y += 38; font(19); x.fillStyle = '#475569';
-  x.fillText('Report made ' + nowText(made), M, y); y += 40;
+  y += 40; font(20); x.fillStyle = '#334155';
+  // One plain sentence on top, as in PixelProof's Proof of Discovery.
+  const owner = (ours.meta && ours.meta.summary && (ours.meta.summary.creator || ours.meta.summary.copyright)) || '';
+  const lead = 'On ' + dayText(l.firstSeen || job.created) + ', PageProof found a copy of ' + (owner ? owner + '\'s photo ' : 'your photo ') + p.name + ' on ' + l.site + '. Report made ' + nowText(made) + '.';
+  for (const t of wrap(lead, W - 2 * M, 2)) { x.fillText(t, M, y); y += 27; }
+  y += 14;
 
   // Pictures side by side: yours (solid blue edge) and the copy (dashed orange), as on the Compare page.
   const ourImg = await createImageBitmap(p.blob);
@@ -1048,7 +1053,7 @@ async function sightingPage(p, l, ours) {
     ['Title', l.title],
     ['Size', copy ? copy.bmp.width + ' × ' + copy.bmp.height + ' pixels · ' + niceBytes(copy.bytes.length) + (sz.text ? ' · ' + sz.text : '') : (l.w ? l.w + ' × ' + l.h : '')],
     ['Hidden data', cm ? (cm.level === 'none' ? 'None (camera, author and copyright data are not in this copy)' : [cm.creator && 'author ' + cm.creator, cm.copyright && '© ' + cm.copyright, cm.taken && 'taken ' + cm.taken].filter(Boolean).join(' · ') || 'Some, but no author, date or copyright') : ''],
-    ['First found', l.firstSeen ? RS_UTIL.niceDate(l.firstSeen) : ''],
+    ['First found', l.firstSeen ? dayText(l.firstSeen) : ''],
     ['Downloaded', copy ? nowText(copy.at) + (copy.which === 'preview' ? ' (the search site\'s preview; the full picture would not download)' : '') : 'Could not be downloaded when this report was made'],
     ['SHA-256', copy ? copy.sha : '', '#334155'],
   ];
@@ -1077,6 +1082,17 @@ async function sightingPage(p, l, ours) {
     '. Each result was downloaded and lined up with your picture by PageProof on this computer (the same check as its Compare page), and kept only if it is the same photo. ' +
     'SHA-256 fingerprints identify the exact files: if even one pixel changes, the fingerprint changes.';
   for (const t of wrap(how, W - 2 * M, 6)) { x.fillText(t, M, y); y += 26; }
+  x.fillText('To keep a full record of the page itself, capture it with PageProof using ' + id + ' as the case number.', M, y + 4); y += 30;
+
+  // Other places the same photo was found in this search.
+  const others = job.pics[l.pic].links.filter(o => o !== l && isSame(o) && !isRejected(p, o) && !RS_LISTS.isHidden(o.site, o.url));
+  if (others.length && y < H - 140) {
+    y += 24; font(22, true); x.fillStyle = '#0f172a';
+    x.fillText('Same photo also found on ' + plural(others.length, 'other page'), M, y); y += 30; font(16);
+    const room = Math.floor((H - 90 - y) / 22), show = others.slice(0, Math.max(0, others.length > room ? room - 1 : room));
+    for (const o of show) { x.fillStyle = '#1d4ed8'; x.fillText(wrap(o.url, W - 2 * M, 1)[0], M, y); y += 22; }
+    if (show.length < others.length) { x.fillStyle = '#64748b'; x.fillText('and ' + (others.length - show.length) + ' more (see the search results PDF)', M, y); }
+  }
 
   font(15); x.fillStyle = '#94a3b8';
   x.fillText('PageProof ' + api.runtime.getManifest().version + '  ·  Match ID ' + id + '  ·  search ' + job.id, M, H - 40);
