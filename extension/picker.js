@@ -195,5 +195,33 @@
     return null;
   }
 
-  window.__ppPick = { start, all, bestFor, under, stop: () => active && active.stop() };
+  // Every address on this page that looks like another size of the same picture
+  // (same file name, maybe with a size tag like -300x200 or @2x, or different size settings after the "?").
+  function variants(urls) {
+    const key = u => {
+      try {
+        const x = new URL(u, location.href);
+        if (!/^https?:$/.test(x.protocol)) return '';
+        let f = decodeURIComponent(x.pathname.split('/').pop() || '').toLowerCase();
+        f = f.replace(/\.[a-z0-9]{2,5}$/, '').replace(/([-_@](\d{2,5}x\d{0,5}|\d{2,5}w|\dx|scaled|thumb|small|medium|large))+$/, '');
+        return f.length >= 4 ? f : '';
+      } catch (e) { return ''; }
+    };
+    const want = new Set(urls.map(key).filter(Boolean));
+    if (!want.size) return [];
+    const found = new Set();
+    const add = u => { if (!u) return; try { const a = new URL(u, location.href).href; if (want.has(key(a))) found.add(a); } catch (e) { /* skip */ } };
+    const addSet = set => { if (set) for (const part of set.split(/,\s+(?=\S)/)) add(part.trim().split(/\s+/)[0]); };
+    for (const img of document.images) {
+      add(img.currentSrc); add(img.src); addSet(img.getAttribute('srcset')); addSet(img.getAttribute('data-srcset'));
+      for (const a of ['data-src', 'data-orig-file', 'data-large-file', 'data-zoom-image', 'data-full-url', 'data-original']) add(img.getAttribute(a));
+    }
+    document.querySelectorAll('source[srcset], source[data-srcset]').forEach(s => { addSet(s.getAttribute('srcset')); addSet(s.getAttribute('data-srcset')); });
+    document.querySelectorAll('a[href]').forEach(a => { if (IMG_EXT.test(a.getAttribute('href'))) add(a.href); });
+    document.querySelectorAll('meta[property="og:image"], meta[name="twitter:image"], link[rel="image_src"]').forEach(m => add(m.content || m.href));
+    try { for (const e of performance.getEntriesByType('resource')) if (e.initiatorType === 'img' || IMG_EXT.test(e.name)) add(e.name); } catch (e) { /* none */ }
+    return [...found].slice(0, 12);
+  }
+
+  window.__ppPick = { start, all, bestFor, under, variants, stop: () => active && active.stop() };
 })();

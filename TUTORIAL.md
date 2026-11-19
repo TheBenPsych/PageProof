@@ -250,7 +250,7 @@ Click the PageProof icon, then **🗂️ Open odd files**, and add the file. Cli
 Right-click anywhere on a website and point at **PageProof**. You get the same four choices everywhere:
 
 - **Inspect picture:** opens the Image Inspector (section 11) for the picture you right-clicked.
-- **Save picture as JPG:** saves the biggest version of the picture straight into your **Downloads** folder as a normal .jpg, named after the website and the picture. WebP, PNG, AVIF and GIF pictures are turned into JPG (see-through parts become white). A picture that is already a JPG is saved untouched. A small note in the bottom-right corner confirms it, with **Show in folder** and **Inspect it**.
+- **Save picture as JPG:** PageProof looks for every size of the same picture on the page, keeps the biggest, and opens the **Save As** window so you can pick the folder and type your own file name (it suggests one made from the website and picture name). WebP, PNG, AVIF and GIF pictures are turned into JPG (see-through parts become white). A picture that is already a JPG is saved untouched. A small note in the bottom-right corner confirms it, with **Show in folder** and **Inspect it**.
 - **Open picture in new tab:** opens just the picture, at the biggest size, in a tab next to the page. The address bar shows the picture's own web address, ready to copy.
 - **Save page as evidence:** does exactly what the green **Capture** button does.
 
