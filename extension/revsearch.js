@@ -47,6 +47,7 @@ const fav = e => h('span', { class: 'fav ' + e, text: ENGINES[e].letter });
 const plural = (n, word, many) => n + ' ' + (n === 1 ? word : (many || word + 's'));
 function side(...kids) {
   $('side').replaceChildren(h('div', { class: 'brand' }, h('img', { src: 'icons/icon48.png', alt: '', width: 22, height: 22 }), ' PageProof'), ...kids.flat().filter(Boolean));
+  backLink();
 }
 function banner(kids, cls) {
   const b = $('banner');
@@ -61,6 +62,31 @@ function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 60000);
 }
 const openTab = url => api.tabs.create({ url });
+// Go to a search's results: switch to its tab if it is already open (a search keeps running
+// in that tab, so we never open a second copy of it), otherwise open it.
+async function goResults(id) {
+  try {
+    const o = (await api.storage.local.get('rsOpenJob')).rsOpenJob;
+    if (o && o.id === id) {
+      const t = await api.tabs.get(o.tab);                 // fails if that tab was closed
+      await api.tabs.update(t.id, { active: true }); await api.windows.update(t.windowId, { focused: true });
+      return;
+    }
+  } catch (e) { /* not open any more */ }
+  openTab(page('job=' + id));
+}
+// On the other PageProof pages, offer a way back to the search that is open.
+async function backLink() {
+  if (VIEW === 'results') return;
+  try {
+    const o = (await api.storage.local.get('rsOpenJob')).rsOpenJob;
+    if (!o || !o.tab) return;
+    await api.tabs.get(o.tab);                             // still open?
+    const links = document.querySelector('#side .links');
+    if (!links || links.querySelector('.back')) return;
+    links.prepend(h('a', { class: 'back', href: '#', text: '↩ Back to search results', onclick: e => { e.preventDefault(); goResults(o.id); } }));
+  } catch (e) { /* ignore */ }
+}
 const page = q => api.runtime.getURL('revsearch.html' + (q ? '?' + q : ''));
 
 async function getSettings() {
@@ -459,7 +485,7 @@ async function origBitmap(p) {
 }
 async function fetchPicture(url) {
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 9000);
+  const timer = setTimeout(() => ctl.abort(), 7000);
   try {
     const r = await fetch(url, { signal: ctl.signal, credentials: 'omit' });
     if (!r.ok) return null;
@@ -468,25 +494,45 @@ async function fetchPicture(url) {
     return await createImageBitmap(b);
   } catch (e) { return null; } finally { clearTimeout(timer); }
 }
-async function scoreLink(l) {
-  const p = job.pics[l.pic];
-  let bmp = null, fromFull = false;
-  if (l.img) { bmp = await fetchPicture(l.img); fromFull = !!bmp; }
-  if (!bmp && l.thumb) bmp = await fetchPicture(l.thumb);
-  if (!bmp) { l.pct = -1; l.sv = SCORE_VERSION; return; }
-  if (fromFull && !l.w) { l.w = bmp.width; l.h = bmp.height; }
+// Line one found picture up with yours and note how well it fits.
+async function measure(p, bmp) {
   const f = Math.min(1, 640 / Math.max(bmp.width, bmp.height));
   const small = f < 1 ? await createImageBitmap(bmp, { resizeWidth: Math.round(bmp.width * f), resizeHeight: Math.round(bmp.height * f), resizeQuality: 'high' }) : bmp;
   try {
-    const best = await PP_ALIGN.align(await origBitmap(p), small);
-    l.pct = best ? Math.max(0, Math.min(100, Math.round(best.sc.lines * 100))) : 0;
-    l.inl = best && best.inliers || 0;                      // matching details found in both pictures
-    l.tiles = best ? best.sc.matched : 0;                   // small squares that line up
-    l.str = best ? +best.sc.strength.toFixed(2) : 0;        // how closely they line up
-    // Share of the middle of your picture (where the subject usually is) that lines up.
-    l.mid = best && best.sc.midTex >= 8 ? +(best.sc.midMatched / best.sc.midTex).toFixed(2) : null;
-  } catch (e) { l.pct = 0; l.inl = 0; l.tiles = 0; l.str = 0; l.mid = null; }
-  l.sv = SCORE_VERSION;
+    const best = await PP_ALIGN.align(await origBitmap(p), small, undefined, { fast: true });
+    return {
+      pct: best ? Math.max(0, Math.min(100, Math.round(best.sc.lines * 100))) : 0,
+      inl: best && best.inliers || 0,                       // matching details found in both pictures
+      tiles: best ? best.sc.matched : 0,                    // small squares that line up
+      str: best ? +best.sc.strength.toFixed(2) : 0,         // how closely they line up
+      // Share of the middle of your picture (where the subject usually is) that lines up.
+      mid: best && best.sc.midTex >= 8 ? +(best.sc.midMatched / best.sc.midTex).toFixed(2) : null,
+      sv: SCORE_VERSION,
+    };
+  } catch (e) { return { pct: 0, inl: 0, tiles: 0, str: 0, mid: null, sv: SCORE_VERSION }; }
+}
+// Quick first look with the search site's small preview (fast to download). A clear
+// "different photo" stops there; anything else is checked again with the full picture.
+async function scoreLink(l) {
+  const p = job.pics[l.pic];
+  let quick = null;
+  if (l.thumb && l.thumb !== l.img) {
+    const tb = await fetchPicture(l.thumb);
+    if (tb && Math.min(tb.width, tb.height) >= 80) {
+      quick = await measure(p, tb);
+      if (verdict(quick) === 'no') { Object.assign(l, quick); return; }
+    }
+  }
+  const full = l.img ? await fetchPicture(l.img) : null;
+  if (full) {
+    if (!l.w) { l.w = full.width; l.h = full.height; }
+    Object.assign(l, await measure(p, full));
+    return;
+  }
+  if (quick) { Object.assign(l, quick); return; }
+  const tb = l.thumb ? await fetchPicture(l.thumb) : null;
+  if (tb) { Object.assign(l, await measure(p, tb)); return; }
+  l.pct = -1; l.sv = SCORE_VERSION;
 }
 
 // Is it the same photo? Tested on real copies (cropped, resized, colour-graded, mirrored, tiny
@@ -496,14 +542,18 @@ async function scoreLink(l) {
 // around the edges but not in the middle: real copies 0.49 to 1.0 there (0.49 = headline over
 // the middle), same-backdrop different photos about 0.3.
 const SCORE_VERSION = 3;
+const userNo = l => !!(l.url && job && job.pics[l.pic] && RS_REJECT.notMatch(l.url, job.pics[l.pic].name));
 function verdict(l) {
+  if (userNo(l)) return 'no';
   if (l.sv !== SCORE_VERSION) return l.pct === null ? 'cant' : 'pending';
   if (l.pct === null || l.pct < 0) return 'cant';
   if (l.mid !== null && l.mid !== undefined && l.mid < 0.35) return 'no';
   const midOk = l.mid === null || l.mid === undefined || l.mid >= 0.42;
-  if (midOk && ((l.inl >= 15 && l.tiles >= 20 && l.str >= 0.8) || (l.pct >= 85 && l.str >= 0.8 && l.inl >= 10))) return 'same';
+  // Most of the shared area must line up. Copies with a big headline over them (about 55%)
+  // land in Maybe, as do different shots in front of the same logo wall (about 50%).
+  if (midOk && l.str >= 0.8 && ((l.pct >= 75 && l.inl >= 15 && l.tiles >= 20) || (l.pct >= 85 && l.inl >= 10))) return 'same';
   // A high % on its own means nothing: two different photos can "line up" over a tiny shared patch.
-  if (l.inl >= 11 && l.tiles >= 12) return 'maybe';
+  if (l.inl >= 11 && l.tiles >= 12 && l.pct >= 40) return 'maybe';
   return 'no';
 }
 const VERDICT = {
@@ -517,7 +567,7 @@ const VERDICT = {
 async function scoreAll() {
   if (R.scoring) return;
   R.scoring = true;
-  try { await Promise.all([scoreWorker(), scoreWorker(), scoreWorker()]); } finally { R.scoring = false; }
+  try { await Promise.all([scoreWorker(), scoreWorker(), scoreWorker(), scoreWorker()]); } finally { R.scoring = false; }
 }
 async function scoreWorker() {
   {
@@ -583,10 +633,18 @@ const isSame = l => verdict(l) === 'same';
 function linkScore(l) { return VERDICT[verdict(l)].rank * 1000 + (l.isNew ? 500 : 0) + (l.pct > 0 ? l.pct : 0); }
 
 const isRejected = (p, l) => RS_REJECT.is(l.url, p.name);
+// Keep the numbers of links you said were not a match, to tune the checker from later.
+async function learnFrom(l, was) {
+  try {
+    const st = (await api.storage.local.get('rsLearn')).rsLearn || [];
+    st.push({ pct: l.pct, inl: l.inl, tiles: l.tiles, str: l.str, mid: l.mid, was, site: l.site, at: Date.now() });
+    await api.storage.local.set({ rsLearn: st.slice(-500) });
+  } catch (e) { /* not important */ }
+}
 function visibleLinks(p, opts = {}) {
   return p.links.filter(l => {
     if (isRejected(p, l) !== (R.filter === 'rejected' && !opts.raw)) return false;
-    const hidden = RS_LISTS.isHidden(l.site);
+    const hidden = RS_LISTS.isHidden(l.site, l.url);
     if (hidden && !(opts.withHidden ?? R.showHidden)) return false;
     if (opts.raw) return true;
     const v = verdict(l);
@@ -602,12 +660,19 @@ function visibleLinks(p, opts = {}) {
 }
 const shownCount = p => visibleLinks(p, { raw: true, withHidden: false }).length;
 const sameCount = p => visibleLinks(p, { raw: true, withHidden: false }).filter(isSame).length;
-const checking = p => p.links.some(l => verdict(l) === 'pending' && !RS_LISTS.isHidden(l.site));
+const checking = p => p.links.some(l => verdict(l) === 'pending' && !RS_LISTS.isHidden(l.site, l.url));
 
+// Is this picture ready to review? (searched, and every link found has been checked)
+function checkLine(p) {
+  if (!picDone(p)) return null;
+  const left = p.links.filter(l => verdict(l) === 'pending' && !RS_LISTS.isHidden(l.site, l.url) && !isRejected(p, l)).length;
+  return left ? h('span', { class: 'ck busy', text: '⏳ Checking matches · ' + left + ' left' })
+    : h('span', { class: 'ck ready', text: '✓ All checked · ready to review' });
+}
 function statusLine(p) {
   const bits = job.engines.map(e => {
     const r = p.runs[e], n = ENGINES[e].short;
-    if (r.state === 'done') return n + ' ' + p.links.filter(l => l.engines.includes(e) && !RS_LISTS.isHidden(l.site)).length;
+    if (r.state === 'done') return n + ' ' + p.links.filter(l => l.engines.includes(e) && !RS_LISTS.isHidden(l.site, l.url)).length;
     if (r.state === 'go') return n + '…';
     if (r.state === 'captcha') return n + ' check!';
     if (r.state === 'wait') return n + ' waiting';
@@ -631,12 +696,12 @@ function resultsSide() {
     : h('div', {}, h('div', { id: 'domain', text: plural(total, 'picture') + ' searched' }),
       h('div', { id: 'sub', text: when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) + ' · ' + plural(job.pics.reduce((a, p) => a + sameCount(p), 0), 'same-photo link') + ' (of ' + links + ' found)' + (job.pics.some(checking) ? ' · still checking matches…' : '') }));
   const list = h('div', { class: 'card plist' }, job.pics.map(p => {
-    const n = sameCount(p), nNew = p.links.filter(l => l.isNew && isSame(l) && !RS_LISTS.isHidden(l.site)).length;
+    const n = sameCount(p), nNew = p.links.filter(l => l.isNew && isSame(l) && !RS_LISTS.isHidden(l.site, l.url)).length;
     const state = picDone(p) ? h('span', { class: 'cnt' + (n ? '' : ' z') + (nNew ? ' newc' : ''), title: 'Links that show the same photo', text: (nNew ? n + ' · ' + nNew + ' new' : n) + (checking(p) ? '…' : '') })
       : runList(p).some(r => r.state === 'captcha') ? h('span', { class: 'st bad', text: 'Check!' })
       : picBusy(p) ? h('span', { class: 'st go', text: 'Searching' }) : h('span', { class: 'st wait', text: 'Waiting' });
     return h('button', { class: 'pitem' + (p.i === R.sel ? ' on' : ''), onclick: () => { R.sel = p.i; R.ticked.clear(); renderResults(); scoreAll(); window.scrollTo(0, 0); } },
-      h('img', { src: p.thumb, alt: '' }), h('div', { class: 'n' }, h('b', { text: (p.i + 1) + '. ' + p.name }), h('small', { text: statusLine(p) })), state);
+      h('img', { src: p.thumb, alt: '' }), h('div', { class: 'n' }, h('b', { text: (p.i + 1) + '. ' + p.name }), h('small', { text: statusLine(p) }), checkLine(p)), state);
   }));
   const actions = busy
     ? [h('button', { class: 'big stop', text: '⏹ Stop and keep results so far', onclick: () => { R.stop = true; for (const t of [...R.tasks.values()]) finishTask(t, 'skip', 'Stopped'); } })]
@@ -653,7 +718,7 @@ function resultsSide() {
 }
 
 function rowFor(p, l) {
-  const hidden = RS_LISTS.isHidden(l.site), allowed = RS_LISTS.isAllowed(l.site);
+  const hidden = RS_LISTS.isHidden(l.site, l.url), allowed = RS_LISTS.isAllowed(l.site, l.url);
   const id = p.i + '|' + l.key;
   const v = verdict(l);
   const pct = v === 'pending' ? h('span', { class: 'pct no', text: 'Checking match…' })
@@ -666,18 +731,24 @@ function rowFor(p, l) {
     h('input', { type: 'checkbox', checked: R.ticked.has(id), onchange: e => { if (e.target.checked) R.ticked.add(id); else R.ticked.delete(id); renderSelbar(); } }),
     (l.thumb || l.img) ? h('img', { class: 'th', src: l.thumb || l.img, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer', onerror: e => e.target.replaceWith(h('div', { class: 'th' })) }) : h('div', { class: 'th' }),
     h('div', { class: 't' }, h('a', { href: l.url, target: '_blank', rel: 'noreferrer', text: l.title || l.url, title: l.title || l.url }),
-      h('small', { text: (l.firstSeen ? 'Seen before, first found ' + RS_UTIL.niceDate(l.firstSeen) + ' · ' : '') + l.url })),
+      h('small', { text: (l.firstSeen ? 'Seen before, first found ' + RS_UTIL.niceDate(l.firstSeen) + ' · ' : '') + l.url }),
+      !hidden && RS_SITE.part(l.url) ? h('button', { class: 'hidepart', title: 'Never show links from ' + RS_SITE.part(l.url) + ' (that account or section only, the rest of ' + l.site + ' still shows)',
+        text: '🚫 Hide ' + RS_SITE.part(l.url), onclick: () => RS_LISTS.add('hidden', RS_SITE.part(l.url)).then(renderResults) }) : null),
     h('div', { class: 'mt' }, pct, h('small', {}, l.w ? l.w + ' × ' + l.h : 'size unknown', sz.text ? ' · ' : '', sz.strong ? h('b', { text: sz.text }) : sz.text)),
     h('div', { class: 'tags' },
       hidden ? h('span', { class: 'tag hid', text: 'Hidden' }) : null,
       l.isNew ? h('span', { class: 'tag new', text: 'New' }) : null,
-      h('span', { class: 'tag ' + VERDICT[v].cls, text: VERDICT[v].tag }),
+      h('span', { class: 'tag ' + VERDICT[v].cls, text: userNo(l) ? 'You: not a match' : VERDICT[v].tag }),
       l.engines.map(e => h('span', { class: 'tag ' + e, text: ENGINES[e].short })),
       h('span', { class: 'act' }, h('button', { text: 'Open', onclick: () => openTab(l.url) }),
         isRejected(p, l)
           ? h('button', { text: '↩ Put back', title: 'Take this link out of rejected-links.txt', onclick: async () => { await RS_REJECT.remove(l.url, p.name); renderResults(); } })
-          : h('button', { class: 'trash', text: '🗑', title: 'Reject this link: you checked it and it is not a problem. It is saved in rejected-links.txt and never shows again for this picture.',
+          : h('button', { class: 'trash', text: '🗑', title: 'Throw this link away: you do not want it (licensed, not worth chasing...). It is saved in rejected-links.txt and never shows again for this picture.',
             onclick: async () => { R.ticked.delete(id); await RS_REJECT.add(l.url, p.name); renderResults(); } }),
+        userNo(l)
+          ? h('button', { text: '↩ It is a match', title: 'Undo "Not a match"', onclick: async () => { await RS_REJECT.remove(l.url, p.name, 'nomatch'); renderResults(); } })
+          : v !== 'no' && !isRejected(p, l) ? h('button', { class: 'nomatch', text: '✕ Not a match', title: 'It is a different photo. It moves to "Different photo", is saved in rejected-links.txt, and PageProof keeps its numbers to learn from.',
+            onclick: async () => { R.ticked.delete(id); await learnFrom(l, v); await RS_REJECT.add(l.url, p.name, 'nomatch'); renderResults(); } }) : null,
         v !== 'cant' && v !== 'pending' ? h('button', { text: '🔀 Compare', title: 'Lay the copy over your picture on the Compare page', onclick: () => compareLink(p, l) }) : null,
         h('button', { text: '📸 Capture', title: 'Save this page as an evidence pack (batch capture)', onclick: () => captureLinks([l.url]) }))));
 }
@@ -732,8 +803,8 @@ function renderResults() {
   const nRej = p.links.filter(l => isRejected(p, l)).length;
   const nNew = all.filter(l => l.isNew && verdict(l) !== 'no').length, nSame = cnt('same'), nPend = cnt('pending');
   const prev = R.prev[p.i] && R.prev[p.i].lastSearched;
-  const hiddenHere = [...new Set(p.links.filter(l => RS_LISTS.isHidden(l.site)).map(l => RS_LISTS.hidden.find(d => RS_SITE.inList(l.site, [d]))))];
-  const nHiddenLinks = p.links.filter(l => RS_LISTS.isHidden(l.site)).length;
+  const hiddenHere = [...new Set(p.links.filter(l => RS_LISTS.isHidden(l.site, l.url)).map(l => RS_SITE.entryFor(l.site, l.url, RS_LISTS.hidden)))];
+  const nHiddenLinks = p.links.filter(l => RS_LISTS.isHidden(l.site, l.url)).length;
   const fbtn = (k, label, cls) => h('button', { class: (cls || '') + (R.filter === k ? ' on' : ''), text: label, onclick: () => { R.filter = k; renderResults(); } });
   const tabBtn = e => {
     const r = p.runs[e];
@@ -793,7 +864,7 @@ function saveCsv() {
   for (const p of job.pics) {
     for (const l of visibleLinks(p, { raw: true, withHidden: false }).sort((a, b) => linkScore(b) - linkScore(a))) {
       rows.push([p.i + 1, p.name, l.site, l.title, l.url, l.engines.map(e => ENGINES[e].short).join(' + '), VERDICT[verdict(l)].tag,
-        l.pct >= 0 && l.sv === SCORE_VERSION ? l.pct + '%' : '', l.inl ?? '', l.w ? l.w + ' x ' + l.h : '', sizeNote(p, l).text, l.isNew ? 'New' : '', RS_LISTS.isAllowed(l.site) ? 'Allowed' : '',
+        l.pct >= 0 && l.sv === SCORE_VERSION ? l.pct + '%' : '', l.inl ?? '', l.w ? l.w + ' x ' + l.h : '', sizeNote(p, l).text, l.isNew ? 'New' : '', RS_LISTS.isAllowed(l.site, l.url) ? 'Allowed' : '',
         l.firstSeen || RS_UTIL.today(), job.created]);
     }
   }
@@ -835,7 +906,7 @@ async function savePdf() {
     for (const l of links) {
       if (y > H - 90) newPage();
       x.fillStyle = l.isNew ? '#92400e' : '#0f172a'; x.font = 'bold 19px system-ui, sans-serif';
-      x.fillText(fit((l.isNew ? '[NEW] ' : '') + (RS_LISTS.isAllowed(l.site) ? '[ALLOWED] ' : '') + (l.title || l.site), W - 2 * M - 260), M, y);
+      x.fillText(fit((l.isNew ? '[NEW] ' : '') + (RS_LISTS.isAllowed(l.site, l.url) ? '[ALLOWED] ' : '') + (l.title || l.site), W - 2 * M - 260), M, y);
       x.textAlign = 'right'; x.font = 'bold 19px system-ui, sans-serif';
       const v = verdict(l);
       x.fillStyle = v === 'same' ? '#15803d' : v === 'maybe' ? '#b45309' : '#64748b';
@@ -856,7 +927,13 @@ async function initResults() {
   job = await RS_DB.get('jobs', PARAMS.get('job'));
   if (!job) { $('main').replaceChildren(h('div', { class: 'none', text: 'This search was not found. It may have been deleted.' })); side(); return; }
   document.title = 'Reverse search results · ' + plural(job.pics.length, 'picture');
+
+  // Lists changed on another PageProof page: show the change here straight away.
+  api.storage.onChanged.addListener((ch, area) => {
+    if (area === 'local' && (ch.rsHidden || ch.rsAllowed || ch.rsRejected)) RS_LISTS.load().then(() => renderResults());
+  });
   try { const me = await api.tabs.getCurrent(); R.myTab = me.id; R.winId = me.windowId; } catch (e) { /* ignore */ }
+  if (R.myTab) api.storage.local.set({ rsOpenJob: { id: job.id, tab: R.myTab } });
   for (const p of job.pics) {
     try {
       const rec = await RS_DB.get('seen', p.hash);
@@ -1048,7 +1125,7 @@ async function renderLists() {
       h('button', { class: 'ghost', text: '📂 Load a file', title: 'Adds the sites in a hidden-sites.txt or allowed-sites.txt file', onclick: () => $('listLoad').click() })),
     h('p', { class: 'hint', text: 'Load a file adds its sites (a file called allowed-sites.txt goes to Allowed, anything else to Hidden). Nothing is removed unless you press ✕.' }),
     h('div', { class: 'links' }, h('a', { href: page(), text: '🔎 Reverse image search' }), h('a', { href: page('view=folder'), text: '📂 My pictures folder' })));
-  const input = h('input', { type: 'text', placeholder: 'Type a site (pinterest.com) or an ending (.gov)' });
+  const input = h('input', { type: 'text', placeholder: 'Type a site (pinterest.com), an ending (.gov) or a part (x.com/nypostsports)' });
   const add = async kind => { if (await RS_LISTS.add(kind, input.value)) { input.value = ''; renderLists(); } else input.focus(); };
   input.addEventListener('keydown', e => { if (e.key === 'Enter') add('hidden'); });
   const rows = (kind, empty) => RS_LISTS[kind].length ? h('div', { class: 'site' + (kind === 'allowed' ? ' allowed' : '') },
@@ -1074,12 +1151,12 @@ async function renderPast() {
     h('div', { class: 'links' }, h('a', { href: page(), text: '🔎 New search' }), h('a', { href: page('view=folder'), text: '📂 My pictures folder' }), h('a', { href: page('view=lists'), text: '🚫 Hidden and allowed sites' })));
   $('main').replaceChildren(h('h1', { text: plural(jobs.length, 'past search', 'past searches') }),
     jobs.length ? h('div', { class: 'tbl' }, jobs.map(j => {
-      const links = j.pics.reduce((a, p) => a + p.links.filter(l => !RS_LISTS.isHidden(l.site) && isSame(l)).length, 0);
-      const nNew = j.pics.reduce((a, p) => a + p.links.filter(l => l.isNew && isSame(l) && !RS_LISTS.isHidden(l.site)).length, 0);
+      const links = j.pics.reduce((a, p) => a + p.links.filter(l => !RS_LISTS.isHidden(l.site, l.url) && isSame(l)).length, 0);
+      const nNew = j.pics.reduce((a, p) => a + p.links.filter(l => l.isNew && isSame(l) && !RS_LISTS.isHidden(l.site, l.url)).length, 0);
       return h('div', { class: 'tr' }, h('img', { src: j.pics[0] && j.pics[0].thumb, alt: '' }),
         h('b', { text: new Date(j.created).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) + (j.folder ? ' · from my folder' : '') }),
         h('span', { text: plural(j.pics.length, 'picture') }), h('span', {}, plural(links, 'same-photo link'), nNew ? [' ', h('span', { class: 'tag new', text: nNew + ' new' })] : ''),
-        h('span', {}, h('button', { class: 'btn', text: 'Open', onclick: () => openTab(page('job=' + j.id)) })),
+        h('span', {}, h('button', { class: 'btn', text: 'Open', onclick: () => goResults(j.id) })),
         h('button', { class: 'del', title: 'Delete this search', text: '🗑', onclick: async () => { if (confirm('Delete this search from the list? This cannot be undone.')) { await RS_DB.del('jobs', j.id); renderPast(); } } }));
     })) : h('div', { class: 'none', text: 'No searches yet.' }));
 }

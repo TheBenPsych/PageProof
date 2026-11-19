@@ -48,10 +48,36 @@ const RS_SITE = {
     if (end) return '.' + end[1];
     if (!/^[a-z]+:\/\//.test(t)) t = 'http://' + t;
     const h = RS_SITE.of(t);
-    return /^[a-z0-9.-]+\.[a-z]{2,}$/.test(h) ? h : '';
+    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(h)) return '';
+    // "x.com/nypostsports" or "site.com/forum": only that part of the site.
+    let path = '';
+    try { path = decodeURIComponent(new URL(t).pathname).replace(/\/+$/, ''); } catch (e) { /* none */ }
+    return path && path !== '/' ? h + path : h;
+  },
+  // Does a link fall under a "site.com/part" entry?
+  underPath(url, entry) {
+    const i = entry.indexOf('/');
+    if (i < 0) return false;
+    const host = entry.slice(0, i), path = entry.slice(i);
+    let u; try { u = new URL(url); } catch (e) { return false; }
+    const site = RS_SITE.of(url);
+    if (!(site === host || site.endsWith('.' + host))) return false;
+    let p = u.pathname; try { p = decodeURIComponent(p); } catch (e) { /* keep */ }
+    p = p.toLowerCase();
+    return p === path || p.startsWith(path + '/');
+  },
+  // The part worth offering to hide: the account on social sites, or a forum section.
+  part(url) {
+    try {
+      const u = new URL(url), seg = u.pathname.split('/').filter(Boolean)[0];
+      if (!seg || /^(status|statuses|p|pin|pins|reel|reels|watch|shorts|video|videos|photo|photos|post|posts|news|article|articles|story|stories|search|explore|i|hashtag|tag|tags|en|us|uk|www|amp|images|img|media|wp-content|uploads|\d+)$/i.test(seg) || seg.length > 40 || /\.[a-z]{2,4}$/i.test(seg)) return '';
+      return RS_SITE.of(url) + '/' + seg.toLowerCase();
+    } catch (e) { return ''; }
   },
   // Does this link's site fall under a listed site? (facebook.com covers m.facebook.com too)
-  inList(site, list) { return list.some(d => d.startsWith('.') ? site.endsWith(d) : site === d || site.endsWith('.' + d)); },
+  inList(site, list) { return list.some(d => !d.includes('/') && (d.startsWith('.') ? site.endsWith(d) : site === d || site.endsWith('.' + d))); },
+  // The list entry that covers this link (whole site, ending, or site.com/part), if any.
+  entryFor(site, url, list) { return list.find(d => d.includes('/') ? !!url && RS_SITE.underPath(url, d) : RS_SITE.inList(site, [d])); },
 };
 
 // ---------- the Documents\PageProof folder ----------
@@ -102,7 +128,7 @@ const RS_LISTS = {
   hidden: [], allowed: [], fileState: 'none',
   FILES: { hidden: 'hidden-sites.txt', allowed: 'allowed-sites.txt' },
   HEAD: {
-    hidden: '# PageProof hidden sites, one per line.\n# Links from these sites never show in reverse search results.\n# Start a line with a dot to hide a whole ending, for example .gov or .edu\n# Lines starting with # are notes and are ignored.\n',
+    hidden: '# PageProof hidden sites, one per line.\n# Links from these sites never show in reverse search results.\n# Start a line with a dot to hide a whole ending, for example .gov or .edu\n# Add a part after the site to hide only that part, for example x.com/nypostsports or example.com/forum\n# Lines starting with # are notes and are ignored.\n',
     allowed: '# PageProof allowed sites, one per line (your own site, licensees...).\n# Links from these sites still show, with a green "Allowed" label.\n# Lines starting with # are notes and are ignored.\n',
   },
   parse(text) { return [...new Set(String(text || '').split(/\r?\n/).map(RS_SITE.tidy).filter(Boolean))]; },
@@ -148,8 +174,8 @@ const RS_LISTS = {
     RS_LISTS[kind] = RS_LISTS[kind].filter(d => d !== site);
     await RS_LISTS.save();
   },
-  isHidden: site => RS_SITE.inList(site, RS_LISTS.hidden),
-  isAllowed: site => RS_SITE.inList(site, RS_LISTS.allowed),
+  isHidden: (site, url) => !!RS_SITE.entryFor(site, url, RS_LISTS.hidden),
+  isAllowed: (site, url) => !!RS_SITE.entryFor(site, url, RS_LISTS.allowed),
 };
 
 // ---------- rejected links (the trash can) ----------
@@ -157,18 +183,18 @@ const RS_LISTS = {
 // Kept in rejected-links.txt next to the site lists, so it survives updates too.
 const RS_REJECT = {
   items: [], FILE: 'rejected-links.txt',
-  HEAD: '# PageProof rejected links, one per line: link | picture name\n# These links never show again for that picture (leave the picture name off to reject the link for every picture).\n# Delete a line to bring a link back. Lines starting with # are notes.\n',
+  HEAD: '# PageProof rejected links, one per line: link | picture name | reason\n# Reason "not a match" = you said it is a different photo (it moves to Different photo).\n# No reason = you do not want it (it never shows again for that picture).\n# Leave the picture name empty to apply to every picture.\n# Delete a line to bring a link back. Lines starting with # are notes.\n',
   parse(text) {
     const out = [];
     for (const line of String(text || '').split(/\r?\n/)) {
       const t = line.trim();
       if (!t || t.startsWith('#')) continue;
-      const [url, pic] = t.split(/\s+\|\s+/);
-      if (/^https?:\/\//i.test(url)) out.push({ url, pic: (pic || '').trim() });
+      const [url, pic, why] = t.split(/\s*\|\s*/);
+      if (/^https?:\/\//i.test(url)) out.push({ url, pic: (pic || '').trim(), why: /not a match/i.test(why || '') ? 'nomatch' : '' });
     }
     return out;
   },
-  text() { return RS_REJECT.HEAD + RS_REJECT.items.map(r => r.url + (r.pic ? ' | ' + r.pic : '')).join('\n') + '\n'; },
+  text() { return RS_REJECT.HEAD + RS_REJECT.items.map(r => r.url + ' | ' + (r.pic || '') + (r.why === 'nomatch' ? ' | not a match' : '')).join('\n') + '\n'; },
   async load() {
     const api = globalThis.browser || globalThis.chrome;
     RS_REJECT.items = (await api.storage.local.get('rsRejected')).rsRejected || [];
@@ -186,15 +212,18 @@ const RS_REJECT = {
     await api.storage.local.set({ rsRejected: RS_REJECT.items });
     if ((await RS_DOCS.state()) === 'granted') await RS_DOCS.writeText(RS_REJECT.FILE, RS_REJECT.text());
   },
-  is(url, pic) {
-    if (!RS_REJECT._keys) RS_REJECT._keys = RS_REJECT.items.map(r => ({ k: RS_UTIL.key(r.url), pic: r.pic }));
+  // why: '' = trash (do not want it), 'nomatch' = not the same photo.
+  find(url, pic, why) {
+    if (!RS_REJECT._keys) RS_REJECT._keys = RS_REJECT.items.map(r => ({ k: RS_UTIL.key(r.url), pic: r.pic, why: r.why || '' }));
     const k = RS_UTIL.key(url);
-    return RS_REJECT._keys.some(r => r.k === k && (!r.pic || r.pic === pic));
+    return RS_REJECT._keys.some(r => r.k === k && (!r.pic || r.pic === pic) && r.why === (why || ''));
   },
-  async add(url, pic) { if (!RS_REJECT.is(url, pic)) RS_REJECT.items.push({ url, pic: pic || '' }); await RS_REJECT.save(); },
-  async remove(url, pic) {
+  is(url, pic) { return RS_REJECT.find(url, pic, ''); },
+  notMatch(url, pic) { return RS_REJECT.find(url, pic, 'nomatch'); },
+  async add(url, pic, why) { if (!RS_REJECT.find(url, pic, why)) RS_REJECT.items.push({ url, pic: pic || '', why: why || '' }); await RS_REJECT.save(); },
+  async remove(url, pic, why) {
     const k = RS_UTIL.key(url);
-    RS_REJECT.items = RS_REJECT.items.filter(r => !(RS_UTIL.key(r.url) === k && (!r.pic || r.pic === pic)));
+    RS_REJECT.items = RS_REJECT.items.filter(r => !(RS_UTIL.key(r.url) === k && (!r.pic || r.pic === pic) && (r.why || '') === (why || '')));
     await RS_REJECT.save();
   },
 };
