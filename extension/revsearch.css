@@ -124,6 +124,7 @@ body.over #main { outline: 3px dashed var(--accent); outline-offset: -10px; bord
 .tag { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 99px; white-space: nowrap; }
 .tag.ex { background: #dcfce7; color: #166534; }
 .tag.sim { background: #f1f5f9; color: #475569; }
+.tag.maybe { background: #fef3c7; color: #92400e; }
 .tag.google { background: #e0e7ff; color: #3730a3; }
 .tag.yandex { background: #ffedd5; color: #9a3412; }
 .tag.bing { background: #e0f2fe; color: #075985; }

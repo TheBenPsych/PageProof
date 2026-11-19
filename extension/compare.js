@@ -431,6 +431,18 @@ $('sVid').onclick = async () => {
 // ---------- start: the Image Inspector can hand over its picture as the copy ----------
 (async () => {
   const params = new URLSearchParams(location.search);
+  if (params.get('from') === 'revsearch') {
+    // From the reverse image search results: your picture in box 1, the one found online in box 2.
+    try {
+      const rec = await PP_DB.get('compare-rs');
+      if (rec && rec.a && rec.b) {
+        await setPicture('A', rec.a.blob, rec.a.name);
+        await setPicture('B', rec.b.blob, rec.b.name, rec.b.src);
+        setStatus('Your picture is in box 1 and the one found online in box 2. Lining them up...');
+        setTimeout(() => { if (!$('auto').disabled) $('auto').click(); }, 300);
+      }
+    } catch (e) { /* start empty */ }
+  }
   if (params.get('from') === 'inspector') {
     try {
       const rec = await PP_DB.get('compare');

@@ -70,6 +70,9 @@ async function getSettings() {
 const setSettings = s => api.storage.local.set({ rsSettings: s });
 
 // ---------- the Documents\PageProof folder banner ----------
+// Chrome will not let extensions use Documents itself (it calls it a "system" folder),
+// but a folder inside Documents is fine, so we ask for a PageProof folder there.
+const SETUP_STEPS = 'Press "Set up PageProof folder". The window opens in Documents: click "New folder", name it PageProof, then click "Select Folder". If you already have a PageProof folder, just pick it and your lists come back.';
 async function docsBanner(after) {
   if (!RS_DOCS.supported) return false;
   const st = await RS_DOCS.state();
@@ -80,8 +83,8 @@ async function docsBanner(after) {
     banner([h('span', {}, h('b', { text: 'One click needed: ' }), 'PageProof needs your OK to use its Documents\\PageProof folder (your hidden and allowed sites, and your pictures folder).'),
       h('span', { class: 'sp' }), h('button', { text: 'Allow', onclick: async () => { if (await RS_DOCS.allow()) done(); } })]);
   } else {
-    banner([h('span', {}, h('b', { text: 'Keep your site lists safe: ' }), 'PageProof saves your hidden and allowed sites as text files in Documents\\PageProof, so updates and reinstalls never lose them. Press the button, then just press "Select Folder" (it opens in Documents). If the folder is already there from before, PageProof picks your lists straight back up.'),
-      h('span', { class: 'sp' }), h('button', { text: '📂 Use Documents', onclick: async () => { try { await RS_DOCS.choose(); done(); } catch (e) { /* closed the picker */ } } }),
+    banner([h('span', {}, h('b', { text: 'Keep your site lists safe: ' }), 'PageProof saves your hidden and allowed sites (and your pictures folder) in Documents\\PageProof, so updates and reinstalls never lose them. ' + SETUP_STEPS),
+      h('span', { class: 'sp' }), h('button', { text: '📂 Set up PageProof folder', onclick: async () => { try { await RS_DOCS.choose(); done(); } catch (e) { /* closed the picker */ } } }),
       VIEW !== 'lists' && VIEW !== 'folder' ? h('button', { class: 'btn', text: 'Not now', onclick: () => { sessionStorage.setItem('rsDocsLater', '1'); banner(null); } }) : null], 'info');
   }
   return true;
@@ -264,7 +267,7 @@ function setupDropAndPaste(onFiles) {
 // =====================================================================================
 let job = null;
 const R = { tasks: new Map(), paused: {}, captchas: {}, gaveUp: {}, queues: {}, stop: false, running: false, winId: null, myTab: null,
-  groups: {}, prev: {}, sel: 0, filter: 'all', engineFilter: new Set(), text: '', showHidden: false, ticked: new Set(), scoreQ: [], scoring: false, origBmp: {} };
+  groups: {}, prev: {}, sel: 0, filter: 'same', engineFilter: new Set(), text: '', showHidden: false, ticked: new Set(), scoreQ: [], scoring: false, origBmp: {} };
 
 let saveTimer = null;
 function saveJob(now) {
@@ -412,7 +415,7 @@ function addLink(p, l, engine) {
   if (!cur.thumb && l.thumb) cur.thumb = String(l.thumb);
   if (!cur.img && l.img && /^https?:/.test(l.img)) cur.img = l.img;
   if (!cur.w && l.w > 0 && l.h > 0) { cur.w = l.w; cur.h = l.h; }
-  if (cur.pct === undefined && !R.scoreQ.includes(cur)) { cur.pic = p.i; R.scoreQ.push(cur); }
+  if (cur.sv !== SCORE_VERSION && !R.scoreQ.includes(cur)) { cur.pic = p.i; R.scoreQ.push(cur); }
 }
 
 function onResults(t, msg) {
@@ -442,7 +445,7 @@ async function folderNote(p) {
   if (!job.folder) return;
   try {
     const old = (await RS_DB.get('folder', p.name)) || {};
-    await RS_DB.put('folder', p.name, { ...old, hash: p.hash, lastChecked: job.created, links: p.links.length, newLinks: p.links.filter(l => l.isNew).length });
+    await RS_DB.put('folder', p.name, { ...old, hash: p.hash, lastChecked: job.created, links: p.links.filter(isSame).length, newLinks: p.links.filter(l => l.isNew && isSame(l)).length });
   } catch (e) { /* ignore */ }
 }
 
@@ -470,15 +473,38 @@ async function scoreLink(l) {
   let bmp = null, fromFull = false;
   if (l.img) { bmp = await fetchPicture(l.img); fromFull = !!bmp; }
   if (!bmp && l.thumb) bmp = await fetchPicture(l.thumb);
-  if (!bmp) { l.pct = -1; return; }
+  if (!bmp) { l.pct = -1; l.sv = SCORE_VERSION; return; }
   if (fromFull && !l.w) { l.w = bmp.width; l.h = bmp.height; }
   const f = Math.min(1, 640 / Math.max(bmp.width, bmp.height));
   const small = f < 1 ? await createImageBitmap(bmp, { resizeWidth: Math.round(bmp.width * f), resizeHeight: Math.round(bmp.height * f), resizeQuality: 'high' }) : bmp;
   try {
     const best = await PP_ALIGN.align(await origBitmap(p), small);
     l.pct = best ? Math.max(0, Math.min(100, Math.round(best.sc.lines * 100))) : 0;
-  } catch (e) { l.pct = 0; }
+    l.inl = best && best.inliers || 0;                      // matching details found in both pictures
+    l.tiles = best ? best.sc.matched : 0;                   // small squares that line up
+    l.str = best ? +best.sc.strength.toFixed(2) : 0;        // how closely they line up
+  } catch (e) { l.pct = 0; l.inl = 0; l.tiles = 0; l.str = 0; }
+  l.sv = SCORE_VERSION;
 }
+
+// Is it the same photo? Tested on real copies (cropped, resized, colour-graded, mirrored, tiny
+// thumbnails, a headline printed over 40% of it) against different photos of the same kind:
+// real copies share dozens of matching details (31 to 400+), different photos share under 10.
+const SCORE_VERSION = 2;
+function verdict(l) {
+  if (l.sv !== SCORE_VERSION) return l.pct === null ? 'cant' : 'pending';
+  if (l.pct === null || l.pct < 0) return 'cant';
+  if ((l.inl >= 15 && l.tiles >= 20 && l.str >= 0.8) || (l.pct >= 85 && l.str >= 0.8)) return 'same';
+  if (l.inl >= 8 || l.pct >= 60) return 'maybe';
+  return 'no';
+}
+const VERDICT = {
+  same: { tag: 'Same photo', cls: 'ex', rank: 4 },
+  maybe: { tag: 'Maybe', cls: 'maybe', rank: 3 },
+  pending: { tag: 'Checking…', cls: 'sim', rank: 2 },
+  cant: { tag: "Can't check", cls: 'sim', rank: 1 },
+  no: { tag: 'Different photo', cls: 'sim', rank: 0 },
+};
 async function scoreAll() {
   if (R.scoring) return;
   R.scoring = true;
@@ -487,9 +513,9 @@ async function scoreAll() {
       // Exact matches and the picture on screen go first.
       R.scoreQ.sort((a, b) => (b.pic === R.sel) - (a.pic === R.sel) || b.exact - a.exact);
       const l = R.scoreQ.shift();
-      if (l.pct !== undefined) continue;
+      if (l.sv === SCORE_VERSION) continue;
       const p = job.pics[l.pic];
-      if (p.links.filter(x => x.pct !== undefined).length >= 60) { l.pct = null; continue; }   // enough for one picture
+      if (p.links.filter(x => x.sv === SCORE_VERSION).length >= 150) { l.pct = null; l.sv = SCORE_VERSION; continue; }   // enough for one picture
       await scoreLink(l);
       saveJob(); renderSoon();
       await sleep(30);
@@ -541,23 +567,28 @@ function sizeNote(p, l) {
   if (area < 0.85) return { text: 'smaller' };
   return { text: 'same size' };
 }
-const isExact = l => l.exact || (l.pct != null && l.pct >= 85);
-function linkScore(l) { return (l.isNew ? 1000 : 0) + (l.pct > 0 ? l.pct : 0) + (isExact(l) ? 50 : 0); }
+const isSame = l => verdict(l) === 'same';
+function linkScore(l) { return VERDICT[verdict(l)].rank * 1000 + (l.isNew ? 500 : 0) + (l.pct > 0 ? l.pct : 0); }
 
 function visibleLinks(p, opts = {}) {
   return p.links.filter(l => {
     const hidden = RS_LISTS.isHidden(l.site);
     if (hidden && !(opts.withHidden ?? R.showHidden)) return false;
     if (opts.raw) return true;
-    if (R.filter === 'new' && !l.isNew) return false;
-    if (R.filter === 'exact' && !isExact(l)) return false;
-    if (R.filter === 'similar' && isExact(l)) return false;
+    const v = verdict(l);
+    if (R.filter === 'new' && !(l.isNew && v !== 'no')) return false;
+    if (R.filter === 'same' && v !== 'same' && v !== 'pending') return false;
+    if (R.filter === 'maybe' && v !== 'maybe') return false;
+    if (R.filter === 'cant' && v !== 'cant') return false;
+    if (R.filter === 'no' && v !== 'no') return false;
     if (R.engineFilter.size && !l.engines.some(e => R.engineFilter.has(e))) return false;
     if (R.text) { const q = R.text.toLowerCase(); if (!(l.site + ' ' + l.title + ' ' + l.url).toLowerCase().includes(q)) return false; }
     return true;
   });
 }
 const shownCount = p => visibleLinks(p, { raw: true, withHidden: false }).length;
+const sameCount = p => visibleLinks(p, { raw: true, withHidden: false }).filter(isSame).length;
+const checking = p => p.links.some(l => verdict(l) === 'pending' && !RS_LISTS.isHidden(l.site));
 
 function statusLine(p) {
   const bits = job.engines.map(e => {
@@ -584,10 +615,10 @@ function resultsSide() {
       h('div', { class: 'prog' }, h('i', { style: 'width:' + Math.round(done / total * 100) + '%' })),
       h('p', { class: 'hint', text: 'You can keep working in your other windows. Leave this window open until it finishes.' }))
     : h('div', {}, h('div', { id: 'domain', text: plural(total, 'picture') + ' searched' }),
-      h('div', { id: 'sub', text: when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) + ' · ' + plural(links, 'link') + ' on ' + plural(sites, 'site') }));
+      h('div', { id: 'sub', text: when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) + ' · ' + plural(job.pics.reduce((a, p) => a + sameCount(p), 0), 'same-photo link') + ' (of ' + links + ' found)' + (job.pics.some(checking) ? ' · still checking matches…' : '') }));
   const list = h('div', { class: 'card plist' }, job.pics.map(p => {
-    const n = shownCount(p), nNew = p.links.filter(l => l.isNew && !RS_LISTS.isHidden(l.site)).length;
-    const state = picDone(p) ? h('span', { class: 'cnt' + (n ? '' : ' z') + (nNew ? ' newc' : ''), text: nNew ? n + ' · ' + nNew + ' new' : n })
+    const n = sameCount(p), nNew = p.links.filter(l => l.isNew && isSame(l) && !RS_LISTS.isHidden(l.site)).length;
+    const state = picDone(p) ? h('span', { class: 'cnt' + (n ? '' : ' z') + (nNew ? ' newc' : ''), title: 'Links that show the same photo', text: (nNew ? n + ' · ' + nNew + ' new' : n) + (checking(p) ? '…' : '') })
       : runList(p).some(r => r.state === 'captcha') ? h('span', { class: 'st bad', text: 'Check!' })
       : picBusy(p) ? h('span', { class: 'st go', text: 'Searching' }) : h('span', { class: 'st wait', text: 'Waiting' });
     return h('button', { class: 'pitem' + (p.i === R.sel ? ' on' : ''), onclick: () => { R.sel = p.i; R.ticked.clear(); renderResults(); scoreAll(); window.scrollTo(0, 0); } },
@@ -610,23 +641,26 @@ function resultsSide() {
 function rowFor(p, l) {
   const hidden = RS_LISTS.isHidden(l.site), allowed = RS_LISTS.isAllowed(l.site);
   const id = p.i + '|' + l.key;
-  const pct = l.pct === undefined ? h('span', { class: 'pct no', text: 'Checking match…' })
-    : l.pct === null ? h('span', { class: 'pct no', text: 'Not checked' })
-    : l.pct < 0 ? h('span', { class: 'pct no', title: 'The site would not let PageProof download the picture', text: 'Picture blocked, no %' })
-    : h('span', { class: 'pct ' + (l.pct >= 85 ? 'hi' : l.pct >= 40 ? 'mid' : 'lo'), title: 'How much of the area the two pictures share lines up detail for detail (like the Compare page)', text: l.pct + '% match' });
-  const sz = sizeNote(p, l);
-  return h('div', { class: 'row' + (l.firstSeen ? ' seen' : '') + (allowed ? ' allowed' : '') },
+  const v = verdict(l);
+  const pct = v === 'pending' ? h('span', { class: 'pct no', text: 'Checking match…' })
+    : v === 'cant' ? h('span', { class: 'pct no', title: 'The site would not let PageProof download its picture, so it could not be compared. Open it to look yourself.', text: l.pct === null ? 'Not checked' : 'Picture blocked' })
+    : h('span', { class: 'pct ' + (v === 'same' ? 'hi' : v === 'maybe' ? 'mid' : 'lo'),
+      title: l.pct + '% of the area the two pictures share lines up detail for detail, with ' + l.inl + ' matching details found in both. A lower % on a "Same photo" means things were added on top (a headline, logo or border) or it was cropped.',
+      text: v === 'same' ? (l.pct >= 85 ? l.pct + '% match' : 'Same photo · ' + l.pct + '% lines up') : l.pct + '% match' });
+  const sz = v === 'same' || v === 'maybe' ? sizeNote(p, l) : { text: '' };
+  return h('div', { class: 'row' + (l.firstSeen || v === 'no' ? ' seen' : '') + (allowed ? ' allowed' : '') },
     h('input', { type: 'checkbox', checked: R.ticked.has(id), onchange: e => { if (e.target.checked) R.ticked.add(id); else R.ticked.delete(id); renderSelbar(); } }),
-    l.thumb ? h('img', { class: 'th', src: l.thumb, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer', onerror: e => e.target.replaceWith(h('div', { class: 'th' })) }) : h('div', { class: 'th' }),
+    (l.thumb || l.img) ? h('img', { class: 'th', src: l.thumb || l.img, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer', onerror: e => e.target.replaceWith(h('div', { class: 'th' })) }) : h('div', { class: 'th' }),
     h('div', { class: 't' }, h('a', { href: l.url, target: '_blank', rel: 'noreferrer', text: l.title || l.url, title: l.title || l.url }),
       h('small', { text: (l.firstSeen ? 'Seen before, first found ' + RS_UTIL.niceDate(l.firstSeen) + ' · ' : '') + l.url })),
     h('div', { class: 'mt' }, pct, h('small', {}, l.w ? l.w + ' × ' + l.h : 'size unknown', sz.text ? ' · ' : '', sz.strong ? h('b', { text: sz.text }) : sz.text)),
     h('div', { class: 'tags' },
       hidden ? h('span', { class: 'tag hid', text: 'Hidden' }) : null,
       l.isNew ? h('span', { class: 'tag new', text: 'New' }) : null,
-      h('span', { class: 'tag ' + (isExact(l) ? 'ex' : 'sim'), text: isExact(l) ? 'Exact match' : 'Similar' }),
+      h('span', { class: 'tag ' + VERDICT[v].cls, text: VERDICT[v].tag }),
       l.engines.map(e => h('span', { class: 'tag ' + e, text: ENGINES[e].short })),
       h('span', { class: 'act' }, h('button', { text: 'Open', onclick: () => openTab(l.url) }),
+        v !== 'cant' && v !== 'pending' ? h('button', { text: '🔀 Compare', title: 'Lay the copy over your picture on the Compare page', onclick: () => compareLink(p, l) }) : null,
         h('button', { text: '📸 Capture', title: 'Save this page as an evidence pack (batch capture)', onclick: () => captureLinks([l.url]) }))));
 }
 
@@ -676,7 +710,8 @@ function renderResults() {
   // While typing in the search box, only redraw the list.
   if (document.activeElement && document.activeElement.id === 'rtext' && $('rlist')) { renderList(); renderSelbar(); return; }
   const all = visibleLinks(p, { raw: true, withHidden: false });
-  const nNew = all.filter(l => l.isNew).length, nEx = all.filter(isExact).length;
+  const cnt = k => all.filter(l => verdict(l) === k).length;
+  const nNew = all.filter(l => l.isNew && verdict(l) !== 'no').length, nSame = cnt('same'), nPend = cnt('pending');
   const prev = R.prev[p.i] && R.prev[p.i].lastSearched;
   const hiddenHere = [...new Set(p.links.filter(l => RS_LISTS.isHidden(l.site)).map(l => RS_LISTS.hidden.find(d => RS_SITE.inList(l.site, [d]))))];
   const nHiddenLinks = p.links.filter(l => RS_LISTS.isHidden(l.site)).length;
@@ -693,12 +728,13 @@ function renderResults() {
   $('main').replaceChildren(
     h('div', { class: 'rhead' }, h('img', { src: p.thumb, alt: '' }), h('div', { class: 'meta' },
       h('h1', { text: (p.i + 1) + '. ' + p.name }),
-      h('p', { class: 'lead' }, h('b', { text: plural(all.length, 'link') }), ' on ', h('b', { text: plural(new Set(all.map(l => l.site)).size, 'site') }),
+      h('p', { class: 'lead' }, h('b', { style: 'color:#15803d', text: plural(nSame, 'link') + ' with the same photo' }), ' (of ' + all.length + ' found)',
         prev ? [' · ', h('b', { style: 'color:#92400e', text: nNew + ' new' }), ' since ' + RS_UTIL.niceDate(prev)] : ' · first search for this picture',
         ' · your file is ' + p.w + ' × ' + p.h),
-      h('div', { class: 'btns' }, job.engines.map(tabBtn), h('small', { text: 'Sorted: new first, then best match' })),
+      h('div', { class: 'btns' }, job.engines.map(tabBtn), h('small', { text: nPend ? 'Checking ' + nPend + ' more pictures…' : 'Every picture found was downloaded and lined up with yours.' })),
       problems.length ? h('p', { class: 'note', text: [...new Set(problems)].join(' ') }) : null)),
-    h('div', { class: 'ftabs' }, fbtn('all', 'All ' + all.length), fbtn('new', '⭐ New ' + nNew, 'newf'), fbtn('exact', 'Exact matches ' + nEx), fbtn('similar', 'Similar ' + (all.length - nEx)),
+    h('div', { class: 'ftabs' }, fbtn('same', '✅ Same photo ' + nSame + (nPend ? ' (checking…)' : '')), fbtn('maybe', 'Maybe ' + cnt('maybe')), fbtn('cant', "Can't check " + cnt('cant')),
+      fbtn('no', 'Different photo ' + cnt('no')), fbtn('new', '⭐ New ' + nNew, 'newf'), fbtn('all', 'All ' + all.length),
       h('span', { class: 'sp' }),
       job.engines.map(e => h('button', { class: R.engineFilter.has(e) ? 'on' : '', text: ENGINES[e].short, title: 'Only links found by ' + ENGINES[e].short + ' (click again to undo)',
         onclick: () => { if (R.engineFilter.has(e)) R.engineFilter.delete(e); else R.engineFilter.add(e); renderResults(); } })),
@@ -714,6 +750,16 @@ function renderResults() {
   renderList(); renderSelbar();
 }
 
+async function compareLink(p, l) {
+  let blob = null, src = '';
+  for (const u of [l.img, l.thumb].filter(Boolean)) {
+    try { const r = await fetch(u, { credentials: 'omit' }); if (r.ok) { blob = await r.blob(); src = u; break; } } catch (e) { /* next */ }
+  }
+  if (!blob) { alert('That picture could not be downloaded. Open the page and save the picture instead.'); return; }
+  await PP_DB.put({ id: 'compare-rs', a: { blob: p.blob, name: p.name }, b: { blob, name: l.site + ' copy', src: src.startsWith('data:') ? l.url : src } });
+  openTab(api.runtime.getURL('compare.html?from=revsearch'));
+}
+
 async function captureLinks(urls) {
   await api.storage.local.set({ batchPrefill: urls });
   openTab(api.runtime.getURL('batch.html'));
@@ -723,11 +769,11 @@ async function captureLinks(urls) {
 const stamp = () => new Date(job.created).toISOString().slice(0, 16).replace(/[:T]/g, '-');
 function saveCsv() {
   const esc = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-  const rows = [['Picture #', 'Picture', 'Site', 'Page title', 'Link', 'Found by', 'Exact or similar', '% match', 'Copy size', 'Size note', 'New', 'Allowed site', 'First found', 'Searched']];
+  const rows = [['Picture #', 'Picture', 'Site', 'Page title', 'Link', 'Found by', 'Same photo?', '% lines up', 'Matching details', 'Copy size', 'Size note', 'New', 'Allowed site', 'First found', 'Searched']];
   for (const p of job.pics) {
     for (const l of visibleLinks(p, { raw: true, withHidden: false }).sort((a, b) => linkScore(b) - linkScore(a))) {
-      rows.push([p.i + 1, p.name, l.site, l.title, l.url, l.engines.map(e => ENGINES[e].short).join(' + '), isExact(l) ? 'Exact' : 'Similar',
-        l.pct > 0 || l.pct === 0 ? l.pct + '%' : '', l.w ? l.w + ' x ' + l.h : '', sizeNote(p, l).text, l.isNew ? 'New' : '', RS_LISTS.isAllowed(l.site) ? 'Allowed' : '',
+      rows.push([p.i + 1, p.name, l.site, l.title, l.url, l.engines.map(e => ENGINES[e].short).join(' + '), VERDICT[verdict(l)].tag,
+        l.pct >= 0 && l.sv === SCORE_VERSION ? l.pct + '%' : '', l.inl ?? '', l.w ? l.w + ' x ' + l.h : '', sizeNote(p, l).text, l.isNew ? 'New' : '', RS_LISTS.isAllowed(l.site) ? 'Allowed' : '',
         l.firstSeen || RS_UTIL.today(), job.created]);
     }
   }
@@ -752,15 +798,17 @@ async function savePdf() {
   newPage();
   x.fillStyle = '#334155'; x.font = '20px system-ui, sans-serif';
   x.fillText('Searched on ' + job.engines.map(e => ENGINES[e].name).join(', ') + '. ' + plural(job.pics.length, 'picture') + '. Hidden sites are left out.', M, y); y += 30;
-  x.fillText('% match = how much of the area the two pictures share lines up detail for detail (a guide; check by eye).', M, y); y += 40;
+  x.fillText('Each picture found was downloaded and lined up with the original. Different photos are left out.', M, y); y += 30;
+  x.fillText('% = how much of the area the two share lines up detail for detail (a guide; check by eye).', M, y); y += 40;
   for (const p of job.pics) {
-    const links = visibleLinks(p, { raw: true, withHidden: false }).sort((a, b) => linkScore(b) - linkScore(a));
+    const found = visibleLinks(p, { raw: true, withHidden: false });
+    const links = found.filter(l => ['same', 'maybe', 'cant'].includes(verdict(l))).sort((a, b) => linkScore(b) - linkScore(a));
     if (y > H - 260) newPage();
     const img = await loadImg(p.thumb);
     if (img) { const s = Math.min(120 / img.width, 120 / img.height); x.drawImage(img, M, y, img.width * s, img.height * s); }
     x.fillStyle = '#0f172a'; x.font = 'bold 26px system-ui, sans-serif'; x.fillText(fit((p.i + 1) + '. ' + p.name, W - 2 * M - 140), M + 140, y + 30);
     x.font = '19px system-ui, sans-serif'; x.fillStyle = '#475569';
-    x.fillText(p.w + ' × ' + p.h + ' · ' + plural(links.length, 'link') + ' on ' + plural(new Set(links.map(l => l.site)).size, 'site') + ' · ' + links.filter(l => l.isNew).length + ' new', M + 140, y + 62);
+    x.fillText(p.w + ' × ' + p.h + ' · ' + plural(links.filter(isSame).length, 'link') + ' with the same photo · ' + links.filter(l => l.isNew && isSame(l)).length + ' new · ' + found.filter(l => verdict(l) === 'no').length + ' different photos left out', M + 140, y + 62);
     x.fillText('SHA-256 ' + p.hash.slice(0, 32) + '…', M + 140, y + 90);
     y += 140;
     if (!links.length) { x.fillText('No matches found.', M, y); y += 40; }
@@ -769,13 +817,14 @@ async function savePdf() {
       x.fillStyle = l.isNew ? '#92400e' : '#0f172a'; x.font = 'bold 19px system-ui, sans-serif';
       x.fillText(fit((l.isNew ? '[NEW] ' : '') + (RS_LISTS.isAllowed(l.site) ? '[ALLOWED] ' : '') + (l.title || l.site), W - 2 * M - 260), M, y);
       x.textAlign = 'right'; x.font = 'bold 19px system-ui, sans-serif';
-      x.fillStyle = l.pct >= 85 ? '#15803d' : l.pct >= 40 ? '#b45309' : '#64748b';
-      x.fillText(l.pct >= 0 && l.pct !== null && l.pct !== undefined ? l.pct + '% match' : 'no %', W - M, y);
+      const v = verdict(l);
+      x.fillStyle = v === 'same' ? '#15803d' : v === 'maybe' ? '#b45309' : '#64748b';
+      x.fillText(VERDICT[v].tag + (l.pct >= 0 && l.sv === SCORE_VERSION ? ' · ' + l.pct + '%' : ''), W - M, y);
       x.textAlign = 'left'; x.font = '16px system-ui, sans-serif'; x.fillStyle = '#2563eb';
       x.fillText(fit(l.url, W - 2 * M), M, y + 24);
       x.fillStyle = '#64748b';
       const sz = sizeNote(p, l);
-      x.fillText(fit([isExact(l) ? 'Exact match' : 'Similar', 'found by ' + l.engines.map(e => ENGINES[e].short).join(' + '), l.w ? l.w + ' × ' + l.h + (sz.text ? ' (' + sz.text + ')' : '') : '', l.firstSeen ? 'first found ' + RS_UTIL.niceDate(l.firstSeen) : ''].filter(Boolean).join(' · '), W - 2 * M), M, y + 46);
+      x.fillText(fit(['found by ' + l.engines.map(e => ENGINES[e].short).join(' + '), l.w ? l.w + ' × ' + l.h + (sz.text ? ' (' + sz.text + ')' : '') : '', l.firstSeen ? 'first found ' + RS_UTIL.niceDate(l.firstSeen) : ''].filter(Boolean).join(' · '), W - 2 * M), M, y + 46);
       y += 74;
     }
     y += 20;
@@ -796,7 +845,7 @@ async function initResults() {
       else if (rec && p.prevSnapshot) R.prev[p.i] = p.prevSnapshot;
     } catch (e) { /* ignore */ }
     if (!p.prevSnapshot && R.prev[p.i]) p.prevSnapshot = { lastSearched: R.prev[p.i].lastSearched, urls: R.prev[p.i].urls };
-    for (const l of p.links) { l.pic = p.i; if (l.pct === undefined) R.scoreQ.push(l); }
+    for (const l of p.links) { l.pic = p.i; if (l.sv !== SCORE_VERSION) R.scoreQ.push(l); }   // older searches get re-checked
   }
   // Pages reopened later: anything that was mid-search is marked as not finished.
   for (const p of job.pics) for (const e of job.engines) if (['go', 'captcha'].includes(p.runs[e].state)) { p.runs[e].state = 'fail'; p.runs[e].why = 'The results window was closed or reloaded during this search.'; }
@@ -850,9 +899,9 @@ async function renderFolder(autoStart) {
     $('main').replaceChildren(h('div', { class: 'empty' }, h('div', { class: 'ic', text: '📂' }),
       h('h1', { text: needAllow ? 'One click to open your pictures folder' : 'Set up your pictures folder' }),
       h('p', { class: 'lead', text: needAllow ? 'Your browser asks once after it restarts. Press Allow and PageProof opens ' + F.label + '.'
-        : 'Press the button, then press "Select Folder". It opens in Documents. PageProof makes a PageProof\\My pictures folder there (or uses the one you already have).' }),
+        : SETUP_STEPS + ' PageProof then makes the My pictures folder inside it by itself.' }),
       !RS_DOCS.supported ? h('p', { class: 'note', text: 'This needs Chrome or Edge. Firefox does not let extensions use folders on your computer.' })
-        : h('button', { class: 'addbtn', text: needAllow ? 'Allow' : '📂 Use Documents', onclick: async () => {
+        : h('button', { class: 'addbtn', text: needAllow ? 'Allow' : '📂 Set up PageProof folder', onclick: async () => {
           try {
             if (needAllow) { if (F.custom) await F.custom.requestPermission({ mode: 'readwrite' }); else await RS_DOCS.allow(); }
             else await RS_DOCS.choose();
@@ -971,7 +1020,7 @@ async function renderLists() {
   const firstBtn = !RS_DOCS.supported ? null : st === 'granted'
     ? h('button', { class: 'big', text: '📂 Use a different folder', onclick: async () => { try { await RS_DOCS.choose(); renderLists(); } catch (e) { /* closed */ } } })
     : st === 'prompt' ? h('button', { class: 'big', text: 'Allow', onclick: async () => { await RS_DOCS.allow(); banner(null); renderLists(); } })
-      : h('button', { class: 'big', text: '📂 Use Documents', onclick: async () => { try { await RS_DOCS.choose(); banner(null); renderLists(); } catch (e) { /* closed */ } } });
+      : h('button', { class: 'big', text: '📂 Set up PageProof folder', onclick: async () => { try { await RS_DOCS.choose(); banner(null); renderLists(); } catch (e) { /* closed */ } } });
   side(h('div', {}, h('div', { id: 'domain', text: 'Hidden and allowed sites' }), h('div', { id: 'sub', text: 'Hidden sites never show. Allowed sites show with a green label.' })),
     fileCard, firstBtn,
     h('div', { class: 'grid2' },
@@ -1005,11 +1054,11 @@ async function renderPast() {
     h('div', { class: 'links' }, h('a', { href: page(), text: '🔎 New search' }), h('a', { href: page('view=folder'), text: '📂 My pictures folder' }), h('a', { href: page('view=lists'), text: '🚫 Hidden and allowed sites' })));
   $('main').replaceChildren(h('h1', { text: plural(jobs.length, 'past search', 'past searches') }),
     jobs.length ? h('div', { class: 'tbl' }, jobs.map(j => {
-      const links = j.pics.reduce((a, p) => a + p.links.filter(l => !RS_LISTS.isHidden(l.site)).length, 0);
-      const nNew = j.pics.reduce((a, p) => a + p.links.filter(l => l.isNew && !RS_LISTS.isHidden(l.site)).length, 0);
+      const links = j.pics.reduce((a, p) => a + p.links.filter(l => !RS_LISTS.isHidden(l.site) && isSame(l)).length, 0);
+      const nNew = j.pics.reduce((a, p) => a + p.links.filter(l => l.isNew && isSame(l) && !RS_LISTS.isHidden(l.site)).length, 0);
       return h('div', { class: 'tr' }, h('img', { src: j.pics[0] && j.pics[0].thumb, alt: '' }),
         h('b', { text: new Date(j.created).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) + (j.folder ? ' · from my folder' : '') }),
-        h('span', { text: plural(j.pics.length, 'picture') }), h('span', {}, plural(links, 'link'), nNew ? [' ', h('span', { class: 'tag new', text: nNew + ' new' })] : ''),
+        h('span', { text: plural(j.pics.length, 'picture') }), h('span', {}, plural(links, 'same-photo link'), nNew ? [' ', h('span', { class: 'tag new', text: nNew + ' new' })] : ''),
         h('span', {}, h('button', { class: 'btn', text: 'Open', onclick: () => openTab(page('job=' + j.id)) })),
         h('button', { class: 'del', title: 'Delete this search', text: '🗑', onclick: async () => { if (confirm('Delete this search from the list? This cannot be undone.')) { await RS_DB.del('jobs', j.id); renderPast(); } } }));
     })) : h('div', { class: 'none', text: 'No searches yet.' }));

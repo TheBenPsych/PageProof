@@ -72,6 +72,7 @@ const RS_DOCS = {
   async choose() {
     const picked = await window.showDirectoryPicker({ id: 'pageproof-docs', mode: 'readwrite', startIn: 'documents' });
     const dir = /^pageproof$/i.test(picked.name) ? picked : await picked.getDirectoryHandle('PageProof', { create: true });
+    try { await dir.getDirectoryHandle('My pictures', { create: true }); } catch (e) { /* made later instead */ }
     await RS_DB.put('handles', 'docs', dir);
     return dir;
   },

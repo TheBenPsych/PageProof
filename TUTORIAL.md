@@ -270,17 +270,28 @@ Click the PageProof icon and choose **Reverse image search**.
    - Each picture gets its own coloured, numbered tab group with a Google, Yandex and Bing tab. These are the same pages you would get searching by hand.
    - Leave the window open until the progress bar on the left finishes. About 2 to 3 minutes for 30 pictures.
 4. Pick a picture on the left to see every link found for it, grouped by site:
-   - **% match**: PageProof downloads the copy it found and lines it up with your picture, like the Compare page. 85% and up is green. "Picture blocked" means that site would not let PageProof download it.
+   - PageProof does not trust the search sites' own "exact match" labels. It downloads every copy it found and lines it up with your picture, the same way the Compare page does, then sorts each link into:
+     - **✅ Same photo**: many details line up. This is your photo, even if it was cropped, resized, mirrored, colour-changed or had text put over it. This is the list shown first.
+     - **Maybe**: some details line up. Worth a quick look.
+     - **Can't check**: the site would not let PageProof download the picture (Facebook, Instagram and so on). Open the link to look yourself.
+     - **Different photo**: nothing lines up. Usually just a similar-looking picture. Hidden unless you pick it.
+   - The number next to a same-photo link (for example "Same photo · 64% lines up") shows how much of the shared area matches. A low number there is normal when the copy has big headlines or text over it.
+   - **🔀 Compare** opens your picture and that copy on the Compare page, already lined up, so you can check it by eye and save a PDF or video.
    - **Size**: the copy's size, flagged **bigger than yours** or **cropped** when that is the case.
    - **New**: links that were not there the last time you searched the same picture. Links you have seen before are faded.
-   - **Exact match / Similar**, and which site found it (Google, Yandex, Bing).
+   - Which site found it (Google, Yandex, Bing).
 5. **Hide this site** hides that site for every picture, now and in future searches (good for Pinterest, stock photo sites and so on). **Mark allowed** is for your own site and licensees: they still show, with a green **Allowed** label.
 6. Tick the links that matter and press **Capture ticked pages**. They open in batch capture (section 7), ready to save as evidence packs.
 7. **Save results** downloads a PDF report and a spreadsheet of everything found.
 
 **"Are you a robot" checks.** The searches run in your own browser, a few at a time with short pauses, which keeps these rare. If one appears anyway, PageProof pauses only that site, shows you the tab and waits. Tick the box and it carries on by itself. If a site keeps asking, press **Skip** and use **Search the rest** later.
 
-**Hidden and allowed sites are saved in Documents.** The first time, PageProof asks you to press **Use Documents** and then **Select Folder**. It keeps two text files there: `Documents\PageProof\hidden-sites.txt` and `allowed-sites.txt` (one site per line, you can edit them in Notepad). After an update nothing changes. After a full reinstall, press **Use Documents** once more and your lists come straight back. Chrome may also ask you to press **Allow** once after it restarts.
+**The PageProof folder (set up once).** Chrome only lets an extension use a folder you have picked yourself, and it will not let anyone pick Documents itself (it calls it a system folder). A folder inside Documents is fine, so the first time:
+1. Press **📂 Set up PageProof folder**. A folder window opens in Documents.
+2. Click **New folder**, name it `PageProof`, and press Enter.
+3. With that new folder selected, click **Select Folder**, then **Save changes** (or **Allow**) if Chrome asks.
+
+PageProof then makes everything inside it by itself: `hidden-sites.txt`, `allowed-sites.txt` (one site per line, you can edit them in Notepad) and the **My pictures** folder. After an update nothing changes. After a full reinstall, press **Set up PageProof folder** again and just pick your existing PageProof folder: your lists come straight back. Chrome may also ask you to press **Allow** once after it restarts.
 
 **My pictures folder.** Choose **📂 My pictures folder** on the left. PageProof uses `Documents\PageProof\My pictures`:
 - Add pictures with **Add pictures to this folder**, by dragging them onto the page, or straight into the folder in File Explorer.
