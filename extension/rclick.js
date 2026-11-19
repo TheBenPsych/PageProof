@@ -5,7 +5,27 @@
   if (window.__ppRC) return;
   const api = globalThis.browser || globalThis.chrome;
   let last = null;
-  addEventListener('contextmenu', e => { last = { x: e.clientX, y: e.clientY, sx: scrollX, sy: scrollY, t: Date.now() }; }, true);
+  // Is there a picture hidden under the spot you right-clicked (one the browser can't see)?
+  function hiddenPicture(e) {
+    if (e.target && e.target.tagName === 'IMG') return false; // the browser sees this one itself
+    for (const el of document.elementsFromPoint(e.clientX, e.clientY)) {
+      if (el === document.documentElement || el === document.body || /^PAGEPROOF-/.test(el.tagName)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 40 || r.height < 40) continue;
+      if (el.tagName === 'IMG' && (el.currentSrc || el.src)) return true;
+      if (el.tagName === 'VIDEO' && el.poster) return true;
+      if (el.tagName === 'image') return true;
+      const bg = getComputedStyle(el).backgroundImage;
+      if (bg && bg !== 'none' && /url\(/.test(bg) && !/data:image\/svg/.test(bg)) return true;
+    }
+    return false;
+  }
+  addEventListener('contextmenu', e => {
+    last = { x: e.clientX, y: e.clientY, sx: scrollX, sy: scrollY, t: Date.now() };
+    let pic = false;
+    try { pic = hiddenPicture(e); } catch (err) { /* ignore */ }
+    try { const p = api.runtime.sendMessage({ type: 'rcMenu', pic }); if (p && p.catch) p.catch(() => {}); } catch (err) { /* extension reloaded */ }
+  }, true);
 
   // The spot you right-clicked, adjusted if the page has scrolled since.
   function point() {

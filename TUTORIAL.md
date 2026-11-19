@@ -247,7 +247,7 @@ Click the PageProof icon, then **🗂️ Open odd files**, and add the file. Cli
 
 ## 15. The right-click menu
 
-Right-click anywhere on a website and point at **PageProof**. You get the same five choices everywhere:
+Right-click on a website and point at **PageProof**. On a picture you get all five choices below. Anywhere else (text, empty space) you only get **Save page as evidence**.
 
 - **Inspect picture:** opens the Image Inspector (section 11) for the picture you right-clicked.
 - **Save picture as JPG:** PageProof looks for every size of the same picture on the page, keeps the biggest, and opens the **Save As** window so you can pick the folder and type your own file name (it suggests one made from the website and picture name). WebP, PNG, AVIF and GIF pictures are turned into JPG (see-through parts become white). A picture that is already a JPG is saved untouched. A small note in the bottom-right corner confirms it, with **Show in folder** and **Inspect it**.

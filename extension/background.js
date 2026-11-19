@@ -241,6 +241,7 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       await openInspector({ mode: 'all', ...found }, tab);
       return { ok: true };
     },
+    rcMenu: async () => { showHiddenPictureItems(!!msg.pic); return { ok: true }; },
     showDownload: async () => { try { await api.downloads.show(msg.id); } catch (e) { /* file moved */ } return { ok: true }; },
     inspect: async () => { await openInspector({ mode: 'one', page: msg.page, title: msg.title, items: msg.items }, sender.tab); return { ok: true }; }
   };
@@ -274,23 +275,33 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 // Right-click the PageProof icon for its other pages.
 const MENU = { batch: ['Batch capture (many links)...', 'batch.html'], log: ['Capture log', 'log.html'], verify: ['Verify a pack', 'verify.html'] };
 // Right-click on a website: the browser groups these under its own "PageProof" entry.
-const WEB = ['page', 'selection', 'link', 'image', 'video', 'audio', 'frame', 'editable'];
+// Picture choices show only when there is a picture under the mouse:
+//  - a normal picture: the browser knows ("image"), so the first set shows by itself;
+//  - a picture hidden under a see-through cover (Instagram): rclick.js spots it the moment you
+//    right-click and asks for the second set ("h_" ids) to be shown.
+const NOT_IMG = ['page', 'selection', 'link', 'video', 'audio', 'frame', 'editable'];
+const PIC_ITEMS = [['inspectImage', 'Inspect picture'], ['jpgImage', 'Save picture as JPG'], ['openImage', 'Open picture in new tab'], ['reverse', 'Reverse image search']];
+const REV_ITEMS = [['revGoogle', 'Google Lens'], ['revYandex', 'Yandex'], ['revBoth', 'Both (two tabs)']];
 api.runtime.onInstalled.addListener(() => {
   try {
     api.contextMenus.removeAll(() => {
       for (const [id, [title]] of Object.entries(MENU)) api.contextMenus.create({ id, title, contexts: ['action'] });
-      api.contextMenus.create({ id: 'inspectImage', title: 'Inspect picture', contexts: WEB });
-      api.contextMenus.create({ id: 'jpgImage', title: 'Save picture as JPG', contexts: WEB });
-      api.contextMenus.create({ id: 'openImage', title: 'Open picture in new tab', contexts: WEB });
-      api.contextMenus.create({ id: 'reverse', title: 'Reverse image search', contexts: WEB });
-      api.contextMenus.create({ id: 'revGoogle', parentId: 'reverse', title: 'Google Lens', contexts: WEB });
-      api.contextMenus.create({ id: 'revYandex', parentId: 'reverse', title: 'Yandex', contexts: WEB });
-      api.contextMenus.create({ id: 'revBoth', parentId: 'reverse', title: 'Both (two tabs)', contexts: WEB });
-      api.contextMenus.create({ id: 'webSep', type: 'separator', contexts: WEB });
-      api.contextMenus.create({ id: 'savePage', title: 'Save page as evidence', contexts: WEB });
+      for (const [pre, contexts, visible] of [['', ['image'], true], ['h_', NOT_IMG, false]]) {
+        for (const [id, title] of PIC_ITEMS) api.contextMenus.create({ id: pre + id, title, contexts, visible });
+        for (const [id, title] of REV_ITEMS) api.contextMenus.create({ id: pre + id, parentId: pre + 'reverse', title, contexts });
+        api.contextMenus.create({ id: pre + 'webSep', type: 'separator', contexts, visible });
+      }
+      api.contextMenus.create({ id: 'savePage', title: 'Save page as evidence', contexts: [...NOT_IMG, 'image'] });
     });
   } catch (e) { /* menus not available */ }
 });
+
+function showHiddenPictureItems(show) {
+  for (const id of ['inspectImage', 'jpgImage', 'openImage', 'reverse', 'webSep']) {
+    try { api.contextMenus.update('h_' + id, { visible: show }, () => void api.runtime.lastError); } catch (e) { /* old browser */ }
+  }
+  try { api.contextMenus.refresh && api.contextMenus.refresh(); } catch (e) { /* Chrome has no refresh */ }
+}
 
 // Run a small job inside the frame that was right-clicked.
 async function inFrame(tab, frameId, files, func, args = []) {
@@ -464,7 +475,7 @@ async function saveAsJpg(item, info, tab, big) {
 
 try {
   api.contextMenus.onClicked.addListener(async (info, tab) => {
-    const id = info.menuItemId;
+    const id = String(info.menuItemId).replace(/^h_/, '');
     if (id === 'savePage') {
       if (!tab) return;
       if (busy) return note(tab, 0, { kind: 'bad', title: 'A capture is already running', lines: ['Wait for it to finish, or click the PageProof icon to stop it.'] });
