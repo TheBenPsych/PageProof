@@ -277,6 +277,8 @@ Click the PageProof icon and choose **Reverse image search**.
      - **Different photo**: nothing lines up. Usually just a similar-looking picture. Hidden unless you pick it.
    - The number next to a same-photo link (for example "Same photo · 64% lines up") shows how much of the shared area matches. A low number there is normal when the copy has big headlines or text over it.
    - **🔀 Compare** opens your picture and that copy on the Compare page, already lined up, so you can check it by eye and save a PDF or video.
+   - **📄 Evidence** (on Same photo and Maybe links) saves a one-page PDF *sighting report*: your picture and the copy side by side, the page and picture links, the copy's size and whether its hidden data (author, copyright) was removed, how well the two line up, how PageProof found it, and SHA-256 fingerprints of both files. The copy is downloaded again when you press the button, so the report shows what is online at that moment. Each report has a Match ID (PP-S-…) that stays the same for that picture and link.
+   - **📄 Evidence for all** (next to the Google/Yandex/Bing tab buttons) saves one PDF with a page for every Same photo link of that picture.
    - **Size**: the copy's size, flagged **bigger than yours** or **cropped** when that is the case.
    - **New**: links that were not there the last time you searched the same picture. Links you have seen before say "Seen before" with the date they were first found.
    - Which site found it (Google, Yandex, Bing).
