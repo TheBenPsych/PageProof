@@ -856,6 +856,7 @@ function rowFor(p, l) {
           : v !== 'no' && !isRejected(p, l) ? h('button', { class: 'nomatch', text: '✕ Not a match', title: 'It is a different photo. It moves to "Different photo", is saved in rejected-links.txt, and PageProof keeps its numbers to learn from.',
             onclick: async () => { R.ticked.delete(id); await learnFrom(l, v); await RS_REJECT.add(l.url, p.name, 'nomatch'); renderResults(); } }) : null,
         v !== 'cant' && v !== 'pending' ? h('button', { text: '🔀 Compare', title: 'Lay the copy over your picture on the Compare page', onclick: () => compareLink(p, l) }) : null,
+        v === 'same' || v === 'maybe' ? h('button', { class: 'evid', text: '📄 Evidence', title: 'Save a PDF: your picture and this copy side by side, where it was found, how well they match, and fingerprints of both files', onclick: () => saveSighting(p, [l]) }) : null,
         h('button', { text: '📸 Capture', title: 'Save this page as an evidence pack (batch capture)', onclick: () => captureLinks([l.url]) }))));
 }
 
@@ -927,7 +928,7 @@ function renderResults() {
       h('p', { class: 'lead' }, h('b', { style: 'color:#15803d', text: plural(nSame, 'link') + ' with the same photo' }), ' (of ' + all.length + ' found)',
         prev ? [' · ', h('b', { style: 'color:#92400e', text: nNew + ' new' }), ' since ' + RS_UTIL.niceDate(prev)] : ' · first search for this picture',
         ' · your file is ' + p.w + ' × ' + p.h),
-      h('div', { class: 'btns' }, job.engines.map(tabBtn), h('small', { text: nPend ? 'Checking ' + nPend + ' more pictures…' : 'Every picture found was downloaded and lined up with yours.' })),
+      h('div', { class: 'btns' }, job.engines.map(tabBtn), nSame ? h('button', { class: 'btn', text: '📄 Evidence for all ' + nSame, title: 'One PDF with an evidence page for every Same photo link of this picture', onclick: () => saveSighting(p, all.filter(isSame)) }) : null, h('small', { text: nPend ? 'Checking ' + nPend + ' more pictures…' : 'Every picture found was downloaded and lined up with yours.' })),
       problems.length ? h('p', { class: 'note', text: [...new Set(problems)].join(' ') }) : null)),
     h('div', { class: 'ftabs' }, fbtn('same', '✅ Same photo ' + nSame + (nPend ? ' (checking…)' : '')), fbtn('maybe', 'Maybe ' + cnt('maybe')), fbtn('cant', "Can't check " + cnt('cant')),
       fbtn('no', 'Different photo ' + cnt('no')), fbtn('new', '⭐ New ' + nNew, 'newf'), fbtn('all', 'All ' + all.length),
@@ -945,6 +946,175 @@ function renderResults() {
     h('div', { class: 'list', id: 'rlist' }),
     h('div', { class: 'selbar', id: 'selbar', hidden: true }));
   renderList(); renderSelbar();
+}
+
+// ---------- evidence of a find ("sighting report") ----------
+// One page per link: your picture and the copy side by side, where it was found, how PageProof
+// found it, how well the two line up, and SHA-256 fingerprints of both files. The found copy is
+// downloaded again at the moment the report is made, so the report shows what is online now.
+const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+const sha256 = async bytes => hex(await crypto.subtle.digest('SHA-256', bytes));
+const matchId = async (p, l) => 'PP-S-' + (await sha256(new TextEncoder().encode(p.hash + '|' + l.url))).slice(0, 8).toUpperCase();
+const niceBytes = n => n >= 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1e3)) + ' kB';
+const dayText = d => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+const nowText = d => d.toLocaleString(undefined, { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+
+async function grabCopy(l) {
+  for (const [u, which] of [[l.img, 'full'], [l.thumb, 'preview']]) {
+    if (!u) continue;
+    try {
+      const r = await fetch(u, { credentials: 'omit' });
+      if (!r.ok) continue;
+      const bytes = new Uint8Array(await r.arrayBuffer());
+      const bmp = await createImageBitmap(new Blob([bytes]));
+      let meta = null; try { meta = await PP_META.read(bytes); } catch (e) { /* not readable */ }
+      return { bytes, bmp, which, src: u, meta, sha: await sha256(bytes), at: new Date() };
+    } catch (e) { /* try the next one */ }
+  }
+  return null;
+}
+
+async function sightingPage(p, l, ours) {
+  const W = 1240, H = 1754, M = 64, G = 32, CW = (W - 2 * M - G) / 2;
+  const c = h('canvas', { width: W, height: H }), x = c.getContext('2d');
+  const font = (px, bold) => { x.font = (bold ? 'bold ' : '') + px + 'px system-ui, "Segoe UI", sans-serif'; };
+  // Wraps text to a width. Long links have no spaces, so they break anywhere.
+  const wrap = (t, maxW, maxLines = 6) => {
+    const out = []; let line = '';
+    for (const word of String(t || '').split(/(\s+)/)) {
+      if (x.measureText(line + word).width <= maxW) { line += word; continue; }
+      if (line.trim()) { out.push(line.trim()); line = ''; }
+      let w = word.trimStart();
+      while (x.measureText(w).width > maxW) { let k = w.length; while (k > 1 && x.measureText(w.slice(0, k)).width > maxW) k--; out.push(w.slice(0, k)); w = w.slice(k); }
+      line = w;
+    }
+    if (line.trim()) out.push(line.trim());
+    if (out.length > maxLines) { out.length = maxLines; out[maxLines - 1] += '…'; }
+    return out;
+  };
+  const rows = (items, x0, y, colW) => {
+    const LW = 150;
+    for (const [k, v, color] of items) {
+      if (!v) continue;
+      font(17, true); x.fillStyle = '#64748b'; x.fillText(k, x0, y);
+      font(17); x.fillStyle = color || '#0f172a';
+      const lines = wrap(v, colW - LW - 8);
+      lines.forEach((t, i) => x.fillText(t, x0 + LW, y + i * 23));
+      y += Math.max(1, lines.length) * 23 + 9;
+    }
+    return y;
+  };
+  const picBox = async (img, x0, y0, label, col) => {
+    const BH = 440;
+    x.fillStyle = col; x.fillRect(x0, y0, CW, 38);
+    font(19, true); x.fillStyle = '#fff'; x.textAlign = 'center'; x.fillText(label, x0 + CW / 2, y0 + 26); x.textAlign = 'left';
+    x.fillStyle = '#f1f5f9'; x.fillRect(x0, y0 + 38, CW, BH);
+    if (img) { const s = Math.min((CW - 24) / img.width, (BH - 24) / img.height); const w = img.width * s, hh = img.height * s; x.drawImage(img, x0 + (CW - w) / 2, y0 + 38 + (BH - hh) / 2, w, hh); }
+    else { font(17); x.fillStyle = '#64748b'; x.textAlign = 'center'; x.fillText('The copy could not be downloaded now.', x0 + CW / 2, y0 + 38 + BH / 2); x.textAlign = 'left'; }
+    x.strokeStyle = col; x.lineWidth = 3; x.setLineDash(col === '#ea580c' ? [10, 6] : []); x.strokeRect(x0 + 1.5, y0 + 1.5, CW - 3, BH + 38 - 3); x.setLineDash([]);
+    return y0 + 38 + BH + 30;
+  };
+
+  const copy = await grabCopy(l);
+  const id = await matchId(p, l), v = verdict(l), made = new Date();
+  x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
+  x.fillStyle = '#0f172a'; x.fillRect(0, 0, W, 84);
+  font(28, true); x.fillStyle = '#fff'; x.fillText('PageProof  ·  Sighting report', M, 53);
+  font(19); x.textAlign = 'right'; x.fillText('Match ID ' + id, W - M, 53); x.textAlign = 'left';
+  let y = 140;
+  font(34, true); x.fillStyle = v === 'same' ? '#15803d' : v === 'maybe' ? '#b45309' : '#0f172a';
+  x.fillText(wrap((v === 'same' ? 'Same photo found on ' : v === 'maybe' ? 'Possible copy found on ' : 'Found on ') + l.site, W - 2 * M, 1)[0], M, y);
+  y += 40; font(20); x.fillStyle = '#334155';
+  // One plain sentence on top, as in PixelProof's Proof of Discovery.
+  const owner = (ours.meta && ours.meta.summary && (ours.meta.summary.creator || ours.meta.summary.copyright)) || '';
+  const lead = 'On ' + dayText(l.firstSeen || job.created) + ', PageProof found a copy of ' + (owner ? owner + '\'s photo ' : 'your photo ') + p.name + ' on ' + l.site + '. Report made ' + nowText(made) + '.';
+  for (const t of wrap(lead, W - 2 * M, 2)) { x.fillText(t, M, y); y += 27; }
+  y += 14;
+
+  // Pictures side by side: yours (solid blue edge) and the copy (dashed orange), as on the Compare page.
+  const ourImg = await createImageBitmap(p.blob);
+  const yA = await picBox(ourImg, M, y, 'YOUR PICTURE', '#2563eb');
+  await picBox(copy && copy.bmp, M + CW + G, y, 'FOUND COPY', '#ea580c');
+  ourImg.close && ourImg.close();
+  y = yA;
+  const om = ours.meta && ours.meta.summary || {}, cm = copy && copy.meta && copy.meta.summary;
+  const left = [
+    ['File name', p.name],
+    ['Folder', p.folderKey && p.folderKey.includes('/') ? p.folderKey.slice(0, p.folderKey.lastIndexOf('/')).replace(/\//g, ' › ') : ''],
+    ['Size', p.w + ' × ' + p.h + ' pixels · ' + niceBytes(p.blob.size)],
+    ['Taken', om.taken], ['Camera', om.camera], ['Author', om.creator], ['Copyright', om.copyright], ['Credit', om.credit],
+    ['SHA-256', p.hash, '#334155'],
+  ];
+  const sz = sizeNote(p, l);
+  const right = [
+    ['Site', l.site],
+    ['Page', l.url, '#1d4ed8'],
+    ['Picture link', copy ? copy.src.startsWith('data:') ? '(shown inside the search page)' : copy.src : (l.img || ''), '#1d4ed8'],
+    ['Title', l.title],
+    ['Size', copy ? copy.bmp.width + ' × ' + copy.bmp.height + ' pixels · ' + niceBytes(copy.bytes.length) + (sz.text ? ' · ' + sz.text : '') : (l.w ? l.w + ' × ' + l.h : '')],
+    ['Hidden data', cm ? (cm.level === 'none' ? 'None (camera, author and copyright data are not in this copy)' : [cm.creator && 'author ' + cm.creator, cm.copyright && '© ' + cm.copyright, cm.taken && 'taken ' + cm.taken].filter(Boolean).join(' · ') || 'Some, but no author, date or copyright') : ''],
+    ['First found', l.firstSeen ? dayText(l.firstSeen) : ''],
+    ['Downloaded', copy ? nowText(copy.at) + (copy.which === 'preview' ? ' (the search site\'s preview; the full picture would not download)' : '') : 'Could not be downloaded when this report was made'],
+    ['SHA-256', copy ? copy.sha : '', '#334155'],
+  ];
+  const yL = rows(left, M, y, CW), yR = rows(right, M + CW + G, y, CW);
+  y = Math.max(yL, yR) + 16;
+
+  // How well they line up.
+  x.fillStyle = '#f8fafc'; x.strokeStyle = '#cbd5e1'; x.lineWidth = 1.5;
+  const boxTop = y; y += 40;
+  font(22, true); x.fillStyle = '#0f172a'; x.fillText('Match check: ' + VERDICT[v].tag + (l.pct >= 0 && l.sv === SCORE_VERSION ? ' · ' + l.pct + '% lines up' : ''), M + 22, y); y += 32;
+  font(18); x.fillStyle = '#334155';
+  const said = [];
+  if (l.pct >= 0 && l.sv === SCORE_VERSION) {
+    said.push(l.pct + '% of the area the two pictures share lines up detail for detail' + (l.inl ? ', using ' + l.inl + ' matching details found in both' : '') + '.');
+    if (l.mid != null) said.push('The middle of your picture (where the subject usually is) lines up ' + Math.round(l.mid * 100) + '%.');
+    if (sz.text) said.push('The copy is ' + (sz.text === 'same size' ? 'the same size as yours' : sz.text) + '.');
+  } else said.push('PageProof could not line the two up automatically. Compare them by eye.');
+  if (userNo(l)) said.push('You marked this link "Not a match".');
+  for (const t of wrap(said.join(' '), W - 2 * M - 44, 5)) { x.fillText(t, M + 22, y); y += 26; }
+  y += 14;
+  x.strokeRect(M, boxTop, W - 2 * M, y - boxTop); y += 40;
+
+  // How it was found.
+  font(22, true); x.fillStyle = '#0f172a'; x.fillText('How PageProof found it', M, y); y += 32; font(18); x.fillStyle = '#334155';
+  const how = 'Your picture was searched with ' + l.engines.map(e => ENGINES[e].name).join(' and ') + ' (reverse image search) on ' + nowText(new Date(job.created)) +
+    '. Each result was downloaded and lined up with your picture by PageProof on this computer (the same check as its Compare page), and kept only if it is the same photo. ' +
+    'SHA-256 fingerprints identify the exact files: if even one pixel changes, the fingerprint changes.';
+  for (const t of wrap(how, W - 2 * M, 6)) { x.fillText(t, M, y); y += 26; }
+  x.fillText('To keep a full record of the page itself, capture it with PageProof using ' + id + ' as the case number.', M, y + 4); y += 30;
+
+  // Other places the same photo was found in this search.
+  const others = job.pics[l.pic].links.filter(o => o !== l && isSame(o) && !isRejected(p, o) && !RS_LISTS.isHidden(o.site, o.url));
+  if (others.length && y < H - 140) {
+    y += 24; font(22, true); x.fillStyle = '#0f172a';
+    x.fillText('Same photo also found on ' + plural(others.length, 'other page'), M, y); y += 30; font(16);
+    const room = Math.floor((H - 90 - y) / 22), show = others.slice(0, Math.max(0, others.length > room ? room - 1 : room));
+    for (const o of show) { x.fillStyle = '#1d4ed8'; x.fillText(wrap(o.url, W - 2 * M, 1)[0], M, y); y += 22; }
+    if (show.length < others.length) { x.fillStyle = '#64748b'; x.fillText('and ' + (others.length - show.length) + ' more (see the search results PDF)', M, y); }
+  }
+
+  font(15); x.fillStyle = '#94a3b8';
+  x.fillText('PageProof ' + api.runtime.getManifest().version + '  ·  Match ID ' + id + '  ·  search ' + job.id, M, H - 40);
+  if (copy && copy.bmp.close) copy.bmp.close();
+  return c;
+}
+
+// One link (the row's button) or every Same photo link of a picture.
+async function saveSighting(p, links) {
+  const go = links.length === 1 ? 'Making the evidence report…' : 'Making ' + links.length + ' evidence pages…';
+  banner([h('b', { text: go })], 'info');
+  try {
+    let meta = null; try { meta = await PP_META.read(new Uint8Array(await p.blob.arrayBuffer())); } catch (e) { /* none */ }
+    const pages = [];
+    for (const l of links) pages.push(await sightingPage(p, l, { meta }));
+    const id = links.length === 1 ? await matchId(p, links[0]) : 'all-' + links.length;
+    const base = p.name.replace(/\.[a-z0-9]+$/i, '').replace(/[^\w.-]+/g, '_').slice(0, 40);
+    const site = links.length === 1 ? '_' + links[0].site.replace(/[^\w.-]+/g, '_') : '';
+    download(makePdf(await PP_REPORT.pdfPages(pages), { title: 'PageProof sighting report', subject: p.name + (links.length === 1 ? ' found on ' + links[0].url : ' · ' + links.length + ' copies') }),
+      'PageProof_sighting_' + base + site + '_' + id + '.pdf');
+    banner(null);
+  } catch (e) { banner([h('b', { text: 'The report could not be made: ' }), String(e && e.message || e)], 'bad'); }
 }
 
 async function compareLink(p, l) {
