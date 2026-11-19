@@ -1084,16 +1084,6 @@ async function sightingPage(p, l, ours) {
   for (const t of wrap(how, W - 2 * M, 6)) { x.fillText(t, M, y); y += 26; }
   x.fillText('To keep a full record of the page itself, capture it with PageProof using ' + id + ' as the case number.', M, y + 4); y += 30;
 
-  // Other places the same photo was found in this search.
-  const others = job.pics[l.pic].links.filter(o => o !== l && isSame(o) && !isRejected(p, o) && !RS_LISTS.isHidden(o.site, o.url));
-  if (others.length && y < H - 140) {
-    y += 24; font(22, true); x.fillStyle = '#0f172a';
-    x.fillText('Same photo also found on ' + plural(others.length, 'other page'), M, y); y += 30; font(16);
-    const room = Math.floor((H - 90 - y) / 22), show = others.slice(0, Math.max(0, others.length > room ? room - 1 : room));
-    for (const o of show) { x.fillStyle = '#1d4ed8'; x.fillText(wrap(o.url, W - 2 * M, 1)[0], M, y); y += 22; }
-    if (show.length < others.length) { x.fillStyle = '#64748b'; x.fillText('and ' + (others.length - show.length) + ' more (see the search results PDF)', M, y); }
-  }
-
   font(15); x.fillStyle = '#94a3b8';
   x.fillText('PageProof ' + api.runtime.getManifest().version + '  ·  Match ID ' + id + '  ·  search ' + job.id, M, H - 40);
   if (copy && copy.bmp.close) copy.bmp.close();
