@@ -259,6 +259,36 @@ Right-click on a website and point at **PageProof**. On a picture you get all fi
 
 If the note says **Please reload this page once**, PageProof was installed or updated after the page opened. Press F5 and right-click again. If it says **No picture found here**, right-click right on top of the picture.
 
+## 16. Search many pictures at once: reverse image search
+
+Click the PageProof icon and choose **Reverse image search**.
+
+1. Press **Add pictures** (or drag pictures, or a whole folder, onto the page, or paste pictures or picture links with Ctrl+V). Up to 50 at once.
+2. On the left, tick the sites to search on: **Google Lens**, **Yandex** and **Bing**. Pick a **Speed** (Normal is best for most days).
+3. Press the green **Search** button. A new window opens:
+   - The first tab is the PageProof results page.
+   - Each picture gets its own coloured, numbered tab group with a Google, Yandex and Bing tab. These are the same pages you would get searching by hand.
+   - Leave the window open until the progress bar on the left finishes. About 2 to 3 minutes for 30 pictures.
+4. Pick a picture on the left to see every link found for it, grouped by site:
+   - **% match**: PageProof downloads the copy it found and lines it up with your picture, like the Compare page. 85% and up is green. "Picture blocked" means that site would not let PageProof download it.
+   - **Size**: the copy's size, flagged **bigger than yours** or **cropped** when that is the case.
+   - **New**: links that were not there the last time you searched the same picture. Links you have seen before are faded.
+   - **Exact match / Similar**, and which site found it (Google, Yandex, Bing).
+5. **Hide this site** hides that site for every picture, now and in future searches (good for Pinterest, stock photo sites and so on). **Mark allowed** is for your own site and licensees: they still show, with a green **Allowed** label.
+6. Tick the links that matter and press **Capture ticked pages**. They open in batch capture (section 7), ready to save as evidence packs.
+7. **Save results** downloads a PDF report and a spreadsheet of everything found.
+
+**"Are you a robot" checks.** The searches run in your own browser, a few at a time with short pauses, which keeps these rare. If one appears anyway, PageProof pauses only that site, shows you the tab and waits. Tick the box and it carries on by itself. If a site keeps asking, press **Skip** and use **Search the rest** later.
+
+**Hidden and allowed sites are saved in Documents.** The first time, PageProof asks you to press **Use Documents** and then **Select Folder**. It keeps two text files there: `Documents\PageProof\hidden-sites.txt` and `allowed-sites.txt` (one site per line, you can edit them in Notepad). After an update nothing changes. After a full reinstall, press **Use Documents** once more and your lists come straight back. Chrome may also ask you to press **Allow** once after it restarts.
+
+**My pictures folder.** Choose **📂 My pictures folder** on the left. PageProof uses `Documents\PageProof\My pictures`:
+- Add pictures with **Add pictures to this folder**, by dragging them onto the page, or straight into the folder in File Explorer.
+- **Check today's 30** searches the pictures that are due: new pictures first, then the ones checked longest ago. Change the number with **Pictures per day**.
+- Under **Every day**, pick **Remind me at** (a pop-up at the time you choose; click it to start), **Start by itself at**, or **Only when I press the button** (no reminder). Chrome has to be open at that time.
+
+**Good to know.** PageProof reads Google's, Yandex's and Bing's results pages the same way you do. If one of them changes how its page looks, its links may stop filling in until PageProof is updated. The search tabs still open, so you can always read them yourself. Some sites (Facebook, Instagram) block picture downloads, so they show no % match.
+
 ## Quick troubleshooting
 
 | Problem | What to do |

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PageProof reverse image search</title>
+<link rel="icon" href="icons/icon32.png">
+<link rel="stylesheet" href="viewer.css">
+<link rel="stylesheet" href="revsearch.css">
+<script src="theme.js"></script>
+</head>
+<body class="with-side">
+  <aside id="side"></aside>
+  <div id="content">
+    <div id="banner" hidden></div>
+    <main id="main"></main>
+  </div>
+  <input type="file" id="filePick" accept="image/*,.heic,.heif,.tif,.tiff,.avif" multiple hidden>
+  <input type="file" id="folderAdd" accept="image/*,.heic,.heif,.tif,.tiff,.avif" multiple hidden>
+  <input type="file" id="listLoad" accept=".txt,text/plain" hidden>
+  <script src="align.js"></script>
+  <script src="pdf.js"></script>
+  <script src="report.js"></script>
+  <script src="rs-store.js"></script>
+  <script src="revsearch.js"></script>
+</body>
+</html>

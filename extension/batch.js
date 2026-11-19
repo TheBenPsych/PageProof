@@ -102,5 +102,8 @@ $('report').onclick = () => {
     const last = (await api.storage.local.get('lastCase')).lastCase || {};
     $('collector').value = last.collector || '';
     $('caseRef').value = '';
+    // Links sent here from the reverse image search results.
+    const pre = (await api.storage.local.get('batchPrefill')).batchPrefill;
+    if (pre && pre.length) { $('urls').value = pre.join('\n'); await api.storage.local.remove('batchPrefill'); }
   } catch (e) { /* ignore */ }
 })();

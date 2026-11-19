@@ -41,6 +41,8 @@ A browser extension for **Chrome and Firefox** that captures a whole web page, t
 4. A new tab opens with your capture. Fill in **Collected by**, **Case / reference number** and any **Notes** (your name is remembered; the case number and notes start empty each time).
 5. Then click the green **⬇ Save evidence pack** to get everything at once, or click **PDF** or **HTML** to download one file on its own.
 
+**Reverse image search (many pictures at once):** click the PageProof icon, choose **Reverse image search**, add your pictures and press **Search**. Each picture is searched on Google Lens, Yandex and Bing in its own tab group, and every link found is listed with a % match. Hide sites you never care about; the list is saved in `Documents\PageProof`. See section 16 of the [tutorial](TUTORIAL.md).
+
 ## Checking a pack
 
 Open **Verify a pack** in PageProof and drop the zip on it. To check without PageProof, see **[VERIFYING.md](VERIFYING.md)**.
