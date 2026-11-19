@@ -68,9 +68,12 @@ Chrome keeps it installed after a restart. To update later, download the new zip
 
 ### Step 2b: Firefox
 
+Firefox needs its own download: **PageProof-Firefox.zip** from the [Latest build](https://github.com/TheBenPsych/PageProof/releases/tag/latest) page. Unzip it first.
+
+
 1. Type `about:debugging#/runtime/this-firefox` in the address bar and press Enter.
 2. Click **Load Temporary Add-on...**
-3. Open the unzipped **PageProof** folder and choose the file **manifest.json**.
+3. Open the unzipped **PageProof-Firefox** folder and choose the file **manifest.json**.
 
 Firefox removes "temporary" add-ons when it closes, so you'd repeat these steps after a restart. To install it permanently, it has to be signed by Mozilla (free). That's a planned next step.
 

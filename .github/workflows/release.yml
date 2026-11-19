@@ -17,9 +17,17 @@ jobs:
       - uses: actions/checkout@v4
       - name: Pack the extension
         run: cd extension && zip -r ../PageProof.zip . -x '.*'
+      # Firefox can't use Chrome's "service_worker" background yet, and Chrome shows an error
+      # if the manifest also lists Firefox's "scripts". So Firefox gets its own copy of the
+      # manifest with "scripts" added.
+      - name: Pack the Firefox version
+        run: |
+          rm -rf ff && cp -r extension ff
+          python3 -c "import json;p='ff/manifest.json';m=json.load(open(p));m['background']={'scripts':['db.js','background.js']};json.dump(m,open(p,'w'),indent=2)"
+          cd ff && zip -r ../PageProof-Firefox.zip . -x '.*'
       - name: Publish the "latest" release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest PageProof.zip --title "Latest build" --notes "Download PageProof.zip below, unzip it, and follow the install steps in the README."
+          gh release create latest PageProof.zip PageProof-Firefox.zip --title "Latest build" --notes "Chrome and Edge: download PageProof.zip below. Firefox: download PageProof-Firefox.zip. Then unzip it, and follow the install steps in the README."
