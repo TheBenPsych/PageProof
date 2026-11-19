@@ -928,7 +928,7 @@ function renderResults() {
       h('p', { class: 'lead' }, h('b', { style: 'color:#15803d', text: plural(nSame, 'link') + ' with the same photo' }), ' (of ' + all.length + ' found)',
         prev ? [' · ', h('b', { style: 'color:#92400e', text: nNew + ' new' }), ' since ' + RS_UTIL.niceDate(prev)] : ' · first search for this picture',
         ' · your file is ' + p.w + ' × ' + p.h),
-      h('div', { class: 'btns' }, job.engines.map(tabBtn), h('small', { text: nPend ? 'Checking ' + nPend + ' more pictures…' : 'Every picture found was downloaded and lined up with yours.' })),
+      h('div', { class: 'btns' }, job.engines.map(tabBtn), nSame ? h('button', { class: 'btn', text: '📄 Evidence for all ' + nSame, title: 'One PDF with an evidence page for every Same photo link of this picture', onclick: () => saveSighting(p, all.filter(isSame)) }) : null, h('small', { text: nPend ? 'Checking ' + nPend + ' more pictures…' : 'Every picture found was downloaded and lined up with yours.' })),
       problems.length ? h('p', { class: 'note', text: [...new Set(problems)].join(' ') }) : null)),
     h('div', { class: 'ftabs' }, fbtn('same', '✅ Same photo ' + nSame + (nPend ? ' (checking…)' : '')), fbtn('maybe', 'Maybe ' + cnt('maybe')), fbtn('cant', "Can't check " + cnt('cant')),
       fbtn('no', 'Different photo ' + cnt('no')), fbtn('new', '⭐ New ' + nNew, 'newf'), fbtn('all', 'All ' + all.length),
