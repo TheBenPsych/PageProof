@@ -470,8 +470,8 @@ async function rememberSeen(p) {
 async function folderNote(p) {
   if (!job.folder) return;
   try {
-    const old = (await RS_DB.get('folder', p.name)) || {};
-    await RS_DB.put('folder', p.name, { ...old, hash: p.hash, lastChecked: job.created, links: p.links.filter(isSame).length, newLinks: p.links.filter(l => l.isNew && isSame(l)).length });
+    const old = (await RS_DB.get('folder', p.folderKey || p.name)) || {};
+    await RS_DB.put('folder', p.folderKey || p.name, { ...old, hash: p.hash, lastChecked: job.created, links: p.links.filter(isSame).length, newLinks: p.links.filter(l => l.isNew && isSame(l)).length });
   } catch (e) { /* ignore */ }
 }
 
@@ -969,11 +969,22 @@ async function picsDir() {
   return { dir: await docs.getDirectoryHandle('My pictures', { create: true }), state: 'granted', label: 'Documents\\PageProof\\My pictures' };
 }
 
+// Every picture in the folder, including folders inside it (Client > Year > Day > picture).
+// Each picture is known by its path inside the folder, like "Smith/2024/May 3/photo.jpg".
 async function folderPictures(dir) {
-  const out = [];
-  for await (const [name, handle] of dir.entries()) {
-    if (handle.kind === 'file' && RS_UTIL.IMAGE_EXT.test(name)) out.push({ name, handle, note: (await RS_DB.get('folder', name).catch(() => null)) || {} });
-  }
+  const out = [], notes = new Map();
+  try {
+    const [keys, vals] = await Promise.all([RS_DB.keys('folder'), RS_DB.all('folder')]);
+    keys.forEach((k, i) => notes.set(k, vals[i]));
+  } catch (e) { /* none yet */ }
+  const walk = async (d, prefix, depth) => {
+    for await (const [name, handle] of d.entries()) {
+      if (name.startsWith('.') || name.startsWith('$')) continue;
+      if (handle.kind === 'directory') { if (depth < 8) await walk(handle, prefix + name + '/', depth + 1); }
+      else if (RS_UTIL.IMAGE_EXT.test(name)) out.push({ name: prefix + name, file: name, handle, note: notes.get(prefix + name) || {} });
+    }
+  };
+  await walk(dir, '', 0);
   // Due order: never checked first, then the ones checked longest ago.
   out.sort((a, b) => (a.note.lastChecked || '').localeCompare(b.note.lastChecked || '') || a.name.localeCompare(b.name));
   return out;
@@ -984,7 +995,7 @@ async function getDaily() {
   return { mode: d.mode || 'remind', time: d.time || '09:00', perDay: d.perDay || 30, lastRun: d.lastRun || '' };
 }
 
-let folderFilter = 'all';
+let folderFilter = 'all', FOLDERQ = '';
 async function renderFolder(autoStart) {
   const F = await picsDir();
   const daily = await getDaily();
@@ -1023,7 +1034,7 @@ async function renderFolder(autoStart) {
     banner([h('b', { text: 'Getting ' + plural(todays.length, 'picture') + ' ready…' })], 'info');
     const ready = [];
     for (const x of todays) {
-      try { const p = await prepare(await x.handle.getFile()); if (!p.error) ready.push(p); } catch (e) { /* unreadable */ }
+      try { const p = await prepare(await x.handle.getFile()); if (!p.error) { p.folderKey = x.name; ready.push(p); } } catch (e) { /* unreadable */ }
     }
     if (!ready.length) { banner([h('b', { text: 'None of today\'s pictures could be opened.' })], 'bad'); return; }
     await api.storage.local.set({ rsDaily: { ...daily, lastRun: today } });
@@ -1044,6 +1055,7 @@ async function renderFolder(autoStart) {
     h('div', { class: 'card' }, h('h3', { text: 'Pictures per day' }), h('div', { class: 'seg' }, [15, 30, 50].map(n => h('button', { class: daily.perDay === n ? 'on' : '', text: n, onclick: () => setDaily({ perDay: n }) })))),
     h('div', { class: 'links' },
       h('button', { text: '📂 Use a different folder', onclick: chooseOtherFolder }),
+      h('button', { text: '📂 Use a different folder…', title: 'Point PageProof at any folder, for example your client folders. Folders inside it (client > year > day) are included. Nothing is copied.', onclick: chooseOtherFolder }),
       F.custom ? h('button', { text: '📂 Go back to Documents\\PageProof\\My pictures', onclick: async () => { await RS_DB.del('handles', 'pics'); renderFolder(); } }) : null,
       h('a', { href: page(), text: '🔎 Reverse image search' }),
       h('a', { href: page('view=lists'), text: '🚫 Hidden and allowed sites' }),
@@ -1076,13 +1088,18 @@ async function renderFolder(autoStart) {
     const d = Math.floor((pos + checkedToday) / daily.perDay);
     return d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : 'In ' + d + ' days';
   };
-  const shown = pics.map((x, i) => [x, i]).filter(([x]) => folderFilter === 'all' || (folderFilter === 'new' && x.note.newLinks > 0) || (folderFilter === 'never' && !x.note.lastChecked) || (folderFilter === 'today' && todays.includes(x)));
+  const fq = FOLDERQ.trim().toLowerCase();
+  const matching = pics.map((x, i) => [x, i]).filter(([x]) => (folderFilter === 'all' || (folderFilter === 'new' && x.note.newLinks > 0) || (folderFilter === 'never' && !x.note.lastChecked) || (folderFilter === 'today' && todays.includes(x)))
+    && (!fq || x.name.toLowerCase().includes(fq)));
+  const SHOWN = 200, shown = matching.slice(0, SHOWN);
+  const findBox = h('input', { type: 'search', class: 'ffind', value: FOLDERQ, placeholder: '🔎 Find a client, year or file name' });
+  let ft; findBox.addEventListener('input', () => { clearTimeout(ft); ft = setTimeout(() => { FOLDERQ = findBox.value; renderFolder().then(() => { const b = document.querySelector('.ffind'); if (b) { b.focus(); b.setSelectionRange(b.value.length, b.value.length); } }); }, 300); });
   const fb = (k, label, cls) => h('button', { class: (cls || '') + (folderFilter === k ? ' on' : ''), text: label, onclick: () => { folderFilter = k; renderFolder(); } });
   $('main').replaceChildren(
     h('div', {}, h('h1', { text: plural(pics.length, 'picture') + ' in your folder' }),
       h('p', { class: 'lead', text: 'Add pictures with the button, by dragging them onto this page, or straight into the folder in File Explorer.' })),
     h('button', { class: 'addbtn', text: '＋ Add pictures to this folder', onclick: () => $('folderAdd').click() }),
-    h('div', { class: 'ftabs' }, fb('all', 'All ' + pics.length), fb('new', '⭐ Have new links ' + withNew, 'newf'), fb('never', 'Never checked ' + never), fb('today', 'Due today ' + todays.length)),
+    h('div', { class: 'ftabs' }, fb('all', 'All ' + pics.length), fb('new', '⭐ Have new links ' + withNew, 'newf'), fb('never', 'Never checked ' + never), fb('today', 'Due today ' + todays.length), h('span', { class: 'sp' }), findBox),
     shown.length ? h('div', { class: 'tbl' },
       h('div', { class: 'tr h' }, h('span'), h('span', { text: 'Picture' }), h('span', { text: 'Last checked' }), h('span', { text: 'Links found' }), h('span', { text: 'Next check' }), h('span')),
       shown.map(([x, i]) => {
@@ -1092,14 +1109,16 @@ async function renderFolder(autoStart) {
           x.note.lastChecked ? h('span', { text: RS_UTIL.niceDate(x.note.lastChecked) }) : h('span', {}, h('span', { class: 'tag new', text: 'Never checked' })),
           h('span', {}, x.note.lastChecked ? String(x.note.links || 0) : '·', x.note.newLinks ? [' ', h('span', { class: 'tag new', text: '+' + x.note.newLinks + ' new' })] : ''),
           h('span', { class: /^Today/.test(nextCheck(i)) ? 'due' : '', text: nextCheck(i) }), h('span'));
-      })) : h('div', { class: 'none', text: pics.length ? 'No pictures match this filter.' : 'Your folder is empty. Add some pictures to get started.' }));
+      }),
+      matching.length > SHOWN ? h('div', { class: 'tr', style: 'color:#64748b;display:block' }, 'Showing ' + SHOWN + ' of ' + matching.length.toLocaleString() + '. Type a client, year or file name in the box above to find others.') : null)
+      : h('div', { class: 'none', text: pics.length ? 'No pictures match this filter.' : 'Your folder is empty. Add some pictures to get started.' }));
   if (autoStart && todays.length && daily.lastRun !== today) start();
 }
 let folderAddFiles = null;
 
 async function chooseOtherFolder() {
   try {
-    const d = await window.showDirectoryPicker({ id: 'pageproof-pics', mode: 'readwrite', startIn: 'pictures' });
+    const d = await window.showDirectoryPicker({ id: 'pageproof-pics', mode: 'readwrite' });
     await RS_DB.put('handles', 'pics', d);
     renderFolder();
   } catch (e) { /* closed the picker */ }

@@ -296,6 +296,7 @@ PageProof then makes everything inside it by itself: `hidden-sites.txt`, `allowe
 
 **My pictures folder.** Choose **📂 My pictures folder** on the left. PageProof uses `Documents\PageProof\My pictures`:
 - Add pictures with **Add pictures to this folder**, by dragging them onto the page, or straight into the folder in File Explorer.
+- **Already have big client folders?** Press **📂 Use a different folder…** on the left and pick the top folder (for example the one that holds all your client folders). Nothing is copied. PageProof includes every folder inside it, like `Client name › Year › Day › picture`, and shows each picture with its path. Type a client, year or file name in the **Find** box to narrow the list. **Go back to Documents\PageProof\My pictures** switches back.
 - **Check today's 30** searches the pictures that are due: new pictures first, then the ones checked longest ago. Change the number with **Pictures per day**.
 - Under **Every day**, pick **Remind me at** (a pop-up at the time you choose; click it to start), **Start by itself at**, or **Only when I press the button** (no reminder). Chrome has to be open at that time.
 
