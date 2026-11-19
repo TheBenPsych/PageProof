@@ -532,3 +532,39 @@ try {
     if (m) api.tabs.create({ url: api.runtime.getURL(m[1]) });
   });
 } catch (e) { /* menus not available */ }
+
+// ---------- Reverse image search: the daily check of "My pictures folder" ----------
+// Settings come from the folder page (rsDaily): mode remind / auto / off, a time, pictures per day.
+async function rsSchedule() {
+  if (!api.alarms) return;
+  const d = (await api.storage.local.get('rsDaily')).rsDaily;
+  await api.alarms.clear('rsDaily');
+  if (!d || d.mode === 'off') return;
+  const [hh, mm] = String(d.time || '09:00').split(':').map(Number);
+  const when = new Date(); when.setHours(hh || 0, mm || 0, 0, 0);
+  if (when.getTime() <= Date.now()) when.setDate(when.getDate() + 1);
+  api.alarms.create('rsDaily', { when: when.getTime(), periodInMinutes: 1440 });
+}
+const rsFolderPage = auto => api.runtime.getURL('revsearch.html?view=folder' + (auto ? '&auto=1' : ''));
+if (api.alarms) {
+  api.alarms.onAlarm.addListener(async a => {
+    if (a.name !== 'rsDaily') return;
+    const d = (await api.storage.local.get('rsDaily')).rsDaily;
+    if (!d || d.mode === 'off') return;
+    const t = new Date(), today = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+    if (d.lastRun === today) return;             // already checked today
+    if (d.mode === 'auto' || !api.notifications) { api.windows.create({ url: rsFolderPage(true), focused: true }); return; }
+    api.notifications.create('rsDaily', { type: 'basic', iconUrl: api.runtime.getURL('icons/icon128.png'), title: 'PageProof: time for today\'s picture check',
+      message: 'Click here to search today\'s pictures from your folder on Google, Yandex and Bing.', requireInteraction: true });
+  });
+  api.storage.onChanged.addListener(ch => { if (ch.rsDaily) rsSchedule(); });
+  api.runtime.onStartup.addListener(rsSchedule);
+  api.runtime.onInstalled.addListener(rsSchedule);
+}
+if (api.notifications) {
+  api.notifications.onClicked.addListener(id => {
+    if (id !== 'rsDaily') return;
+    api.notifications.clear(id);
+    api.tabs.create({ url: rsFolderPage(true) });
+  });
+}
