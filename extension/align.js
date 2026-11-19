@@ -12,9 +12,15 @@
 // Nothing leaves the computer. No libraries.
 const PP_ALIGN = (() => {
   // ---------- small helpers ----------
+  // A drawing surface. On a page it is a normal canvas; in a background worker (no page)
+  // it is an OffscreenCanvas, which works the same way.
+  function mkCanvas(w, h) {
+    if (typeof document !== 'undefined') { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+    return new OffscreenCanvas(w, h);
+  }
   function grayOf(bitmap, w, h) {
     w = Math.max(1, Math.round(w)); h = Math.max(1, Math.round(h));
-    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const c = mkCanvas(w, h);
     const ctx = c.getContext('2d', { willReadFrequently: true });
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);   // see-through parts count as white
     ctx.imageSmoothingQuality = 'high';
@@ -287,7 +293,7 @@ const PP_ALIGN = (() => {
   // Only the area where the two overlap counts, and a square where the copy has something
   // printed over it (a headline, a logo) simply doesn't match; it doesn't drag the rest down.
   function render(B, T, w, h, f) {
-    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const c = mkCanvas(w, h);
     const ctx = c.getContext('2d', { willReadFrequently: true });
     ctx.imageSmoothingQuality = 'high';
     drawCopy(ctx, B, T, f);
@@ -407,7 +413,7 @@ const PP_ALIGN = (() => {
 
   // ---------- putting it together ----------
   function mirrored(B) {
-    const c = document.createElement('canvas'); c.width = B.width; c.height = B.height;
+    const c = mkCanvas(B.width, B.height);
     const ctx = c.getContext('2d'); ctx.translate(B.width, 0); ctx.scale(-1, 1); ctx.drawImage(B, 0, 0);
     return createImageBitmap(c);
   }

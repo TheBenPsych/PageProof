@@ -553,11 +553,56 @@ async function fetchPicture(url) {
 }
 const freePic = x => { try { x && x.bmp.close && x.bmp.close(); } catch (e) { /* already freed */ } };
 // Line one found picture up with yours and note how well it fits.
+// The checking itself runs in background workers (score-worker.js), one per spare processor
+// core up to 4, so the results page stays smooth. A check that hangs (a strange picture) is
+// stopped after 30 seconds and its worker replaced, so one bad picture can't freeze anything.
+// If workers aren't available the check runs on the page as before.
+const POOL = { list: [], next: 1, failed: false };
+const POOL_SIZE = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
+function newWorker() {
+  const w = { worker: new Worker('score-worker.js'), busy: 0, sent: new Set(), waits: new Map() };
+  w.worker.onmessage = e => { const r = w.waits.get(e.data.id); if (r) { w.waits.delete(e.data.id); w.busy--; r(e.data); } };
+  w.worker.onerror = () => killWorker(w);
+  return w;
+}
+function killWorker(w) {
+  try { w.worker.terminate(); } catch (e) { /* gone */ }
+  for (const r of w.waits.values()) r({ err: 'stopped' });
+  w.waits.clear();
+  const i = POOL.list.indexOf(w); if (i >= 0) POOL.list.splice(i, 1);
+}
+async function checkInWorker(p, bmp) {
+  if (POOL.failed || typeof Worker === 'undefined' || typeof OffscreenCanvas === 'undefined') return null;
+  try {
+    while (POOL.list.length < POOL_SIZE) POOL.list.push(newWorker());
+  } catch (e) { POOL.failed = true; return null; }
+  const w = POOL.list.reduce((a, b) => (b.busy < a.busy ? b : a));
+  if (!w.sent.has(p.i)) {
+    const o = await origBitmap(p);
+    const copy = await createImageBitmap(o);
+    w.worker.postMessage({ type: 'orig', key: p.i, bmp: copy }, [copy]);
+    w.sent.add(p.i);
+    if (w.sent.size > 8) { const old = w.sent.values().next().value; w.sent.delete(old); w.worker.postMessage({ type: 'forget', key: old }); }   // keep memory small
+  } else { w.sent.delete(p.i); w.sent.add(p.i); }   // most recently used goes last
+  const id = POOL.next++;
+  w.busy++;
+  const res = await new Promise(resolve => {
+    w.waits.set(id, resolve);
+    w.worker.postMessage({ type: 'check', id, key: p.i, bmp }, [bmp]);
+    setTimeout(() => { if (w.waits.has(id)) killWorker(w); }, 30000);
+  });
+  if (res.err) return { stuck: true };                // the picture was handed over, so no second try here
+  return res.out;
+}
+
 async function measure(p, bmp) {
   const f = Math.min(1, 640 / Math.max(bmp.width, bmp.height));
   const small = f < 1 ? await createImageBitmap(bmp, { resizeWidth: Math.round(bmp.width * f), resizeHeight: Math.round(bmp.height * f), resizeQuality: 'high' }) : bmp;
   try {
-    const best = await PP_ALIGN.align(await origBitmap(p), small, undefined, { fast: true });
+    const w = await checkInWorker(p, small);
+    if (w && w.stuck) return { pct: -1, sv: SCORE_VERSION };        // took too long: shown as "Can't check"
+    const best = w ? (w.none ? null : { inliers: w.inliers, sc: w })
+      : await PP_ALIGN.align(await origBitmap(p), small, undefined, { fast: true });
     return {
       pct: best ? Math.max(0, Math.min(100, Math.round(best.sc.lines * 100))) : 0,
       inl: best && best.inliers || 0,                       // matching details found in both pictures
@@ -627,7 +672,7 @@ async function scoreAll() {
   if (R.scoring) return;
   R.scoring = true;
   // 6 at a time: downloads overlap well; more than that mostly waits on the computer itself.
-  try { await Promise.all(Array.from({ length: 6 }, scoreWorker)); } finally { R.scoring = false; }
+  try { await Promise.all(Array.from({ length: Math.max(3, POOL_SIZE * 2) }, scoreWorker)); } finally { R.scoring = false; }
 }
 async function scoreWorker() {
   {
