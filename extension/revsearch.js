@@ -293,7 +293,7 @@ function setupDropAndPaste(onFiles) {
 // =====================================================================================
 let job = null;
 const R = { tasks: new Map(), paused: {}, captchas: {}, gaveUp: {}, queues: {}, stop: false, running: false, winId: null, myTab: null,
-  groups: {}, prev: {}, sel: 0, filter: 'same', engineFilter: new Set(), text: '', showHidden: false, ticked: new Set(), scoreQ: [], scoring: false, origBmp: {} };
+  groups: {}, prev: {}, sel: 0, filter: 'same', engineFilter: new Set(), text: '', showHidden: false, ticked: new Set(), scoreQ: [], scoring: false, origBmp: {}, known: {} };
 
 let saveTimer = null;
 function saveJob(now) {
@@ -441,7 +441,8 @@ function addLink(p, l, engine) {
   if (!cur.thumb && l.thumb) cur.thumb = String(l.thumb);
   if (!cur.img && l.img && /^https?:/.test(l.img)) cur.img = l.img;
   if (!cur.w && l.w > 0 && l.h > 0) { cur.w = l.w; cur.h = l.h; }
-  if (cur.sv !== SCORE_VERSION && !R.scoreQ.includes(cur)) { cur.pic = p.i; R.scoreQ.push(cur); }
+  cur.pic = p.i;
+  if (cur.sv !== SCORE_VERSION && !knownScore(p, cur) && !R.scoreQ.includes(cur)) R.scoreQ.push(cur);
 }
 
 function onResults(t, msg) {
@@ -458,12 +459,43 @@ function onResults(t, msg) {
 // Remember every link found for this picture, so next time new ones can be marked "New".
 async function rememberSeen(p) {
   try {
-    const rec = (await RS_DB.get('seen', p.hash)) || { urls: {} };
+    const rec = (await RS_MEM.get(p.hash)) || { urls: {} };
     const today = RS_UTIL.today();
     for (const l of p.links) if (!rec.urls[l.key]) rec.urls[l.key] = today;
     rec.lastSearched = job.created;
-    await RS_DB.put('seen', p.hash, rec);
+    addScores(rec, p);
+    await RS_MEM.put(p.hash, rec);
   } catch (e) { /* ignore */ }
+}
+// Match results are remembered per picture, so a link already checked is never downloaded
+// and compared again in a later search.
+const SAVE_FIELDS = ['pct', 'inl', 'tiles', 'str', 'mid', 'w', 'h'];
+function addScores(rec, p) {
+  rec.scores = rec.scores || {};
+  for (const l of p.links) if (l.sv === SCORE_VERSION && l.pct >= 0 && !l.fromMemory) {
+    const o = { sv: l.sv }; for (const k of SAVE_FIELDS) if (l[k] !== undefined && l[k] !== null) o[k] = l[k];
+    rec.scores[l.key] = o;
+  }
+}
+function knownScore(p, l) {
+  const m = R.known[p.i] && R.known[p.i][l.key];
+  if (!m || m.sv !== SCORE_VERSION) return false;
+  for (const k of SAVE_FIELDS) if (m[k] !== undefined && (k !== 'w' && k !== 'h' || !l[k])) l[k] = m[k];
+  if (m.mid === undefined) l.mid = null;
+  l.sv = m.sv; l.fromMemory = true;
+  return true;
+}
+const scoreSaveQ = new Set();
+let scoreSaveT = null;
+function saveScoresSoon(p) {
+  scoreSaveQ.add(p);
+  clearTimeout(scoreSaveT);
+  scoreSaveT = setTimeout(async () => {
+    const ps = [...scoreSaveQ]; scoreSaveQ.clear();
+    for (const q of ps) {
+      try { const rec = (await RS_MEM.get(q.hash)) || { urls: {} }; addScores(rec, q); await RS_MEM.put(q.hash, rec); } catch (e) { /* ignore */ }
+    }
+  }, 4000);
 }
 
 // Pictures that came from "My pictures folder": note when they were checked.
@@ -472,7 +504,21 @@ async function folderNote(p) {
   try {
     const old = (await RS_DB.get('folder', p.folderKey || p.name)) || {};
     await RS_DB.put('folder', p.folderKey || p.name, { ...old, hash: p.hash, lastChecked: job.created, links: p.links.filter(isSame).length, newLinks: p.links.filter(l => l.isNew && isSame(l)).length });
+    backupFolderNotesSoon();
   } catch (e) { /* ignore */ }
+}
+// The folder's "last checked" notes are also copied to Documents\PageProof\Memory\folder-notes.json.
+let folderBackupT = null;
+function backupFolderNotesSoon() {
+  clearTimeout(folderBackupT);
+  folderBackupT = setTimeout(async () => {
+    try {
+      const d = await RS_MEM.dir(); if (!d) return;
+      const [keys, vals] = await Promise.all([RS_DB.keys('folder'), RS_DB.all('folder')]);
+      const o = {}; keys.forEach((k, i) => { o[k] = vals[i]; });
+      const w = await (await d.getFileHandle('folder-notes.json', { create: true })).createWritable(); await w.write(JSON.stringify(o)); await w.close();
+    } catch (e) { /* backup only */ }
+  }, 3000);
 }
 
 // ---------- % match: line up each found picture with yours (same work as the Compare page) ----------
@@ -580,6 +626,7 @@ async function scoreWorker() {
       if (l.sv === SCORE_VERSION) continue;
       const p = job.pics[l.pic];
       await scoreLink(l);
+      saveScoresSoon(job.pics[l.pic]);
       saveJob(); renderSoon();
       await sleep(30);
     }
@@ -937,13 +984,14 @@ async function initResults() {
   if (R.myTab) api.storage.local.set({ rsOpenJob: { id: job.id, tab: R.myTab } });
   for (const p of job.pics) {
     try {
-      const rec = await RS_DB.get('seen', p.hash);
+      const rec = await RS_MEM.get(p.hash);
+      R.known[p.i] = (rec && rec.scores) || {};
       // Only links found BEFORE this search count as "seen before".
       if (rec && rec.lastSearched && rec.lastSearched < job.created) R.prev[p.i] = rec;
       else if (rec && p.prevSnapshot) R.prev[p.i] = p.prevSnapshot;
     } catch (e) { /* ignore */ }
     if (!p.prevSnapshot && R.prev[p.i]) p.prevSnapshot = { lastSearched: R.prev[p.i].lastSearched, urls: R.prev[p.i].urls };
-    for (const l of p.links) { l.pic = p.i; if (l.sv !== SCORE_VERSION || l.pct === null) R.scoreQ.push(l); }   // older searches (and links an old version skipped) get checked
+    for (const l of p.links) { l.pic = p.i; if ((l.sv !== SCORE_VERSION || l.pct === null) && !knownScore(p, l)) R.scoreQ.push(l); }   // older searches (and links an old version skipped) get checked
   }
   // Pages reopened later: anything that was mid-search is marked as not finished.
   for (const p of job.pics) for (const e of job.engines) if (['go', 'captcha'].includes(p.runs[e].state)) { p.runs[e].state = 'fail'; p.runs[e].why = 'The results window was closed or reloaded during this search.'; }
@@ -976,6 +1024,13 @@ async function folderPictures(dir) {
   try {
     const [keys, vals] = await Promise.all([RS_DB.keys('folder'), RS_DB.all('folder')]);
     keys.forEach((k, i) => notes.set(k, vals[i]));
+    if (!keys.length) {                                     // reinstalled: bring the notes back from the file
+      const md = await RS_MEM.dir();
+      if (md) {
+        const o = JSON.parse(await (await (await md.getFileHandle('folder-notes.json')).getFile()).text());
+        for (const [k, v] of Object.entries(o)) { notes.set(k, v); await RS_DB.put('folder', k, v); }
+      }
+    }
   } catch (e) { /* none yet */ }
   const walk = async (d, prefix, depth) => {
     for await (const [name, handle] of d.entries()) {

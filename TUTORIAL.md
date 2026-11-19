@@ -294,6 +294,8 @@ Click the PageProof icon and choose **Reverse image search**.
 
 PageProof then makes everything inside it by itself: `hidden-sites.txt`, `allowed-sites.txt` (one site per line, you can edit them in Notepad) and the **My pictures** folder. After an update nothing changes. After a full reinstall, press **Set up PageProof folder** again and just pick your existing PageProof folder: your lists come straight back. Chrome may also ask you to press **Allow** once after it restarts.
 
+**What PageProof remembers.** For every picture you search, PageProof remembers each link it found, when it first saw it, and how well that link's picture matched. A later search of the same picture only downloads and checks links it has not seen before, so repeat searches are much faster. This memory is kept in the browser and also as small files in `Documents\PageProof\Memory`, so updating PageProof never loses it, and even after a full reinstall it comes back once you pick the PageProof folder again.
+
 **My pictures folder.** Choose **📂 My pictures folder** on the left. PageProof uses `Documents\PageProof\My pictures`:
 - Add pictures with **Add pictures to this folder**, by dragging them onto the page, or straight into the folder in File Explorer.
 - **Already have big client folders?** Press **📂 Use a different folder…** on the left and pick the top folder (for example the one that holds all your client folders). Nothing is copied. PageProof includes every folder inside it, like `Client name › Year › Day › picture`, and shows each picture with its path. Type a client, year or file name in the **Find** box to narrow the list. **Go back to Documents\PageProof\My pictures** switches back.
