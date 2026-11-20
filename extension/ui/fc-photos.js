@@ -40,10 +40,10 @@ V.connect = async () => {
     const rows = [];
     const walk = (rel, depth) => {
       for (const f of state.csTree.get(rel) || []) {
-        const on = pick.has(f.rel), inherited = under(f.rel), open = state.csOpen.has(f.rel);
+        const on = pick.has(f.rel) && !f.ignore, inherited = under(f.rel), open = state.csOpen.has(f.rel) && !f.ignore;
         rows.push(`<div class="crow" style="padding-left:${10 + depth * 22}px">
           <button class="btn ghost sm" style="min-height:28px;width:28px;padding:0" data-act="csopen" data-v="${esc(f.rel)}" aria-label="${open ? 'Close' : 'Open'} ${esc(f.name)}" aria-expanded="${open}">${open ? '▾' : '▸'}</button>
-          <label style="display:flex;gap:10px;align-items:center;flex:1;min-width:0;cursor:pointer"><input type="checkbox" data-act="cspk" data-v="${esc(f.rel)}" ${on || inherited ? 'checked' : ''} ${inherited ? 'disabled title="Included: the folder above it is ticked"' : ''}><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${on ? ';font-weight:700' : ''}">${esc(f.name)}</span></label>
+          <label style="display:flex;gap:10px;align-items:center;flex:1;min-width:0;cursor:pointer"><input type="checkbox" data-act="cspk" data-v="${esc(f.rel)}" ${(on || inherited) && !f.ignore ? 'checked' : ''} ${f.ignore ? 'disabled title="Skipped: this folder has client_info_ignore.txt"' : inherited ? 'disabled title="Included: the folder above it is ticked"' : ''}><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${on ? ';font-weight:700' : ''}${f.ignore ? ';text-decoration:line-through;color:var(--faint)' : ''}">${esc(f.name)}</span>${f.ignore ? '<span class="tag grey" style="font-size:11px;flex-shrink:0" title="client_info_ignore.txt is in this folder, so it and everything inside it is never searched">Skipped</span>' : f.id ? `<span class="tag ok" style="font-size:11px;flex-shrink:0" title="client_info.txt names this client">ID: ${esc(f.id)}</span>` : ''}</label>
           ${on ? `<button class="starbtn${state.csStar.has(f.rel) ? ' on' : ''}" data-act="csstar" data-v="${esc(f.rel)}" aria-label="Priority client" title="Priority: searched right after High priority photos">★</button>` : ''}</div>`);
         if (open) {
           if (state.csTree.get(f.rel) === undefined) rows.push(`<div class="faint" style="padding:6px 0 6px ${42 + depth * 22}px;font-size:13px">Opening…</div>`);
@@ -56,6 +56,7 @@ V.connect = async () => {
     const extras = await FC.extraHandles();
     body = `<h2>3. Pick your clients</h2>
     <p class="muted" style="margin:0">Choose the top folder (for example G: › Shared drives, or one shared drive). Then click <b>▸</b> to open a folder and <b>tick only the folders you search</b>. Each ticked folder is one client, and everything inside it is searched. Star the ones that matter most.</p>
+    <p class="faint" style="margin:0;font-size:13px">PageProof reads the same text files as your other platform: a folder with <b>client_info.txt</b> gets that client ID as its name (also for folders deeper inside a ticked folder), and a folder with <b>client_info_ignore.txt</b> is skipped with everything inside it.</p>
     <div class="row"><button class="btn${root ? '' : ' primary'}" data-act="cspick">${ic('files', 18)} ${root ? 'Choose a different top folder' : 'Choose the top folder'}</button>${root && st === 'granted' ? `<button class="btn primary" data-act="csaddone">＋ Add one folder</button>` : ''}${st === 'prompt' ? '<button class="btn primary" data-act="csallow">Allow PageProof to read it</button>' : ''}${state.csBusy ? `<span class="muted">${esc(state.csBusy)}</span>` : ''}</div>
     ${root ? `<span class="faint" style="font-size:12.5px;margin-top:-6px">Top folder: <b>${esc(root.name)}</b>. "Add one folder" opens the folder window so you can go straight to a big folder and pick it.</span>` : ''}
     <label class="field" for="csLabel">Where the top folder is, as File Explorer shows it<input id="csLabel" value="${esc(d.label)}" placeholder="G:\\Shared drives"><span class="faint" style="font-size:12.5px">Your browser can't see the full path, so it's typed here once. It goes in the evidence report next to the photo.</span></label>
@@ -144,7 +145,7 @@ Object.assign(ACTS, {
     // Folders you didn't tick: forgotten if nothing was found for them, otherwise kept (not searched).
     const copies = await FC.allCopies();
     for (const c of await FC.DB.all('clients')) {
-      if (names.has(c.name)) continue;
+      if (names.has(c.name) || (c.from && names.has(c.from))) continue;
       if (!copies.some(x => x.client === c.name)) {
         const ps = await FC.DB.by('photos', 'client', c.name);
         await FC.DB.delMany('photos', ps.map(p => p.id));

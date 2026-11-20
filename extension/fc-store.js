@@ -49,6 +49,7 @@ const FC = (() => {
     all: s => tx(s, 'readonly', o => o.getAll()),
     count: s => tx(s, 'readonly', o => o.count()),
     by: (s, index, v) => tx(s, 'readonly', o => o.index(index).getAll(v)),
+    prefix: (s, p) => tx(s, 'readonly', o => o.getAll(IDBKeyRange.bound(p, p + '\uffff'))),
     async putMany(s, list) {
       if (!list.length) return;
       const db = await open();
@@ -170,6 +171,27 @@ const FC = (() => {
   // is searched (if a client has no such folder, the whole client folder is used).
   // Each photo gets: client, year, quarter, day, and a "newness" number for newest-first.
   const SCAN = { busy: false };
+  // client_info.txt (client_id=…) names the client for a folder and everything inside it.
+  // client_info_ignore.txt (ignore_client=true) means: don't search this folder or anything inside it.
+  // The same files your other monitoring platform reads.
+  const INFO = 'client_info.txt', IGNORE = 'client_info_ignore.txt';
+  function parseInfo(text) {
+    const o = {};
+    for (const line of String(text || '').slice(0, 20000).split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Za-z_]+)\s*[=:]\s*(.*?)\s*$/);
+      if (m) o[m[1].toLowerCase()] = m[2];
+    }
+    return o;
+  }
+  async function readInfo(dir, names) {
+    const out = {};
+    const read = async n => { try { return parseInfo(await (await (await dir.getFileHandle(n)).getFile()).text()); } catch (e) { return null; } };
+    const has = n => (names ? names.find(x => x.toLowerCase() === n) : n);
+    const ign = has(IGNORE), inf = has(INFO);
+    if (ign) { const o = await read(ign); if (o !== null && !/^(false|no|0)$/i.test(o.ignore_client || '')) { out.ignore = true; out.ignoreId = o.client_id || ''; } }
+    if (inf) { const o = await read(inf); if (o && o.client_id) out.id = tidyClient(o.client_id); }
+    return out;
+  }
   async function listDirs(dir) {
     const out = [];
     for await (const [name, h] of dir.entries()) if (h.kind === 'directory' && !/^[.$~]/.test(name)) out.push([name, h]);
@@ -185,7 +207,9 @@ const FC = (() => {
   // The folders inside one folder, for the folder tree in setup. [{ name, rel }]
   async function subfolders(rel) {
     const d = await dirAt(rel);
-    return (await listDirs(d)).map(([name]) => ({ name, rel: (rel ? rel + '/' : '') + name }));
+    const out = [];
+    for (const [name, h] of await listDirs(d)) out.push({ name, rel: (rel ? rel + '/' : '') + name, ...(await readInfo(h)) });
+    return out;
   }
   // The folders you ticked (paths inside the top folder). null = never picked (older setups:
   // every folder directly inside the top folder is a client).
@@ -220,6 +244,8 @@ const FC = (() => {
         let base = null, baseName = '', name = parts[parts.length - 1], folderRel = rel;
         if (/^registered/i.test(name) && parts.length > 1) { base = h; name = parts[parts.length - 2]; folderRel = parts.slice(0, -1).join('/'); }
         else for (const [n2, h2] of await listDirs(h)) if (/^registered/i.test(n2)) { base = h2; baseName = n2; break; }
+        const info = { ...(await readInfo(h)), ...(base && base !== h ? await readInfo(base) : {}) };
+        if (info.id) name = info.id;
         out.push({ name: tidyClient(name), folder: folderRel, base: base || h, baseName: base === h ? '' : baseName, rel: rel + (baseName && base !== h ? '/' + baseName : ''), pick: rel });
       }
       // Two ticked folders with the same name: add the folder above to tell them apart.
@@ -235,18 +261,24 @@ const FC = (() => {
   async function walkClient(cf, onFile, only, onDir) {
     const regs = {};
     const walk = async (dir, rel, depth, ctx) => {
-      const files = [], dirs = [];
+      const files = [], dirs = [], txt = [];
       for await (const [name, h] of dir.entries()) {
         if (/^[.$~]/.test(name)) continue;
         if (h.kind === 'directory') dirs.push([name, h]);
         else if (IMAGE.test(name)) files.push(name);
+        else if (/^client_info(_ignore)?\.txt$/i.test(name)) txt.push(name);
         else if (SHEET.test(name)) { const r = regIn(name); if (r) regs[rel] = { ...(regs[rel] || {}), ...r, from: 'File name in this folder: ' + name }; }
+      }
+      if (txt.length) {
+        const info = await readInfo(dir, txt);
+        if (info.ignore) { if (onDir) onDir(rel, 0, true); return; }
+        if (info.id) ctx = { ...ctx, client: info.id };
       }
       const own = regIn(dir.name);
       if (own && depth > 0) regs[rel] = { ...own, ...(regs[rel] || {}), from: regs[rel] ? regs[rel].from : 'Folder name: ' + dir.name };
       if (onDir) onDir(rel, files.length);
       for (const f of files) {
-        onFile({ rel: rel + '/' + f, name: f, folder: rel, year: ctx.year || yearOf(f), quarter: ctx.quarter, day: dayOf(f) || ctx.day });
+        onFile({ rel: rel + '/' + f, name: f, folder: rel, year: ctx.year || yearOf(f), quarter: ctx.quarter, day: dayOf(f) || ctx.day, client: ctx.client || '' });
       }
       if (depth >= 8) return;
       for (const [name, h] of dirs) {
@@ -291,19 +323,30 @@ const FC = (() => {
         if (onlyClients && !onlyClients.includes(cf.name)) { await DB.put('clients', client); continue; }
         if (!full && client.searching !== true) continue;
         // What's already known about this client's photos, so flags and search history stay.
-        const have = new Map((await DB.by('photos', 'client', cf.name)).map(p => [p.id, p]));
-        const seen = new Set(), batch = [];
-        let n = 0;
+        const pre = 'd:' + (cf.extra ? '+' : '') + cf.rel + '/';
+        const have = new Map((await DB.prefix('photos', pre)).map(p => [p.id, p]));
+        const seen = new Set(), batch = [], subs = {};
+        let n = 0, skipped = 0;
         if (progress) progress('Reading ' + cf.name + '…');
         const r = await walkClient(cf, f => {
           const id = 'd:' + (cf.extra ? '+' : '') + f.rel;
-          seen.add(id); n++;
+          // A client_info.txt further down names a different client for those photos.
+          const who = f.client || cf.name;
+          delete f.client;
+          seen.add(id);
+          if (who === cf.name) n++; else subs[who] = (subs[who] || 0) + 1;
           const p = have.get(id);
-          if (p) { if (p.year !== f.year || p.quarter !== f.quarter || p.day !== f.day || p.gone) { Object.assign(p, f, { gone: false }); p.order = newness(p); batch.push(p); } return; }
-          const np = { id, client: cf.name, extra: !!cf.extra, ...f, flag: '', searches: 0, empty: 0, copies: 0, stolen: 0, added: gen };
+          if (p) { if (p.year !== f.year || p.quarter !== f.quarter || p.day !== f.day || p.gone || p.client !== who) { Object.assign(p, f, { gone: false, client: who }); p.order = newness(p); batch.push(p); } return; }
+          const np = { id, client: who, extra: !!cf.extra, ...f, flag: '', searches: 0, empty: 0, copies: 0, stolen: 0, added: gen };
           np.order = newness(np);
           batch.push(np); added++;
-        }, only, null);
+        }, only, (rel, k, ignored) => { if (ignored) skipped++; });
+        // Clients named by a client_info.txt inside this folder: searched like the folder they're in.
+        for (const [name, cnt] of Object.entries(subs)) {
+          const o = known.get(name) || (await DB.get('clients', name));
+          await DB.put('clients', { name, searching: o ? o.searching : client.searching, priority: o ? !!o.priority : client.priority, photos: full ? cnt : Math.max(cnt, (o && o.photos) || 0), licensed: o ? o.licensed || [] : [], from: cf.name, scanned: new Date().toISOString() });
+        }
+        client.ignored = skipped;
         for (const [k, v] of Object.entries(r)) regs[k] = { ...v, ...(regs[k] && regs[k].manual ? regs[k] : {}) };
         await DB.putMany('photos', batch);
         if (full) {
