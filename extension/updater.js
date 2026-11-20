@@ -9,38 +9,13 @@ const PP_UPDATE = (() => {
   const RAW = 'https://raw.githubusercontent.com/' + REPO + '/main/extension/manifest.json';
   const ZIP = 'https://github.com/' + REPO + '/releases/download/latest/PageProof.zip';
   const PAGE = 'https://github.com/' + REPO + '/releases/latest';
-  // PageProof's code on GitHub may be private. So each download is tried three ways:
-  //  1. plainly (works when the code is public),
-  //  2. as you (works when this browser is signed in to GitHub with an account that can see it),
-  //  3. with an access key typed into Settings (kept on this computer only).
-  const NEED = 'PageProof could not reach its code on GitHub. The code is private, so this browser has to be signed in to GitHub with an account that can see it.';
-  async function token() { return ((await api.storage.local.get('ppGhToken')).ppGhToken || '').trim(); }
+  // The code on GitHub is public, so downloads are plain: no sign-in, no cookies, no key.
   async function gh(kind) {
-    const stamp = '?t=' + Date.now();
-    const tries = kind === 'manifest'
-      ? [[RAW + stamp, { credentials: 'omit' }], ['https://github.com/' + REPO + '/raw/main/extension/manifest.json' + stamp, { credentials: 'include' }]]
-      : [[ZIP + stamp, { credentials: 'omit' }], [ZIP + stamp, { credentials: 'include' }]];
-    let last = 0;
-    for (const [url, o] of tries) {
-      try { const r = await fetch(url, { cache: 'no-store', ...o }); if (r.ok && !/text\/html/.test(r.headers.get('content-type') || '')) return r; last = r.status; } catch (e) { last = last || -1; }
-    }
-    const tk = await token();
-    if (tk) {
-      const H = { Authorization: 'Bearer ' + tk, 'X-GitHub-Api-Version': '2022-11-28' };
-      try {
-        if (kind === 'manifest') {
-          const r = await fetch('https://api.github.com/repos/' + REPO + '/contents/extension/manifest.json', { cache: 'no-store', credentials: 'omit', headers: { ...H, Accept: 'application/vnd.github.raw+json' } });
-          if (r.ok) return r; last = r.status;
-        } else {
-          const rel = await fetch('https://api.github.com/repos/' + REPO + '/releases/tags/latest', { cache: 'no-store', credentials: 'omit', headers: { ...H, Accept: 'application/vnd.github+json' } });
-          if (rel.ok) {
-            const a = ((await rel.json()).assets || []).find(x => x.name === 'PageProof.zip');
-            if (a) { const r = await fetch(a.url, { cache: 'no-store', credentials: 'omit', headers: { ...H, Accept: 'application/octet-stream' } }); if (r.ok) return r; last = r.status; }
-          } else last = rel.status;
-        }
-      } catch (e) { last = last || -1; }
-    }
-    throw new Error(last === -1 ? 'GitHub could not be reached. Check the internet connection.' : last === 401 || last === 403 ? 'GitHub did not accept the access key in Settings.' : NEED);
+    const url = (kind === 'manifest' ? RAW : ZIP) + '?t=' + Date.now();
+    let r;
+    try { r = await fetch(url, { cache: 'no-store', credentials: 'omit' }); } catch (e) { throw new Error('GitHub could not be reached. Check the internet connection.'); }
+    if (r.ok && !/text\/html/.test(r.headers.get('content-type') || '')) return r;
+    throw new Error('PageProof could not reach GitHub just now. Try again in a few minutes.');
   }
   const current = () => api.runtime.getManifest().version;
   // Is version a newer than b? ("4.1.0" vs "4.0.15")

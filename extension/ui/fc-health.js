@@ -114,7 +114,6 @@ V.health = async () => {
   const up = await PP_UPDATE.state();
   const fs = PP_UPDATE.canWriteFolder() ? await PP_UPDATE.folderState() : 'unsupported';
   const upd = (await api.storage.local.get('ppUpdated')).ppUpdated;
-  const tk = !!(await api.storage.local.get('ppGhToken')).ppGhToken;
   return `${head('Settings', 'Is everything working?', 'A quick look at every part of PageProof. Green is fine, yellow needs a look, red is stopped.', `<button class="btn" data-act="healthagain">${ic('refresh', 18)} Check again</button><button class="btn primary" data-act="supportcopy">${ic('doc', 18)} Copy details for support</button>`)}
   <div class="banner ${bad ? 'bad' : warn ? 'warn' : 'info'}" style="font-size:15px"><b>${bad ? plural(bad, 'thing has', 'things have') + ' stopped' : warn ? plural(warn, 'thing needs', 'things need') + ' a look' : 'Everything is working'}</b>${bad && warn ? `<span class="muted">and ${warn} more ${warn === 1 ? 'needs' : 'need'} a look</span>` : ''}</div>
   <section class="card" style="overflow:hidden">
@@ -137,8 +136,6 @@ V.health = async () => {
         <span><b>1.</b> Once on this computer, you show PageProof the folder it was installed from: the unzipped PageProof folder, the one you loaded on the extensions page. ${fs === 'granted' || fs === 'prompt' ? '<b style="color:var(--ok)">Done.</b> <button class="btn ghost sm" data-act="upforget">Pick a different folder</button>' : fs === 'none' ? '<button class="btn sm" data-act="uppick">Pick the PageProof folder</button>' : 'This browser can\'t do that, so use "Download the zip instead".'}</span>
         <span><b>2.</b> "Update now" downloads the newest PageProof from GitHub, puts the new files into that folder and restarts PageProof. Your finds, settings and lists are not touched.</span>
         <span><b>3.</b> After a browser restart the browser may ask once to "Allow" changes to the folder.</span>
-        <span>PageProof's code on GitHub is private, so this browser must be signed in to GitHub with an account that can see it. ${tk ? 'An access key is saved on this computer. <button class="btn ghost sm" data-act="uptokenclear">Remove it</button>' : 'Or paste a GitHub access key (read-only) here once:'}</span>
-        ${tk ? '' : `<div class="ask-row"><input id="ghTok" type="password" class="chip" style="min-height:34px;padding:0 10px;font-size:14px;flex:1 1 220px" placeholder="github_pat_…" aria-label="GitHub access key" autocomplete="off"><button class="btn sm" data-act="uptoken">Save the key</button></div>`}
       </div></details>
   </section>
   ${state.support ? `<section class="card pad" style="display:flex;flex-direction:column;gap:10px"><div class="row"><h2>Details for support</h2><span class="tag ok" style="margin-left:auto">Copied</span></div>
@@ -193,6 +190,4 @@ Object.assign(ACTS, {
     catch (e) { state.upBusy = false; state.upText = ''; toast(String(e.message || e)); render(true); }
   },
   upzip: async () => { api.tabs.create({ url: PP_UPDATE.PAGE }); toast('Download PageProof.zip there, unzip it over your PageProof folder, then press the reload arrow on the extensions page.'); },
-  uptoken: async () => { const i = document.getElementById('ghTok'); const v = i && i.value.trim(); if (!/^(github_pat_|ghp_)[A-Za-z0-9_]{20,}$/.test(v || '')) return toast('That does not look like a GitHub access key.'); await api.storage.local.set({ ppGhToken: v }); toast('Saved on this computer only.'); ACTS.upcheck(); },
-  uptokenclear: async () => { await api.storage.local.remove('ppGhToken'); toast('Removed.'); render(true); },
 });
