@@ -43,6 +43,9 @@ const RS_JOB = (() => {
     const s = await settings();
     let engines = opts.engines || ENGINES.filter(e => s.engines[e]);
     if (opts.kind === 'keep') { const r = await resting(); engines = engines.filter(e => !r[e]); }
+    // A site that has stopped giving results rests too (automatic searches only: a search you
+    // start yourself still tries it).
+    if ((opts.kind === 'keep' || opts.kind === 'fifty') && typeof FC !== 'undefined') { const b = await FC.brokenEngines(); const left = engines.filter(e => !b[e]); if (left.length || opts.kind === 'keep') engines = left; }
     if (!engines.length) return null;
     const hw = typeof ppHardware === 'function' ? await ppHardware() : { limits: { tabs: 3, checks: 4 } };
     const job = {

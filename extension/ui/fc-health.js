@@ -1,0 +1,198 @@
+// Settings › Is everything working? (green and red lights, Copy details for support, updates)
+// and Find copies › Skipped photos (photos that could not be searched, and why).
+Object.assign(state, { skTab: 'All', skMore: 100, support: '', upText: '', upBusy: false });
+const agoText = t => {
+  if (!t) return 'never';
+  const m = Math.round((Date.now() - t) / 60000);
+  if (m < 1) return 'just now'; if (m < 60) return m + ' min ago';
+  if (m < 48 * 60) return Math.round(m / 60) + ' hours ago';
+  return Math.round(m / 1440) + ' days ago';
+};
+const clock = t => new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+const msText = ms => ms == null ? '' : ms < 1000 ? ms + ' ms' : (ms / 1000).toFixed(1) + ' seconds';
+
+// ---------------------------------------------------------------- the lights
+// Each light: [colour, title, what it says, optional button html]
+async function healthLights() {
+  const st = await api.storage.local.get(['fcStatus', 'fcPause', 'fcRest', 'fcLastSearch', 'ppBackupAt', 'fcPerf', 'ppUpdate']);
+  const [k, d, ds, docs, eng, rs, skipped, moved] = [await FC.keep(), await FC.drive(), await FC.driveStateSoft(true), await RS_DOCS.state(), await FC.engines(), await RS_JOB.settings(), await FC.skipped(), await FC.meta.get('picsMoved')];
+  const perf = st.fcPerf || {}, now = Date.now(), L = [];
+  // Google Drive
+  if (!d.done) L.push(['grey', 'Google Drive photos', 'Not connected yet.', '<a class="btn sm" href="#connect">Connect your photos</a>']);
+  else if (ds === 'granted') L.push(['ok', 'Google Drive photos', 'Connected' + (perf.driveAnswer ? '. Drive answered in ' + msText(perf.driveAnswer.ms) + '.' : '.')]);
+  else if (ds === 'prompt') L.push(['warn', 'Google Drive photos', 'Your browser needs one click before PageProof can read the photos (it asks after every restart).', '<button class="btn primary sm" data-act="driveallow">Allow</button>']);
+  else if (ds === 'offline') L.push(['bad', 'Google Drive photos', 'Can\'t be reached. Drive for desktop is signed out or not running.', '<button class="btn sm" data-act="driveretry">Try again</button>']);
+  else L.push(['bad', 'Google Drive photos', 'The photos folder is no longer linked.', '<a class="btn sm" href="#connect">Connect again</a>']);
+  // Keep searching
+  const s = st.fcStatus, alive = s && now - s.beat < 90000;
+  if (!d.done) L.push(['grey', 'Keep searching', 'Waiting for the photos to be connected.']);
+  else if (!k.on) L.push(['grey', 'Keep searching', 'Switched off.', '<a class="btn sm" href="#keep">Open Keep searching</a>']);
+  else if (st.fcPause) L.push(['warn', 'Keep searching', 'Paused by you.', '<a class="btn sm" href="#keep">Open Keep searching</a>']);
+  else if (!alive) L.push(['warn', 'Keep searching', 'Switched on, but its small window is not running.', '<button class="btn sm" data-act="keepshow">Start it</button>']);
+  else L.push([['offline', 'allow', 'setup'].includes(s.state) ? 'warn' : 'ok', 'Keep searching', s.text || 'Running.']);
+  // Last photo searched
+  const last = st.fcLastSearch;
+  const inHours = k.hours === 'all' || (!(k.weekdays !== false && [0, 6].includes(new Date().getDay())) && new Date().getHours() >= (k.from ?? 8) && new Date().getHours() < (k.to ?? 18));
+  if (d.done) L.push([!last ? 'grey' : k.on && alive && inHours && !st.fcPause && now - last > 2 * 3600000 ? 'warn' : 'ok', 'Last photo searched', last ? agoText(last) + (k.on && alive && inHours && now - last > 2 * 3600000 ? '. That is a long gap while Keep searching is on.' : '.') : 'No photo has been searched yet.']);
+  // Search sites
+  for (const e of RS_JOB.ENGINES) {
+    const h = eng[e] || {}, name = FC.ENGINE_NAME[e];
+    if (!rs.engines[e]) L.push(['grey', name, 'Switched off in New search.']);
+    else if (h.until > now) L.push(['bad', name, (h.why === 'fails' ? 'Gave no answer for several photos in a row' : 'Found nothing at all for several photos in a row') + ', so it may have changed its page. Resting until ' + clock(h.until) + '. Those empty results were not counted against your photos.', `<button class="btn sm" data-act="engretry" data-v="${e}">Try it now</button>`]);
+    else if ((st.fcRest || {})[e] > now) L.push(['warn', name, 'Resting until ' + clock(st.fcRest[e]) + ' after an "are you a robot" check.']);
+    else if (h.ok) L.push(['ok', name, 'Last gave results ' + agoText(h.ok) + '.' + (h.zeros >= 3 ? ' Nothing for the last ' + h.zeros + ' photos.' : '')]);
+    else L.push(['grey', name, h.last ? 'Has not given any results yet (' + (h.zeros || 0) + ' photos tried).' : 'Not used yet.']);
+  }
+  // Backup
+  if (docs === 'granted') { const at = st.ppBackupAt ? Date.parse(st.ppBackupAt) : 0; L.push([at ? 'ok' : 'grey', 'Backup in Documents › PageProof', at ? 'Settings saved ' + agoText(at) + '.' : 'Nothing has been saved there yet.']); }
+  else if (docs === 'prompt') L.push(['warn', 'Backup in Documents › PageProof', 'Needs one click before PageProof can save there.', '<button class="btn primary sm" data-act="docsallow">Allow</button>']);
+  else L.push(['warn', 'Backup in Documents › PageProof', 'Not set up, so a reinstall would lose your hidden sites and finds.', '<a class="btn sm" href="#settings">Set it up</a>']);
+  // Skipped photos
+  if (d.done) L.push([skipped.length ? 'warn' : 'ok', 'Skipped photos', skipped.length ? skipped.length.toLocaleString() + (skipped.length >= 5000 ? '+' : '') + ' photos could not be searched.' : 'Every photo tried so far could be opened.', skipped.length ? '<a class="btn sm" href="#skipped">See them</a>' : '']);
+  // Preview pictures
+  L.push([moved ? 'ok' : 'warn', 'Preview pictures', moved ? 'Kept in their own small store.' : 'Still being tidied after the update. This finishes by itself.']);
+  // Version
+  const up = st.ppUpdate;
+  if (up && up.has) L.push(['warn', 'PageProof version', 'You have ' + VERSION + '. Version ' + up.latest + ' is ready.', '<a class="btn primary sm" href="#health?update=1" data-act="upgo">Update</a>']);
+  else if (up && up.error) L.push(['grey', 'PageProof version', 'You have ' + VERSION + '. Could not ask GitHub for the newest version: ' + up.error]);
+  else L.push([up ? 'ok' : 'grey', 'PageProof version', 'You have ' + VERSION + (up ? ', the newest. Checked ' + agoText(up.at) + '.' : '. Not checked yet.')]);
+  return L;
+}
+const LIGHT = { ok: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--bad)', grey: 'var(--faint)' };
+
+// ---------------------------------------------------------------- Copy details for support
+// Numbers and settings only. Never a photo's name, a client's name, a site or a folder path.
+async function supportDetails() {
+  const t = async f => { const t0 = performance.now(); const r = await f(); return [Math.round(performance.now() - t0), r]; };
+  const st = await api.storage.local.get(['fcPerf', 'fcToday', 'fcStatus', 'ppUpdate', 'rsHidden', 'rsAllowed']);
+  const hw = await ppHardware(), k = await FC.keep();
+  const [msPhotos, nPhotos] = await t(() => FC.DB.count('photos'));
+  const [msCopies, copies] = await t(() => FC.allCopies());
+  const [msClients, clients] = await t(() => FC.DB.all('clients'));
+  const [msDrive, drive] = await t(() => FC.driveStateSoft(true));
+  const by = {}; for (const c of copies) by[c.status] = (by[c.status] || 0) + 1;
+  const skipped = await FC.skipped(); const sk = {}; for (const x of skipped) sk[x[3]] = (sk[x[3]] || 0) + 1;
+  let est = {}; try { est = await navigator.storage.estimate(); } catch (e) { /* none */ }
+  const eng = await FC.engines();
+  const lights = await healthLights();
+  const perf = st.fcPerf || {};
+  const NAME = { openPhoto: 'Open one photo from Drive (n = its size in KB)', searchLine: 'Work out which photo is next (n = photos)', readCopies: 'Read all copies found (n = copies)', readEveryFolder: 'Read every folder (n = photos)', readNewFolders: 'Read this and last quarter\'s folders (n = photos)', driveAnswer: 'Google Drive answers' };
+  const lines = [
+    'PageProof details for support', 'Made ' + new Date().toString(), '',
+    'Version: ' + VERSION + (st.ppUpdate && st.ppUpdate.latest ? ' (newest on GitHub: ' + st.ppUpdate.latest + ')' : ''),
+    'Browser: ' + navigator.userAgent,
+    'Computer: ' + hw.cores + ' cores, ' + hw.memGB + ' GB memory, rated ' + hw.level + ' (' + hw.limits.checks + ' photo checks, ' + hw.limits.tabs + ' search tabs at once)',
+    'Page memory in use: ' + (performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) + ' MB' : 'not known'),
+    'Browser storage used by PageProof: ' + (est.usage ? Math.round(est.usage / 1e6) + ' MB' : 'not known'), '',
+    'How much it holds',
+    '  Clients: ' + clients.length + ' (' + clients.filter(c => c.searching === true).length + ' being searched, ' + clients.filter(c => c.priority).length + ' priority)',
+    '  Photos: ' + nPhotos.toLocaleString(),
+    '  Copies found: ' + copies.length.toLocaleString() + ' (' + Object.entries(by).map(([s, n]) => n + ' ' + s).join(', ') + ')',
+    '  Preview pictures stored: ' + (await FC.pics.count().catch(() => '?')),
+    '  Hidden sites: ' + (st.rsHidden || []).length + ', approved sites: ' + (st.rsAllowed || []).length,
+    '  Skipped photos: ' + skipped.length + (skipped.length ? ' (' + Object.entries(sk).map(([s, n]) => n + ' ' + (FC.SKIP_LABEL[s] || s).toLowerCase()).join(', ') + ')' : ''), '',
+    'How long things take right now',
+    '  Count the photos: ' + msText(msPhotos),
+    '  Read all copies found: ' + msText(msCopies),
+    '  Read the clients: ' + msText(msClients),
+    '  Ask Google Drive if it is there: ' + msText(msDrive) + ' (' + drive + ')', '',
+    'How long things took earlier (last time, slowest time, how often)',
+    ...(Object.keys(perf).length ? Object.entries(perf).map(([n, v]) => '  ' + (NAME[n] || n) + ': last ' + msText(v.ms) + ', slowest ' + msText(v.max) + ', ' + v.runs + ' times' + (v.n != null ? ', n = ' + Number(v.n).toLocaleString() : '') + ', ' + agoText(v.at)) : ['  Nothing measured yet.']), '',
+    'Keep searching: ' + (k.on ? 'on' : 'off') + ', pace ' + k.pace + ', hours ' + (k.hours === 'all' ? 'all day' : (k.from ?? 8) + ' to ' + (k.to ?? 18) + (k.weekdays !== false ? ' weekdays' : '')) + ', ' + k.perDay + ' a day' + (k.fiftyAuto ? ' starting by itself at ' + k.fiftyTime : ''),
+    'Today: ' + ((st.fcToday || {}).searched || 0) + ' photos searched, ' + ((st.fcToday || {}).found || 0) + ' new copies',
+    'Search sites: ' + RS_JOB.ENGINES.map(e => e + ' ' + JSON.stringify({ lastGood: eng[e] && eng[e].ok ? agoText(eng[e].ok) : 'never', emptyInARow: (eng[e] || {}).zeros || 0, noAnswerInARow: (eng[e] || {}).fails || 0, resting: !!(eng[e] && eng[e].until > Date.now()) })).join('; '), '',
+    'The lights',
+    ...lights.map(([c, title, text]) => '  [' + ({ ok: 'green', warn: 'yellow', bad: 'red', grey: 'grey' }[c]) + '] ' + title + ': ' + text),
+  ];
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------- the page
+V.health = async () => {
+  const lights = await healthLights();
+  const bad = lights.filter(l => l[0] === 'bad').length, warn = lights.filter(l => l[0] === 'warn').length;
+  const up = await PP_UPDATE.state();
+  const fs = PP_UPDATE.canWriteFolder() ? await PP_UPDATE.folderState() : 'unsupported';
+  const upd = (await api.storage.local.get('ppUpdated')).ppUpdated;
+  const tk = !!(await api.storage.local.get('ppGhToken')).ppGhToken;
+  return `${head('Settings', 'Is everything working?', 'A quick look at every part of PageProof. Green is fine, yellow needs a look, red is stopped.', `<button class="btn" data-act="healthagain">${ic('refresh', 18)} Check again</button><button class="btn primary" data-act="supportcopy">${ic('doc', 18)} Copy details for support</button>`)}
+  <div class="banner ${bad ? 'bad' : warn ? 'warn' : 'info'}" style="font-size:15px"><b>${bad ? plural(bad, 'thing has', 'things have') + ' stopped' : warn ? plural(warn, 'thing needs', 'things need') + ' a look' : 'Everything is working'}</b>${bad && warn ? `<span class="muted">and ${warn} more ${warn === 1 ? 'needs' : 'need'} a look</span>` : ''}</div>
+  <section class="card" style="overflow:hidden">
+    ${lights.map(([c, title, text, btn]) => `<div class="row" style="gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);flex-wrap:nowrap;align-items:center">
+      <span style="width:14px;height:14px;border-radius:50%;flex-shrink:0;background:${LIGHT[c]}" role="img" aria-label="${{ ok: 'Working', warn: 'Needs a look', bad: 'Stopped', grey: 'Not in use' }[c]}"></span>
+      <div style="flex:1;min-width:0"><b>${esc(title)}</b><div class="muted" style="font-size:13.5px">${esc(text)}</div></div>${btn || ''}</div>`).join('')}
+  </section>
+  <section class="card pad" id="updates" style="display:flex;flex-direction:column;gap:12px">
+    <div class="row"><h2>Updates</h2><span class="tag ${up && up.has ? 'warn' : up && !up.error ? 'ok' : 'grey'}" style="margin-left:auto">${up && up.has ? 'Version ' + esc(up.latest) + ' is ready' : up && !up.error ? 'Up to date' : 'Not checked'}</span></div>
+    <p class="muted" style="margin:0;font-size:14px">You have PageProof ${VERSION}. PageProof asks GitHub for a newer version every morning.${upd && upd.to === VERSION ? ' Updated from ' + esc(upd.from) + ' ' + agoText(upd.at) + '.' : ''}</p>
+    ${up && up.error ? `<div class="banner warn" style="padding:10px 12px;font-size:13.5px"><span>${esc(up.error)}</span></div>` : ''}
+    ${state.upText ? `<div class="scanbar"><span class="spin"></span>${esc(state.upText)}</div>` : ''}
+    <div class="row" style="gap:8px">
+      <button class="btn" data-act="upcheck"${state.upBusy ? ' disabled' : ''}>Check for an update now</button>
+      ${up && up.has ? (fs === 'unsupported' ? '' : fs === 'none' ? `<button class="btn primary" data-act="uppick">Update now (pick the PageProof folder first)</button>` : `<button class="btn primary" data-act="upnow"${state.upBusy ? ' disabled' : ''}>Update now to ${esc(up.latest)}</button>`) : ''}
+      ${up && up.has ? `<button class="btn" data-act="upzip">Download the zip instead</button>` : ''}
+    </div>
+    <details class="keyfold"${fs === 'none' && up && up.has ? ' open' : ''}><summary>How "Update now" works</summary>
+      <div class="muted" style="font-size:13.5px;display:flex;flex-direction:column;gap:6px;margin-top:8px">
+        <span><b>1.</b> Once on this computer, you show PageProof the folder it was installed from: the unzipped PageProof folder, the one you loaded on the extensions page. ${fs === 'granted' || fs === 'prompt' ? '<b style="color:var(--ok)">Done.</b> <button class="btn ghost sm" data-act="upforget">Pick a different folder</button>' : fs === 'none' ? '<button class="btn sm" data-act="uppick">Pick the PageProof folder</button>' : 'This browser can\'t do that, so use "Download the zip instead".'}</span>
+        <span><b>2.</b> "Update now" downloads the newest PageProof from GitHub, puts the new files into that folder and restarts PageProof. Your finds, settings and lists are not touched.</span>
+        <span><b>3.</b> After a browser restart the browser may ask once to "Allow" changes to the folder.</span>
+        <span>PageProof's code on GitHub is private, so this browser must be signed in to GitHub with an account that can see it. ${tk ? 'An access key is saved on this computer. <button class="btn ghost sm" data-act="uptokenclear">Remove it</button>' : 'Or paste a GitHub access key (read-only) here once:'}</span>
+        ${tk ? '' : `<div class="ask-row"><input id="ghTok" type="password" class="chip" style="min-height:34px;padding:0 10px;font-size:14px;flex:1 1 220px" placeholder="github_pat_…" aria-label="GitHub access key" autocomplete="off"><button class="btn sm" data-act="uptoken">Save the key</button></div>`}
+      </div></details>
+  </section>
+  ${state.support ? `<section class="card pad" style="display:flex;flex-direction:column;gap:10px"><div class="row"><h2>Details for support</h2><span class="tag ok" style="margin-left:auto">Copied</span></div>
+    <p class="muted" style="margin:0;font-size:14px">This is exactly what was copied. Paste it into a message. It has numbers and settings only: no photo names, client names, sites or folder paths.</p>
+    <textarea readonly style="width:100%;min-height:260px;font-family:var(--mono,monospace);font-size:12.5px;border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--sunk);color:var(--ink)">${esc(state.support)}</textarea></section>` : ''}`;
+};
+// ---------------------------------------------------------------- Skipped photos
+V.skipped = async () => {
+  const all = await FC.skipped();
+  const kinds = {}; for (const x of all) kinds[x[3]] = (kinds[x[3]] || 0) + 1;
+  const rows = all.filter(x => state.skTab === 'All' || x[3] === state.skTab);
+  const page = rows.slice(0, state.skMore);
+  const canRetry = all.some(x => x[3] !== 'type');
+  return `${head('Find copies', 'Skipped photos', 'Photos PageProof could not search, and why. They are tried again by themselves every 3 months.', `<a class="btn" href="#clients">Clients and photos</a>${canRetry ? `<button class="btn primary" data-act="skretry" data-v="">Try them all again</button>` : ''}`)}
+  ${await driveBanner()}
+  ${!all.length ? `<section class="card pad" style="text-align:center;padding:48px 22px"><h2>No skipped photos</h2><p class="muted" style="margin:8px 0 0">Every photo PageProof has tried so far could be opened and searched.</p></section>` : `
+  <section class="card" style="overflow:hidden">
+    <div class="toolbar"><div class="tabs" role="tablist">${[['All', 'All', all.length], ...Object.keys(FC.SKIP_LABEL).filter(k => kinds[k]).map(k => [k, FC.SKIP_LABEL[k], kinds[k]])].map(([k, l, n]) => `<button role="tab" class="${state.skTab === k ? 'on' : ''}" aria-selected="${state.skTab === k}" data-act="sktab" data-v="${k}">${l} <span>${n.toLocaleString()}</span></button>`).join('')}</div></div>
+    ${state.skTab !== 'All' ? `<div style="padding:12px 18px;border-bottom:1px solid var(--line);background:var(--sunk);font-size:14px">${esc(FC.SKIP_WHY[state.skTab])}</div>` : ''}
+    <div class="scroll"><table><thead><tr><th>Photo</th><th>Client</th><th>Why</th><th>When</th><th></th></tr></thead><tbody>
+      ${page.map(([id, name, client, kind, at]) => `<tr><td><b style="overflow-wrap:anywhere">${esc(name)}</b><div class="faint mono" style="font-size:12px;overflow-wrap:anywhere">${esc(String(id).replace(/^d:\+?/, '').split('/').slice(0, -1).join(' › '))}</div></td><td>${esc(client || 'Client unknown')}</td><td><span class="tag ${kind === 'type' ? 'grey' : 'warn'}" title="${esc(FC.SKIP_WHY[kind] || '')}">${esc(FC.SKIP_LABEL[kind] || kind)}</span></td><td class="muted" style="white-space:nowrap">${esc(fmtDate(at))}</td><td style="text-align:right">${kind === 'type' ? '' : `<button class="btn" style="min-height:32px;font-size:13px" data-act="skretry" data-v="${esc(id)}">Try again</button>`}</td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="row faint" style="padding:10px 18px;border-top:1px solid var(--line);font-size:12.5px;gap:12px"><span>Showing ${page.length.toLocaleString()} of ${rows.length.toLocaleString()}${all.length >= 5000 ? ' (the newest 5,000 are kept)' : ''}.</span>${rows.length > page.length ? '<button class="btn" style="min-height:30px;font-size:13px;margin-left:auto" data-act="skmore">Show more</button>' : ''}</div>
+  </section>`}`;
+};
+V.skipped.guard = async () => ((await FC.drive()).done ? null : 'connect');
+
+Object.assign(ACTS, {
+  healthagain: async () => { state.support = ''; toast('Checked again.'); render(true); },
+  supportcopy: async () => {
+    toast('Measuring…');
+    state.support = await supportDetails();
+    try { await navigator.clipboard.writeText(state.support); toast('Copied. Paste it into a message to send it.'); } catch (e) { toast('Could not copy by itself. Select the text in the box and copy it.'); }
+    await render(true);
+    const b = view.querySelector('textarea'); if (b) b.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  },
+  engretry: async v => { await FC.retryEngine(v); toast(FC.ENGINE_NAME[v] + ' is tried again with the next photo.'); render(true); },
+  sktab: v => { state.skTab = v; state.skMore = 100; render(true); },
+  skmore: () => { state.skMore += 200; render(true); },
+  skretry: async v => { const n = await FC.retrySkipped(v ? [v] : null); toast(n ? plural(n, 'photo goes', 'photos go') + ' to the front of the line.' : 'Nothing to try again.'); render(true); },
+  upgo: () => { location.hash = 'health'; setTimeout(() => { const u = document.getElementById('updates'); if (u) u.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 300); },
+  upcheck: async () => { state.upBusy = true; state.upText = 'Asking GitHub…'; render(true); const st = await PP_UPDATE.check(); state.upBusy = false; state.upText = ''; toast(st.error ? 'Could not check: ' + st.error : st.has ? 'Version ' + st.latest + ' is ready.' : 'You have the newest version.'); render(true); },
+  uppick: async () => { try { await PP_UPDATE.pick(); toast('Folder saved. Press Update now.'); } catch (e) { if (e && e.name !== 'AbortError') toast(String(e.message || e)); } render(true); },
+  upforget: async () => { await PP_UPDATE.forget(); render(true); },
+  upnow: async () => {
+    if (state.upBusy) return;
+    state.upBusy = true;
+    // The first step (allowing the folder) has to happen straight from the click.
+    const job = PP_UPDATE.apply(t => { state.upText = t; const el = view.querySelector('.scanbar'); if (el) el.lastChild.textContent = t; else render(true); });
+    state.upText = 'Starting…'; render(true);
+    try { const r = await job; state.upText = 'Updated to ' + r.version + '. Restarting PageProof…'; render(true); }
+    catch (e) { state.upBusy = false; state.upText = ''; toast(String(e.message || e)); render(true); }
+  },
+  upzip: async () => { api.tabs.create({ url: PP_UPDATE.PAGE }); toast('Download PageProof.zip there, unzip it over your PageProof folder, then press the reload arrow on the extensions page.'); },
+  uptoken: async () => { const i = document.getElementById('ghTok'); const v = i && i.value.trim(); if (!/^(github_pat_|ghp_)[A-Za-z0-9_]{20,}$/.test(v || '')) return toast('That does not look like a GitHub access key.'); await api.storage.local.set({ ppGhToken: v }); toast('Saved on this computer only.'); ACTS.upcheck(); },
+  uptokenclear: async () => { await api.storage.local.remove('ppGhToken'); toast('Removed.'); render(true); },
+});

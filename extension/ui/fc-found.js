@@ -3,7 +3,7 @@
 // (Stolen, Licensed, Remove, Skip), undo for every answer, hiding sites and countries, and
 // grouping by client, photo, site or site owner.
 Object.assign(state, {
-  open: '', picked: [], fFilter: 'All', fView: 'client', fSort: 'act', fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fOwner: '',
+  open: '', picked: [], fFilter: 'All', fView: 'client', fSort: 'act', fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fOwner: '',
   showFilters: false, exp: [], more: 250, qi: 0, cmpMode: 'side', cut: 50, rvTab: 'review', recentHides: [],
 });
 const HIST = [];         // every answer and hide, newest last, so each one can be undone in turn
@@ -41,11 +41,25 @@ async function loadFC() {
   const ownerList = await FC.owners([...new Set(copies.filter(c => c.status !== 'removed').map(c => c.site))]);
   const ownerOf = new Map();
   for (const o of ownerList) for (const s of o.sites) ownerOf.set(s, o);
+  // Repeat offenders: how many copies you already marked Stolen on the same site, or on any
+  // site of the same owner.
+  const stolenSite = new Map(), stolenOwner = new Map();
+  for (const c of copies) if (c.status === 'stolen') {
+    stolenSite.set(c.site, (stolenSite.get(c.site) || 0) + 1);
+    const o = ownerOf.get(c.site); if (o && o.real) stolenOwner.set(o.key, (stolenOwner.get(o.key) || 0) + 1);
+  }
+  for (const c of copies) {
+    const o = ownerOf.get(c.site), own = c.status === 'stolen' ? 1 : 0;
+    const bySite = (stolenSite.get(c.site) || 0) - own, byOwner = o && o.real ? (stolenOwner.get(o.key) || 0) - own : 0;
+    c.repeat = Math.max(bySite, byOwner, 0);
+    c.repeatWho = byOwner > bySite ? o.name : c.site;
+  }
   FCD = { copies, photos, clients: new Map(clients.map(c => [c.name, c])), countries, facts, owners: ownerList, ownerOf };
   return FCD;
 }
 const siteHidden = c => RS_LISTS.isHidden(c.site, c.url);
-const actScore = c => (c.status === 'new' || c.status === 'stolen' ? 40 : 0) + (c.online === 'back' ? 45 : c.online === 'up' ? 20 : 0) + (c.use === 'shop' ? 20 : 0) + (c.credit === 'removed' ? 12 : 0) + (c.risk.level === 'sus' ? -6 : 0) + (c.pct || 0) / 10;
+const repeatTag = c => c.repeat && c.status === 'new' ? `<span class="tag bad" style="font-size:11.5px" title="You already marked ${c.repeat} ${c.repeat === 1 ? 'copy' : 'copies'} on ${esc(c.repeatWho)} as Stolen">${c.repeat} stolen before</span>` : '';
+const actScore = c => (c.status === 'new' || c.status === 'stolen' ? 40 : 0) + (c.repeat && c.status === 'new' ? 30 : 0) + (c.online === 'back' ? 45 : c.online === 'up' ? 20 : 0) + (c.use === 'shop' ? 20 : 0) + (c.credit === 'removed' ? 12 : 0) + (c.risk.level === 'sus' ? -6 : 0) + (c.pct || 0) / 10;
 const onlineText = c => c.online === 'back' ? 'Back online' + (c.backAt ? ' ' + shortDate(c.backAt) : '') : c.online === 'gone' ? 'Gone' + (c.goneAt ? ' since ' + shortDate(c.goneAt) : '') : 'Still up';
 const tagFor = c => `<span class="tag ${STATUS[c.status][1]}">${STATUS[c.status][0]}</span>`;
 const lineBar = p => p == null || p < 0 ? '<span class="faint" style="font-size:12.5px">—</span>' : `<div class="row" style="gap:8px;flex-wrap:nowrap"><span class="num" style="width:34px;text-align:right;font-weight:600">${p}%</span><span class="bar" style="width:46px;flex-shrink:0"><i style="width:${p}%;background:${p >= 80 ? 'var(--bad)' : p >= 60 ? 'var(--warn)' : 'var(--faint)'}"></i></span></div>`;
@@ -95,7 +109,7 @@ async function loadOurs(root = document) {
 // ---------------------------------------------------------------- the filters
 function passMain(c) {
   return (state.fClient === 'Any' || (c.clientName || 'Client unknown') === state.fClient) && (state.fUse === 'Any' || c.use === state.fUse) &&
-    (state.fRisk === 'Any' || c.risk.level === state.fRisk) && (state.fCredit === 'Any' || (c.credit || '') === state.fCredit) && (!state.fShop || c.use === 'shop') &&
+    (state.fRisk === 'Any' || c.risk.level === state.fRisk) && (state.fCredit === 'Any' || (c.credit || '') === state.fCredit) && (!state.fShop || c.use === 'shop') && (!state.fRepeat || (c.repeat > 0 && c.status === 'new')) &&
     (!state.fOwner || (FCD.ownerOf.get(c.site) || {}).key === state.fOwner);
 }
 function passStatus(c, f = state.fFilter) {
@@ -150,8 +164,8 @@ async function drawer(list) {
   <div class="row" style="flex-wrap:nowrap"><div style="min-width:0;flex:1"><div class="eyebrow" style="margin:0">${esc(FC.USE[c.use][0])}${idx >= 0 ? ` · ${idx + 1} of ${list.length}` : ''}</div><h2 style="font-size:20px;overflow-wrap:anywhere">${esc(c.site)}</h2></div><button class="btn" data-act="closedrawer" aria-label="Close">✕</button></div>
   ${last ? `<button class="btn" style="min-height:34px;justify-content:flex-start;font-size:13.5px;border-color:var(--accent);color:var(--accent)" data-act="undo">↶ Undo: ${esc(last.label)}<span class="kbd" style="margin-left:auto">U</span></button>` : ''}
   <div class="pair"><div class="frame ours"><img data-our="${esc(c.photo)}" src="${oursImg(p)}" alt="Your client's photo"><span class="lab">Your client's</span></div><div class="frame theirs"><img src="${theirImg(c)}" alt="Their copy" referrerpolicy="no-referrer"><span class="lab">Theirs</span></div></div>
-  <div class="row">${tagFor(c)}${c.pct >= 0 && c.pct != null ? `<b style="color:${c.pct >= 80 ? 'var(--bad)' : 'var(--warn)'}" data-gloss="Lines up">${c.pct}% lines up</b>` : ''}${c.match === 'maybe' ? '<span class="tag warn" data-gloss="Maybe">Maybe</span>' : ''}<button class="btn ghost sm" style="margin-left:auto" data-act="compare">Compare closely</button></div>
-  ${p && p.rel ? `<section class="dsec"><div class="dsh">Copyright registration</div>${regBox(p, reg)}</section><section class="dsec"><div class="dsh">Your client's photo in Drive</div>${pathBox(path)}</section>` : ''}
+  <div class="row">${tagFor(c)}${repeatTag(c)}${c.pct >= 0 && c.pct != null ? `<b style="color:${c.pct >= 80 ? 'var(--bad)' : 'var(--warn)'}" data-gloss="Lines up">${c.pct}% lines up</b>` : ''}${c.match === 'maybe' ? '<span class="tag warn" data-gloss="Maybe">Maybe</span>' : ''}<button class="btn ghost sm" style="margin-left:auto" data-act="compare">Compare closely</button></div>
+  ${p && p.rel ? `${reg ? `<section class="dsec"><div class="dsh">Copyright registration</div>${regBox(p, reg)}</section>` : ''}<section class="dsec"><div class="dsh">Your client's photo in Drive</div>${pathBox(path)}</section>` : ''}
   <dl class="facts">
     <dt>Page</dt><dd class="mono" style="font-size:12px;overflow-wrap:anywhere"><a href="${safeUrl(c.url)}" target="_blank" rel="noreferrer">${esc(c.url)}</a></dd>
     ${c.title ? `<dt>Title</dt><dd>${esc(c.title)}</dd>` : ''}
@@ -168,9 +182,14 @@ async function drawer(list) {
     ${c.w ? `<dt>Their size</dt><dd>${c.w} × ${c.h}${sz ? ' · ' + sz : ''}</dd>` : ''}
   </dl>
   <a class="lookup" href="#who" data-act="gowho" data-v="${esc(c.id)}">${ic('owner', 18)}<span><b>Who's behind this site</b><br><span class="muted" style="font-size:13px">${f ? esc(f.names && f.names[0] ? 'Probably ' + f.names[0] : 'Names, contacts and domain facts') : 'Read names, contacts and domain facts off the site'}</span></span><span style="margin-left:auto">${ic('chev', 16)}</span></a>
+  <details class="hidebox" id="okbox"><summary><b>Is this site allowed to use the photo?</b> <span class="muted" style="font-size:13px">Approve it</span></summary>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+    ${c.clientName ? `<button class="lookup" style="text-align:left;cursor:pointer" data-act="approvesite" data-v="client"><span style="font-size:18px">✅</span><span><b>Approved for ${esc(c.clientName)} only</b><br><span class="muted" style="font-size:12.5px">${esc(FC.baseOf(c.site))} may use this client's photos. Other clients' photos there still show as new.</span></span></button>` : ''}
+    <button class="lookup" style="text-align:left;cursor:pointer" data-act="approvesite" data-v="all"><span style="font-size:18px">✅</span><span><b>Approved for every client</b><br><span class="muted" style="font-size:12.5px">${esc(FC.baseOf(c.site))} may use any client's photos (a partner, a wire service, your own site).</span></span></button>
+    <span class="faint" style="font-size:12.5px">Copies on an approved site are marked Licensed by themselves, now and in every later search. Change it in Settings › Hidden and approved sites.</span></div></details>
   <details class="hidebox" id="hidebox"><summary><b>Don't want results from this site?</b> <span class="muted" style="font-size:13px">Hide it</span></summary>
     <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">${hideChoices(c).map(([v, l, d]) => `<button class="lookup" style="text-align:left;cursor:pointer" data-act="hidesite" data-v="${esc(v)}"><span style="font-size:18px">🚫</span><span><b>${esc(l)}</b><br><span class="muted" style="font-size:12.5px">${esc(d)}</span></span></button>`).join('')}
-    <span class="faint" style="font-size:12.5px">Hidden sites never show again in any search. Bring them back from the Sites chips above the list, or Settings › Hidden and allowed sites.</span></div></details>
+    <span class="faint" style="font-size:12.5px">Hidden sites never show again in any search. Bring them back from the Sites chips above the list, or Settings › Hidden and approved sites.</span></div></details>
   <div class="dacts" style="display:flex;flex-direction:column;gap:8px;margin-top:auto">
   ${c.status === 'removed' ? `<div class="banner info" style="padding:10px 12px"><span style="flex:1;font-size:14px"><b>Removed</b><br><span class="muted">Hidden from your results. It won't come back for this photo.</span></span><button class="btn" data-act="putback">Put back</button></div>` : `
     ${['stolen', 'licensed'].includes(c.status) ? `<div class="row" style="gap:8px;font-size:13.5px"><span>Your answer: ${tagFor(c)}</span><button class="btn ghost sm" style="margin-left:auto" data-act="changeans">Change answer</button></div>` : ''}
@@ -181,7 +200,7 @@ async function drawer(list) {
       <button class="btn" style="flex-direction:column;gap:0;min-height:52px" data-act="dverdict" data-v="removed"><b>🗑 Remove</b><span class="kbd">N</span></button>
       <button class="btn" style="flex-direction:column;gap:0;min-height:52px" data-act="dverdict" data-v="skip"><b>Skip</b><span class="kbd">→</span></button>
     </div>`}
-    <div class="grid" style="grid-template-columns:1fr 1fr 1fr;gap:6px"><a class="btn" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer">Open page</a><button class="btn" data-act="capturecopy">${ic('capture', 16)} Capture</button><button class="btn" data-act="openhide">🚫 Hide site</button></div>
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:6px"><a class="btn" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer">Open page</a><button class="btn" data-act="capturecopy">${ic('capture', 16)} Capture</button><button class="btn" data-act="openok">✅ Approve site</button><button class="btn" data-act="openhide">🚫 Hide site</button></div>
     <button class="btn primary" data-act="evidence">${ic('doc', 18)} Evidence report</button>
   </div></aside>`;
 }
@@ -205,7 +224,7 @@ V.found = async () => {
     <td class="muted" style="white-space:nowrap">${esc(FC.USE[c.use][0])}</td>
     <td><div class="row" style="gap:4px;flex-wrap:nowrap">${flagsFor(c)}</div></td>
     <td>${lineBar(c.pct)}</td>
-    <td>${tagFor(c)}${c.match === 'maybe' ? ' <span class="tag warn" style="font-size:11.5px">Maybe</span>' : ''}</td>
+    <td>${tagFor(c)}${c.match === 'maybe' ? ' <span class="tag warn" style="font-size:11.5px">Maybe</span>' : ''}${repeatTag(c) ? ' ' + repeatTag(c) : ''}</td>
     <td>${onDot(c)}</td>
     <td style="width:28px;color:var(--faint)">${ic('chev', 16)}</td></tr>`;
   const groupHead = (key, html, n, foldable) => {
@@ -248,6 +267,7 @@ V.found = async () => {
   if (rows.length > shown) body += `<tr class="more-row"><td colspan="8"><button class="btn" data-act="fmore">Show ${Math.min(250, rows.length - shown)} more (${rows.length - shown} not shown)</button></td></tr>`;
   const active = [['fClient', state.fClient], ['fUse', state.fUse === 'Any' ? 'Any' : FC.USE[state.fUse][0]], ['fRisk', state.fRisk === 'Any' ? 'Any' : RISK[state.fRisk][0]], ['fCredit', state.fCredit === 'Any' ? 'Any' : CREDIT[state.fCredit]]].filter(([, v]) => v !== 'Any');
   if (state.fShop) active.push(['fShop', 'Selling something']);
+  if (state.fRepeat) active.push(['fRepeat', 'Repeat offenders']);
   if (state.fOwner) { const o = FCD.owners.find(z => z.key === state.fOwner); active.push(['fOwner', 'Owner: ' + (o ? o.name : '?')]); }
   const sel = (id, label, opts, cur) => `<label>${label}<select data-act="fsel" data-v="${id}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`;
   const quick = (label, n, col, act, v) => `<button class="qstat" data-act="${act}" data-v="${v}"><b style="color:${col}">${n}</b><span>${label}</span></button>`;
@@ -266,6 +286,7 @@ V.found = async () => {
   <div class="row" style="gap:10px">
     ${quick('back online', live.filter(c => c.online === 'back').length, 'var(--bad)', 'ffilter', 'Back online')}
     ${quick('waiting for you', nNew, 'var(--copy)', 'ffilter', 'New')}
+    ${quick('from repeat offenders', live.filter(c => c.repeat && c.status === 'new').length, 'var(--bad)', 'qrepeat', '')}
     ${quick('selling something', live.filter(c => c.use === 'shop').length, 'var(--ok)', 'qshop', '')}
     ${quick('on suspicious sites', live.filter(c => c.risk.level === 'sus').length, 'var(--bad)', 'qrisk', 'sus')}
     ${quick('credit removed', live.filter(c => c.credit === 'removed').length, 'var(--copy)', 'qcredit', 'removed')}
@@ -275,6 +296,7 @@ V.found = async () => {
     <div class="kitem"><span class="flag" style="color:var(--bad);background:var(--bad-soft)">${FLAG_ICON.sus}</span><div><b>Suspicious site</b><span>Young site, hidden owner, odd ending like .xyz, or a name copycat sites use.</span></div></div>
     <div class="kitem"><span class="flag" style="color:var(--warn);background:var(--warn-soft)">${FLAG_ICON.watch}</span><div><b>Worth a look</b><span>Something is a bit off. Not a clear warning.</span></div></div>
     <div class="kitem"><span class="flag" style="color:var(--copy);background:var(--copy-soft)">${FLAG_ICON.cmi}</span><div><b>Credit removed</b><span>Your client's photo has a copyright line in its hidden data. Their copy doesn't.</span></div></div>
+    <div class="kitem"><span class="tag bad" style="font-size:11.5px">2 stolen before</span><div><b>Repeat offender</b><span>You already marked copies on this site, or on another site of the same owner, as Stolen. These come first in Review.</span></div></div>
     <div class="kitem"><span class="flag" style="color:var(--ok);background:var(--ok-soft)">${FLAG_ICON.sell}</span><div><b>Selling something</b><span>A shop page, product listing or ad. Commercial use.</span></div></div>
   </section></details>
   <section class="card" style="overflow:hidden">
@@ -433,11 +455,25 @@ Object.assign(ACTS, {
   fmore: () => { state.more += 250; render(true); },
   ffilter: v => { state.fFilter = v; state.more = 250; if (route() !== 'found') location.hash = 'found'; else render(true); },
   qshop: () => { state.fShop = true; state.fFilter = 'All'; render(true); },
+  qrepeat: () => { state.fRepeat = true; state.fFilter = 'New'; render(true); },
   qrisk: v => { state.fRisk = v; state.fFilter = 'All'; render(true); },
   qcredit: v => { state.fCredit = v; state.fFilter = 'All'; render(true); },
   togglefilters: () => { state.showFilters = !state.showFilters; render(true); },
-  unfilter: v => { if (v === 'all') Object.assign(state, { fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fOwner: '' }); else state[v] = v === 'fShop' ? false : v === 'fOwner' ? '' : 'Any'; render(true); },
+  unfilter: v => { if (v === 'all') Object.assign(state, { fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fOwner: '' }); else state[v] = v === 'fShop' || v === 'fRepeat' ? false : v === 'fOwner' ? '' : 'Any'; render(true); },
   hidesite: async v => { await hideSite(v); render(true); },
+  openok: () => { const d = document.getElementById('okbox'); if (d) { d.open = true; d.scrollIntoView({ block: 'center', behavior: 'smooth' }); } },
+  approvesite: async v => {
+    const c = FCD.copies.find(x => x.id === state.open);
+    if (!c) return;
+    const base = FC.baseOf(c.site), who = v === 'client' ? c.clientName : '';
+    const undo = await FC.approveSite(base, who, c.id);
+    const i = LIST.indexOf(c.id);
+    const nextId = LIST.slice(i + 1).find(id => { const x = FCD.copies.find(y => y.id === id); return x && FC.baseOf(x.site) !== base; }) || '';
+    HIST.push({ label: base + ' approved' + (who ? ' for ' + who : ' for every client'), undo, open: c.id });
+    FCD = null; state.open = nextId;
+    toastUndo(base + ' is approved' + (who ? ' for ' + who : ' for every client') + '. Its copies are marked Licensed.');
+    render(true);
+  },
   openhide: () => { const d = document.getElementById('hidebox'); if (d) { d.open = true; d.scrollIntoView({ block: 'center', behavior: 'smooth' }); } },
   showsite: async v => {
     await RS_LISTS.load(); await RS_LISTS.remove('hidden', v); FCD = null;
@@ -549,7 +585,7 @@ async function ownerSummary(site) {
 // ---------------------------------------------------------------- Review new copies
 function reviewQueue() {
   return FCD.copies.filter(c => c.status === 'new' && visible(c))
-    .sort((a, b) => (!!a.skipped - !!b.skipped) || (a.skipped || '').localeCompare(b.skipped || '') || (b.match === 'same') - (a.match === 'same') || (b.pct || 0) - (a.pct || 0));
+    .sort((a, b) => (!!a.skipped - !!b.skipped) || (a.skipped || '').localeCompare(b.skipped || '') || (b.repeat > 0) - (a.repeat > 0) || (b.match === 'same') - (a.match === 'same') || (b.pct || 0) - (a.pct || 0));
 }
 V.review = async () => {
   await loadFC();
@@ -590,7 +626,7 @@ V.review = async () => {
       </div>
     </section>
     <aside class="card pad" style="flex:2 1 320px;display:flex;flex-direction:column;gap:16px" aria-label="About this copy">
-      <div><div class="row" style="gap:8px"><h2 style="overflow-wrap:anywhere">${esc(c.site)}</h2><span class="tag ${c.match === 'same' ? 'bad' : 'warn'}">${c.match === 'same' ? 'Same photo' : 'Maybe'}${c.pct >= 0 && c.pct != null ? ' · ' + c.pct + '% lines up' : ''}</span></div><a href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" class="mono" style="overflow-wrap:anywhere;display:block;margin-top:4px">${esc(c.url)}</a></div>
+      <div><div class="row" style="gap:8px"><h2 style="overflow-wrap:anywhere">${esc(c.site)}</h2><span class="tag ${c.match === 'same' ? 'bad' : 'warn'}">${c.match === 'same' ? 'Same photo' : 'Maybe'}${c.pct >= 0 && c.pct != null ? ' · ' + c.pct + '% lines up' : ''}</span></div>${c.repeat ? `<div class="banner warn" style="padding:8px 12px;margin-top:8px;font-size:13.5px"><span><b>Repeat offender.</b> You already marked ${plural(c.repeat, 'copy', 'copies')} on ${esc(c.repeatWho)} as Stolen. These come first in Review.</span></div>` : ''}<a href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" class="mono" style="overflow-wrap:anywhere;display:block;margin-top:4px">${esc(c.url)}</a></div>
       <dl class="facts">
         <dt>Your client's photo</dt><dd>${esc(c.photoName)}<br><span class="muted">${p && p.w ? p.w + ' × ' + p.h + ' · ' : ''}${esc(c.clientName || 'Client unknown')}</span></dd>
         <dt>Their copy</dt><dd>${c.w ? c.w + ' × ' + c.h : 'Size not known'} · ${esc(FC.USE[c.use][0])}</dd>
@@ -655,11 +691,17 @@ document.addEventListener('keydown', e => {
 // Shown on Find copies pages when Google Drive can't be reached or needs a click.
 async function driveBanner() {
   const st = await FC.driveStateSoft();
-  if (st === 'prompt') return `<div class="banner warn" role="alert">${ic('help', 22)}<div style="flex:1 1 260px;min-width:0"><b>One click needed: let PageProof read your photos again</b><div style="font-size:13.5px">Your browser asks once after it restarts. Searching waits until you press Allow.</div></div><button class="btn primary" data-act="driveallow">Allow</button></div>`;
+  if (st === 'prompt') return `<div class="banner warn" role="alert">${ic('help', 22)}<div style="flex:1 1 260px;min-width:0"><b>One click needed: let PageProof read your photos again</b><div style="font-size:13.5px">Your browser asks once after it restarts. Searching waits until you press Allow. If the browser offers "Allow on every visit", pick that and it stops asking.</div></div><button class="btn primary" data-act="driveallow">Allow</button></div>`;
   if (st === 'offline') return `<div class="banner bad" role="alert">${ic('help', 22)}<div style="flex:1 1 260px;min-width:0"><b>Can't reach Google Drive. Searching is paused.</b><div style="font-size:13.5px;color:var(--ink)">Drive for desktop is signed out or not running, so the photos folder is missing. Nothing is lost: it picks up where it left off.</div></div><button class="btn primary" data-act="driveretry">Try again</button></div>`;
   return '';
 }
 Object.assign(ACTS, {
-  driveallow: async () => { if (await FC.allowDrive()) { toast('Thanks. PageProof can read your photos again.'); } render(true); },
+  driveallow: async () => {
+    const ok = await FC.allowDrive();
+    if (ok) { toast('Thanks. PageProof can read your photos again.'); api.storage.local.set({ fcNeedsAllow: 0 }).catch(() => {}); }
+    await render(true);
+    // Today's batch was waiting for this click.
+    if (ok && state.wantFifty) { state.wantFifty = false; ACTS.fifty(); }
+  },
   driveretry: async () => { const st = await FC.driveStateSoft(true); toast(st === 'granted' ? 'Google Drive is back. Searching carries on.' : 'Still can\'t reach Google Drive.'); render(true); },
 });

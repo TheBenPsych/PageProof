@@ -90,6 +90,7 @@ let redrawT = null;
 // Keep searching writes a heartbeat every 30 seconds. Only what you can see counts as a change.
 const statusLook = s => (s ? [s.state, s.text, s.current && s.current.id].join('|') : '');
 api.storage.onChanged.addListener(ch => {
+  if ((ch.fcEngines || ch.ppUpdate) && ['home', 'health'].includes(route()) && !state.upBusy) { clearTimeout(redrawT); redrawT = setTimeout(() => render(true), 600); return; }
   if (!ch.fcChanged && !ch.fcStatus) return;
   if (!ch.fcChanged && statusLook(ch.fcStatus.oldValue) === statusLook(ch.fcStatus.newValue)) return;
   if (ch.fcStatus && !['keep', 'home'].includes(route())) return;
@@ -187,6 +188,9 @@ async function homeFinds() {
   let alerts = '';
   if (store.fcDriveOffline) alerts += `<div class="banner bad" role="alert">${ic('help', 22)}<div style="flex:1 1 260px"><b>Can't reach Google Drive. Searching is paused.</b><div style="font-size:13.5px;color:var(--ink)">Drive for desktop is signed out or not running. It picks up where it left off.</div></div><a class="btn" href="#keep">Keep searching</a></div>`;
   else if (ds === 'prompt') alerts += `<div class="banner warn" role="alert">${ic('help', 22)}<div style="flex:1 1 260px"><b>One click needed: let PageProof read your photos again</b></div><button class="btn primary" data-act="driveallow">Allow</button></div>`;
+  const upd = await PP_UPDATE.state();
+  if (upd && upd.has) alerts += `<div class="banner info" role="status"><div style="flex:1 1 260px"><b>PageProof ${esc(upd.latest)} is ready</b><div style="font-size:13.5px">You have ${VERSION}. Updating takes about a minute and keeps everything you have.</div></div><a class="btn primary" href="#health" data-act="upgo">Update</a></div>`;
+  for (const [e, until] of Object.entries(await FC.brokenEngines())) alerts += `<div class="banner bad" role="alert">${ic('help', 22)}<div style="flex:1 1 260px"><b>${FC.ENGINE_NAME[e]} may have stopped working</b><div style="font-size:13.5px;color:var(--ink)">It gave nothing for many photos in a row, so PageProof is resting it until ${new Date(until).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}. Those empty results are not counted against your photos. The other search sites carry on.</div></div><a class="btn" href="#health">See details</a></div>`;
   if (back.length) alerts += `<div class="banner bad" role="alert"><div style="flex:1 1 260px"><b>${back.length} ${back.length === 1 ? 'copy is' : 'copies are'} back online</b><div style="font-size:13.5px;color:var(--ink)">They had gone, and came back: ${esc([...new Set(back.map(c => c.site))].slice(0, 3).join(', '))}</div></div><a class="btn primary" href="#found?filter=Back%20online">See them</a></div>`;
   const main = `<section class="card pad" style="display:flex;flex-direction:column;gap:12px">
     <div class="row"><h2>Needs your review</h2><a class="btn ghost" style="margin-left:auto" href="#found">All copies found</a>${nNew ? `<a class="btn primary" href="#review">Review ${nNew} new</a>` : ''}</div>
@@ -315,20 +319,24 @@ V.browser.after = async () => {
 V.settings = async () => {
   const [name, hw, docs] = [await getName(), await ppHardware(), await RS_DOCS.state()];
   await RS_LISTS.load();
+  const upd = await PP_UPDATE.state();
   return `${head('Settings', 'Settings', 'These apply to everything in PageProof and are saved on this computer.')}
   <div class="grid g2">
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>You</h2>
       <label class="field" for="sName">Your name on every pack and report<input id="sName" value="${esc(name)}" placeholder="For example, Ben"></label>
       <div class="dsh" style="margin-top:6px">Version</div>
-      <p class="muted" style="margin:0;font-size:14px">PageProof ${VERSION}</p>
-      <div class="row" style="gap:8px"><a class="btn" href="#whatsnew">What's new</a><button class="btn" data-act="tour">Take the tour again</button></div></section>
+      <p class="muted" style="margin:0;font-size:14px">PageProof ${VERSION}${upd && upd.has ? ` · <b style="color:var(--warn)">version ${esc(upd.latest)} is ready</b>` : ''}</p>
+      <div class="row" style="gap:8px"><a class="btn${upd && upd.has ? ' primary' : ''}" href="#health" data-act="upgo">${upd && upd.has ? 'Update now' : 'Updates'}</a><a class="btn" href="#whatsnew">What's new</a><button class="btn" data-act="tour">Take the tour again</button></div></section>
+    <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>Is everything working?</h2>
+      <p class="muted" style="margin:0;font-size:14px">Green and red lights for Google Drive, Keep searching, each search site and your backup. One button copies the details to send for support.</p>
+      <a class="btn" style="align-self:flex-start" href="#health">Check now</a></section>
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>PageProof folder</h2>
-      <p class="muted" style="margin:0;font-size:14px">Documents › PageProof. Holds your hidden and allowed sites and rejected links as text files, so they survive updates and reinstalls.</p>
+      <p class="muted" style="margin:0;font-size:14px">Documents › PageProof. Holds your hidden and approved sites and rejected links as text files, so they survive updates and reinstalls.</p>
       ${docs === 'granted' ? `<span class="tag ok" style="align-self:flex-start">${ic('check', 13, 3)} Connected</span><button class="btn" style="align-self:flex-start" data-act="docschoose">Change folder</button>`
         : docs === 'prompt' ? `<span class="tag warn" style="align-self:flex-start">Needs one click</span><button class="btn primary" style="align-self:flex-start" data-act="docsallow">Allow PageProof to use it</button>`
         : `<span class="tag warn" style="align-self:flex-start">Not set up</span><button class="btn primary" style="align-self:flex-start" data-act="docschoose">Set up the PageProof folder</button><span class="faint" style="font-size:12.5px">Pick Documents in the window that opens. PageProof makes a PageProof folder inside it.</span>`}</section>
-    <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>Hidden and allowed sites</h2>
-      <p class="muted" style="margin:0;font-size:14px">${RS_LISTS.hidden.length.toLocaleString()} hidden · ${RS_LISTS.allowed.length.toLocaleString()} allowed · ${RS_REJECT.items.length.toLocaleString()} rejected links.</p>
+    <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>Hidden and approved sites</h2>
+      <p class="muted" style="margin:0;font-size:14px">${RS_LISTS.hidden.length.toLocaleString()} hidden · ${RS_LISTS.allowed.length.toLocaleString()} approved · ${RS_REJECT.items.length.toLocaleString()} rejected links.</p>
       <a class="btn" style="align-self:flex-start" href="#hidden">See and edit the lists</a></section>
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><div class="row"><h2>Your computer</h2><span class="tag ${hw.level === 'Light' ? 'warn' : 'ok'}" style="margin-left:auto">${hw.level}</span></div>
       <p class="muted" style="margin:0;font-size:14px">${hw.cores} cores, ${hw.memGB} GB memory. Up to ${hw.limits.checks} photo ${hw.limits.checks > 1 ? 'checks' : 'check'} and ${hw.limits.tabs} search ${hw.limits.tabs > 1 ? 'tabs' : 'tab'} at once.</p>
@@ -341,25 +349,30 @@ V.settings.after = () => {
 };
 
 // =====================================================================================
-// Hidden and allowed sites
+// Hidden and approved sites
 // =====================================================================================
 const kindOf = s => s.startsWith('.') ? 'Ending' : s.includes('/') ? 'Account or part' : s.split('.').length > 2 && !/\.(co|com|org|net|gov|ac)\.[a-z]{2}$/.test(s) ? 'Sub-site' : 'Whole site';
 V.hidden = async () => {
   await RS_LISTS.load();
   const tab = state.hidTab, q = state.hidQ.toLowerCase();
-  const list = tab === 'rejected' ? RS_REJECT.items.map(r => r.url) : RS_LISTS[tab];
-  const rows = [...list].reverse().filter(s => s.toLowerCase().includes(q) && (tab === 'rejected' || state.hidKind === 'All' || kindOf(s) === state.hidKind));
-  const T = [['hidden', 'Hidden sites', RS_LISTS.hidden.length], ['allowed', 'Allowed sites', RS_LISTS.allowed.length], ['rejected', 'Rejected links', RS_REJECT.items.length]];
+  // Approved for one client: kept with each client (site | client).
+  const perClient = [];
+  for (const c of await FC.DB.all('clients')) for (const s of c.licensed || []) perClient.push(s + ' | ' + c.name);
+  const list = tab === 'rejected' ? RS_REJECT.items.map(r => r.url) : tab === 'client' ? perClient.sort().reverse() : RS_LISTS[tab];
+  const rows = [...list].reverse().filter(s => s.toLowerCase().includes(q) && (tab === 'rejected' || tab === 'client' || state.hidKind === 'All' || kindOf(s) === state.hidKind));
+  const T = [['hidden', 'Hidden sites', RS_LISTS.hidden.length], ['allowed', 'Approved for every client', RS_LISTS.allowed.length], ['client', 'Approved for one client', perClient.length], ['rejected', 'Rejected links', RS_REJECT.items.length]];
+  const flat = tab === 'rejected' || tab === 'client';
   const page = rows.slice(0, state.hidMore || 100);
-  return `${head('Settings', 'Hidden and allowed sites', 'Hidden sites never show up in any search. Allowed sites are your clients and their partners: they always show green.', `<button class="btn" data-act="hidsave">${ic('down', 18)} Download list</button><button class="btn" data-act="hidload">Add from a file</button>`)}
+  return `${head('Settings', 'Hidden and approved sites', 'Hidden sites never show up in any search. Approved sites may use the photos: copies found there are marked Licensed by themselves.', `<button class="btn" data-act="hidsave">${ic('down', 18)} Download list</button><button class="btn" data-act="hidload">Add from a file</button>`)}
   <section class="card" style="overflow:hidden">
     <div class="toolbar"><div class="tabs" role="tablist">${T.map(([k, l, n]) => `<button role="tab" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}" data-act="hidtab" data-v="${k}">${l} <span>${n.toLocaleString()}</span></button>`).join('')}</div></div>
     <div class="row" style="gap:10px;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--bg)">
-      <input id="hidq" class="chip" style="min-height:38px;padding:0 12px;font-size:14px;flex:1 1 260px" placeholder="${tab === 'rejected' ? 'Find a rejected link' : 'Find or add a site, like patch.com or x.com/nypost'}" value="${esc(state.hidQ)}" aria-label="Find a site">
-      ${tab !== 'rejected' ? `<button class="btn primary" data-act="hidadd">＋ ${tab === 'hidden' ? 'Hide' : 'Allow'} it</button>
+      <input id="hidq" class="chip" style="min-height:38px;padding:0 12px;font-size:14px;flex:1 1 260px" placeholder="${tab === 'rejected' ? 'Find a rejected link' : tab === 'client' ? 'Find a site or a client' : 'Find or add a site, like patch.com or x.com/nypost'}" value="${esc(state.hidQ)}" aria-label="Find a site">
+      ${tab === 'client' ? '<span class="faint" style="font-size:13px">Add one from a copy: open it in All copies found and press Approve site.</span>' : ''}${!flat ? `<button class="btn primary" data-act="hidadd">＋ ${tab === 'hidden' ? 'Hide' : 'Approve'} it</button>
       <div class="seg">${['All', 'Whole site', 'Sub-site', 'Account or part', 'Ending'].map(k => `<button class="${state.hidKind === k ? 'on' : ''}" data-act="hidkind" data-v="${k}">${k}</button>`).join('')}</div>` : ''}</div>
-    <div class="scroll"><table><thead><tr><th>${tab === 'rejected' ? 'Link' : 'Site or account'}</th>${tab === 'rejected' ? '<th>Photo</th>' : '<th>What it covers</th>'}<th></th></tr></thead><tbody>
-      ${page.map(h => { const r = tab === 'rejected' ? RS_REJECT.items.find(x => x.url === h) : null; return `<tr><td><b class="mono" style="font-size:13px;overflow-wrap:anywhere">${esc(h)}</b></td><td>${r ? esc(r.pic || 'every photo') : `<span class="tag grey">${kindOf(h)}</span>`}</td><td style="text-align:right"><button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ ${tab === 'hidden' ? 'Show again' : tab === 'allowed' ? 'Remove' : 'Bring back'}</button></td></tr>`; }).join('') || `<tr><td colspan="3" class="muted" style="padding:28px;text-align:center">${q ? 'Nothing matches. Press the button to add it.' : 'This list is empty.'}</td></tr>`}
+    <div class="scroll"><table><thead><tr><th>${tab === 'rejected' ? 'Link' : tab === 'client' ? 'Site' : 'Site or account'}</th>${tab === 'rejected' ? '<th>Photo</th>' : tab === 'client' ? '<th>Approved for</th>' : '<th>What it covers</th>'}<th></th></tr></thead><tbody>
+      ${page.map(h => { const r = tab === 'rejected' ? RS_REJECT.items.find(x => x.url === h) : null; if (tab === 'client') { const [site, who] = h.split(' | '); return `<tr><td><b class="mono" style="font-size:13px;overflow-wrap:anywhere">${esc(site)}</b></td><td>${esc(who)}</td><td style="text-align:right"><button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ Remove</button></td></tr>`; }
+        return `<tr><td><b class="mono" style="font-size:13px;overflow-wrap:anywhere">${esc(h)}</b></td><td>${r ? esc(r.pic || 'every photo') : `<span class="tag grey">${kindOf(h)}</span>`}</td><td style="text-align:right"><button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ ${tab === 'hidden' ? 'Show again' : tab === 'allowed' ? 'Remove' : 'Bring back'}</button></td></tr>`; }).join('') || `<tr><td colspan="3" class="muted" style="padding:28px;text-align:center">${q ? (flat ? 'Nothing matches.' : 'Nothing matches. Press the button to add it.') : 'This list is empty.'}</td></tr>`}
     </tbody></table></div>
     <div class="row faint" style="padding:10px 18px;border-top:1px solid var(--line);font-size:12.5px;gap:12px"><span>Showing ${page.length.toLocaleString()} of ${rows.length.toLocaleString()}.</span>${rows.length > page.length ? '<button class="btn" style="min-height:30px;font-size:13px;margin-left:auto" data-act="hidmore">Show more</button>' : ''}</div>
   </section>
@@ -368,7 +381,7 @@ V.hidden = async () => {
 V.hidden.after = () => {
   const i = document.getElementById('hidq');
   i.oninput = () => { state.hidQ = i.value; state.hidMore = 0; render(true).then(() => { const j = document.getElementById('hidq'); j.focus(); j.setSelectionRange(j.value.length, j.value.length); }); };
-  i.onkeydown = e => { if (e.key === 'Enter' && state.hidTab !== 'rejected') act('hidadd'); };
+  i.onkeydown = e => { if (e.key === 'Enter' && !['rejected', 'client'].includes(state.hidTab)) act('hidadd'); };
 };
 document.getElementById('hidLoad').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';
@@ -415,6 +428,13 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Update with one button', 'Settings › Is everything working? has "Update now". Show PageProof its folder once, and from then on one press downloads the new version and restarts PageProof.'],
+  ['Is everything working?', 'Green, yellow and red lights for Google Drive, Keep searching, each search site and your backup. "Copy details for support" copies numbers only, never names.'],
+  ['A broken search site is spotted', 'If Google, Yandex or Bing suddenly gives nothing for many photos in a row, PageProof rests it, tells you, and does not count those empty results against your photos.'],
+  ['Skipped photos', 'Find copies › Skipped photos lists every photo that could not be searched, with the reason and a Try again button.'],
+  ['Repeat offenders first', 'A new copy on a site (or site owner) you already marked Stolen gets a "stolen before" badge and comes first in Review.'],
+  ['Approve a site', 'In a copy\'s panel, Approve site lets a site use one client\'s photos or every client\'s. Its copies are marked Licensed by themselves from then on.'],
+  ['Lighter and faster', 'Preview pictures now live in their own small store, so big lists use far less memory.'],
   ['Find copies, all day', 'Connect the shared Google Drive once. Keep searching then looks for copies of your clients\' photos one at a time, gently, and today\'s 50 runs a bigger batch.'],
   ['All copies found', 'Every copy in one list: group by client, photo, site or site owner, filter by how it\'s used, suspicious sites or credit removed, and hover for a quick side-by-side.'],
   ['Answer and move on', 'Stolen, Licensed, 🗑 Remove or Skip opens the next copy. Every answer can be undone (U or Ctrl+Z).'],
@@ -426,7 +446,7 @@ const NEWS = [
   ['Light and dark', 'Switch at the top right. Both are softer on the eyes. Reports always print white.'],
   ['New toolbar menu and side panel', 'Capture is the big button. Keep PageProof open beside any website.'],
   ['Tidier right-click menu', 'One PageProof item with Inspect, Find copies (Google Lens, Yandex, Bing or all three), Save biggest copy and Capture.'],
-  ['Hidden and allowed sites page', 'Search thousands of hidden sites, filter by kind, and bring any back with one click.'],
+  ['Hidden and approved sites page', 'Search thousands of hidden sites, filter by kind, and bring any back with one click.'],
   ['Your computer', 'PageProof checks how strong your computer is and sets its own limits.'],
   ['Hover help', 'Hover a word with a dotted underline to see what it means.'],
   ['Batch capture removed', 'It wasn\'t reliable. Capture pages one at a time from the icon or the right-click menu.'],
@@ -536,19 +556,23 @@ async function act(a, v, el) {
     if (!s) return toast('Type a site like patch.com, x.com/nypost or .gov');
     await RS_LISTS.load(); await RS_LISTS.add(kind, s);
     state.hidQ = '';
-    toast(s + (kind === 'hidden' ? ' hidden' : ' allowed'), async () => { await RS_LISTS.load(); await RS_LISTS.remove(kind, s); render(true); });
+    toast(s + (kind === 'hidden' ? ' hidden' : ' approved for every client'), async () => { await RS_LISTS.load(); await RS_LISTS.remove(kind, s); render(true); });
     render(true);
   }
   else if (a === 'hidremove') {
     await RS_LISTS.load();
-    if (state.hidTab === 'rejected') {
+    if (state.hidTab === 'client') {
+      const [site, who] = v.split(' | ');
+      await FC.licenseSite(who, site, false);
+      toast(site + ' is no longer approved for ' + who, async () => { await FC.licenseSite(who, site, true); render(true); });
+    } else if (state.hidTab === 'rejected') {
       const r = RS_REJECT.items.find(x => x.url === v);
       RS_REJECT.items = RS_REJECT.items.filter(x => x !== r); await RS_REJECT.save();
       toast('Brought back', async () => { await RS_LISTS.load(); RS_REJECT.items.push(r); await RS_REJECT.save(); render(true); });
     } else {
       const kind = state.hidTab;
       await RS_LISTS.remove(kind, v);
-      toast(kind === 'hidden' ? v + ' shows again' : v + ' is no longer allowed', async () => { await RS_LISTS.load(); await RS_LISTS.add(kind, v); render(true); });
+      toast(kind === 'hidden' ? v + ' shows again' : v + ' is no longer approved', async () => { await RS_LISTS.load(); await RS_LISTS.add(kind, v); render(true); });
     }
     render(true);
   }

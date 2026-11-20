@@ -30,7 +30,11 @@ async function draw() {
   const [label, dot] = STATE[s] || ['Starting', ''];
   const today = store.fcToday && store.fcToday.day === new Date().toDateString() ? store.fcToday : { searched: 0, found: 0 };
   const site = canUse(tab) && /^https?:/.test(tab.url) ? RS_SITE.of(tab.url) : '';
+  const extra = await api.storage.local.get(['fcNeedsAllow', 'ppUpdate']);
+  const needAllow = drive.done && (extra.fcNeedsAllow || (alive && st.state === 'allow'));
   $('mini').innerHTML = `
+    ${needAllow ? `<div class="msec mfind" role="alert" style="border-color:var(--warn)"><b>One click needed</b><span style="font-size:13.5px">Your browser asks once after it restarts. Press Allow and PageProof can read your photos and start searching.</span><div class="mrow"><button class="btn primary" id="allow">Allow</button></div></div>` : ''}
+    ${extra.ppUpdate && extra.ppUpdate.has ? `<div class="msec" role="status"><div class="mline"><b>PageProof ${esc(extra.ppUpdate.latest)} is ready</b><button class="btn sm" style="margin-left:auto" data-go="health">Update</button></div></div>` : ''}
     ${here ? `<div class="msec mfind" role="alert"><b>This site is in your finds</b><span style="font-size:13.5px">${here.n} ${here.n === 1 ? 'copy' : 'copies'} of your clients' photos on ${esc(site)}${here.stolen ? ', marked stolen' : ''}.</span><div class="mrow"><button class="btn sm" data-go="found?open=${encodeURIComponent(here.first)}">See ${here.n === 1 ? 'it' : 'them'}</button></div></div>` : ''}
     ${busy ? `<button class="mcap stop" id="stop"><span style="font-size:24px">⏹</span><span><b>Stop the capture</b><small>Keeps what's captured so far</small></span></button>`
       : `<button class="mcap" id="cap"${canUse(tab) ? '' : ' disabled'}><span style="font-size:24px">${ic('capture', 26)}</span><span><b>Capture this page</b><small>${site ? esc(site) + ': PDF, web copy, fingerprints, timestamps' : 'Open a website first'}</small></span></button>`}
@@ -49,6 +53,11 @@ async function draw() {
   on('stop', async () => { await api.runtime.sendMessage({ type: 'stop' }).catch(() => {}); done(); if (SIDE) setTimeout(draw, 800); });
   on('pick', async () => { if (!canUse(tab)) return err(NOT_HERE); try { await send({ type: 'pick', tabId: tab.id }); done(); } catch (e) { err('Could not start the picker: ' + e.message); } });
   on('all', async () => { if (!canUse(tab)) return err(NOT_HERE); $('all').textContent = 'Looking for photos…'; try { await send({ type: 'inspectAll', tabId: tab.id }); done(); } catch (e) { err('Could not read the photos on this page: ' + e.message); } });
+  on('allow', async () => {
+    // Asking has to happen straight from this click.
+    try { if (await FC.allowDrive()) { await api.storage.local.set({ fcNeedsAllow: 0 }); return draw(); } } catch (e) { /* the menu can't ask here */ }
+    open('keep');
+  });
   on('pause', async () => { const p = (await api.storage.local.get('fcPause')).fcPause; if (p) await api.storage.local.remove('fcPause'); else await api.storage.local.set({ fcPause: Date.now() }); draw(); });
   on('panel', async () => {
     try { await api.sidePanel.open({ windowId: tab.windowId }); done(); }
@@ -71,5 +80,5 @@ if (SIDE) {
   const soon = () => { clearTimeout(t); t = setTimeout(draw, 300); };
   api.tabs.onActivated.addListener(soon);
   api.tabs.onUpdated.addListener((id, ch) => { if (ch.url || ch.status === 'complete') soon(); });
-  api.storage.onChanged.addListener(ch => { if (ch.fcStatus || ch.fcChanged || ch.fcPause || ch.fcKeep || ch.ppTheme) soon(); });
+  api.storage.onChanged.addListener(ch => { if (ch.fcStatus || ch.fcChanged || ch.fcPause || ch.fcKeep || ch.ppTheme || ch.fcNeedsAllow || ch.ppUpdate) soon(); });
 }

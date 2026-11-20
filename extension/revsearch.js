@@ -4,7 +4,7 @@
 //   revsearch.html?job=ID         -> the results window (also runs the searches)
 //   revsearch.html?view=past      -> all searches (shown inside the full PageProof page)
 // Today's 50 and Keep searching (photos from the shared Google Drive) live on the full PageProof
-// page (app.html#keep); hidden and allowed sites on app.html#hidden.
+// page (app.html#keep); hidden and approved sites on app.html#hidden.
 // The searches run in normal tabs of your own browser. rsearch.js (on the Google, Yandex
 // and Bing pages) hands each picture over and reads the links back.
 const api = globalThis.browser || globalThis.chrome;
@@ -121,10 +121,10 @@ async function docsBanner(after) {
   if (sessionStorage.getItem('rsDocsLater') && VIEW !== 'lists' && VIEW !== 'folder') return false;
   const done = async () => { banner(null); await RS_LISTS.load(); if (after) after(); };
   if (st === 'prompt') {
-    banner([h('span', {}, h('b', { text: 'One click needed: ' }), 'PageProof needs your OK to use its Documents\\PageProof folder (your hidden and allowed sites, and your pictures folder).'),
+    banner([h('span', {}, h('b', { text: 'One click needed: ' }), 'PageProof needs your OK to use its Documents\\PageProof folder (your hidden and approved sites, and your pictures folder).'),
       h('span', { class: 'sp' }), h('button', { text: 'Allow', onclick: async () => { if (await RS_DOCS.allow()) done(); } })]);
   } else {
-    banner([h('span', {}, h('b', { text: 'Keep your site lists safe: ' }), 'PageProof saves your hidden and allowed sites (and your pictures folder) in Documents\\PageProof, so updates and reinstalls never lose them. ' + SETUP_STEPS),
+    banner([h('span', {}, h('b', { text: 'Keep your site lists safe: ' }), 'PageProof saves your hidden and approved sites (and your pictures folder) in Documents\\PageProof, so updates and reinstalls never lose them. ' + SETUP_STEPS),
       h('span', { class: 'sp' }), h('button', { text: '📂 Set up PageProof folder', onclick: async () => { try { await RS_DOCS.choose(); done(); } catch (e) { /* closed the picker */ } } }),
       VIEW !== 'lists' && VIEW !== 'folder' ? h('button', { class: 'btn', text: 'Not now', onclick: () => { sessionStorage.setItem('rsDocsLater', '1'); banner(null); } }) : null], 'info');
   }
@@ -218,7 +218,7 @@ async function setupSide() {
     h('div', { class: 'links' },
       appLink('keep', '📂 Today\'s 50 and Keep searching'),
       appLink('searches', '📒 All searches'),
-      appLink('hidden', '🚫 Hidden and allowed sites'),
+      appLink('hidden', '🚫 Hidden and approved sites'),
       h('a', { href: 'https://github.com/TheBenPsych/PageProof/blob/main/TUTORIAL.md#16-search-many-pictures-at-once-reverse-image-search', target: '_blank', text: '❔ How this works' })));
 }
 
@@ -714,12 +714,19 @@ async function runJob(onlyEngines) {
 const BY = { keep: 'Keep searching', fifty: 'today\'s 50', new: 'a search' };
 function maybeIngest(p) {
   if (!p || p.ingested || !picDone(p)) return;
-  if (!job.engines.some(e => p.runs[e].state === 'done')) return;          // nothing actually searched
+  // What each search site gave back, for "is this site still working?" (-1 = no answer).
+  const health = {};
+  for (const e of job.engines) { const st = p.runs[e].state; if (st === 'done') health[e] = p.links.filter(l => (l.engines || []).includes(e)).length; else if (st === 'fail') health[e] = -1; }
+  if (!job.engines.some(e => p.runs[e].state === 'done')) {                // nothing actually searched
+    if (!p.healthNoted && Object.keys(health).length) { p.healthNoted = true; FC.engineResults(health, null, false).catch(() => {}); }
+    return;
+  }
   if (p.links.some(l => verdict(l) === 'pending' && !RS_LISTS.isHidden(l.site, l.url))) return;
   p.ingested = true;
   const links = p.links.filter(l => ['same', 'maybe'].includes(verdict(l)) && !RS_LISTS.isHidden(l.site, l.url) && !isRejected(p, l))
     .map(l => ({ ...l, verdict: verdict(l) }));
-  FC.ingest(p, links, BY[job.kind] || 'a search').catch(err => { p.ingested = false; console.warn('PageProof: could not add the copies', err); })
+  FC.ingest(p, links, BY[job.kind] || 'a search').then(r => { if (!p.healthNoted) { p.healthNoted = true; return FC.engineResults(health, r.photo.id, !links.length); } })
+    .catch(err => { p.ingested = false; console.warn('PageProof: could not add the copies', err); })
     .finally(() => { saveJob(); autoDone(); });
 }
 // Keep searching runs a search in a background window: when it's finished, tell that window and close.
@@ -834,7 +841,7 @@ function resultsSide() {
   side(head, list, ...actions, h('div', { class: 'links' },
     appLink('found', '🗂 All copies found'),
     appLink('search', '🔎 New search'),
-    appLink('hidden', '🚫 Hidden and allowed sites'),
+    appLink('hidden', '🚫 Hidden and approved sites'),
     appLink('searches', '📒 All searches')));
 }
 
