@@ -77,7 +77,9 @@ async function chores() {
     // Once a week (Monday to Friday, 8 AM to 6 PM, when the computers are on): read every folder.
     // Otherwise every hour: this and last quarter's folders.
     const workTime = d.getDay() >= 1 && d.getDay() <= 5 && d.getHours() >= 8 && d.getHours() < 18;
-    if (workTime && now - (m.full || 0) > 6.5 * 86400000) {
+    // Setup has just read every folder, so the first weekly check is a week after the first run.
+    if (!m.full) ch.full = now;
+    else if (workTime && now - m.full > 6.5 * 86400000) {
       await status('running', 'Reading every folder in Google Drive for new photos (weekly check)…');
       const r = await FC.scan({ full: true }); if (!r.busy && !r.state) ch.full = now;
       await FC.applyPendingFlags();
