@@ -57,7 +57,7 @@ V.connect = async () => {
       }
     };
     walk('', 0);
-    if (root && st === 'granted' && !Array.isArray(state.csTree.get(''))) rows.push('<div class="faint" style="padding:10px;font-size:13px">Opening the top folder…</div>');
+    if (root && st === 'granted' && !Array.isArray(state.csTree.get(''))) rows.push('<div class="faint" style="padding:10px;font-size:13px">Opening the top folder… The first time, Google Drive can take a minute to list a big shared drive. PageProof remembers the list after that.</div>');
     const extras = await FC.extraHandles();
     body = `<h2>3. Pick your clients</h2>
     <p class="muted" style="margin:0">Choose the top folder (for example G: › Shared drives, or one shared drive). Then click <b>▸</b> to open a folder and <b>tick only the folders you search</b>. Each ticked folder is one client, and everything inside it is searched. Star the ones that matter most.</p>
@@ -95,23 +95,52 @@ const csDraw = now => {
   const go = () => { csDrawT = null; if (route() === 'connect' && state.cs === 2) render(true); };
   if (now) { clearTimeout(csDrawT); go(); } else if (!csDrawT) csDrawT = setTimeout(go, 300);
 };
+// The folder list is remembered (names and client_info tags), so opening a folder again shows it
+// at once. Google Drive can take a minute to list a big shared drive; the fresh list replaces the
+// remembered one in the background.
+const CS_CACHE = 'fcTreeCache';
+let csCache = null, csSaveT = null;
+async function csCacheGet() {
+  if (!csCache) { try { csCache = (await ppApi.storage.local.get(CS_CACHE))[CS_CACHE] || {}; } catch (e) { csCache = {}; } }
+  return csCache;
+}
+function csCacheSave() {
+  clearTimeout(csSaveT);
+  csSaveT = setTimeout(() => { ppApi.storage.local.set({ [CS_CACHE]: csCache }).catch(() => {}); }, 1000);
+}
+async function csCacheClear() { csCache = {}; await ppApi.storage.local.remove(CS_CACHE).catch(() => {}); }
 async function csLoad(rel) {
   if (state.csTree.has(rel)) return;
   state.csTree.set(rel, 'loading');
+  const cache = await csCacheGet();
+  const kidsOf = names => names.map(name => ({ name, rel: (rel ? rel + '/' : '') + name }));
+  const had = cache[rel];
+  if (had && Array.isArray(had.kids)) {
+    state.csTree.set(rel, kidsOf(had.kids));
+    for (const [name, info] of Object.entries(had.info || {})) { const r = (rel ? rel + '/' : '') + name; if (!state.csInfo.has(r)) state.csInfo.set(r, info); }
+    csDraw(true);
+  }
   let kids;
-  try { kids = await FC.subfolders(rel); } catch (e) { state.csTree.set(rel, { error: String(e.message || e) }); csDraw(); return; }
+  try { kids = await FC.subfolders(rel); } catch (e) { if (!had) { state.csTree.set(rel, { error: String(e.message || e) }); csDraw(); } return; }
   state.csTree.set(rel, kids);
+  const entry = { kids: kids.map(k => k.name), info: {} };
+  for (const k of kids) { const old = had && had.info && had.info[k.name]; if (old) entry.info[k.name] = old; }
+  cache[rel] = entry; csCacheSave();
   csDraw(true);
-  const todo = kids.filter(k => !state.csInfo.has(k.rel));
+  // Read (or re-read) the client_info tags, a few folders at a time.
   let i = 0;
   const worker = async () => {
-    while (i < todo.length) {
-      const k = todo[i++];
-      try { state.csInfo.set(k.rel, await FC.folderInfo(k.rel)); } catch (e) { state.csInfo.set(k.rel, {}); }
+    while (i < kids.length) {
+      const k = kids[i++];
+      let info = {};
+      try { info = await FC.folderInfo(k.rel); } catch (e) { /* unreadable: no tags */ }
+      state.csInfo.set(k.rel, info);
+      if (Object.keys(info).length) entry.info[k.name] = info; else delete entry.info[k.name];
       csDraw();
     }
   };
-  await Promise.all(Array.from({ length: Math.min(6, todo.length) }, worker));
+  await Promise.all(Array.from({ length: Math.min(6, kids.length) }, worker));
+  csCacheSave();
   csDraw();
 }
 function csReset() { state.csTree = new Map(); state.csInfo = new Map(); state.csOpen = new Set(); state.csPick = null; state.csStar = new Set(); state.csBusy = ''; }
@@ -123,7 +152,7 @@ Object.assign(ACTS, {
   },
   cspick: async () => {
     try { await FC.pickRoot(); } catch (e) { if (e.name !== 'AbortError') toast('That folder could not be opened.'); return; }
-    csReset(); state.csPick = new Set(); render(true);
+    await csCacheClear(); csReset(); state.csPick = new Set(); render(true);
   },
   csallow: async () => { if (await FC.allowDrive()) { csReset(); render(true); } },
   csopen: v => {
