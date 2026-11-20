@@ -26,13 +26,14 @@ const PP_MENU = [
   ] },
 ];
 const PP_ROUTES = {
-  home: ['home'], capture: ['capture'], search: ['find', 'search'], searches: ['find', 'searches'], found: ['find', 'found'], review: ['find', 'review'],
+  home: ['home'], capture: ['capture'], search: ['find', 'search'], searches: ['find', 'searches'], results: ['find', 'searches'], found: ['find', 'found'], review: ['find', 'review'],
   clients: ['find', 'clients'], photos: ['find', 'clients'], owners: ['find', 'owners'], who: ['find', 'owners'], keep: ['find', 'keep'], connect: ['find', 'found'], weekly: ['library', 'weekly'],
   inspect: ['tools', 'inspect'], compare: ['tools', 'compare'], markup: ['tools', 'markup'], files: ['files', 'files'], openfiles: ['files', 'openfiles'],
   library: ['library', 'library'], verify: ['verify'], browser: ['browser'], settings: ['settings'], hidden: ['settings'], computer: ['settings'],
   whatsnew: ['settings'], setup: ['browser'], help: ['help']
 };
 const PP_CRUMBS = {
+  results: 'Find copies › Search results',
   home: 'Home', capture: 'Capture a page', search: 'Find copies › New search', searches: 'Find copies › All searches', found: 'Find copies › All copies found',
   review: 'Find copies › Review new copies', clients: 'Find copies › Clients and photos', photos: 'Find copies › Clients and photos', owners: 'Find copies › Site owners',
   who: 'Find copies › Who\'s behind this site', keep: 'Find copies › Keep searching', connect: 'Find copies › Connect your photos', weekly: 'Evidence library › Weekly summary',

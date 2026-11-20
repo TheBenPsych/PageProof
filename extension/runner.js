@@ -168,7 +168,10 @@ async function step() {
   if (!job) return status('resting', restText || 'No search sites are switched on. Tick them in Find copies › New search.');
   S.job = job.id; S.started = Date.now(); S.last = Date.now();
   S.current = { id: p.id, name: p.name, sub: (p.client || 'Client unknown') + ' · on ' + job.engines.map(e => NAMES[e]).join(', '), thumb: pic.thumb };
-  const t = await api.tabs.create({ windowId: S.win, url: api.runtime.getURL('revsearch.html?job=' + job.id), active: false });
+  // Pinned: a small icon at the left of the tab bar instead of a full tab.
+  const opts = { windowId: S.win, url: api.runtime.getURL('revsearch.html?job=' + job.id), active: false };
+  let t;
+  try { t = await api.tabs.create({ ...opts, pinned: true }); } catch (e) { t = await api.tabs.create(opts); }
   S.tab = t.id;
   await status('running', 'Searching one photo. ' + tally + '.', { current: S.current });
 }

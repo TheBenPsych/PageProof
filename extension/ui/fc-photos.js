@@ -487,7 +487,7 @@ V.keep = async () => {
     </section>
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
       <div class="row"><h2>Today's 50</h2>${fifty ? '<span class="tag ok" style="margin-left:auto">Running now</span>' : ''}</div>
-      <p class="muted" style="margin:0;font-size:14px">A bigger batch at once, in a window you can watch. Keep searching pauses while it runs, then carries on. The 50 are the next photos in line.</p>
+      <p class="muted" style="margin:0;font-size:14px">A bigger batch at once, shown right here in PageProof (the search tabs open as small pinned tabs in this browser window). Keep searching pauses while it runs, then carries on. The 50 are the next photos in line.</p>
       <div class="row"><label class="mini">How many<select data-act="keepnum" data-v="perDay">${[10, 25, 50, 75, 100].map(n => `<option value="${n}" ${k.perDay === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label><button class="btn primary" data-act="fifty"${fifty ? ' disabled' : ''}>Check ${k.perDay} now</button></div>
       <label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" data-act="keepauto" ${k.fiftyAuto ? 'checked' : ''}> Start by itself every weekday at <input type="time" value="${esc(k.fiftyTime)}" data-act="keeptime" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);padding:2px 6px"></label>
       <p class="faint" style="margin:0;font-size:13px">On this computer 50 photos take ${esc(hw.limits.fifty)}.</p>

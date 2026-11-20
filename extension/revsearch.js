@@ -68,15 +68,18 @@ const openTab = url => api.tabs.create({ url });
 // Go to a search's results: switch to its tab if it is already open (a search keeps running
 // in that tab, so we never open a second copy of it), otherwise open it.
 async function goResults(id) {
+  const hash = 'results?job=' + encodeURIComponent(id);
+  // Inside the full PageProof page: just switch to that search there.
+  try { if (window.top !== window && /\/app\.html$/.test(window.top.location.pathname)) { window.top.location.hash = hash; return; } } catch (e) { /* not inside PageProof */ }
   try {
     const o = (await api.storage.local.get('rsOpenJob')).rsOpenJob;
     if (o && o.id === id) {
       const t = await api.tabs.get(o.tab);                 // fails if that tab was closed
-      await api.tabs.update(t.id, { active: true }); await api.windows.update(t.windowId, { focused: true });
+      await api.tabs.update(t.id, /app\.html/.test(t.url || '') ? { active: true, url: appUrl(hash) } : { active: true }); await api.windows.update(t.windowId, { focused: true });
       return;
     }
   } catch (e) { /* not open any more */ }
-  openTab(page('job=' + id));
+  openTab(appUrl(hash));
 }
 // On the other PageProof pages, offer a way back to the search that is open.
 async function backLink() {
@@ -206,7 +209,7 @@ async function setupSide() {
   const go = h('button', { class: 'big', disabled: !n || !nEng, text: '🔎 Search ' + (n ? plural(n, 'picture') : 'pictures'), onclick: async () => {
     go.disabled = true;
     const job = await startJob(draft.slice());
-    if (job) { draft.length = 0; draftNotes = ['Search started in a new window. You can add more pictures for another search here.']; renderSetup(); }
+    if (job) { draft.length = 0; draftNotes = ['Search started. You can add more pictures for another search here.']; renderSetup(); }
     else go.disabled = false;
   } });
   side(h('div', {}, h('div', { id: 'domain', text: 'Reverse image search' }), h('div', { id: 'sub', text: 'Search many pictures at once on Google, Yandex and Bing.' })),
@@ -231,13 +234,13 @@ function renderSetup(busy) {
       h('button', { class: 'btn', style: 'font-size:14px;padding:8px 16px', text: '📂 Or pick from my clients\' photos', onclick: e => goApp('clients', e) }),
       h('div', { class: 'ways' }, h('span', { text: 'Or drag pictures or a whole folder onto this page' }), h('span', { text: 'Or paste pictures or picture links (Ctrl+V)' }), h('span', { text: 'Up to ' + MAX_PICS + ' at once' })),
       h('div', { class: 'howbox' }, h('b', { text: 'What happens next:' }), h('ol', {},
-        h('li', { text: 'PageProof opens one new window. Each picture gets its own coloured tab group with a Google, Yandex and Bing tab.' }),
+        h('li', { text: 'PageProof shows the results right here in PageProof. The Google, Yandex and Bing search tabs open as small pinned tabs at the left of the tab bar, and close by themselves when done.' }),
         h('li', { text: 'The pictures are searched a few at a time, with short pauses, in your own browser. That keeps "are you a robot" checks away.' }),
         h('li', { text: 'Every link found is listed on one results page, with a % match. Hide the sites you never care about.' })))));
     return;
   }
   $('main').replaceChildren(
-    h('div', {}, h('h1', { text: plural(draft.length, 'picture') + (busy ? ' (adding more…)' : ' ready') }), h('p', { class: 'lead', text: 'Numbers match the tab groups in the results window. Press ✕ to take a picture out.' })),
+    h('div', {}, h('h1', { text: plural(draft.length, 'picture') + (busy ? ' (adding more…)' : ' ready') }), h('p', { class: 'lead', text: 'Numbers match the pictures in the results window. Press ✕ to take a picture out.' })),
     notes,
     h('div', { class: 'pics' }, draft.map((p, i) => h('div', { class: 'pic' },
       h('img', { src: p.thumb, alt: '' }), h('span', { class: 'num', text: i + 1 }),
@@ -340,10 +343,12 @@ async function runOne(p, engine) {
   const run = p.runs[engine];
   run.state = 'go'; delete run.why; renderSoon();
   let tab;
-  try { tab = await api.tabs.create({ windowId: R.winId, url: ENGINES[engine].start, active: false }); }
+  const opts = { windowId: R.winId, url: ENGINES[engine].start, active: false };
+  try { try { tab = await api.tabs.create({ ...opts, pinned: true }); } catch (e) { tab = await api.tabs.create(opts); } }
   catch (e) { run.state = 'fail'; run.why = 'Could not open a tab'; renderSoon(); return; }
   run.tabId = tab.id;
-  await groupTab(p, tab.id);
+  // Search tabs are pinned (small icons at the left of the tab bar) so they don't fill it. A
+  // pinned tab can't be in a tab group, so the old coloured groups are no longer made.
   await new Promise(done => R.tasks.set(tab.id, { p, engine, tabId: tab.id, stage: 'upload', deadline: Date.now() + TASK_TIMEOUT, done }));
 }
 
@@ -616,6 +621,7 @@ async function scoreLink(l) {
 const SCORE_VERSION = 3;
 const userNo = l => !!(l.url && job && job.pics[l.pic] && RS_REJECT.notMatch(l.url, job.pics[l.pic].name));
 function verdict(l) {
+  if (l.rescued) return 'maybe';          // you said it is a copy
   if (userNo(l)) return 'no';
   if (l.sv !== SCORE_VERSION) return l.pct === null ? 'cant' : 'pending';
   if (l.pct === null || l.pct < 0) return 'cant';
@@ -806,7 +812,7 @@ function resultsSide() {
     ? h('div', {}, h('div', { id: 'domain', text: 'Searching ' + plural(total, 'picture') }),
       h('div', { id: 'sub', text: done + ' done · ' + job.pics.filter(picBusy).length + ' searching · ' + (total - done - job.pics.filter(picBusy).length) + ' waiting' }),
       h('div', { class: 'prog' }, h('i', { style: 'width:' + Math.round(done / total * 100) + '%' })),
-      h('p', { class: 'hint', text: 'You can keep working in your other windows. Leave this window open until it finishes.' }))
+      h('p', { class: 'hint', text: 'You can use other PageProof pages and other tabs meanwhile. Keep the PageProof tab open until it finishes.' }))
     : h('div', {}, h('div', { id: 'domain', text: plural(total, 'picture') + ' searched' }),
       h('div', { id: 'sub', text: when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) + ' · ' + plural(job.pics.reduce((a, p) => a + sameCount(p), 0), 'same-photo link') + ' (of ' + links + ' found)' + (job.pics.some(checking) ? ' · still checking matches…' : '') }));
   const list = h('div', { class: 'card plist' }, job.pics.map(p => {
@@ -814,7 +820,7 @@ function resultsSide() {
     const state = picDone(p) ? h('span', { class: 'cnt' + (n ? '' : ' z') + (nNew ? ' newc' : ''), title: 'Links that show the same photo', text: (nNew ? n + ' · ' + nNew + ' new' : n) + (checking(p) ? '…' : '') })
       : runList(p).some(r => r.state === 'captcha') ? h('span', { class: 'st bad', text: 'Check!' })
       : picBusy(p) ? h('span', { class: 'st go', text: 'Searching' }) : h('span', { class: 'st wait', text: 'Waiting' });
-    return h('button', { class: 'pitem' + (p.i === R.sel ? ' on' : ''), onclick: () => { R.sel = p.i; R.ticked.clear(); renderResults(); scoreAll(); window.scrollTo(0, 0); } },
+    return h('button', { class: 'pitem' + (p.i === R.sel ? ' on' : ''), onclick: () => { R.sel = p.i; renderResults(); scoreAll(); window.scrollTo(0, 0); } },
       h('img', { src: p.thumb, alt: '' }), h('div', { class: 'n' }, h('b', { text: (p.i + 1) + '. ' + p.name }), h('small', { text: statusLine(p) }), checkLine(p)), state);
   }));
   const actions = busy
@@ -832,96 +838,43 @@ function resultsSide() {
     appLink('searches', '📒 All searches')));
 }
 
+// A link the checker threw out (Different photo / Can't check). These are NOT added to All copies
+// found; "It is a copy" rescues one that really is your photo.
 function rowFor(p, l) {
-  const hidden = RS_LISTS.isHidden(l.site, l.url), allowed = RS_LISTS.isAllowed(l.site, l.url);
-  const id = p.i + '|' + l.key;
   const v = verdict(l);
-  const pct = v === 'pending' ? h('span', { class: 'pct no', text: 'Checking match…' })
-    : v === 'cant' ? h('span', { class: 'pct no', title: 'The site would not let PageProof download its picture, so it could not be compared. Open it to look yourself.', text: l.pct === null ? 'Not checked' : 'Picture blocked' })
-    : h('span', { class: 'pct ' + (v === 'same' ? 'hi' : v === 'maybe' ? 'mid' : 'lo'),
-      title: l.pct + '% of the area the two pictures share lines up detail for detail, with ' + l.inl + ' matching details found in both. A lower % on a "Same photo" means things were added on top (a headline, logo or border) or it was cropped.',
-      text: v === 'same' ? (l.pct >= 85 ? l.pct + '% match' : 'Same photo · ' + l.pct + '% lines up') : v === 'maybe' ? 'A few details match' : 'No match' });
-  const sz = v === 'same' || v === 'maybe' ? sizeNote(p, l) : { text: '' };
-  return h('div', { class: 'row' + (v === 'no' ? ' seen' : '') + (allowed ? ' allowed' : '') },
-    h('input', { type: 'checkbox', checked: R.ticked.has(id), onchange: e => { if (e.target.checked) R.ticked.add(id); else R.ticked.delete(id); renderSelbar(); } }),
+  const why = userNo(l) ? 'You: not a match' : v === 'cant' ? (l.pct === null ? 'Not checked' : 'Picture blocked') : 'Different photo';
+  return h('div', { class: 'row' },
     (l.thumb || l.img) ? h('img', { class: 'th', src: l.thumb || l.img, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer', onerror: e => e.target.replaceWith(h('div', { class: 'th' })) }) : h('div', { class: 'th' }),
     h('div', { class: 't' }, h('a', { href: l.url, target: '_blank', rel: 'noreferrer', text: l.title || l.url, title: l.title || l.url }),
-      h('small', { text: (l.firstSeen ? 'Seen before, first found ' + RS_UTIL.niceDate(l.firstSeen) + ' · ' : '') + l.url }),
-      !hidden && RS_SITE.part(l.url) ? h('button', { class: 'hidepart', title: 'Never show links from ' + RS_SITE.part(l.url) + ' (that account or section only, the rest of ' + l.site + ' still shows)',
-        text: '🚫 Hide ' + RS_SITE.part(l.url), onclick: () => RS_LISTS.add('hidden', RS_SITE.part(l.url)).then(renderResults) }) : null),
-    h('div', { class: 'mt' }, pct, h('small', {}, l.w ? l.w + ' × ' + l.h : 'size unknown', sz.text ? ' · ' : '', sz.strong ? h('b', { text: sz.text }) : sz.text)),
+      h('small', { text: l.site + ' · ' + l.url })),
+    h('div', { class: 'mt' }, h('span', { class: 'pct ' + (v === 'cant' ? 'no' : 'lo'),
+      title: v === 'cant' ? 'The site would not let PageProof download its picture, so it could not be compared. Open it to look yourself.' : 'The two pictures did not line up detail for detail.',
+      text: why }), h('small', {}, l.w ? l.w + ' × ' + l.h : 'size unknown')),
     h('div', { class: 'tags' },
-      hidden ? h('span', { class: 'tag hid', text: 'Hidden' }) : null,
-      l.isNew ? h('span', { class: 'tag new', text: 'New' }) : null,
-      h('span', { class: 'tag ' + VERDICT[v].cls, text: userNo(l) ? 'You: not a match' : VERDICT[v].tag }),
       l.engines.map(e => h('span', { class: 'tag ' + e, text: ENGINES[e].short })),
       h('span', { class: 'act' }, h('button', { text: 'Open', onclick: () => openTab(l.url) }),
-        isRejected(p, l)
-          ? h('button', { text: '↩ Put back', title: 'Take this link out of rejected-links.txt', onclick: async () => { await RS_REJECT.remove(l.url, p.name); renderResults(); } })
-          : h('button', { class: 'trash', text: '🗑', title: 'Throw this link away: you do not want it (licensed, not worth chasing...). It is saved in rejected-links.txt and never shows again for this picture.',
-            onclick: async () => { R.ticked.delete(id); await RS_REJECT.add(l.url, p.name); renderResults(); } }),
-        userNo(l)
-          ? h('button', { text: '↩ It is a match', title: 'Undo "Not a match"', onclick: async () => { await RS_REJECT.remove(l.url, p.name, 'nomatch'); renderResults(); } })
-          : v !== 'no' && !isRejected(p, l) ? h('button', { class: 'nomatch', text: '✕ Not a match', title: 'It is a different photo. It moves to "Different photo", is saved in rejected-links.txt, and PageProof keeps its numbers to learn from.',
-            onclick: async () => { R.ticked.delete(id); await learnFrom(l, v); await RS_REJECT.add(l.url, p.name, 'nomatch'); renderResults(); } }) : null,
-        v !== 'cant' && v !== 'pending' ? h('button', { text: '🔀 Compare', title: 'Lay the copy over your picture on the Compare page', onclick: () => compareLink(p, l) }) : null,
-        v === 'same' || v === 'maybe' ? h('button', { class: 'evid', text: '📄 Evidence', title: 'Save a PDF: your picture and this copy side by side, where it was found, how well they match, and fingerprints of both files', onclick: () => saveSighting(p, l) }) : null,
-        h('button', { text: '📸 Capture', title: 'Open this page and capture it as an evidence pack', onclick: () => captureLinks([l.url]) }))));
-}
-
-function renderSelbar() {
-  const bar = $('selbar');
-  if (!bar) return;
-  const p = job.pics[R.sel];
-  const urls = p.links.filter(l => R.ticked.has(p.i + '|' + l.key)).map(l => l.url);
-  bar.hidden = !urls.length;
-  bar.replaceChildren(h('span', {}, '✓ ', h('b', { text: plural(urls.length, 'link') + ' ticked' })), h('span', { class: 'sp' }),
-    h('button', { class: 'btn', text: 'Untick all', onclick: () => { R.ticked.clear(); renderResults(); } }),
-    h('button', { class: 'btn', text: 'Copy links', onclick: () => navigator.clipboard.writeText(urls.join('\n')) }),
-    h('button', { class: 'btn', text: '🚫 Hide these sites', onclick: async () => { for (const u of urls) await RS_LISTS.add('hidden', RS_SITE.of(u)); R.ticked.clear(); renderResults(); } }));
-}
-
-function renderList() {
-  const p = job.pics[R.sel];
-  const links = visibleLinks(p);
-  const bySite = new Map();
-  for (const l of links) { if (!bySite.has(l.site)) bySite.set(l.site, []); bySite.get(l.site).push(l); }
-  const groups = [...bySite.entries()].map(([site, ls]) => [site, ls.sort((a, b) => linkScore(b) - linkScore(a))])
-    .sort((a, b) => linkScore(b[1][0]) - linkScore(a[1][0]));
-  const box = $('rlist');
-  if (!groups.length) {
-    const searching = picBusy(p) || runList(p).some(r => r.state === 'wait');
-    box.replaceChildren(h('div', { class: 'none', text: searching ? 'Searching… links appear here as each site answers.' : p.links.length ? 'No links match these filters.' : 'No matches found for this picture.' }));
-    return;
-  }
-  box.replaceChildren(...groups.map(([site, ls]) => {
-    const hidden = RS_LISTS.isHidden(site), allowed = RS_LISTS.isAllowed(site);
-    const after = () => { renderResults(); };
-    return h('div', { class: 'site' + (allowed ? ' allowed' : '') + (hidden ? ' hiddenSite' : '') },
-      h('div', { class: 'sh' }, h('b', { text: site }), allowed ? h('span', { class: 'tag ok', text: '✓ Allowed' }) : null, h('span', { class: 'n', text: plural(ls.length, 'link') }),
-        h('span', { class: 'acts' },
-          hidden ? h('button', { class: 'allowB', text: 'Show again', onclick: () => RS_LISTS.remove('hidden', site).then(after) })
-            : allowed ? h('button', { class: 'allowB', text: 'Remove from allowed', onclick: () => RS_LISTS.remove('allowed', site).then(after) })
-              : [h('button', { class: 'allowB', title: 'Your own site or a licensee: keep showing it, with a green label', text: '✓ Mark allowed', onclick: () => RS_LISTS.add('allowed', site).then(after) }),
-                h('button', { class: 'hideB', title: 'Never show links from ' + site + ' again, for any picture', text: '🚫 Hide this site', onclick: () => RS_LISTS.add('hidden', site).then(after) })])),
-      ls.map(l => rowFor(p, l)));
-  }));
+        v !== 'cant' ? h('button', { text: '🔀 Compare', title: 'Lay this picture over yours on the Compare page', onclick: () => compareLink(p, l) }) : null,
+        h('button', { class: 'evid', text: '＋ It is a copy', title: 'The checker got it wrong: add this link to All copies found for this photo',
+          onclick: async e => {
+            e.target.disabled = true;
+            try {
+              if (userNo(l)) await RS_REJECT.remove(l.url, p.name, 'nomatch');
+              await FC.rescue(p, { ...l, verdict: 'maybe' }, BY[job.kind] || 'a search');
+              l.rescued = true; saveJob(); renderResults();
+            } catch (err) { e.target.disabled = false; banner([h('span', { text: 'Could not add it: ' + (err && err.message || err) })]); }
+          } }))));
 }
 
 function renderResults() {
   if (!job) return;
   resultsSide();
   const p = job.pics[R.sel];
-  // While typing in the search box, only redraw the list.
-  if (document.activeElement && document.activeElement.id === 'rtext' && $('rlist')) { renderList(); renderSelbar(); return; }
   const all = visibleLinks(p, { raw: true, withHidden: false });
   const cnt = k => all.filter(l => verdict(l) === k).length;
-  const nRej = p.links.filter(l => isRejected(p, l)).length;
-  const nNew = all.filter(l => l.isNew && verdict(l) !== 'no').length, nSame = cnt('same'), nPend = cnt('pending');
-  const prev = R.prev[p.i] && R.prev[p.i].lastSearched;
-  const hiddenHere = [...new Set(p.links.filter(l => RS_LISTS.isHidden(l.site, l.url)).map(l => RS_SITE.entryFor(l.site, l.url, RS_LISTS.hidden)))];
-  const nHiddenLinks = p.links.filter(l => RS_LISTS.isHidden(l.site, l.url)).length;
-  const fbtn = (k, label, cls) => h('button', { class: (cls || '') + (R.filter === k ? ' on' : ''), text: label, onclick: () => { R.filter = k; renderResults(); } });
+  const nSame = cnt('same'), nMaybe = cnt('maybe'), nPend = cnt('pending'), kept = nSame + nMaybe;
+  const out = all.filter(l => ['no', 'cant'].includes(verdict(l))).sort((a, b) => linkScore(b) - linkScore(a));
+  const nNo = out.filter(l => verdict(l) === 'no').length;
+  const searching = !picDone(p);
   const tabBtn = e => {
     const r = p.runs[e];
     if (!r || (!r.tabId && !r.pageUrl)) return null;
@@ -931,30 +884,30 @@ function renderResults() {
     } }, fav(e), ' ' + ENGINES[e].short + ' tab');
   };
   const problems = job.engines.map(e => p.runs[e]).filter(r => r.why && r.state !== 'done').map(r => r.why);
-  $('main').replaceChildren(
+  // The whole search: one button to the review, which lives in All copies found.
+  const totalKept = job.pics.reduce((a, q) => a + visibleLinks(q, { raw: true, withHidden: false }).filter(l => ['same', 'maybe'].includes(verdict(l))).length, 0);
+  const allIn = !R.running && job.pics.every(q => q.ingested || !job.engines.some(e => q.runs[e].state === 'done'));
+  const top = h('div', { class: 'sumcard' },
+    h('div', {}, h('b', { text: R.running ? 'Searching… ' + plural(totalKept, 'copy', 'copies') + ' found so far' : plural(totalKept, 'copy', 'copies') + ' found in this search' }),
+      h('small', { text: allIn ? 'They are in All copies found, with each photo\'s client. Review them there: Stolen, Licensed or Remove.'
+        : 'Each photo\'s copies go to All copies found as soon as that photo is searched and checked. You review them there.' })),
+    h('a', { class: 'btn blue', href: appUrl('review'), onclick: e => goApp('review', e), text: 'Review new copies' }),
+    h('a', { class: 'btn', href: appUrl('found'), onclick: e => goApp('found', e), text: 'All copies found' }));
+  const state = searching ? 'Searching… ' + statusLine(p)
+    : nPend ? 'Checking ' + plural(nPend, 'picture') + ' found against yours…'
+      : kept ? plural(kept, 'copy', 'copies') + ' of this photo ' + (p.ingested ? 'added to' : 'going to') + ' All copies found (' + nSame + ' same photo, ' + nMaybe + ' maybe)'
+        : 'No copies found for this photo';
+  const wasOpen = $('thrown') ? $('thrown').open : false;
+  $('main').replaceChildren(top,
     h('div', { class: 'rhead' }, h('img', { src: p.thumb, alt: '' }), h('div', { class: 'meta' },
       h('h1', { text: (p.i + 1) + '. ' + p.name }),
-      h('p', { class: 'lead' }, h('b', { style: 'color:#15803d', text: plural(nSame, 'link') + ' with the same photo' }), ' (of ' + all.length + ' found)',
-        prev ? [' · ', h('b', { style: 'color:#92400e', text: nNew + ' new' }), ' since ' + RS_UTIL.niceDate(prev)] : ' · first search for this picture',
-        ' · your file is ' + p.w + ' × ' + p.h),
-      h('div', { class: 'btns' }, job.engines.map(tabBtn), h('small', { text: nPend ? 'Checking ' + nPend + ' more pictures…' : 'Every picture found was downloaded and lined up with yours.' })),
+      h('p', { class: 'lead' }, h('b', { style: kept && !searching && !nPend ? 'color:#15803d' : '', text: state }), ' · your file is ' + p.w + ' × ' + p.h),
+      h('div', { class: 'btns' }, job.engines.map(tabBtn)),
       problems.length ? h('p', { class: 'note', text: [...new Set(problems)].join(' ') }) : null)),
-    h('div', { class: 'ftabs' }, fbtn('same', '✅ Same photo ' + nSame + (nPend ? ' (checking…)' : '')), fbtn('maybe', 'Maybe ' + cnt('maybe')), fbtn('cant', "Can't check " + cnt('cant')),
-      fbtn('no', 'Different photo ' + cnt('no')), fbtn('new', '⭐ New ' + nNew, 'newf'), fbtn('all', 'All ' + all.length),
-      nRej || R.filter === 'rejected' ? fbtn('rejected', '🗑 Rejected ' + nRej) : null,
-      h('span', { class: 'sp' }),
-      job.engines.map(e => h('button', { class: R.engineFilter.has(e) ? 'on' : '', text: ENGINES[e].short, title: 'Only links found by ' + ENGINES[e].short + ' (click again to undo)',
-        onclick: () => { if (R.engineFilter.has(e)) R.engineFilter.delete(e); else R.engineFilter.add(e); renderResults(); } })),
-      h('input', { id: 'rtext', type: 'search', placeholder: '🔎 Find a site or word', value: R.text, oninput: e => { R.text = e.target.value; renderList(); } })),
-    h('div', { class: 'hidebar' }, '🚫 Hidden sites:',
-      hiddenHere.length ? hiddenHere.map(d => h('span', { class: 'chip' }, d, h('button', { title: 'Show ' + d + ' again', text: '✕', onclick: () => RS_LISTS.remove('hidden', d).then(renderResults) })))
-        : h('span', { text: RS_LISTS.hidden.length ? ' none for this picture' : ' none yet. Press "Hide this site" on any site you never care about.' }),
-      nHiddenLinks ? h('span', { style: 'color:#64748b', text: '· ' + plural(nHiddenLinks, 'link') + ' hidden for this picture' }) : null,
-      nHiddenLinks ? h('button', { class: 'lnk', text: R.showHidden ? 'Hide them again' : 'Show them', onclick: () => { R.showHidden = !R.showHidden; renderResults(); } })
-        : h('a', { class: 'lnk', href: appUrl('hidden'), onclick: e => goApp('hidden', e), text: 'Manage lists', style: 'margin-left:auto;font-weight:600;text-decoration:none' })),
-    h('div', { class: 'list', id: 'rlist' }),
-    h('div', { class: 'selbar', id: 'selbar', hidden: true }));
-  renderList(); renderSelbar();
+    h('details', { class: 'thrown', id: 'thrown', open: wasOpen },
+      h('summary', {}, h('b', { text: 'Thrown out by the checker: ' + out.length }), ' · ' + nNo + ' different photo · ' + (out.length - nNo) + " can't check"),
+      h('p', { class: 'hint', text: 'These were not added to All copies found. If one really is your photo, press "＋ It is a copy" and it goes there.' }),
+      out.length ? h('div', { class: 'list' }, h('div', { class: 'site' }, out.map(l => rowFor(p, l)))) : h('div', { class: 'none', text: searching || nPend ? 'Nothing thrown out yet.' : 'Nothing was thrown out for this photo.' })));
 }
 
 // ---------- the Evidence report (one PDF for one use) ----------
