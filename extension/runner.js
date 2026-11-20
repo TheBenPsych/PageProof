@@ -177,7 +177,12 @@ async function step() {
 }
 
 api.runtime.onMessage.addListener(msg => {
-  if (msg && msg.type === 'fcAutoDone' && msg.job === S.job) { S.job = null; S.tab = null; setTimeout(tick, 2000); }
+  if (msg && msg.type === 'fcAutoDone' && msg.job === S.job) {
+    S.job = null; S.tab = null; setTimeout(tick, 2000);
+    // The search tab closes straight away, so this window writes the text copy of the finds
+    // (Documents › PageProof › found-copies.txt).
+    FC.backupCopiesSoon();
+  }
   if (msg && msg.type === 'fcRunnerPing') return Promise.resolve({ ok: true, win: S.win });
   return false;
 });
