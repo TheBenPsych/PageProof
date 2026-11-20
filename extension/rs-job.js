@@ -58,10 +58,18 @@ const RS_JOB = (() => {
     } catch (e) { /* ignore */ }
     return job;
   }
-  // Open its results window (where the searches run).
+  // Show its results (where the searches run) inside the full PageProof page, as
+  // app.html#results?job=ID. No separate window: from PageProof itself the page just switches;
+  // from anywhere else a PageProof tab opens next to the tab you're in. The search tabs open as
+  // small pinned tabs in that same browser window.
   async function open(job) {
-    const W = globalThis.screen || { availWidth: 1500, availHeight: 1000 };
-    await api.windows.create({ url: api.runtime.getURL('revsearch.html?job=' + job.id), focused: true, width: Math.min(1500, W.availWidth), height: Math.min(1000, W.availHeight) });
+    const hash = 'results?job=' + encodeURIComponent(job.id);
+    try { if (/\/app\.html$/.test(window.top.location.pathname)) { window.top.location.hash = hash; return; } } catch (e) { /* not inside PageProof */ }
+    const url = api.runtime.getURL('app.html#' + hash);
+    let here = null;
+    try { here = await api.tabs.getCurrent(); } catch (e) { /* not in a tab */ }
+    try { await api.tabs.create(here ? { url, windowId: here.windowId, index: here.index + 1, active: true } : { url, active: true }); }
+    catch (e) { await api.tabs.create({ url, active: true }); }
   }
   return { prepare, create, open, settings, resting, ENGINES };
 })();

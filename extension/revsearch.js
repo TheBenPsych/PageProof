@@ -68,15 +68,18 @@ const openTab = url => api.tabs.create({ url });
 // Go to a search's results: switch to its tab if it is already open (a search keeps running
 // in that tab, so we never open a second copy of it), otherwise open it.
 async function goResults(id) {
+  const hash = 'results?job=' + encodeURIComponent(id);
+  // Inside the full PageProof page: just switch to that search there.
+  try { if (window.top !== window && /\/app\.html$/.test(window.top.location.pathname)) { window.top.location.hash = hash; return; } } catch (e) { /* not inside PageProof */ }
   try {
     const o = (await api.storage.local.get('rsOpenJob')).rsOpenJob;
     if (o && o.id === id) {
       const t = await api.tabs.get(o.tab);                 // fails if that tab was closed
-      await api.tabs.update(t.id, { active: true }); await api.windows.update(t.windowId, { focused: true });
+      await api.tabs.update(t.id, /app\.html/.test(t.url || '') ? { active: true, url: appUrl(hash) } : { active: true }); await api.windows.update(t.windowId, { focused: true });
       return;
     }
   } catch (e) { /* not open any more */ }
-  openTab(page('job=' + id));
+  openTab(appUrl(hash));
 }
 // On the other PageProof pages, offer a way back to the search that is open.
 async function backLink() {
@@ -206,7 +209,7 @@ async function setupSide() {
   const go = h('button', { class: 'big', disabled: !n || !nEng, text: '🔎 Search ' + (n ? plural(n, 'picture') : 'pictures'), onclick: async () => {
     go.disabled = true;
     const job = await startJob(draft.slice());
-    if (job) { draft.length = 0; draftNotes = ['Search started in a new window. You can add more pictures for another search here.']; renderSetup(); }
+    if (job) { draft.length = 0; draftNotes = ['Search started. You can add more pictures for another search here.']; renderSetup(); }
     else go.disabled = false;
   } });
   side(h('div', {}, h('div', { id: 'domain', text: 'Reverse image search' }), h('div', { id: 'sub', text: 'Search many pictures at once on Google, Yandex and Bing.' })),
@@ -231,7 +234,7 @@ function renderSetup(busy) {
       h('button', { class: 'btn', style: 'font-size:14px;padding:8px 16px', text: '📂 Or pick from my clients\' photos', onclick: e => goApp('clients', e) }),
       h('div', { class: 'ways' }, h('span', { text: 'Or drag pictures or a whole folder onto this page' }), h('span', { text: 'Or paste pictures or picture links (Ctrl+V)' }), h('span', { text: 'Up to ' + MAX_PICS + ' at once' })),
       h('div', { class: 'howbox' }, h('b', { text: 'What happens next:' }), h('ol', {},
-        h('li', { text: 'PageProof opens one new window. The Google, Yandex and Bing search tabs open as small pinned tabs at the left of the tab bar, and close by themselves when done.' }),
+        h('li', { text: 'PageProof shows the results right here in PageProof. The Google, Yandex and Bing search tabs open as small pinned tabs at the left of the tab bar, and close by themselves when done.' }),
         h('li', { text: 'The pictures are searched a few at a time, with short pauses, in your own browser. That keeps "are you a robot" checks away.' }),
         h('li', { text: 'Every link found is listed on one results page, with a % match. Hide the sites you never care about.' })))));
     return;
@@ -808,7 +811,7 @@ function resultsSide() {
     ? h('div', {}, h('div', { id: 'domain', text: 'Searching ' + plural(total, 'picture') }),
       h('div', { id: 'sub', text: done + ' done · ' + job.pics.filter(picBusy).length + ' searching · ' + (total - done - job.pics.filter(picBusy).length) + ' waiting' }),
       h('div', { class: 'prog' }, h('i', { style: 'width:' + Math.round(done / total * 100) + '%' })),
-      h('p', { class: 'hint', text: 'You can keep working in your other windows. Leave this window open until it finishes.' }))
+      h('p', { class: 'hint', text: 'You can use other PageProof pages and other tabs meanwhile. Keep the PageProof tab open until it finishes.' }))
     : h('div', {}, h('div', { id: 'domain', text: plural(total, 'picture') + ' searched' }),
       h('div', { id: 'sub', text: when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) + ' · ' + plural(job.pics.reduce((a, p) => a + sameCount(p), 0), 'same-photo link') + ' (of ' + links + ' found)' + (job.pics.some(checking) ? ' · still checking matches…' : '') }));
   const list = h('div', { class: 'card plist' }, job.pics.map(p => {
