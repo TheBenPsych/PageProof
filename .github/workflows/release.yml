@@ -8,17 +8,23 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Safety: by default every job may only READ the code. Only the "zip" job below, which runs
+# after a change lands on main (never for someone else's pull request), may publish a release.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   # The automatic checks (tests/app). They start a real browser with PageProof loaded and a
   # pretend library. If any check fails, the "zip" job below does not run: nothing is released.
   checks:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -32,10 +38,14 @@ jobs:
 
   zip:
     needs: checks
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.repository == 'TheBenPsych/PageProof'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Pack the extension
         run: cd extension && zip -r ../PageProof.zip . -x '.*'
       # Firefox can't use Chrome's "service_worker" background yet, and Chrome shows an error
