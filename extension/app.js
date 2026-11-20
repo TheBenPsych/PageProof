@@ -24,6 +24,7 @@ async function render(keep) {
   document.getElementById('crumb').innerHTML = `<b>PageProof</b> › ${PP_CRUMBS[r] || ''}`;
   document.body.classList.toggle('framed', !!FRAMES[r]);
   if (V[r] && V[r].guard) { const g = await V[r].guard(); if (g) r = g; }
+  state.shown = r; // the page really on screen (a guard can show setup under another page's address)
   if (FRAMES[r]) {
     const want = FRAMES[r];
     const f = view.querySelector('iframe.tool');

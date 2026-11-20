@@ -92,11 +92,11 @@ V.connect.noAutoRedraw = true;
 // a few at a time. The page is redrawn as things arrive.
 let csDrawT = null, csHoldAt = 0;
 // Keep saying "setup is open" while someone sits on the folder step.
-setInterval(() => { if (route() === 'connect' && state.cs === 2 && !document.hidden) { csHoldAt = Date.now(); ppApi.storage.local.set({ fcSetupAt: csHoldAt }).catch(() => {}); } }, 30000);
+setInterval(() => { if (state.shown === 'connect' && state.cs === 2 && !document.hidden) { csHoldAt = Date.now(); ppApi.storage.local.set({ fcSetupAt: csHoldAt }).catch(() => {}); } }, 30000);
 // Redraw at most every 300 ms. (It must not keep pushing the redraw back while tags are still
 // being read, or a big folder shows nothing until every tag is in.)
 const csDraw = now => {
-  const go = () => { csDrawT = null; if (route() === 'connect' && state.cs === 2) render(true); };
+  const go = () => { csDrawT = null; if (state.shown === 'connect' && state.cs === 2) render(true); };
   if (now) { clearTimeout(csDrawT); go(); } else if (!csDrawT) csDrawT = setTimeout(go, 300);
 };
 // The folder list is remembered (names and client_info tags), so opening a folder again shows it
