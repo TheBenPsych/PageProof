@@ -14,8 +14,13 @@
   <div class="main">
     <header class="top">
       <button class="btn menu-btn" id="menuBtn" aria-label="Open menu">☰</button>
-      <div class="crumb" id="crumb"></div>
-      <button class="btn" id="themeBtn" aria-label="Switch between light and dark" style="min-height:40px;padding:0 12px;margin-left:auto"></button>
+      <div class="crumb" id="crumb" hidden></div>
+      <label class="search" id="topSearch"><span id="topSearchIc"></span><input id="ppSearch" type="search" placeholder="Search sites, photos or clients" aria-label="Search sites, photos or clients"></label>
+      <div class="topr">
+        <div class="undo-wrap"><button class="btn tb" id="undoBtn" title="Undo your last answer (U)" disabled></button><div class="tmenu" id="undoMenu" hidden></div></div>
+        <button class="btn tb icon" id="themeBtn" aria-label="Switch between light and dark"></button>
+        <a class="btn tb go" id="capBtn" href="#capture"></a>
+      </div>
     </header>
     <main class="content" id="view"></main>
     <div class="content" id="live" style="display:none"></div>
@@ -37,6 +42,7 @@
 <script src="ui/fc-found.js"></script>
 <script src="ui/fc-photos.js"></script>
 <script src="ui/fc-owners.js"></script>
+<script src="ui/newlook.js"></script>
 <script src="unzip.js"></script>
 <script src="updater.js"></script>
 <script src="ui/fc-health.js"></script>

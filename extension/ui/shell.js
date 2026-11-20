@@ -7,34 +7,25 @@ const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&a
 // ---------- the menu ----------
 // Each page has an id (the part after # in the address). ROUTES says which menu item and sub-item it lights up.
 const PP_MENU = [
-  { g: null, items: [{ id: 'home', label: 'Home', desc: 'What needs you today', href: 'home' }] },
-  { g: 'Collect evidence', items: [
-    { id: 'capture', label: 'Capture a page', desc: 'Save a web page as proof', href: 'capture' },
-    { id: 'find', label: 'Find copies', desc: 'Search the web for your photos', href: 'found', badgeKey: 'newCopies',
-      subs: [['All copies found', 'found'], ['Review new copies', 'review'], ['Clients and photos', 'clients'], ['Skipped photos', 'skipped'], ['Site owners', 'owners'], ['Keep searching', 'keep'], ['New search', 'search'], ['All searches', 'searches']] },
-  ] },
-  { g: 'Look closer', items: [
-    { id: 'tools', label: 'Photo tools', desc: 'Hidden data, compare, mark up', href: 'inspect', subs: [['Inspect a photo', 'inspect'], ['Compare two photos', 'compare'], ['Mark up a copy', 'markup']] },
-    { id: 'files', label: 'Open files', desc: 'View or convert any file', href: 'files', subs: [['Convert files', 'files'], ['Open odd files', 'openfiles']] },
-  ] },
-  { g: 'Keep and prove', items: [
-    { id: 'library', label: 'Evidence library', desc: 'Every capture and report', href: 'library', subs: [['All evidence', 'library'], ['Weekly summary', 'weekly']] },
-    { id: 'verify', label: 'Verify a pack', desc: 'Show nothing was changed', href: 'verify' },
-  ] },
-  { g: 'In your browser', items: [
-    { id: 'browser', label: 'Toolbar and side panel', desc: 'PageProof beside every page', href: 'browser' },
-  ] },
+  { id: 'home', label: 'Home', href: 'home' },
+  { id: 'find', label: 'Copies found', href: 'found', badgeKey: 'newCopies', icon: 'copies',
+    subs: [['All copies', 'found'], ['One at a time', 'review'], ['New search', 'search'], ['All searches', 'searches']] },
+  { id: 'clients', label: 'Clients and photos', href: 'clients', icon: 'people', subs: [['Clients', 'clients'], ['Skipped photos', 'skipped'], ['Site owners', 'owners']] },
+  { id: 'keep', label: 'Keep searching', href: 'keep', icon: 'loop' },
+  { id: 'library', label: 'Evidence library', href: 'library', subs: [['All evidence', 'library'], ['Weekly summary', 'weekly']] },
+  { id: 'tools', label: 'Tools', href: 'tools', icon: 'grid' },
+  { id: 'browser', label: 'In your browser', href: 'browser' },
 ];
 const PP_ROUTES = {
-  home: ['home'], capture: ['capture'], search: ['find', 'search'], searches: ['find', 'searches'], results: ['find', 'searches'], found: ['find', 'found'], review: ['find', 'review'],
-  clients: ['find', 'clients'], photos: ['find', 'clients'], owners: ['find', 'owners'], who: ['find', 'owners'], keep: ['find', 'keep'], connect: ['find', 'found'], weekly: ['library', 'weekly'],
-  inspect: ['tools', 'inspect'], compare: ['tools', 'compare'], markup: ['tools', 'markup'], files: ['files', 'files'], openfiles: ['files', 'openfiles'],
-  library: ['library', 'library'], verify: ['verify'], browser: ['browser'], settings: ['settings'], hidden: ['settings'], computer: ['settings'],
-  whatsnew: ['settings'], health: ['settings'], skipped: ['find', 'skipped'], setup: ['browser'], help: ['help']
+  home: ['home'], capture: ['tools'], tools: ['tools'], search: ['find', 'search'], searches: ['find', 'searches'], results: ['find', 'searches'], found: ['find', 'found'], review: ['find', 'review'],
+  clients: ['clients', 'clients'], photos: ['clients', 'clients'], owners: ['clients', 'owners'], who: ['clients', 'owners'], keep: ['keep'], connect: ['find', 'found'], weekly: ['library', 'weekly'],
+  inspect: ['tools'], compare: ['tools'], markup: ['tools'], files: ['tools'], openfiles: ['tools'],
+  library: ['library', 'library'], verify: ['tools'], browser: ['browser'], settings: ['settings'], hidden: ['settings'], computer: ['settings'],
+  whatsnew: ['settings'], health: ['settings'], skipped: ['clients', 'skipped'], setup: ['browser'], help: ['help']
 };
 const PP_CRUMBS = {
   results: 'Find copies › Search results',
-  home: 'Home', capture: 'Capture a page', search: 'Find copies › New search', searches: 'Find copies › All searches', found: 'Find copies › All copies found',
+  home: 'Home', tools: 'Tools', capture: 'Capture a page', search: 'Find copies › New search', searches: 'Find copies › All searches', found: 'Find copies › All copies found',
   review: 'Find copies › Review new copies', clients: 'Find copies › Clients and photos', photos: 'Find copies › Clients and photos', owners: 'Find copies › Site owners',
   who: 'Find copies › Who\'s behind this site', keep: 'Find copies › Keep searching', connect: 'Find copies › Connect your photos', weekly: 'Evidence library › Weekly summary',
   inspect: 'Photo tools › Inspect a photo', compare: 'Photo tools › Compare two photos', markup: 'Photo tools › Mark up a copy', files: 'Open files › Convert files',
@@ -45,19 +36,17 @@ const PP_BADGES = {};
 
 function ppRenderSide(route) {
   const [sec, sub] = PP_ROUTES[route] || PP_ROUTES.home;
-  let h = `<a class="brand" href="#home" style="text-decoration:none;color:inherit"><img src="icons/icon48.png" width="30" height="30" alt=""><b>PageProof</b></a>`;
-  for (const grp of PP_MENU) {
-    if (grp.g) h += `<div class="grp">${grp.g}</div>`;
-    for (const it of grp.items) {
-      const on = it.id === sec, badge = it.badgeKey && PP_BADGES[it.badgeKey];
-      h += `<a class="nav${on ? ' on' : ''}" href="#${it.href}"${on ? ' aria-current="page"' : ''}>${ic(it.id)}<span class="t"><b>${it.label}</b><i>${it.desc}</i></span>${badge && !on ? `<span class="pill-n">${badge}</span>` : ''}</a>`;
-      if (on && it.subs) h += `<div class="subs">${it.subs.map(([l, r]) => `<a href="#${r}" class="${r === sub ? 'on' : ''}">${l}</a>`).join('')}</div>`;
-    }
+  let h = `<a class="brand" href="#home" style="text-decoration:none;color:inherit"><img src="icons/icon48.png" width="36" height="36" alt=""><b>PageProof</b></a>`;
+  for (const it of PP_MENU) {
+    const on = it.id === sec, badge = it.badgeKey && PP_BADGES[it.badgeKey];
+    h += `<a class="nav${on ? ' on' : ''}" href="#${it.href}"${on ? ' aria-current="page"' : ''}>${ic(it.icon || it.id)}<span class="t"><b>${it.label}</b></span>${badge ? `<span class="pill-n">${badge}</span>` : ''}</a>`;
+    if (on && it.subs) h += `<div class="subs">${it.subs.map(([l, r]) => `<a href="#${r}" class="${r === sub ? 'on' : ''}">${l}</a>`).join('')}</div>`;
   }
-  h += `<div class="grow"></div>
-  <a class="nav${sec === 'settings' ? ' on' : ''}" href="#settings">${ic('settings')}<span class="t"><b>Settings</b><i>Name, folder, health, updates</i></span></a>
+  h += `<div class="grow"></div><div id="sideLive"></div>
+  <a class="nav${sec === 'settings' ? ' on' : ''}" href="#settings">${ic('settings')}<span class="t"><b>Settings</b></span></a>
   <a class="nav${sec === 'help' ? ' on' : ''}" href="#help">${ic('help')}<span class="t"><b>Help and tutorial</b></span></a>`;
   document.getElementById('side').innerHTML = h;
+  if (typeof ppSideLive === 'function') ppSideLive();
 }
 
 // ---------- light / dark ----------
@@ -65,7 +54,7 @@ async function ppTheme(next) {
   if (next) { await ppApi.storage.local.set({ ppTheme: next }); document.documentElement.dataset.theme = next; }
   const t = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
   const b = document.getElementById('themeBtn');
-  if (b) b.innerHTML = t === 'dark' ? `${ic('sun', 18)} Light` : `${ic('moon', 18)} Dark`;
+  if (b) { b.innerHTML = ic(t === 'dark' ? 'sun' : 'moon', 18); b.title = t === 'dark' ? 'Switch to light' : 'Switch to dark'; }
 }
 
 // ---------- little notes at the bottom ----------

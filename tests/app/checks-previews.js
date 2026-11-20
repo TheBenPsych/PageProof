@@ -20,9 +20,9 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   console.log(JSON.stringify(r));
   ok(r.inline === 0 && r.pics === r.th + r.pth && r.one.startsWith('data:image/jpeg'), 'previews moved to their own store');
   await page.goto(url('app.html#found')); await page.waitForTimeout(1500);
-  const f = await page.evaluate(() => ({ rows: document.querySelectorAll('tr.frow').length, real: [...document.querySelectorAll('tr.frow img.thumb')].filter(i => i.src.startsWith('data:image/jpeg')).length, left: document.querySelectorAll('img[data-th]').length }));
+  const f = await page.evaluate(() => ({ rows: document.querySelectorAll('.frow').length, real: [...document.querySelectorAll('.frow img.thumb')].filter(i => i.src.startsWith('data:image/jpeg')).length, left: document.querySelectorAll('img[data-th]').length }));
   console.log(JSON.stringify(f)); ok(f.rows > 0 && f.real === f.rows && f.left === 0, 'All copies found shows every preview');
-  await page.click('tr.frow'); await page.waitForTimeout(700);
+  await page.click('.frow .l1'); await page.waitForTimeout(700);
   const d = await page.evaluate(() => [...document.querySelectorAll('#drawer .pair img')].map(i => i.src.slice(0, 15)));
   console.log(d); ok(d.every(s => s.startsWith('data:image/jpe') || s.startsWith('blob:')), 'details panel shows both pictures');
   await page.goto(url('app.html#review')); await page.waitForTimeout(1200);

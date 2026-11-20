@@ -39,4 +39,15 @@ PP_ICONS.moon='<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>';
 PP_ICONS.sun='<circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>';
 PP_ICONS.menu='<path d="M4 6h16M4 12h16M4 18h16"/>';
 PP_ICONS.x='<path d="M6 6l12 12M18 6L6 18"/>';
+PP_ICONS.copies='<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>';
+PP_ICONS.people='<circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6"/><path d="M17 4a4 4 0 0 1 0 8M22 21c0-3-1.5-5-4-5.7"/>';
+PP_ICONS.loop='<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>';
+PP_ICONS.grid='<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>';
+PP_ICONS.dots='<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>';
+PP_ICONS.undo='<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>';
+PP_ICONS.cam='<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>';
+PP_ICONS.ban='<circle cx="12" cy="12" r="9"/><path d="M6 6l12 12"/>';
+PP_ICONS.layers='<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>';
+PP_ICONS.pen='<path d="M4 20l4-1L20 7l-3-3L5 16z"/>';
+PP_ICONS.swap='<path d="M4 8h14l-3-3M20 16H6l3 3"/>';
 function ppIcon(n, s = 20, w = 2) { return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PP_ICONS[n] || ''}</svg>`; }
