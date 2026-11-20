@@ -91,8 +91,10 @@ const FC = (() => {
   function picsOpen() {
     if (picsP) return picsP;
     picsP = new Promise((resolve, reject) => {
-      const req = indexedDB.open('pageproof-fc-pics', 1);
-      req.onupgradeneeded = () => req.result.createObjectStore('p');
+      // Version 2 adds two more drawers: "kept" (their copy of the photo, exactly as downloaded
+      // the moment it was found) and "pages" (a small picture of their page).
+      const req = indexedDB.open('pageproof-fc-pics', 2);
+      req.onupgradeneeded = () => { for (const n of ['p', 'kept', 'pages']) if (!req.result.objectStoreNames.contains(n)) req.result.createObjectStore(n); };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => { picsP = null; reject(req.error); };
     });
@@ -126,6 +128,63 @@ const FC = (() => {
     },
     async count() { const db = await picsOpen(); return new Promise((res, rej) => { const r = db.transaction('p', 'readonly').objectStore('p').count(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
   };
+  // ---------------------------------------------------------------- their copy and their page, kept
+  // "kept": their copy of the photo, saved the moment a search finds it, so it is still here if
+  // they delete it later. { blob, type, size, sha, at, from }. "pages": a small picture of their
+  // page, taken the first time you look at the copy. { pic (a small JPEG), at }.
+  const KEEP_MAX = 4 * 1024 * 1024;            // a bigger file than this is not kept (the preview still is)
+  const box = name => ({
+    async get(id) { const db = await picsOpen(); return new Promise((res, rej) => { const r = db.transaction(name, 'readonly').objectStore(name).get(id); r.onsuccess = () => res(r.result || null); r.onerror = () => rej(r.error); }); },
+    async put(id, v) { const db = await picsOpen(); return new Promise((res, rej) => { const t = db.transaction(name, 'readwrite'); t.objectStore(name).put(v, id); t.oncomplete = () => res(); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error); }); },
+    async del(ids) { const db = await picsOpen(); return new Promise((res, rej) => { const t = db.transaction(name, 'readwrite'), o = t.objectStore(name); [].concat(ids).forEach(id => o.delete(id)); t.oncomplete = () => res(); t.onerror = () => rej(t.error); }); },
+    async stats() {                            // how many, and how much room they take
+      const db = await picsOpen();
+      return new Promise((res, rej) => {
+        let n = 0, bytes = 0; const ids = [];
+        const r = db.transaction(name, 'readonly').objectStore(name).openCursor();
+        r.onsuccess = () => { const c = r.result; if (!c) return res({ n, bytes, ids }); n++; ids.push(c.key); const v = c.value || {}; bytes += v.size || (v.pic ? Math.round(v.pic.length * 0.75) : 0); c.continue(); };
+        r.onerror = () => rej(r.error);
+      });
+    },
+    async clear() { const db = await picsOpen(); return new Promise((res, rej) => { const t = db.transaction(name, 'readwrite'); t.objectStore(name).clear(); t.oncomplete = () => res(); t.onerror = () => rej(t.error); }); },
+  });
+  const kept = box('kept'), pages = box('pages');
+  async function shaHex(buf) { const d = await crypto.subtle.digest('SHA-256', buf); return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, '0')).join(''); }
+  // Download their copy once and keep it. Quietly gives up if the site refuses or the file is huge.
+  async function keepOriginal(c) {
+    if (!c || !/^https?:/i.test(c.img || '')) return false;
+    try {
+      if (await kept.get(c.id)) return true;
+      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000);
+      const r = await fetch(c.img, { credentials: 'omit', referrerPolicy: 'no-referrer', signal: ctl.signal });
+      clearTimeout(t);
+      if (!r.ok) return false;
+      const type = (r.headers.get('content-type') || '').split(';')[0];
+      if (type && !/^image\//i.test(type)) return false;
+      const buf = await r.arrayBuffer();
+      if (!buf.byteLength || buf.byteLength > KEEP_MAX) return false;
+      await kept.put(c.id, { blob: new Blob([buf], { type: type || 'image/jpeg' }), type: type || 'image/jpeg', size: buf.byteLength, sha: await shaHex(buf), at: new Date().toISOString(), from: c.img });
+      return true;
+    } catch (e) { return false; }
+  }
+  // After a search: keep each new find's picture, one at a time so the search isn't slowed.
+  let keepChain = Promise.resolve();
+  function keepSoon(list) { for (const c of list) keepChain = keepChain.then(() => keepOriginal(c)).catch(() => {}); return keepChain; }
+  // Tidy up: copies you removed more than a week ago (so Undo still works) lose their kept
+  // picture and page picture. Everything else stays.
+  async function pruneKept() {
+    try {
+      const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
+      for (const b of [kept, pages]) {
+        const { ids } = await b.stats();
+        if (!ids.length) continue;
+        const recs = await DB.getMany('copies', ids);
+        const dead = ids.filter((id, i) => !recs[i] || (recs[i].status === 'removed' && (recs[i].answered || '') < weekAgo));
+        if (dead.length) await b.del(dead);
+      }
+    } catch (e) { /* tidy next time */ }
+  }
+
   // Take the preview out of a record before it is saved. Returns [id, picture] to save, or null.
   // (A preview that is just a web address stays where it is: it is tiny.)
   function splitPic(rec) {
@@ -939,6 +998,8 @@ const FC = (() => {
     const newPics = out.map(splitPic).filter(Boolean);
     await pics.putMany(newPics);
     await DB.putMany('copies', out);
+    // Their copy of the photo is kept the moment it is found (not for sites already approved).
+    keepSoon(out.filter(c => c.times === 1 && c.status === 'new'));
     const all = await copiesOf(p.id);
     p.searches = (p.searches || 0) + 1;
     p.lastSearched = now;
@@ -1436,7 +1497,7 @@ const FC = (() => {
     if (left.length !== list.length) backupSoon(true);
   }
 
-  return { DB, meta, open, touch, pics, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
+  return { DB, meta, open, touch, pics, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, setPicked, pickInside, SCAN, applyPendingFlags, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, setClientOf, setFlag, setClients, checkOnline, logWeek, week, weekKey,
     hiddenCountries, setHiddenCountries, ownerFor, pathOf, logReport, USE, useOf, riskOf, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,

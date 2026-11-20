@@ -70,7 +70,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(rp.n > 0 && rp.order, 'Repeat offenders are flagged and come first in Review');
   await page.goto(url('app.html#found')); await page.waitForTimeout(1500);
   await page.click('[data-act="ffilter"][data-v="New"]'); await page.waitForTimeout(500);
-  await page.click('tr.frow'); await page.waitForTimeout(600);
+  await page.click('.frow .l1'); await page.waitForTimeout(600);
   ok(await page.evaluate(() => !/No registration number found/.test(document.getElementById('drawer').textContent)), 'Details panel: the "No registration number found" box is gone');
   const ap = await page.evaluate(async () => {
     const c = FCD.copies.find(x => x.id === state.open); const base = FC.baseOf(c.site);

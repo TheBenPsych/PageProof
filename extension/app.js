@@ -75,6 +75,7 @@ async function render(keep) {
   document.getElementById('side').classList.remove('open');
   if (!keep) window.scrollTo(0, 0);
   if (state.tour >= 0) drawTour();
+  if (typeof ppTopBar === 'function') ppTopBar();
   ppBadges();
 }
 window.addEventListener('hashchange', () => render());
@@ -193,18 +194,32 @@ async function homeFinds() {
   for (const [e, until] of Object.entries(await FC.brokenEngines())) alerts += `<div class="banner bad" role="alert">${ic('help', 22)}<div style="flex:1 1 260px"><b>${FC.ENGINE_NAME[e]} may have stopped working</b><div style="font-size:13.5px;color:var(--ink)">It gave nothing for many photos in a row, so PageProof is resting it until ${new Date(until).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}. Those empty results are not counted against your photos. The other search sites carry on.</div></div><a class="btn" href="#health">See details</a></div>`;
   if (back.length) alerts += `<div class="banner bad" role="alert"><div style="flex:1 1 260px"><b>${back.length} ${back.length === 1 ? 'copy is' : 'copies are'} back online</b><div style="font-size:13.5px;color:var(--ink)">They had gone, and came back: ${esc([...new Set(back.map(c => c.site))].slice(0, 3).join(', '))}</div></div><a class="btn primary" href="#found?filter=Back%20online">See them</a></div>`;
   const main = `<section class="card pad" style="display:flex;flex-direction:column;gap:12px">
-    <div class="row"><h2>Needs your review</h2><a class="btn ghost" style="margin-left:auto" href="#found">All copies found</a>${nNew ? `<a class="btn primary" href="#review">Review ${nNew} new</a>` : ''}</div>
+    <div class="row"><h2>New copies by client</h2><a class="btn ghost" style="margin-left:auto" href="#found">Copies found</a>${nNew ? `<a class="btn primary" href="#review">One at a time (${nNew})</a>` : ''}</div>
     ${top.length ? top.map(([n, v]) => `<a href="#found?client=${encodeURIComponent(n)}" class="row" style="gap:10px;color:inherit;text-decoration:none;flex-wrap:nowrap"><span style="width:160px;flex-shrink:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n)}</span><span class="bar" style="flex:1"><i style="width:${v / max * 100}%;background:var(--copy)"></i></span><span class="num" style="width:40px;text-align:right">${v}</span></a>`).join('') : '<p class="muted" style="margin:0">Nothing new to review. Well done.</p>'}
   </section>`;
   const side = `<section class="card pad" style="display:flex;flex-direction:column;gap:8px">
     <div class="row"><h2>Keep searching</h2><span class="tag ${k.on && !store.fcPause ? 'ok' : 'grey'}" style="margin-left:auto">${!k.on ? 'Off' : store.fcPause ? 'Paused' : alive ? 'On' : 'Starting'}</span></div>
     <span class="muted" style="font-size:14px">${k.on && alive ? esc(st.text) : k.on ? 'The search window is starting.' : 'Turn it on to search all day.'}</span>
-    <span class="faint" style="font-size:13px">Today: ${today.searched} photos searched, ${today.found} new copies</span>
+    <span class="faint" style="font-size:13px">Today: ${today.searched} ${today.searched === 1 ? 'photo' : 'photos'} searched, ${today.found} new ${today.found === 1 ? 'copy' : 'copies'}</span>
     <a class="btn" href="#keep">Open Keep searching</a></section>
     <section class="card pad" style="display:flex;flex-direction:column;gap:8px"><h2>Still online?</h2>
     <span class="muted" style="font-size:14px">${stolen.length ? `${up} of ${stolen.length} copies you marked stolen are still up. They're checked every week.` : 'Copies you mark stolen are checked every week.'}</span>
     <div class="row"><a class="btn" href="#found?filter=Stolen">Stolen copies</a><a class="btn ghost" href="#weekly">Weekly summary</a></div></section>`;
-  return { alerts, main, side };
+  // Most copied photos: your photos that turn up on the most pages.
+  const per = new Map();
+  for (const c of vis) if (c.status !== 'removed' && c.status !== 'licensed') per.set(c.photo, (per.get(c.photo) || 0) + 1);
+  const most = [...per.entries()].filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  let mostHtml = '';
+  if (most.length) {
+    const ps = await FC.DB.getMany('photos', most.map(m => m[0]));
+    const mx = most[0][1];
+    mostHtml = `<section class="card pad" id="mostCopied" style="display:flex;flex-direction:column;gap:6px"><div class="row"><h2>Most copied photos</h2><span class="faint" style="margin-left:auto;font-size:13px">Pages each one is on</span></div>
+      ${most.map(([id, n], i) => { const p = ps[i] || { id, name: 'Photo' }; const src = p.thumb ? esc(p.thumb) : p.th ? (FC.pics.seen(p.id) || `data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" data-th="${esc(p.id)}`) : 'icons/icon48.png';
+        return `<a class="toprow" href="#found?photo=${encodeURIComponent(id)}"><img src="${src}" alt=""><span style="min-width:0"><b>${esc(p.name || 'Photo')}</b><span class="faint" style="font-size:12.5px">${esc(p.client || 'Client unknown')}</span></span><span class="bar"><i style="width:${n / mx * 100}%;background:var(--copy)"></i></span><b class="num" style="text-align:right">${n}</b></a>`; }).join('')}
+    </section>`;
+  }
+  const hero = nNew ? `<a class="homehero" href="#found"><div class="n">${nNew}</div><div style="flex:1;min-width:200px"><h2>new ${nNew === 1 ? 'copy' : 'copies'} to look at</h2><p>${top.length === 1 ? 'One client has' : top.length + ' clients have'} photos found on other sites.</p></div><span class="btn">Review them ›</span></a>` : '';
+  return { alerts, main: hero + main + mostHtml, side };
 }
 V.home.after = async () => {
   try { const c = (await api.commands.getAll()).find(x => x.name === 'capture-page'); if (c && c.shortcut) document.getElementById('shortcut').textContent = c.shortcut; } catch (e) { /* none */ }
@@ -428,6 +443,14 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['A new look', 'A shorter menu, a search box and Undo at the top, a Tools page for everything else, and a new shield logo. Nothing was taken away: Tools has every older page.'],
+  ['Answer right on the row', 'Copies found has Stolen, Licensed and Remove on every row, with the page link in view. The ⋯ menu has Approve site, Hide site, Compare, Evidence report and Capture.'],
+  ['Quick filters', 'One-click chips (Back online, Repeat offenders, Suspicious sites and more), plus Found (today, this week, this month), Match (exact, strong, loose) and the photo\'s year and quarter.'],
+  ['Many copies on one site fold up', 'The first shows, the rest wait under "N more from this site", with buttons to answer them all in one go. After Stolen, PageProof offers the same article on sister sites.'],
+  ['A picture of their page', 'The details panel shows their page in a small window and keeps one small picture of it (about 30 KB), so it is there next time. Untick "Show pages by themselves" to load it only when you ask.'],
+  ['Their picture is kept when found', 'PageProof saves their copy of the photo (up to 4 MB) with its fingerprint the moment it is found, in case they take it down. It is deleted a week after you remove a copy.'],
+  ['Undo list', 'The ▾ next to Undo lists your last ten answers. Take back any one of them, not only the last.'],
+  ['Most copied photos', 'Home shows the photos with the most copies. Click one to see all of its copies.'],
   ['Update with one button', 'Settings › Is everything working? has "Update now". Show PageProof its folder once, and from then on one press downloads the new version and restarts PageProof.'],
   ['Is everything working?', 'Green, yellow and red lights for Google Drive, Keep searching, each search site and your backup. "Copy details for support" copies numbers only, never names.'],
   ['A broken search site is spotted', 'If Google, Yandex or Bing suddenly gives nothing for many photos in a row, PageProof rests it, tells you, and does not count those empty results against your photos.'],
@@ -604,6 +627,7 @@ const ON_CHANGE = el => el.tagName === 'SELECT' || (el.tagName === 'INPUT' && !/
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act]');
   if (!b || ON_CHANGE(b)) return;
+  if (b.dataset.act === 'openlink') return;      // a plain link inside a row you can click: just open it
   if (b.tagName === 'A') e.preventDefault();
   act(b.dataset.act, b.dataset.v, b);
 });

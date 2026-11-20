@@ -39,7 +39,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.keyboard.press('u'); await page.waitForTimeout(800);
   // found page: open row, verdict, next opens
   await page.goto(url('app.html#found')); await page.waitForTimeout(1200);
-  await page.click('tr.frow'); await page.waitForTimeout(500);
+  await page.click('.frow .l1'); await page.waitForTimeout(500);
   const o1 = await page.evaluate(() => state.open);
   await page.keyboard.press('l'); await page.waitForTimeout(900);
   const o2 = await page.evaluate(() => ({ open: state.open }));
