@@ -10,6 +10,9 @@
 const api = globalThis.browser || globalThis.chrome;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// Lets other work run for a moment without a timer: browsers slow timers right down while the
+// window is minimized, which used to stall the photo checks for hours.
+const breathe = () => new Promise(r => { const c = new MessageChannel(); c.port1.onmessage = () => { c.port1.close(); r(); }; c.port2.postMessage(0); });
 const rand = ([a, b]) => a + Math.random() * (b - a);
 const PARAMS = new URLSearchParams(location.search);
 const VIEW = PARAMS.get('job') ? 'results' : (PARAMS.get('view') || 'setup');
@@ -672,8 +675,13 @@ async function scoreAll() {
   if (R.scoring) return;
   R.scoring = true;
   // 6 at a time: downloads overlap well; more than that mostly waits on the computer itself.
-  try { await Promise.all(Array.from({ length: Math.max(3, POOL_SIZE * 2) }, scoreWorker)); } finally { R.scoring = false; }
+  const run = () => Promise.all(Array.from({ length: Math.max(3, POOL_SIZE * 2) }, scoreWorker));
+  // Holding a lock while checking tells Chrome and Edge this page is busy, so they don't put it
+  // to sleep when the window is minimized or left in the background.
+  try { await (navigator.locks ? navigator.locks.request('pageproof-photo-checks', run) : run()); } finally { R.scoring = false; }
 }
+// Coming back to the window: carry on with anything still waiting, in case the browser paused us.
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && job && R.scoreQ.length) scoreAll(); });
 async function scoreWorker() {
   {
     while (R.scoreQ.length) {
@@ -686,7 +694,7 @@ async function scoreWorker() {
       await scoreLink(l);
       saveScoresSoon(job.pics[l.pic]);
       saveJob(); renderSoon();
-      await sleep(30);
+      await breathe();
     }
   }
 }

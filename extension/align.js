@@ -14,6 +14,12 @@ const PP_ALIGN = (() => {
   // ---------- small helpers ----------
   // A drawing surface. On a page it is a normal canvas; in a background worker (no page)
   // it is an OffscreenCanvas, which works the same way.
+  // A short breather so a long check doesn't lock up the page. Browsers slow page timers down
+  // to about once a minute when the window is minimized, so this does not use a timer. In a
+  // background worker nothing is waiting on the screen, so it doesn't pause at all.
+  const pause = typeof document === 'undefined'
+    ? () => Promise.resolve()
+    : () => new Promise(r => { const c = new MessageChannel(); c.port1.onmessage = () => { c.port1.close(); r(); }; c.port2.postMessage(0); });
   function mkCanvas(w, h) {
     if (typeof document !== 'undefined') { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
     return new OffscreenCanvas(w, h);
@@ -159,7 +165,7 @@ const PP_ALIGN = (() => {
         if (dist < best) { second = best; best = dist; bi = i; } else if (dist < second) second = dist;
       }
       if (bi >= 0 && best <= 70 && best < 0.85 * second) out.push({ ax: A.x[bi], ay: A.y[bi], bx: B.x[j], by: B.y[j], d: best });
-      if (j % 300 === 299) await new Promise(r => setTimeout(r, 0));
+      if (j % 300 === 299) await pause();
     }
     return out;
   }
@@ -363,7 +369,7 @@ const PP_ALIGN = (() => {
         }
       }
       for (const k in steps) steps[k] /= 2;
-      await new Promise(r => setTimeout(r, 0));
+      await pause();
     }
     return T;
   }
@@ -404,7 +410,7 @@ const PP_ALIGN = (() => {
           const c = cost(a, b, ox, oy, lv.stride, 0.35);
           if (!lvBest || c < lvBest.c) lvBest = { c, s, x: ox / f, y: oy / f };
         }
-        await new Promise(r => setTimeout(r, 0));
+        await pause();
       }
       if (lvBest) best = lvBest;
     }
@@ -422,7 +428,7 @@ const PP_ALIGN = (() => {
   // calls and skip the slow whole-picture search, which only helps plain copies with few details.
   const featCache = new WeakMap();
   async function align(A, B, progress = () => {}, opts = {}) {
-    const tries = [], tick = () => new Promise(r => setTimeout(r, 0));
+    const tries = [], tick = pause;
     progress('Finding details in both pictures...');
     let FA = opts.fast && featCache.get(A);
     if (!FA) { FA = features(A, 900); if (opts.fast) featCache.set(A, FA); }
