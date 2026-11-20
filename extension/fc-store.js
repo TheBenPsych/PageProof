@@ -175,16 +175,57 @@ const FC = (() => {
     for await (const [name, h] of dir.entries()) if (h.kind === 'directory' && !/^[.$~]/.test(name)) out.push([name, h]);
     return out.sort((a, b) => a[0].localeCompare(b[0]));
   }
-  // Every client folder inside Photos, with its Registered images folder. Quick: no photos read.
+  // A folder inside the top folder, by its path ("Every Other - G-H/NY Post").
+  async function dirAt(rel) {
+    let d = await rootHandle();
+    if (!d) throw new Error('The photos folder is not connected');
+    for (const p of String(rel || '').split('/').filter(Boolean)) d = await d.getDirectoryHandle(p);
+    return d;
+  }
+  // The folders inside one folder, for the folder tree in setup. [{ name, rel }]
+  async function subfolders(rel) {
+    const d = await dirAt(rel);
+    return (await listDirs(d)).map(([name]) => ({ name, rel: (rel ? rel + '/' : '') + name }));
+  }
+  // The folders you ticked (paths inside the top folder). null = never picked (older setups:
+  // every folder directly inside the top folder is a client).
+  async function picked() { const p = await meta.get('picked'); return Array.isArray(p) ? p : null; }
+  async function setPicked(list) {
+    // A folder inside another ticked folder is already included.
+    const clean = [...new Set(list.map(r => String(r).replace(/^\/+|\/+$/g, '')).filter(Boolean))].sort();
+    const keep = clean.filter(r => !clean.some(o => o !== r && r.startsWith(o + '/')));
+    await meta.set('picked', keep); queueDirty(); backupSoon();
+    return keep;
+  }
+  // Add one folder with the folder window. Inside the top folder: its path is ticked. Anywhere
+  // else: it is added as its own folder (asks for a client name).
+  async function pickInside() {
+    const root = await rootHandle();
+    const h = await window.showDirectoryPicker({ id: 'pageproof-add', mode: 'read' });
+    const path = root ? await root.resolve(h).catch(() => null) : null;
+    return { h, rel: path ? path.join('/') : null };
+  }
+  // Every client folder, with its Registered images folder. Quick: no photos read.
+  // A ticked folder called "Registered images" belongs to the folder above it.
   async function clientFolders() {
     const root = await rootHandle();
     const out = [];
     if (root) {
-      for (const [name, h] of await listDirs(root)) {
-        let base = null, baseName = '';
-        for (const [n2, h2] of await listDirs(h)) if (/^registered/i.test(n2)) { base = h2; baseName = n2; break; }
-        out.push({ name: tidyClient(name), folder: name, base: base || h, baseName, rel: name + (baseName ? '/' + baseName : '') });
+      const picks = await picked();
+      const list = [];
+      if (picks) for (const rel of picks) { try { list.push([rel, await dirAt(rel)]); } catch (e) { /* folder gone or Drive offline */ } }
+      else for (const [name, h] of await listDirs(root)) list.push([name, h]);
+      for (const [rel, h] of list) {
+        const parts = rel.split('/');
+        let base = null, baseName = '', name = parts[parts.length - 1], folderRel = rel;
+        if (/^registered/i.test(name) && parts.length > 1) { base = h; name = parts[parts.length - 2]; folderRel = parts.slice(0, -1).join('/'); }
+        else for (const [n2, h2] of await listDirs(h)) if (/^registered/i.test(n2)) { base = h2; baseName = n2; break; }
+        out.push({ name: tidyClient(name), folder: folderRel, base: base || h, baseName: base === h ? '' : baseName, rel: rel + (baseName && base !== h ? '/' + baseName : ''), pick: rel });
       }
+      // Two ticked folders with the same name: add the folder above to tell them apart.
+      const count = {};
+      for (const c of out) count[c.name] = (count[c.name] || 0) + 1;
+      for (const c of out) if (count[c.name] > 1) { const up = c.folder.split('/').slice(-2, -1)[0]; if (up) c.name = tidyClient(up + ' › ' + c.name); }
     }
     for (const x of await extraHandles()) out.push({ name: x.client, folder: x.h.name, base: x.h, baseName: '', rel: x.client, extra: true });
     return out;
@@ -293,7 +334,7 @@ const FC = (() => {
     const out = [];
     for (const cf of folders) {
       const old = known.get(cf.name);
-      out.push({ name: cf.name, folder: cf.folder, rel: cf.rel, baseName: cf.baseName, extra: !!cf.extra, searching: old ? old.searching : null, priority: old ? !!old.priority : false, photos: old ? old.photos : 0, licensed: old ? old.licensed || [] : [] });
+      out.push({ name: cf.name, folder: cf.folder, rel: cf.rel, baseName: cf.baseName, extra: !!cf.extra, pick: cf.pick || '', searching: old ? old.searching : null, priority: old ? !!old.priority : false, photos: old ? old.photos : 0, licensed: old ? old.licensed || [] : [] });
       if (progress) progress(out.length, folders.length);
     }
     await DB.putMany('clients', out.map(c => ({ ...(known.get(c.name) || {}), ...c })));
@@ -911,7 +952,7 @@ const FC = (() => {
     const regs = Object.fromEntries(Object.entries((await meta.get('regs')) || {}).filter(([, v]) => v.manual));
     return { app: 'PageProof', version: api.runtime.getManifest().version, saved: new Date().toISOString(), name: (st.lastCase || {}).collector || '', theme: st.ppTheme || 'light',
       search: st.rsSettings || null, keep: st.fcKeep || null, drive: st.fcDrive || null, hiddenCountries: st.fcHiddenCountries || [], hardware: st.ppHw || null,
-      clients: clients.map(c => ({ name: c.name, searching: c.searching, priority: !!c.priority, licensed: c.licensed || [] })), flags, regs };
+      clients: clients.map(c => ({ name: c.name, searching: c.searching, priority: !!c.priority, licensed: c.licensed || [] })), flags, regs, picked: await picked() };
   }
   async function writeSettings() {
     try { await RS_DOCS.writeText('pageproof-settings.json', JSON.stringify(await settingsSnapshot(), null, 1)); await api.storage.local.set({ ppBackupAt: new Date().toISOString() }); } catch (e) { /* folder not set up */ }
@@ -938,6 +979,7 @@ const FC = (() => {
     if (j.hardware && typeof j.hardware === 'object') set.ppHw = { choice: ['auto', 'Light', 'Normal', 'Strong'].includes(j.hardware.choice) ? j.hardware.choice : 'auto' };
     await api.storage.local.set(set);
     if (Array.isArray(j.clients)) await DB.putMany('clients', j.clients.filter(c => c && typeof c.name === 'string').map(c => ({ name: tidyClient(c.name), searching: c.searching === true ? true : c.searching === false ? false : null, priority: !!c.priority, licensed: Array.isArray(c.licensed) ? c.licensed.map(str) : [], photos: 0 })));
+    if (Array.isArray(j.picked)) await meta.set('picked', j.picked.filter(r => typeof r === 'string' && r && !r.split('/').includes('..')).map(r => r.slice(0, 1000)));
     if (Array.isArray(j.flags)) await meta.set('pendingFlags', j.flags.filter(f => Array.isArray(f) && typeof f[0] === 'string').map(f => [f[0].slice(0, 2000), ['hi', 'pop'].includes(f[1]) ? f[1] : '', f[2] ? 1 : 0]));
     if (j.regs && typeof j.regs === 'object') { const regs = (await meta.get('regs')) || {}; for (const [k, v] of Object.entries(j.regs)) if (v && typeof v === 'object') regs[str(k)] = { va: str(v.va), app: str(v.app), from: 'Typed in by you for this folder', manual: true }; await meta.set('regs', regs); }
     await restoreCopies();
@@ -952,7 +994,7 @@ const FC = (() => {
   }
 
   return { DB, meta, open, touch, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
-    regIn, regFor, setReg, scan, quickClients, clientFolders, SCAN, applyPendingFlags, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
+    regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, picked, setPicked, pickInside, SCAN, applyPendingFlags, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, searchedNothing, copiesOf, allCopies, answer, licenseSite, setClientOf, setFlag, setClients, checkOnline, logWeek, week, weekKey,
     hiddenCountries, setHiddenCountries, ownerFor, pathOf, logReport, USE, useOf, riskOf, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
     backupSoon, backupCopiesSoon, writeSettings, writeCopies, readBackup, restore, restoreCopies, settingsSnapshot, monthsOld, newness, yearOf, quarterOf, dayOf };

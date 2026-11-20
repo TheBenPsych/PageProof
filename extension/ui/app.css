@@ -391,3 +391,7 @@ dialog.pp-ask::backdrop{background:rgba(8,12,20,.5)}
 @keyframes ppspin { to { transform: rotate(360deg); } }
 .scanbar { display: flex; gap: 10px; align-items: center; font-size: 13.5px; color: var(--muted); }
 .review-cap .swipe, .review-cap .pair .frame { max-height: 52vh; }
+.csteps { flex-direction: row; flex-wrap: wrap; gap: 10px 22px; }
+.csteps li.cur { font-weight: 700; }
+.csteps li.cur .s { border-color: var(--accent); color: var(--accent); }
+.cpick .crow { display: flex; gap: 8px; align-items: center; }
