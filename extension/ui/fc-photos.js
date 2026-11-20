@@ -1,6 +1,6 @@
 // Find copies › Connect your photos (setup), Clients and photos, a client's photos, and
 // Keep searching with today's 50.
-Object.assign(state, { cs: 0, csClients: null, csBusy: '', csTree: new Map(), csOpen: new Set(), csPick: null, csStar: new Set(), cTab: 'All', cQ: '', cSort: 'name', cPicked: [], phClient: '', phQ: '', phMore: 50, phPicked: [], phOpen: [] });
+Object.assign(state, { cs: 0, csClients: null, csBusy: '', csTree: new Map(), csInfo: new Map(), csOpen: new Set(), csPick: null, csStar: new Set(), cTab: 'All', cQ: '', cSort: 'name', cPicked: [], phClient: '', phQ: '', phMore: 50, phPicked: [], phOpen: [] });
 
 // ---------------------------------------------------------------- Connect your photos
 const CS_STEPS = ['Install Drive for desktop', 'Stream your files', 'Pick your clients', 'Check and start'];
@@ -34,25 +34,30 @@ V.connect = async () => {
       state.csStar = new Set((await FC.DB.all('clients')).filter(c => c.priority && c.pick).map(c => c.pick));
       for (const r of state.csPick) { const parts = r.split('/'); for (let k = 1; k < parts.length; k++) state.csOpen.add(parts.slice(0, k).join('/')); }
     }
-    if (root && st === 'granted') { try { await csKids(''); for (const r of state.csOpen) await csKids(r); } catch (e) { state.csBusy = 'Can\'t read the folder. Is Google Drive running?'; } }
+    // Folders are opened in the background, so the page never waits on a big folder.
+    if (root && st === 'granted') { csLoad(''); for (const r of state.csOpen) csLoad(r); }
     const pick = state.csPick || new Set();
     const under = r => [...pick].some(p => r.startsWith(p + '/'));
     const rows = [];
     const walk = (rel, depth) => {
-      for (const f of state.csTree.get(rel) || []) {
+      const kids = state.csTree.get(rel);
+      if (kids && kids.error) { rows.push(`<div style="padding:6px 0 6px ${20 + depth * 22}px;font-size:13px;color:var(--bad)">This folder could not be opened. Is Google Drive running? <button class="btn ghost sm" data-act="csretry" data-v="${esc(rel)}">Try again</button></div>`); return; }
+      for (const f0 of Array.isArray(kids) ? kids : []) {
+        const f = { ...f0, ...(state.csInfo.get(f0.rel) || {}) };
         const on = pick.has(f.rel) && !f.ignore, inherited = under(f.rel), open = state.csOpen.has(f.rel) && !f.ignore;
         rows.push(`<div class="crow" style="padding-left:${10 + depth * 22}px">
           <button class="btn ghost sm" style="min-height:28px;width:28px;padding:0" data-act="csopen" data-v="${esc(f.rel)}" aria-label="${open ? 'Close' : 'Open'} ${esc(f.name)}" aria-expanded="${open}">${open ? '▾' : '▸'}</button>
           <label style="display:flex;gap:10px;align-items:center;flex:1;min-width:0;cursor:pointer"><input type="checkbox" data-act="cspk" data-v="${esc(f.rel)}" ${(on || inherited) && !f.ignore ? 'checked' : ''} ${f.ignore ? 'disabled title="Skipped: this folder has client_info_ignore.txt"' : inherited ? 'disabled title="Included: the folder above it is ticked"' : ''}><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${on ? ';font-weight:700' : ''}${f.ignore ? ';text-decoration:line-through;color:var(--faint)' : ''}">${esc(f.name)}</span>${f.ignore ? '<span class="tag grey" style="font-size:11px;flex-shrink:0" title="client_info_ignore.txt is in this folder, so it and everything inside it is never searched">Skipped</span>' : f.id ? `<span class="tag ok" style="font-size:11px;flex-shrink:0" title="client_info.txt names this client">ID: ${esc(f.id)}</span>` : ''}</label>
           ${on ? `<button class="starbtn${state.csStar.has(f.rel) ? ' on' : ''}" data-act="csstar" data-v="${esc(f.rel)}" aria-label="Priority client" title="Priority: searched right after High priority photos">★</button>` : ''}</div>`);
         if (open) {
-          if (state.csTree.get(f.rel) === undefined) rows.push(`<div class="faint" style="padding:6px 0 6px ${42 + depth * 22}px;font-size:13px">Opening…</div>`);
-          else if (!state.csTree.get(f.rel).length) rows.push(`<div class="faint" style="padding:6px 0 6px ${42 + depth * 22}px;font-size:13px">No folders inside</div>`);
+          if (!Array.isArray(state.csTree.get(f.rel)) && !(state.csTree.get(f.rel) || {}).error) rows.push(`<div class="faint" style="padding:6px 0 6px ${42 + depth * 22}px;font-size:13px">Opening…</div>`);
+          else if (Array.isArray(state.csTree.get(f.rel)) && !state.csTree.get(f.rel).length) rows.push(`<div class="faint" style="padding:6px 0 6px ${42 + depth * 22}px;font-size:13px">No folders inside</div>`);
           else walk(f.rel, depth + 1);
         }
       }
     };
     walk('', 0);
+    if (root && st === 'granted' && !Array.isArray(state.csTree.get(''))) rows.push('<div class="faint" style="padding:10px;font-size:13px">Opening the top folder…</div>');
     const extras = await FC.extraHandles();
     body = `<h2>3. Pick your clients</h2>
     <p class="muted" style="margin:0">Choose the top folder (for example G: › Shared drives, or one shared drive). Then click <b>▸</b> to open a folder and <b>tick only the folders you search</b>. Each ticked folder is one client, and everything inside it is searched. Star the ones that matter most.</p>
@@ -81,13 +86,30 @@ V.connect = async () => {
 };
 V.connect.noAutoRedraw = true;
 // The folders inside one folder (read once, then kept while setup is open).
-async function csKids(rel) {
-  if (state.csTree.has(rel)) return state.csTree.get(rel);
-  const kids = await FC.subfolders(rel);
+// Open a folder in the background: its folders show first, then the client_info tags fill in
+// a few at a time. The page is redrawn as things arrive.
+let csDrawT = null;
+const csDraw = () => { clearTimeout(csDrawT); csDrawT = setTimeout(() => { if (route() === 'connect' && state.cs === 2) render(true); }, 120); };
+async function csLoad(rel) {
+  if (state.csTree.has(rel)) return;
+  state.csTree.set(rel, 'loading');
+  let kids;
+  try { kids = await FC.subfolders(rel); } catch (e) { state.csTree.set(rel, { error: String(e.message || e) }); csDraw(); return; }
   state.csTree.set(rel, kids);
-  return kids;
+  csDraw();
+  const todo = kids.filter(k => !state.csInfo.has(k.rel));
+  let i = 0;
+  const worker = async () => {
+    while (i < todo.length) {
+      const k = todo[i++];
+      try { state.csInfo.set(k.rel, await FC.folderInfo(k.rel)); } catch (e) { state.csInfo.set(k.rel, {}); }
+      if (i % 8 === 0 || i === todo.length) csDraw();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(6, todo.length) }, worker));
+  csDraw();
 }
-function csReset() { state.csTree = new Map(); state.csOpen = new Set(); state.csPick = null; state.csStar = new Set(); state.csBusy = ''; }
+function csReset() { state.csTree = new Map(); state.csInfo = new Map(); state.csOpen = new Set(); state.csPick = null; state.csStar = new Set(); state.csBusy = ''; }
 Object.assign(ACTS, {
   csgo: v => {
     const l = document.getElementById('csLabel');
@@ -99,10 +121,11 @@ Object.assign(ACTS, {
     csReset(); state.csPick = new Set(); render(true);
   },
   csallow: async () => { if (await FC.allowDrive()) { csReset(); render(true); } },
-  csopen: async v => {
-    if (state.csOpen.has(v)) state.csOpen.delete(v); else state.csOpen.add(v);
+  csopen: v => {
+    if (state.csOpen.has(v)) state.csOpen.delete(v); else { state.csOpen.add(v); csLoad(v); }
     render(true);
   },
+  csretry: v => { state.csTree.delete(v); csLoad(v); render(true); },
   cspk: v => {
     const p = state.csPick || (state.csPick = new Set());
     if (p.has(v)) { p.delete(v); state.csStar.delete(v); }
