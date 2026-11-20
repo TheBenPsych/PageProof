@@ -231,13 +231,13 @@ function renderSetup(busy) {
       h('button', { class: 'btn', style: 'font-size:14px;padding:8px 16px', text: '📂 Or pick from my clients\' photos', onclick: e => goApp('clients', e) }),
       h('div', { class: 'ways' }, h('span', { text: 'Or drag pictures or a whole folder onto this page' }), h('span', { text: 'Or paste pictures or picture links (Ctrl+V)' }), h('span', { text: 'Up to ' + MAX_PICS + ' at once' })),
       h('div', { class: 'howbox' }, h('b', { text: 'What happens next:' }), h('ol', {},
-        h('li', { text: 'PageProof opens one new window. Each picture gets its own coloured tab group with a Google, Yandex and Bing tab.' }),
+        h('li', { text: 'PageProof opens one new window. The Google, Yandex and Bing search tabs open as small pinned tabs at the left of the tab bar, and close by themselves when done.' }),
         h('li', { text: 'The pictures are searched a few at a time, with short pauses, in your own browser. That keeps "are you a robot" checks away.' }),
         h('li', { text: 'Every link found is listed on one results page, with a % match. Hide the sites you never care about.' })))));
     return;
   }
   $('main').replaceChildren(
-    h('div', {}, h('h1', { text: plural(draft.length, 'picture') + (busy ? ' (adding more…)' : ' ready') }), h('p', { class: 'lead', text: 'Numbers match the tab groups in the results window. Press ✕ to take a picture out.' })),
+    h('div', {}, h('h1', { text: plural(draft.length, 'picture') + (busy ? ' (adding more…)' : ' ready') }), h('p', { class: 'lead', text: 'Numbers match the pictures in the results window. Press ✕ to take a picture out.' })),
     notes,
     h('div', { class: 'pics' }, draft.map((p, i) => h('div', { class: 'pic' },
       h('img', { src: p.thumb, alt: '' }), h('span', { class: 'num', text: i + 1 }),
@@ -340,10 +340,12 @@ async function runOne(p, engine) {
   const run = p.runs[engine];
   run.state = 'go'; delete run.why; renderSoon();
   let tab;
-  try { tab = await api.tabs.create({ windowId: R.winId, url: ENGINES[engine].start, active: false }); }
+  const opts = { windowId: R.winId, url: ENGINES[engine].start, active: false };
+  try { try { tab = await api.tabs.create({ ...opts, pinned: true }); } catch (e) { tab = await api.tabs.create(opts); } }
   catch (e) { run.state = 'fail'; run.why = 'Could not open a tab'; renderSoon(); return; }
   run.tabId = tab.id;
-  await groupTab(p, tab.id);
+  // Search tabs are pinned (small icons at the left of the tab bar) so they don't fill it. A
+  // pinned tab can't be in a tab group, so the old coloured groups are no longer made.
   await new Promise(done => R.tasks.set(tab.id, { p, engine, tabId: tab.id, stage: 'upload', deadline: Date.now() + TASK_TIMEOUT, done }));
 }
 
