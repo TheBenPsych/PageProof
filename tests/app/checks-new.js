@@ -120,55 +120,14 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   console.log(sup.split('\n').slice(0, 40).join('\n'));
   ok(sup.includes('Photos: 3,00') && !/Client [A-Z] Media|IMG_0|site\d+\./.test(sup), 'Copy details: numbers only, no client, photo or site names');
 
-  // ---- update: unpack checks + write into a folder (a pretend install folder)
-  const up = await page.evaluate(async () => {
-    const enc = s => new TextEncoder().encode(s);
-    const mine = await (await fetch(chrome.runtime.getURL('manifest.json'))).text();
-    const root = await navigator.storage.getDirectory();
-    const inst = await root.getDirectoryHandle('install', { create: true });
-    const w = await (await inst.getFileHandle('manifest.json', { create: true })).createWritable(); await w.write(mine); await w.close();
-    const same = await PP_UPDATE.isInstallFolder(inst);
-    const other = await root.getDirectoryHandle('other', { create: true });
-    const notSame = await PP_UPDATE.isInstallFolder(other);
-    await RS_DB.put('handles', 'ppInstall', inst);
-    return { same, notSame, newer: [PP_UPDATE.newer('4.1.1', '4.1.0'), PP_UPDATE.newer('4.1.0', '4.1.0'), PP_UPDATE.newer('4.0.15', '4.1.0'), PP_UPDATE.newer('4.10.0', '4.9.9')] };
-  });
-  console.log(JSON.stringify(up));
-  ok(up.same && !up.notSame && up.newer.join() === 'true,false,false,true', 'Update: only the real install folder is accepted; version compare is right');
-  const fs = require('fs'), cp = require('child_process');
-  // Two zips: one that says it is a much newer version (with one extra file), one that is the same version.
-  const EXT = require('path').resolve(__dirname, '../../extension'), TMP = fs.mkdtempSync(require('path').join(require('os').tmpdir(), 'ppzip-'));
-  cp.execSync(`cp -r "${EXT}" "${TMP}/e"`);
-  const man = JSON.parse(fs.readFileSync(TMP + '/e/manifest.json', 'utf8')); man.version = '99.0.0'; fs.writeFileSync(TMP + '/e/manifest.json', JSON.stringify(man, null, 2));
-  fs.writeFileSync(TMP + '/e/ui/brand-new.js', '// new file\n');
-  cp.execSync(`cd "${TMP}/e" && zip -qr ../new.zip . && cd "${EXT}" && zip -qr "${TMP}/same.zip" .`);
-  await ctx.route('**/releases/download/latest/PageProof.zip*', r => r.fulfill({ status: 200, contentType: 'application/zip', body: fs.readFileSync(TMP + '/new.zip') }));
-  await ctx.route('**/raw.githubusercontent.com/**', r => r.fulfill({ status: 200, contentType: 'text/plain', body: fs.readFileSync(TMP + '/e/manifest.json') }));
-  const chk = await page.evaluate(() => PP_UPDATE.check());
+  // ---- update: PageProof only reads a version number; it never writes its own files
+  await ctx.route('**/raw.githubusercontent.com/**', r => r.fulfill({ status: 200, contentType: 'text/plain', body: JSON.stringify({ version: '99.0.0' }) }));
+  const chk = await page.evaluate(async () => ({ st: await ppUpCheck(), newer: [ppNewer('4.1.1', '4.1.0'), ppNewer('4.1.0', '4.1.0'), ppNewer('4.0.15', '4.1.0'), ppNewer('4.10.0', '4.9.9')], gone: typeof PP_UPDATE }));
   console.log(JSON.stringify(chk));
-  ok(chk.has && chk.latest === '99.0.0', 'Update: a newer version on GitHub is noticed');
-  await page.reload(); await page.waitForTimeout(1200);
-  const ap2 = await page.evaluate(async () => {
-    const t0 = performance.now();
-    const r = await PP_UPDATE.apply(null, { noReload: true });
-    const root = await navigator.storage.getDirectory(); const inst = await root.getDirectoryHandle('install');
-    const m = JSON.parse(await (await (await inst.getFileHandle('manifest.json')).getFile()).text());
-    const ui = await inst.getDirectoryHandle('ui'); const nf = await (await (await ui.getFileHandle('brand-new.js')).getFile()).text();
-    const lib = await inst.getDirectoryHandle('lib'); let n = 0; for await (const x of lib.keys()) n++;
-    const app = (await (await inst.getFileHandle('app.js')).getFile()).size, real = (await (await fetch(chrome.runtime.getURL('app.js'))).blob()).size;
-    return { r, v: m.version, nf: nf.trim(), lib: n, sameSize: app === real, ms: Math.round(performance.now() - t0), flag: (await chrome.storage.local.get('ppUpdated')).ppUpdated.to };
-  });
-  console.log(JSON.stringify(ap2));
-  ok(ap2.v === '99.0.0' && ap2.nf === '// new file' && ap2.lib > 3 && ap2.sameSize && ap2.flag === '99.0.0', 'Update now: downloads, unpacks and writes every file into the folder (' + ap2.r.files + ' files, ' + ap2.ms + ' ms)');
-  await ctx.unroute('**/releases/download/latest/PageProof.zip*');
-  await ctx.route('**/releases/download/latest/PageProof.zip*', r => r.fulfill({ status: 200, contentType: 'application/zip', body: fs.readFileSync(TMP + '/same.zip') }));
-  const stale = await page.evaluate(async () => {
-    const root = await navigator.storage.getDirectory(); const inst = await root.getDirectoryHandle('install');
-    const mine = await (await fetch(chrome.runtime.getURL('manifest.json'))).text();
-    const w = await (await inst.getFileHandle('manifest.json', { create: true })).createWritable(); await w.write(mine); await w.close();
-    try { await PP_UPDATE.apply(null, { noReload: true }); return 'applied'; } catch (e) { return e.message; }
-  });
-  console.log(stale); ok(/still packing/.test(stale), 'Update: a zip that is not newer is refused');
+  ok(chk.st.has && chk.st.latest === '99.0.0' && chk.newer.join() === 'true,false,false,true', 'Update: a newer version on GitHub is noticed; version compare is right');
+  ok(chk.gone === 'undefined' && !require('fs').existsSync(require('path').resolve(__dirname, '../../extension/updater.js')), 'Update: the self-updater is gone (PageProof never rewrites its own files)');
+  await page.goto(url('app.html#health')); await page.waitForTimeout(900);
+  ok(await page.evaluate(() => !!document.querySelector('[data-act="upzip"]') && !document.querySelector('[data-act="upnow"],[data-act="uppick"]')), 'Update: the page offers the zip download and the steps');
   // every page still draws
   for (const r of ['home', 'found', 'review', 'clients', 'photos', 'keep', 'owners', 'weekly', 'hidden', 'library', 'settings', 'health', 'skipped', 'whatsnew']) {
     await page.goto(url('app.html#' + r)); await page.waitForTimeout(700);

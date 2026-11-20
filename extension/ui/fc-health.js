@@ -1,5 +1,21 @@
 // Settings › Is everything working? (green and red lights, Copy details for support, updates)
 // and Find copies › Skipped photos (photos that could not be searched, and why).
+// Is there a newer PageProof? This only reads a version number from GitHub. PageProof never downloads
+// or changes its own files: updating is done by you, with the zip.
+const PP_REPO = 'TheBenPsych/PageProof';
+const PP_ZIP = 'https://github.com/' + PP_REPO + '/releases/latest/download/PageProof.zip';
+const ppNewer = (a, b) => { const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d > 0; } return false; };
+async function ppUpState() { const u = (await api.storage.local.get('ppUpdate')).ppUpdate; return u ? { ...u, has: !!u.latest && ppNewer(u.latest, VERSION) } : null; }
+async function ppUpCheck() {
+  const st = { at: Date.now(), latest: '', has: false, error: '' };
+  try {
+    const r = await fetch('https://raw.githubusercontent.com/' + PP_REPO + '/main/extension/manifest.json?t=' + Date.now(), { cache: 'no-store', credentials: 'omit' });
+    const m = r.ok ? await r.json() : null;
+    if (m && /^\d+(\.\d+){1,3}$/.test(m.version || '')) { st.latest = m.version; st.has = ppNewer(m.version, VERSION); } else st.error = 'PageProof could not reach GitHub just now. Try again in a few minutes.';
+  } catch (e) { st.error = 'GitHub could not be reached. Check the internet connection.'; }
+  await api.storage.local.set({ ppUpdate: st });
+  return st;
+}
 Object.assign(state, { skTab: 'All', skMore: 100, support: '', upText: '', upBusy: false });
 const agoText = t => {
   if (!t) return 'never';
@@ -111,9 +127,7 @@ async function supportDetails() {
 V.health = async () => {
   const lights = await healthLights();
   const bad = lights.filter(l => l[0] === 'bad').length, warn = lights.filter(l => l[0] === 'warn').length;
-  const up = await PP_UPDATE.state();
-  const fs = PP_UPDATE.canWriteFolder() ? await PP_UPDATE.folderState() : 'unsupported';
-  const upd = (await api.storage.local.get('ppUpdated')).ppUpdated;
+  const up = await ppUpState();
   return `${head('Settings', 'Is everything working?', 'A quick look at every part of PageProof. Green is fine, yellow needs a look, red is stopped.', `<button class="btn" data-act="healthagain">${ic('refresh', 18)} Check again</button><button class="btn primary" data-act="supportcopy">${ic('doc', 18)} Copy details for support</button>`)}
   <div class="banner ${bad ? 'bad' : warn ? 'warn' : 'info'}" style="font-size:15px"><b>${bad ? plural(bad, 'thing has', 'things have') + ' stopped' : warn ? plural(warn, 'thing needs', 'things need') + ' a look' : 'Everything is working'}</b>${bad && warn ? `<span class="muted">and ${warn} more ${warn === 1 ? 'needs' : 'need'} a look</span>` : ''}</div>
   <section class="card" style="overflow:hidden">
@@ -123,19 +137,18 @@ V.health = async () => {
   </section>
   <section class="card pad" id="updates" style="display:flex;flex-direction:column;gap:12px">
     <div class="row"><h2>Updates</h2><span class="tag ${up && up.has ? 'warn' : up && !up.error ? 'ok' : 'grey'}" style="margin-left:auto">${up && up.has ? 'Version ' + esc(up.latest) + ' is ready' : up && !up.error ? 'Up to date' : 'Not checked'}</span></div>
-    <p class="muted" style="margin:0;font-size:14px">You have PageProof ${VERSION}. PageProof asks GitHub for a newer version every morning.${upd && upd.to === VERSION ? ' Updated from ' + esc(upd.from) + ' ' + agoText(upd.at) + '.' : ''}</p>
+    <p class="muted" style="margin:0;font-size:14px">You have PageProof ${VERSION}. PageProof asks GitHub for a newer version every morning.</p>
     ${up && up.error ? `<div class="banner warn" style="padding:10px 12px;font-size:13.5px"><span>${esc(up.error)}</span></div>` : ''}
     ${state.upText ? `<div class="scanbar"><span class="spin"></span>${esc(state.upText)}</div>` : ''}
     <div class="row" style="gap:8px">
       <button class="btn" data-act="upcheck"${state.upBusy ? ' disabled' : ''}>Check for an update now</button>
-      ${up && up.has ? (fs === 'unsupported' ? '' : fs === 'none' ? `<button class="btn primary" data-act="uppick">Update now (pick the PageProof folder first)</button>` : `<button class="btn primary" data-act="upnow"${state.upBusy ? ' disabled' : ''}>Update now to ${esc(up.latest)}</button>`) : ''}
-      ${up && up.has ? `<button class="btn" data-act="upzip">Download the zip instead</button>` : ''}
+      ${up && up.has ? `<button class="btn primary" data-act="upzip">Download version ${esc(up.latest)}</button>` : ''}
     </div>
-    <details class="keyfold"${fs === 'none' && up && up.has ? ' open' : ''}><summary>How "Update now" works</summary>
+    <details class="keyfold"${up && up.has ? ' open' : ''}><summary>How to update</summary>
       <div class="muted" style="font-size:13.5px;display:flex;flex-direction:column;gap:6px;margin-top:8px">
-        <span><b>1.</b> Once on this computer, you show PageProof the folder it was installed from: the unzipped PageProof folder, the one you loaded on the extensions page. ${fs === 'granted' || fs === 'prompt' ? '<b style="color:var(--ok)">Done.</b> <button class="btn ghost sm" data-act="upforget">Pick a different folder</button>' : fs === 'none' ? '<button class="btn sm" data-act="uppick">Pick the PageProof folder</button>' : 'This browser can\'t do that, so use "Download the zip instead".'}</span>
-        <span><b>2.</b> "Update now" downloads the newest PageProof from GitHub, puts the new files into that folder and restarts PageProof. Your finds, settings and lists are not touched.</span>
-        <span><b>3.</b> After a browser restart the browser may ask once to "Allow" changes to the folder.</span>
+        <span><b>1.</b> Press "Download version…". PageProof.zip lands in your Downloads folder.</span>
+        <span><b>2.</b> Unzip it over your PageProof folder and say yes to replacing the files.</span>
+        <span><b>3.</b> Open the extensions page (edge://extensions or chrome://extensions) and press the reload arrow on PageProof. Your finds, settings and lists are not touched.</span>
       </div></details>
   </section>
   ${state.support ? `<section class="card pad" style="display:flex;flex-direction:column;gap:10px"><div class="row"><h2>Details for support</h2><span class="tag ok" style="margin-left:auto">Copied</span></div>
@@ -177,17 +190,6 @@ Object.assign(ACTS, {
   skmore: () => { state.skMore += 200; render(true); },
   skretry: async v => { const n = await FC.retrySkipped(v ? [v] : null); toast(n ? plural(n, 'photo goes', 'photos go') + ' to the front of the line.' : 'Nothing to try again.'); render(true); },
   upgo: () => { location.hash = 'health'; setTimeout(() => { const u = document.getElementById('updates'); if (u) u.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 300); },
-  upcheck: async () => { state.upBusy = true; state.upText = 'Asking GitHub…'; render(true); const st = await PP_UPDATE.check(); state.upBusy = false; state.upText = ''; toast(st.error ? 'Could not check: ' + st.error : st.has ? 'Version ' + st.latest + ' is ready.' : 'You have the newest version.'); render(true); },
-  uppick: async () => { try { await PP_UPDATE.pick(); toast('Folder saved. Press Update now.'); } catch (e) { if (e && e.name !== 'AbortError') toast(String(e.message || e)); } render(true); },
-  upforget: async () => { await PP_UPDATE.forget(); render(true); },
-  upnow: async () => {
-    if (state.upBusy) return;
-    state.upBusy = true;
-    // The first step (allowing the folder) has to happen straight from the click.
-    const job = PP_UPDATE.apply(t => { state.upText = t; const el = view.querySelector('.scanbar'); if (el) el.lastChild.textContent = t; else render(true); });
-    state.upText = 'Starting…'; render(true);
-    try { const r = await job; state.upText = 'Updated to ' + r.version + '. Restarting PageProof…'; render(true); }
-    catch (e) { state.upBusy = false; state.upText = ''; toast(String(e.message || e)); render(true); }
-  },
-  upzip: async () => { api.tabs.create({ url: PP_UPDATE.PAGE }); toast('Download PageProof.zip there, unzip it over your PageProof folder, then press the reload arrow on the extensions page.'); },
+  upcheck: async () => { state.upBusy = true; state.upText = 'Asking GitHub…'; render(true); const st = await ppUpCheck(); state.upBusy = false; state.upText = ''; toast(st.error ? 'Could not check: ' + st.error : st.has ? 'Version ' + st.latest + ' is ready.' : 'You have the newest version.'); render(true); },
+  upzip: async () => { api.tabs.create({ url: PP_ZIP, active: false }); toast('Downloading PageProof.zip. Unzip it over your PageProof folder, then press the reload arrow on the extensions page.'); },
 });
