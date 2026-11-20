@@ -30,9 +30,18 @@ async function render(keep) {
     if (!f || f.dataset.src !== want) view.innerHTML = `<iframe class="tool" data-src="${want}" src="${want}" title="${esc(PP_CRUMBS[r])}"></iframe>`;
   } else {
     view.classList.toggle('still', !!keep);
-    const sy = window.scrollY;
-    view.innerHTML = await V[r]();
-    if (keep) window.scrollTo(0, sy);
+    // Keep every scroll position (the page and boxes that scroll inside it, like the folder list)
+    // when a page is drawn again after a click.
+    const SCROLLERS = '.cpick, .scroll, .drawer, .pgrid';
+    const sy = window.scrollY, main = document.querySelector('.main'), my = main ? main.scrollTop : 0;
+    const inner = keep ? [...view.querySelectorAll(SCROLLERS)].map(e => [e.scrollTop, e.scrollLeft]) : [];
+    const html = await V[r]();
+    view.innerHTML = html;
+    if (keep) {
+      window.scrollTo(0, sy);
+      if (main) main.scrollTop = my;
+      view.querySelectorAll(SCROLLERS).forEach((e, i) => { if (inner[i]) { e.scrollTop = inner[i][0]; e.scrollLeft = inner[i][1]; } });
+    }
     ppAddHelp(view);
     if (V[r].after) V[r].after();
   }
