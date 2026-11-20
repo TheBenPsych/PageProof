@@ -63,7 +63,7 @@ V.connect = async () => {
     const extras = await FC.extraHandles();
     body = `<h2>3. Pick your clients</h2>
     <p class="muted" style="margin:0">Choose the top folder (for example G: › Shared drives, or one shared drive). Then click <b>▸</b> to open a folder and <b>tick only the folders you search</b>. Each ticked folder is one client, and everything inside it is searched. Star the ones that matter most.</p>
-    <p class="faint" style="margin:0;font-size:13px">PageProof reads the same text files as your other platform: a folder with <b>client_info.txt</b> gets that client ID as its name (also for folders deeper inside a ticked folder), and a folder with <b>client_info_ignore.txt</b> is skipped with everything inside it. The ID or Skipped tag shows here when you tick or open that folder; folders deeper inside are sorted out when the photos are read.</p>
+    <p class="faint" style="margin:0;font-size:13px">PageProof reads the same text files as your other platform: a folder with <b>client_info.txt</b> gets that client ID as its name (also for folders deeper inside a ticked folder), and a folder with <b>client_info_ignore.txt</b> is skipped with everything inside it. The ID and Skipped tags appear a moment after a folder opens.</p>
     <div class="row"><button class="btn${root ? '' : ' primary'}" data-act="cspick">${ic('files', 18)} ${root ? 'Choose a different top folder' : 'Choose the top folder'}</button>${root && st === 'granted' ? `<button class="btn primary" data-act="csaddone">＋ Add one folder</button>` : ''}${st === 'prompt' ? '<button class="btn primary" data-act="csallow">Allow PageProof to read it</button>' : ''}${state.csBusy ? `<span class="muted">${esc(state.csBusy)}</span>` : ''}</div>
     ${root ? `<span class="faint" style="font-size:12.5px;margin-top:-6px">Top folder: <b>${esc(root.name)}</b>. "Add one folder" opens the folder window so you can go straight to a big folder and pick it.</span>` : ''}
     <label class="field" for="csLabel">Where the top folder is, as File Explorer shows it<input id="csLabel" value="${esc(d.label)}" placeholder="G:\\Shared drives"><span class="faint" style="font-size:12.5px">Your browser can't see the full path, so it's typed here once. It goes in the evidence report next to the photo.</span></label>
@@ -131,6 +131,22 @@ async function csLoad(rel) {
   for (const k of kids) { const old = had && had.info && had.info[k.name]; if (old) entry.info[k.name] = old; }
   cache[rel] = entry; csCacheSave();
   csDraw(true);
+  // Then read each folder's client_info tag (ID / Skipped), three at a time so Drive isn't flooded.
+  let i = 0;
+  const worker = async () => {
+    while (i < kids.length) {
+      const k = kids[i++];
+      let info = {};
+      try { info = await FC.folderInfo(k.rel); } catch (e) { continue; }
+      state.csInfo.set(k.rel, info);
+      if (info.ignore && state.csPick) state.csPick.delete(k.rel);
+      if (Object.keys(info).length) entry.info[k.name] = info; else delete entry.info[k.name];
+      csDraw();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(3, kids.length) }, worker));
+  csCacheSave();
+  csDraw();
 }
 // The client_info tag of ONE folder, read only when you tick or open it. (Reading it for every
 // folder in a list made Google Drive crawl: asking Drive for a file that isn't there is slow.)
