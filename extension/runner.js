@@ -3,7 +3,8 @@
 //  - Rests between photos (the pace), only in the hours you picked.
 //  - Waits while today's 50 run, while Google Drive can't be reached, while the computer is busy
 //    or on low battery, and gives a search site an hour's rest if it asks "are you a robot".
-//  - Looks for new photos every hour (this and last quarter's folders), every folder on Sunday night.
+//  - Looks for new photos every hour (this and last quarter's folders), every folder once a week
+//    (on a weekday, 8 AM to 6 PM, when the office computers are on).
 //  - Checks once a week that copies marked Stolen are still online, and reads who is behind new sites.
 const api = globalThis.browser || globalThis.chrome;
 const $ = id => document.getElementById(id);
@@ -73,10 +74,11 @@ async function chores() {
   const now = Date.now(), d = new Date();
   const ch = { ...m };
   try {
-    // Sunday night: read every folder. Otherwise every hour: this and last quarter's folders.
-    const sundayNight = (d.getDay() === 0 && d.getHours() >= 20) || (d.getDay() === 1 && d.getHours() < 6);
-    if (sundayNight && now - (m.full || 0) > 4 * 86400000) {
-      await status('running', 'Reading every folder in Google Drive for new photos (Sunday night check)…');
+    // Once a week (Monday to Friday, 8 AM to 6 PM, when the computers are on): read every folder.
+    // Otherwise every hour: this and last quarter's folders.
+    const workTime = d.getDay() >= 1 && d.getDay() <= 5 && d.getHours() >= 8 && d.getHours() < 18;
+    if (workTime && now - (m.full || 0) > 6.5 * 86400000) {
+      await status('running', 'Reading every folder in Google Drive for new photos (weekly check)…');
       const r = await FC.scan({ full: true }); if (!r.busy && !r.state) ch.full = now;
       await FC.applyPendingFlags();
     } else if (now - (m.quick || 0) > 3600000) {
