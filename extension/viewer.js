@@ -59,17 +59,14 @@ function imageName(img, i) {
 // Plain-text summary of who hosts the site, for capture-details.txt.
 function hostingLines(h) {
   if (!h) return [];
-  const contact = c => c ? [c.name, ...c.emails, ...c.phones].filter(Boolean).join(', ') : '(not listed)';
   const lines = ['WHO HOSTS THIS SITE (public RDAP/WHOIS records, looked up ' + new Date().toISOString() + ')'];
   if (h.ip) lines.push(
     'Hosting company: ' + (h.ip.host || h.ip.network || '(not listed)') + (h.ip.country ? ' (' + h.ip.country + ')' : ''),
-    'Server network:  ' + h.ip.network + '  ' + h.ip.range,
-    'Host abuse contact: ' + contact(h.ip.abuse));
+    'Server network:  ' + h.ip.network + '  ' + h.ip.range);
   else if (h.ipError) lines.push('Hosting company: lookup failed (' + h.ipError + ')');
   if (h.domain) lines.push(
     'Domain:          ' + h.domain.name + (h.domain.created ? ', registered ' + h.domain.created.slice(0, 10) : '') + (h.domain.expires ? ', expires ' + h.domain.expires.slice(0, 10) : ''),
     'Registrar:       ' + (h.domain.registrar || '(not listed)'),
-    'Registrar abuse contact: ' + contact(h.domain.registrarAbuse),
     'Domain owner:    ' + (h.domain.registrant || '(hidden for privacy)'),
     'Name servers:    ' + (h.domain.nameservers.join(', ') || '(not listed)'));
   else if (h.domainError) lines.push('Domain lookup failed (' + h.domainError + ')');
@@ -85,7 +82,7 @@ function showHosting(h) {
   const t = document.createElement('summary');
   t.textContent = '🏢 Who hosts this site';
   const short = document.createElement('small');
-  short.textContent = (h.ip && (h.ip.host || h.ip.network)) || (h.domain && h.domain.registrar) || 'For takedown notices';
+  short.textContent = (h.ip && (h.ip.host || h.ip.network)) || (h.domain && h.domain.registrar) || 'From public records';
   t.append(short);
   const pre = document.createElement('pre');
   pre.textContent = hostingLines(h).slice(1, -2).join('\n');

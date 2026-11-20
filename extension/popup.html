@@ -3,41 +3,19 @@
 <head>
 <meta charset="utf-8">
 <title>PageProof</title>
-<link rel="stylesheet" href="popup.css">
+<script src="theme.js"></script>
+<link rel="stylesheet" href="ui/app.css">
+<link rel="stylesheet" href="ui/mini.css">
 </head>
-<body>
-  <div class="head">
-    <img src="icons/icon48.png" alt="" width="22" height="22"><b>PageProof</b></div>
-
-  <div id="home">
-    <button class="opt cap" id="cap" autofocus><span class="e">📸</span><span><b>Capture this page</b><small>Save the whole page as evidence</small></span></button>
-    <button class="opt ins" id="ins"><span class="e">🔍</span><span><b>Inspect a picture</b><small>See the hidden data inside a picture</small></span></button>
-    <div class="tools">
-      <button class="tool" data-page="batch.html"><span class="e">📚</span><span><b>Batch capture</b><small>Capture a list of links in one go</small></span></button>
-      <button class="tool" data-page="revsearch.html"><span class="e">🔎</span><span><b>Reverse image search</b><small>Search many pictures on Google, Yandex and Bing</small></span></button>
-      <button class="tool" data-page="compare.html"><span class="e">🔀</span><span><b>Compare two pictures</b><small>Show a copy matches the original</small></span></button>
-      <button class="tool" data-page="convert.html"><span class="e">🔄</span><span><b>Convert files</b><small>Change file types, join PDFs, make files smaller</small></span></button>
-      <button class="tool" data-page="convert.html?open=1"><span class="e">🗂️</span><span><b>Open odd files</b><small>Mac, Outlook email, ZIP and RAR files</small></span></button>
-      <button class="tool" data-page="verify.html"><span class="e">✅</span><span><b>Verify a pack</b><small>Check a pack hasn&#39;t been changed</small></span></button>
-      <button class="tool" data-page="log.html"><span class="e">📒</span><span><b>Capture log</b><small>Find and download past captures</small></span></button>
-    </div>
-    <p class="tip" id="tip"></p>
-  </div>
-
-  <div id="ways" hidden>
-    <p class="q">How do you want to pick the picture?</p>
-    <button class="way" id="wPick"><span class="e">🎯</span><span><b>Click a picture on this page</b><small>Point at it and click, like a highlighter</small></span></button>
-    <button class="way" id="wAll"><span class="e">🖼️</span><span><b>Show all pictures on this page</b><small>See them side by side and choose one</small></span></button>
-    <button class="way" id="wUp"><span class="e">📁</span><span><b>Upload from my computer</b><small>Or drag it in, or paste it</small></span></button>
-    <button class="back" id="back">← Back</button>
-  </div>
-
-  <div id="busy" hidden>
-    <p><b>A capture is running.</b> It scrolls the page one screen at a time.</p>
-    <button class="opt stop" id="stop"><span class="e">⏹</span><span><b>Stop and keep what's captured</b></span></button>
-  </div>
-
-  <p id="err" hidden></p>
-  <script src="popup.js"></script>
+<body class="mini-body popup">
+  <div class="mhead"><img src="icons/icon48.png" alt="" width="22" height="22"><b>PageProof</b><button class="btn ghost sm" id="themeBtn" aria-label="Switch between light and dark" style="margin-left:auto"></button></div>
+  <div id="mini"></div>
+  <p id="err" class="banner bad" hidden></p>
+  <script src="ui/icons.js"></script>
+  <script src="ui/shell.js"></script>
+  <script src="db.js"></script>
+  <script src="rs-store.js"></script>
+  <script src="fc-store.js"></script>
+  <script src="ui/mini.js"></script>
 </body>
 </html>

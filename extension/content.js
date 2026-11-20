@@ -377,6 +377,7 @@
   }
 
   function restore() {
+    ovRemove();
     removeBadges();
     hidden.forEach(([el, v]) => { el.style.visibility = v; });
     hidden.length = 0;
@@ -390,5 +391,31 @@
     if (start) window.scrollTo({ left: start.x, top: start.y, ...instant });
   }
 
-  window.__pageproof = { expandMore, unclamp, prepare, scrollPage, hideFixed, removeBadges, scrollSection, grewNow, restore };
+  // The progress card in the corner while a capture runs. It sits outside <body> in its own
+  // closed shadow, so the page's styles can't change it, and it is hidden before every screenshot.
+  let ov = null, ovText = null;
+  function ovShow(title, step) {
+    if (!ov) {
+      ov = document.createElement('pageproof-progress');
+      ov.style.cssText = 'all:initial;position:fixed;z-index:2147483647;right:16px;bottom:16px;display:block';
+      const sh = ov.attachShadow({ mode: 'closed' });
+      sh.innerHTML = '<style>div{font:14px/1.4 system-ui,Segoe UI,Arial,sans-serif;background:#191C24;color:#fff;border-radius:14px;padding:14px 16px;box-shadow:0 10px 40px rgba(0,0,0,.4);display:flex;gap:12px;align-items:center;max-width:320px}' +
+        'i{width:16px;height:16px;border-radius:50%;border:2px solid #444;border-top-color:#0090E7;animation:s .8s linear infinite;flex-shrink:0}@keyframes s{to{transform:rotate(360deg)}}' +
+        'b{display:block}span{color:#AEB3CA;font-size:13px}button{font:inherit;font-weight:600;margin-left:auto;background:#FC424A;color:#fff;border:0;border-radius:8px;padding:6px 12px;cursor:pointer}</style>' +
+        '<div role="status"><i></i><p style="margin:0"><b>PageProof is capturing</b><span></span></p><button type="button">Stop</button></div>';
+      ovText = sh.querySelector('span');
+      sh.querySelector('button').onclick = () => { try { chrome.runtime.sendMessage({ type: 'stop' }); } catch (e) { /* reloaded */ } ovText.textContent = 'Stopping, keeping what was captured…'; };
+      document.documentElement.appendChild(ov);
+    }
+    ovText.textContent = (step ? step + ' · ' : '') + (title || '') + ' Keep this tab open.';
+    ov.style.display = 'block';
+  }
+  // Hidden, and the browser has drawn the page without it.
+  function ovHide() {
+    if (ov) ov.style.display = 'none';
+    return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => r(true))));
+  }
+  function ovRemove() { if (ov) ov.remove(); ov = null; }
+
+  window.__pageproof = { expandMore, unclamp, prepare, scrollPage, hideFixed, removeBadges, scrollSection, grewNow, restore, ovShow, ovHide, ovRemove };
 })();

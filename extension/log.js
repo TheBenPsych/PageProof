@@ -28,7 +28,7 @@ async function load() {
   }
   document.getElementById('csv').onclick = () => {
     const head = ['Captured', 'Web address', 'Page title', 'Case / ref', 'Collected by', 'Evidence pack saved', 'Pack SHA-256', 'Trusted timestamps', 'Notes'];
-    const esc = v => '"' + String(v).replace(/"/g, '""') + '"';
+    const esc = v => { let t = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; };
     const csv = [head, ...rows].map(r => r.map(esc).join(',')).join('\r\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' }));
