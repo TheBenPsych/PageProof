@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "PageProof",
-  "version": "3.12.2",
-  "description": "Capture a whole web page as evidence, reverse search many pictures at once, inspect the hidden data inside a picture, or convert and open files. Saved as PDF and evidence packs with fingerprints and timestamps.",
+  "version": "4.0.0",
+  "description": "Capture web pages as evidence, and find copies of your clients' photos all day from Google Drive with Google Lens, Yandex and Bing. Evidence packs and reports with fingerprints and timestamps.",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -30,7 +30,10 @@
     "clipboardWrite",
     "tabGroups",
     "alarms",
-    "notifications"
+    "notifications",
+    "sidePanel",
+    "system.cpu",
+    "system.memory"
   ],
   "commands": {
     "capture-page": {
@@ -87,5 +90,8 @@
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
   }
 }

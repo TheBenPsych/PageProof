@@ -1,10 +1,10 @@
 // Reverse image search: search many pictures on Google Lens, Yandex and Bing at once.
-// One page, five views:
-//   revsearch.html                -> pick pictures and press Search
+// One page, three views:
+//   revsearch.html                -> pick photos and press Search (shown inside the full PageProof page)
 //   revsearch.html?job=ID         -> the results window (also runs the searches)
-//   revsearch.html?view=folder    -> "My pictures folder"
-//   revsearch.html?view=lists     -> hidden and allowed sites
-//   revsearch.html?view=past      -> past searches
+//   revsearch.html?view=past      -> all searches (shown inside the full PageProof page)
+// Today's 50 and Keep searching (photos from the shared Google Drive) live on the full PageProof
+// page (app.html#keep); hidden and allowed sites on app.html#hidden.
 // The searches run in normal tabs of your own browser. rsearch.js (on the Google, Yandex
 // and Bing pages) hands each picture over and reads the links back.
 const api = globalThis.browser || globalThis.chrome;
@@ -91,6 +91,15 @@ async function backLink() {
   } catch (e) { /* ignore */ }
 }
 const page = q => api.runtime.getURL('revsearch.html' + (q ? '?' + q : ''));
+// A page of the full PageProof page (app.html#route). Inside it, just switch page; in the
+// results window, open it in a new tab.
+const appUrl = r => api.runtime.getURL('app.html#' + r);
+function goApp(r, e) {
+  if (e) e.preventDefault();
+  if (window.top !== window) { window.top.location.hash = r; return; }
+  openTab(appUrl(r));
+}
+const appLink = (r, text) => h('a', { href: appUrl(r), text, onclick: e => goApp(r, e) });
 
 async function getSettings() {
   const s = (await api.storage.local.get('rsSettings')).rsSettings || {};
@@ -122,25 +131,7 @@ async function docsBanner(after) {
 // =====================================================================================
 // Getting pictures ready
 // =====================================================================================
-async function prepare(file, extra) {
-  let bmp;
-  try { bmp = await createImageBitmap(file); } catch (e) { return { error: file.name + ' could not be opened (HEIC and TIFF pictures need converting to JPG first, with Convert files)' }; }
-  const w = bmp.width, hgt = bmp.height;
-  // The copy sent to the search sites: big pictures are made smaller (the sites shrink them anyway).
-  let blob = file;
-  const max = 2000;
-  if (Math.max(w, hgt) > max || file.size > 4e6 || !/^image\/(jpeg|png|webp|gif)$/.test(file.type)) {
-    const f = Math.min(1, max / Math.max(w, hgt));
-    const c = h('canvas', { width: Math.round(w * f), height: Math.round(hgt * f) });
-    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(bmp, 0, 0, c.width, c.height);
-    blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.92));
-  }
-  const tf = Math.min(1, 240 / Math.max(w, hgt));
-  const tc = h('canvas', { width: Math.max(1, Math.round(w * tf)), height: Math.max(1, Math.round(hgt * tf)) });
-  tc.getContext('2d').drawImage(bmp, 0, 0, tc.width, tc.height);
-  bmp.close && bmp.close();
-  return { name: file.name, size: file.size, w, h: hgt, hash: await RS_UTIL.sha256(file), blob, thumb: tc.toDataURL('image/jpeg', 0.8), ...(extra || {}) };
-}
+const prepare = (file, extra) => RS_JOB.prepare(file, extra);
 
 async function filesFromDrop(dt) {
   const out = [];
@@ -170,23 +161,11 @@ async function fileFromUrl(url) {
   return new File([b], name, { type: b.type });
 }
 
-// Start a search with these pictures: save it, then open the results window.
+// Start a search with these photos: save it, then open the results window.
 async function startJob(pics, opts) {
-  const s = await getSettings();
-  const engines = Object.keys(ENGINES).filter(e => s.engines[e]);
-  if (!engines.length) { alert('Tick at least one site to search on.'); return null; }
-  const job = {
-    id: 'rs' + Date.now(), created: new Date().toISOString(), engines, speed: s.speed, closeTabs: s.closeTabs,
-    folder: !!(opts && opts.folder), started: false,
-    pics: pics.map((p, i) => ({ ...p, i, links: [], runs: Object.fromEntries(engines.map(e => [e, { state: 'wait' }])) })),
-  };
-  await RS_DB.put('jobs', job.id, job);
-  // Keep the last 40 searches.
-  try {
-    const keys = (await RS_DB.keys('jobs')).sort();
-    for (const k of keys.slice(0, Math.max(0, keys.length - 40))) await RS_DB.del('jobs', k);
-  } catch (e) { /* ignore */ }
-  await api.windows.create({ url: page('job=' + job.id), focused: true, width: Math.min(1500, screen.availWidth), height: Math.min(1000, screen.availHeight) });
+  const job = await RS_JOB.create(pics, opts);
+  if (!job) { banner([h('b', { text: 'Tick at least one site to search on.' })], 'bad'); return null; }
+  await RS_JOB.open(job);
   return job;
 }
 
@@ -234,9 +213,9 @@ async function setupSide() {
     engines, speed, go,
     n ? h('p', { class: 'hint', style: 'margin:-4px 0 0;text-align:center', text: 'About ' + (secs < 90 ? secs + ' seconds' : Math.round(secs / 60) + ' minutes') + ' for ' + plural(n, 'picture') + ' on ' + plural(nEng, 'site') }) : null,
     h('div', { class: 'links' },
-      h('a', { href: page('view=folder'), text: '📂 My pictures folder' }),
-      h('a', { href: page('view=past'), text: '📒 Past searches' }),
-      h('a', { href: page('view=lists'), text: '🚫 Hidden and allowed sites' }),
+      appLink('keep', '📂 Today\'s 50 and Keep searching'),
+      appLink('searches', '📒 All searches'),
+      appLink('hidden', '🚫 Hidden and allowed sites'),
       h('a', { href: 'https://github.com/TheBenPsych/PageProof/blob/main/TUTORIAL.md#16-search-many-pictures-at-once-reverse-image-search', target: '_blank', text: '❔ How this works' })));
 }
 
@@ -249,7 +228,7 @@ function renderSetup(busy) {
       h('div', { class: 'ic', text: '🖼️' }),
       h('h1', { text: busy ? 'Getting your pictures ready…' : 'Which pictures do you want to search?' }),
       h('button', { class: 'addbtn', text: '📁 Add pictures', onclick: () => $('filePick').click() }),
-      h('button', { class: 'btn', style: 'font-size:14px;padding:8px 16px', text: '📂 Or use my pictures folder', onclick: () => { location.href = page('view=folder'); } }),
+      h('button', { class: 'btn', style: 'font-size:14px;padding:8px 16px', text: '📂 Or pick from my clients\' photos', onclick: e => goApp('clients', e) }),
       h('div', { class: 'ways' }, h('span', { text: 'Or drag pictures or a whole folder onto this page' }), h('span', { text: 'Or paste pictures or picture links (Ctrl+V)' }), h('span', { text: 'Up to ' + MAX_PICS + ' at once' })),
       h('div', { class: 'howbox' }, h('b', { text: 'What happens next:' }), h('ol', {},
         h('li', { text: 'PageProof opens one new window. Each picture gets its own coloured tab group with a Google, Yandex and Bing tab.' }),
@@ -375,7 +354,7 @@ function finishTask(t, state, why) {
   run.state = state;
   if (why) run.why = why; else delete run.why;
   if (t.captcha) { t.captcha = false; updatePause(t.engine); }
-  if (picDone(t.p)) folderNote(t.p);
+  if (picDone(t.p)) maybeIngest(t.p);
   saveJob(); renderSoon();
   // Search tabs are the big memory cost (each one is a full Google/Yandex/Bing page), so a
   // finished one is closed at once. A failed one is kept so you can look at it, but put to
@@ -392,6 +371,15 @@ function updatePause(engine) {
 
 async function onCaptcha(t) {
   if (t.captcha) return;
+  if (job.auto) {
+    // Nobody is watching: that site rests for an hour and the others carry on.
+    const rest = (await api.storage.local.get('fcRest')).fcRest || {};
+    rest[t.engine] = Date.now() + 3600000;
+    await api.storage.local.set({ fcRest: rest });
+    t.captcha = true;
+    giveUp(t.engine);
+    return;
+  }
   t.captcha = true;
   R.paused[t.engine] = true;
   R.captchas[t.engine] = (R.captchas[t.engine] || 0) + 1;
@@ -503,29 +491,6 @@ function saveScoresSoon(p) {
   }, 4000);
 }
 
-// Pictures that came from "My pictures folder": note when they were checked.
-async function folderNote(p) {
-  if (!job.folder) return;
-  try {
-    const old = (await RS_DB.get('folder', p.folderKey || p.name)) || {};
-    await RS_DB.put('folder', p.folderKey || p.name, { ...old, hash: p.hash, lastChecked: job.created, links: p.links.filter(isSame).length, newLinks: p.links.filter(l => l.isNew && isSame(l)).length });
-    backupFolderNotesSoon();
-  } catch (e) { /* ignore */ }
-}
-// The folder's "last checked" notes are also copied to Documents\PageProof\Memory\folder-notes.json.
-let folderBackupT = null;
-function backupFolderNotesSoon() {
-  clearTimeout(folderBackupT);
-  folderBackupT = setTimeout(async () => {
-    try {
-      const d = await RS_MEM.dir(); if (!d) return;
-      const [keys, vals] = await Promise.all([RS_DB.keys('folder'), RS_DB.all('folder')]);
-      const o = {}; keys.forEach((k, i) => { o[k] = vals[i]; });
-      const w = await (await d.getFileHandle('folder-notes.json', { create: true })).createWritable(); await w.write(JSON.stringify(o)); await w.close();
-    } catch (e) { /* backup only */ }
-  }, 3000);
-}
-
 // ---------- % match: line up each found picture with yours (same work as the Compare page) ----------
 async function origBitmap(p) {
   if (R.origBmp[p.i]) return R.origBmp[p.i];
@@ -561,7 +526,7 @@ const freePic = x => { try { x && x.bmp.close && x.bmp.close(); } catch (e) { /*
 // stopped after 30 seconds and its worker replaced, so one bad picture can't freeze anything.
 // If workers aren't available the check runs on the page as before.
 const POOL = { list: [], next: 1, failed: false };
-const POOL_SIZE = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
+let POOL_SIZE = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));   // lowered to the computer's limit when a search opens
 function newWorker() {
   const w = { worker: new Worker('score-worker.js'), busy: 0, sent: new Set(), waits: new Map() };
   w.worker.onmessage = e => { const r = w.waits.get(e.data.id); if (r) { w.waits.delete(e.data.id); w.busy--; r(e.data); } };
@@ -693,6 +658,7 @@ async function scoreWorker() {
       const p = job.pics[l.pic];
       await scoreLink(l);
       saveScoresSoon(job.pics[l.pic]);
+      maybeIngest(job.pics[l.pic]);
       saveJob(); renderSoon();
       await breathe();
     }
@@ -700,6 +666,10 @@ async function scoreWorker() {
 }
 
 // ---------- running the whole search ----------
+// The computer check sets how many search tabs may be open at once (all sites together).
+const SLOTS = { free: 3, wait: [] };
+const takeSlot = () => (SLOTS.free > 0 ? (SLOTS.free--, Promise.resolve()) : new Promise(r => SLOTS.wait.push(r)));
+const giveSlot = () => { const n = SLOTS.wait.shift(); if (n) n(); else SLOTS.free++; };
 async function runJob(onlyEngines) {
   R.running = true; R.stop = false;
   job.started = true; saveJob(true);
@@ -715,7 +685,8 @@ async function runJob(onlyEngines) {
           while (R.paused[e] && !R.stop && !R.gaveUp[e]) await sleep(500);
           const p = q.shift();
           if (!p || R.stop || R.gaveUp[e]) { if (p) q.unshift(p); break; }
-          await runOne(p, e);
+          await takeSlot();
+          try { await runOne(p, e); } finally { giveSlot(); }
           if (q.length) await sleep(rand(sp.gap));
         }
       })());
@@ -727,6 +698,35 @@ async function runJob(onlyEngines) {
   R.running = false;
   job.finished = new Date().toISOString();
   saveJob(true); renderSoon();
+  for (const p of job.pics) maybeIngest(p);
+  autoDone();
+}
+
+// ---------- every find goes into All copies found ----------
+// When a photo has been searched and every link checked, its Same photo and Maybe links are
+// added to the copies list (Find copies › All copies found), with the photo's client.
+const BY = { keep: 'Keep searching', fifty: 'today\'s 50', new: 'a search' };
+function maybeIngest(p) {
+  if (!p || p.ingested || !picDone(p)) return;
+  if (!job.engines.some(e => p.runs[e].state === 'done')) return;          // nothing actually searched
+  if (p.links.some(l => verdict(l) === 'pending' && !RS_LISTS.isHidden(l.site, l.url))) return;
+  p.ingested = true;
+  const links = p.links.filter(l => ['same', 'maybe'].includes(verdict(l)) && !RS_LISTS.isHidden(l.site, l.url) && !isRejected(p, l))
+    .map(l => ({ ...l, verdict: verdict(l) }));
+  FC.ingest(p, links, BY[job.kind] || 'a search').catch(err => { p.ingested = false; console.warn('PageProof: could not add the copies', err); })
+    .finally(() => { saveJob(); autoDone(); });
+}
+// Keep searching runs a search in a background window: when it's finished, tell that window and close.
+let autoClosing = false;
+function autoDone() {
+  if (!job || !job.auto || autoClosing || R.running) return;
+  if (!job.pics.every(p => p.ingested || picDone(p) && !job.engines.some(e => p.runs[e].state === 'done'))) return;
+  if (job.pics.some(p => !p.ingested && job.engines.some(e => p.runs[e].state === 'done'))) return;
+  autoClosing = true;
+  saveJob(true).finally(() => {
+    api.runtime.sendMessage({ type: 'fcAutoDone', job: job.id, found: job.pics.reduce((a, p) => a + p.links.filter(isSame).length, 0) }).catch(() => {});
+    setTimeout(() => window.close(), 300);
+  });
 }
 // Give up on tabs that never answer.
 setInterval(() => {
@@ -826,9 +826,10 @@ function resultsSide() {
         runJob();
       } }) : null];
   side(head, list, ...actions, h('div', { class: 'links' },
-    h('a', { href: page(), target: '_blank', text: '🔎 New search' }),
-    h('a', { href: page('view=lists'), target: '_blank', text: '🚫 Hidden and allowed sites' }),
-    h('a', { href: page('view=past'), target: '_blank', text: '📒 Past searches' })));
+    appLink('found', '🗂 All copies found'),
+    appLink('search', '🔎 New search'),
+    appLink('hidden', '🚫 Hidden and allowed sites'),
+    appLink('searches', '📒 All searches')));
 }
 
 function rowFor(p, l) {
@@ -864,8 +865,8 @@ function rowFor(p, l) {
           : v !== 'no' && !isRejected(p, l) ? h('button', { class: 'nomatch', text: '✕ Not a match', title: 'It is a different photo. It moves to "Different photo", is saved in rejected-links.txt, and PageProof keeps its numbers to learn from.',
             onclick: async () => { R.ticked.delete(id); await learnFrom(l, v); await RS_REJECT.add(l.url, p.name, 'nomatch'); renderResults(); } }) : null,
         v !== 'cant' && v !== 'pending' ? h('button', { text: '🔀 Compare', title: 'Lay the copy over your picture on the Compare page', onclick: () => compareLink(p, l) }) : null,
-        v === 'same' || v === 'maybe' ? h('button', { class: 'evid', text: '📄 Evidence', title: 'Save a PDF: your picture and this copy side by side, where it was found, how well they match, and fingerprints of both files', onclick: () => saveSighting(p, [l]) }) : null,
-        h('button', { text: '📸 Capture', title: 'Save this page as an evidence pack (batch capture)', onclick: () => captureLinks([l.url]) }))));
+        v === 'same' || v === 'maybe' ? h('button', { class: 'evid', text: '📄 Evidence', title: 'Save a PDF: your picture and this copy side by side, where it was found, how well they match, and fingerprints of both files', onclick: () => saveSighting(p, l) }) : null,
+        h('button', { text: '📸 Capture', title: 'Open this page and capture it as an evidence pack', onclick: () => captureLinks([l.url]) }))));
 }
 
 function renderSelbar() {
@@ -877,7 +878,7 @@ function renderSelbar() {
   bar.replaceChildren(h('span', {}, '✓ ', h('b', { text: plural(urls.length, 'link') + ' ticked' })), h('span', { class: 'sp' }),
     h('button', { class: 'btn', text: 'Untick all', onclick: () => { R.ticked.clear(); renderResults(); } }),
     h('button', { class: 'btn', text: 'Copy links', onclick: () => navigator.clipboard.writeText(urls.join('\n')) }),
-    h('button', { class: 'btn green', text: '📸 Capture ' + plural(urls.length, 'ticked page'), onclick: () => captureLinks(urls) }));
+    h('button', { class: 'btn', text: '🚫 Hide these sites', onclick: async () => { for (const u of urls) await RS_LISTS.add('hidden', RS_SITE.of(u)); R.ticked.clear(); renderResults(); } }));
 }
 
 function renderList() {
@@ -936,7 +937,7 @@ function renderResults() {
       h('p', { class: 'lead' }, h('b', { style: 'color:#15803d', text: plural(nSame, 'link') + ' with the same photo' }), ' (of ' + all.length + ' found)',
         prev ? [' · ', h('b', { style: 'color:#92400e', text: nNew + ' new' }), ' since ' + RS_UTIL.niceDate(prev)] : ' · first search for this picture',
         ' · your file is ' + p.w + ' × ' + p.h),
-      h('div', { class: 'btns' }, job.engines.map(tabBtn), nSame ? h('button', { class: 'btn', text: '📄 Evidence for all ' + nSame, title: 'One PDF with an evidence page for every Same photo link of this picture', onclick: () => saveSighting(p, all.filter(isSame)) }) : null, h('small', { text: nPend ? 'Checking ' + nPend + ' more pictures…' : 'Every picture found was downloaded and lined up with yours.' })),
+      h('div', { class: 'btns' }, job.engines.map(tabBtn), h('small', { text: nPend ? 'Checking ' + nPend + ' more pictures…' : 'Every picture found was downloaded and lined up with yours.' })),
       problems.length ? h('p', { class: 'note', text: [...new Set(problems)].join(' ') }) : null)),
     h('div', { class: 'ftabs' }, fbtn('same', '✅ Same photo ' + nSame + (nPend ? ' (checking…)' : '')), fbtn('maybe', 'Maybe ' + cnt('maybe')), fbtn('cant', "Can't check " + cnt('cant')),
       fbtn('no', 'Different photo ' + cnt('no')), fbtn('new', '⭐ New ' + nNew, 'newf'), fbtn('all', 'All ' + all.length),
@@ -950,171 +951,29 @@ function renderResults() {
         : h('span', { text: RS_LISTS.hidden.length ? ' none for this picture' : ' none yet. Press "Hide this site" on any site you never care about.' }),
       nHiddenLinks ? h('span', { style: 'color:#64748b', text: '· ' + plural(nHiddenLinks, 'link') + ' hidden for this picture' }) : null,
       nHiddenLinks ? h('button', { class: 'lnk', text: R.showHidden ? 'Hide them again' : 'Show them', onclick: () => { R.showHidden = !R.showHidden; renderResults(); } })
-        : h('a', { class: 'lnk', href: page('view=lists'), target: '_blank', text: 'Manage lists', style: 'margin-left:auto;font-weight:600;text-decoration:none' })),
+        : h('a', { class: 'lnk', href: appUrl('hidden'), onclick: e => goApp('hidden', e), text: 'Manage lists', style: 'margin-left:auto;font-weight:600;text-decoration:none' })),
     h('div', { class: 'list', id: 'rlist' }),
     h('div', { class: 'selbar', id: 'selbar', hidden: true }));
   renderList(); renderSelbar();
 }
 
-// ---------- evidence of a find ("sighting report") ----------
-// One page per link: your picture and the copy side by side, where it was found, how PageProof
-// found it, how well the two line up, and SHA-256 fingerprints of both files. The found copy is
-// downloaded again at the moment the report is made, so the report shows what is online now.
-const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
-const sha256 = async bytes => hex(await crypto.subtle.digest('SHA-256', bytes));
-const matchId = async (p, l) => 'PP-S-' + (await sha256(new TextEncoder().encode(p.hash + '|' + l.url))).slice(0, 8).toUpperCase();
-const niceBytes = n => n >= 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1e3)) + ' kB';
-const dayText = d => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
-const nowText = d => d.toLocaleString(undefined, { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
-
-async function grabCopy(l) {
-  for (const [u, which] of [[l.img, 'full'], [l.thumb, 'preview']]) {
-    if (!u) continue;
-    try {
-      const r = await fetch(u, { credentials: 'omit' });
-      if (!r.ok) continue;
-      const bytes = new Uint8Array(await r.arrayBuffer());
-      const bmp = await createImageBitmap(new Blob([bytes]));
-      let meta = null; try { meta = await PP_META.read(bytes); } catch (e) { /* not readable */ }
-      return { bytes, bmp, which, src: u, meta, sha: await sha256(bytes), at: new Date() };
-    } catch (e) { /* try the next one */ }
-  }
-  return null;
-}
-
-async function sightingPage(p, l, ours) {
-  const W = 1240, H = 1754, M = 64, G = 32, CW = (W - 2 * M - G) / 2;
-  const c = h('canvas', { width: W, height: H }), x = c.getContext('2d');
-  const font = (px, bold) => { x.font = (bold ? 'bold ' : '') + px + 'px system-ui, "Segoe UI", sans-serif'; };
-  // Wraps text to a width. Long links have no spaces, so they break anywhere.
-  const wrap = (t, maxW, maxLines = 6) => {
-    const out = []; let line = '';
-    for (const word of String(t || '').split(/(\s+)/)) {
-      if (x.measureText(line + word).width <= maxW) { line += word; continue; }
-      if (line.trim()) { out.push(line.trim()); line = ''; }
-      let w = word.trimStart();
-      while (x.measureText(w).width > maxW) { let k = w.length; while (k > 1 && x.measureText(w.slice(0, k)).width > maxW) k--; out.push(w.slice(0, k)); w = w.slice(k); }
-      line = w;
-    }
-    if (line.trim()) out.push(line.trim());
-    if (out.length > maxLines) { out.length = maxLines; out[maxLines - 1] += '…'; }
-    return out;
-  };
-  const rows = (items, x0, y, colW) => {
-    const LW = 150;
-    for (const [k, v, color] of items) {
-      if (!v) continue;
-      font(17, true); x.fillStyle = '#64748b'; x.fillText(k, x0, y);
-      font(17); x.fillStyle = color || '#0f172a';
-      const lines = wrap(v, colW - LW - 8);
-      lines.forEach((t, i) => x.fillText(t, x0 + LW, y + i * 23));
-      y += Math.max(1, lines.length) * 23 + 9;
-    }
-    return y;
-  };
-  const picBox = async (img, x0, y0, label, col) => {
-    const BH = 440;
-    x.fillStyle = col; x.fillRect(x0, y0, CW, 38);
-    font(19, true); x.fillStyle = '#fff'; x.textAlign = 'center'; x.fillText(label, x0 + CW / 2, y0 + 26); x.textAlign = 'left';
-    x.fillStyle = '#f1f5f9'; x.fillRect(x0, y0 + 38, CW, BH);
-    if (img) { const s = Math.min((CW - 24) / img.width, (BH - 24) / img.height); const w = img.width * s, hh = img.height * s; x.drawImage(img, x0 + (CW - w) / 2, y0 + 38 + (BH - hh) / 2, w, hh); }
-    else { font(17); x.fillStyle = '#64748b'; x.textAlign = 'center'; x.fillText('The copy could not be downloaded now.', x0 + CW / 2, y0 + 38 + BH / 2); x.textAlign = 'left'; }
-    x.strokeStyle = col; x.lineWidth = 3; x.setLineDash(col === '#ea580c' ? [10, 6] : []); x.strokeRect(x0 + 1.5, y0 + 1.5, CW - 3, BH + 38 - 3); x.setLineDash([]);
-    return y0 + 38 + BH + 30;
-  };
-
-  const copy = await grabCopy(l);
-  const id = await matchId(p, l), v = verdict(l), made = new Date();
-  x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
-  x.fillStyle = '#0f172a'; x.fillRect(0, 0, W, 84);
-  font(28, true); x.fillStyle = '#fff'; x.fillText('PageProof  ·  Sighting report', M, 53);
-  font(19); x.textAlign = 'right'; x.fillText('Match ID ' + id, W - M, 53); x.textAlign = 'left';
-  let y = 140;
-  font(34, true); x.fillStyle = v === 'same' ? '#15803d' : v === 'maybe' ? '#b45309' : '#0f172a';
-  x.fillText(wrap((v === 'same' ? 'Same photo found on ' : v === 'maybe' ? 'Possible copy found on ' : 'Found on ') + l.site, W - 2 * M, 1)[0], M, y);
-  y += 40; font(20); x.fillStyle = '#334155';
-  // One plain sentence on top, as in PixelProof's Proof of Discovery.
-  const owner = (ours.meta && ours.meta.summary && (ours.meta.summary.creator || ours.meta.summary.copyright)) || '';
-  const lead = 'On ' + dayText(l.firstSeen || job.created) + ', PageProof found a copy of ' + (owner ? owner + '\'s photo ' : 'your photo ') + p.name + ' on ' + l.site + '. Report made ' + nowText(made) + '.';
-  for (const t of wrap(lead, W - 2 * M, 2)) { x.fillText(t, M, y); y += 27; }
-  y += 14;
-
-  // Pictures side by side: yours (solid blue edge) and the copy (dashed orange), as on the Compare page.
-  const ourImg = await createImageBitmap(p.blob);
-  const yA = await picBox(ourImg, M, y, 'YOUR PICTURE', '#2563eb');
-  await picBox(copy && copy.bmp, M + CW + G, y, 'FOUND COPY', '#ea580c');
-  ourImg.close && ourImg.close();
-  y = yA;
-  const om = ours.meta && ours.meta.summary || {}, cm = copy && copy.meta && copy.meta.summary;
-  const left = [
-    ['File name', p.name],
-    ['Folder', p.folderKey && p.folderKey.includes('/') ? p.folderKey.slice(0, p.folderKey.lastIndexOf('/')).replace(/\//g, ' › ') : ''],
-    ['Size', p.w + ' × ' + p.h + ' pixels · ' + niceBytes(p.blob.size)],
-    ['Taken', om.taken], ['Camera', om.camera], ['Author', om.creator], ['Copyright', om.copyright], ['Credit', om.credit],
-    ['SHA-256', p.hash, '#334155'],
-  ];
-  const sz = sizeNote(p, l);
-  const right = [
-    ['Site', l.site],
-    ['Page', l.url, '#1d4ed8'],
-    ['Picture link', copy ? copy.src.startsWith('data:') ? '(shown inside the search page)' : copy.src : (l.img || ''), '#1d4ed8'],
-    ['Title', l.title],
-    ['Size', copy ? copy.bmp.width + ' × ' + copy.bmp.height + ' pixels · ' + niceBytes(copy.bytes.length) + (sz.text ? ' · ' + sz.text : '') : (l.w ? l.w + ' × ' + l.h : '')],
-    ['Hidden data', cm ? (cm.level === 'none' ? 'None (camera, author and copyright data are not in this copy)' : [cm.creator && 'author ' + cm.creator, cm.copyright && '© ' + cm.copyright, cm.taken && 'taken ' + cm.taken].filter(Boolean).join(' · ') || 'Some, but no author, date or copyright') : ''],
-    ['First found', l.firstSeen ? dayText(l.firstSeen) : ''],
-    ['Downloaded', copy ? nowText(copy.at) + (copy.which === 'preview' ? ' (the search site\'s preview; the full picture would not download)' : '') : 'Could not be downloaded when this report was made'],
-    ['SHA-256', copy ? copy.sha : '', '#334155'],
-  ];
-  const yL = rows(left, M, y, CW), yR = rows(right, M + CW + G, y, CW);
-  y = Math.max(yL, yR) + 16;
-
-  // How well they line up.
-  x.fillStyle = '#f8fafc'; x.strokeStyle = '#cbd5e1'; x.lineWidth = 1.5;
-  const boxTop = y; y += 40;
-  font(22, true); x.fillStyle = '#0f172a'; x.fillText('Match check: ' + VERDICT[v].tag + (l.pct >= 0 && l.sv === SCORE_VERSION ? ' · ' + l.pct + '% lines up' : ''), M + 22, y); y += 32;
-  font(18); x.fillStyle = '#334155';
-  const said = [];
-  if (l.pct >= 0 && l.sv === SCORE_VERSION) {
-    said.push(l.pct + '% of the area the two pictures share lines up detail for detail' + (l.inl ? ', using ' + l.inl + ' matching details found in both' : '') + '.');
-    if (l.mid != null) said.push('The middle of your picture (where the subject usually is) lines up ' + Math.round(l.mid * 100) + '%.');
-    if (sz.text) said.push('The copy is ' + (sz.text === 'same size' ? 'the same size as yours' : sz.text) + '.');
-  } else said.push('PageProof could not line the two up automatically. Compare them by eye.');
-  if (userNo(l)) said.push('You marked this link "Not a match".');
-  for (const t of wrap(said.join(' '), W - 2 * M - 44, 5)) { x.fillText(t, M + 22, y); y += 26; }
-  y += 14;
-  x.strokeRect(M, boxTop, W - 2 * M, y - boxTop); y += 40;
-
-  // How it was found.
-  font(22, true); x.fillStyle = '#0f172a'; x.fillText('How PageProof found it', M, y); y += 32; font(18); x.fillStyle = '#334155';
-  const how = 'Your picture was searched with ' + l.engines.map(e => ENGINES[e].name).join(' and ') + ' (reverse image search) on ' + nowText(new Date(job.created)) +
-    '. Each result was downloaded and lined up with your picture by PageProof on this computer (the same check as its Compare page), and kept only if it is the same photo. ' +
-    'SHA-256 fingerprints identify the exact files: if even one pixel changes, the fingerprint changes.';
-  for (const t of wrap(how, W - 2 * M, 6)) { x.fillText(t, M, y); y += 26; }
-  x.fillText('To keep a full record of the page itself, capture it with PageProof using ' + id + ' as the case number.', M, y + 4); y += 30;
-
-  font(15); x.fillStyle = '#94a3b8';
-  x.fillText('PageProof ' + api.runtime.getManifest().version + '  ·  Match ID ' + id + '  ·  search ' + job.id, M, H - 40);
-  if (copy && copy.bmp.close) copy.bmp.close();
-  return c;
-}
-
-// One link (the row's button) or every Same photo link of a picture.
-async function saveSighting(p, links) {
-  const go = links.length === 1 ? 'Making the evidence report…' : 'Making ' + links.length + ' evidence pages…';
-  banner([h('b', { text: go })], 'info');
+// ---------- the Evidence report (one PDF for one use) ----------
+// Made by evidence.js, the same report as the copy details on All copies found.
+async function saveSighting(p, l) {
+  const caseNo = await PP_EVIDENCE.ask();
+  if (caseNo === null) return;
+  banner([h('b', { text: 'Making the evidence report…' })], 'info');
   try {
-    let meta = null; try { meta = await PP_META.read(new Uint8Array(await p.blob.arrayBuffer())); } catch (e) { /* none */ }
-    const pages = [];
-    for (const l of links) pages.push(await sightingPage(p, l, { meta }));
-    const id = links.length === 1 ? await matchId(p, links[0]) : 'all-' + links.length;
-    const base = p.name.replace(/\.[a-z0-9]+$/i, '').replace(/[^\w.-]+/g, '_').slice(0, 40);
-    const site = links.length === 1 ? '_' + links[0].site.replace(/[^\w.-]+/g, '_') : '';
-    download(makePdf(await PP_REPORT.pdfPages(pages), { title: 'PageProof sighting report', subject: p.name + (links.length === 1 ? ' found on ' + links[0].url : ' · ' + links.length + ' copies') }),
-      'PageProof_sighting_' + base + site + '_' + id + '.pdf');
+    const ph = await FC.photoForPic(p);
+    const st = await api.storage.local.get('lastCase');
+    const r = await PP_EVIDENCE.make({ blob: p.blob, name: p.name, w: p.w, h: p.h, hash: p.hash, client: ph.client || '', path: await FC.pathOf(ph), reg: await FC.regFor(ph) },
+      { ...l, match: verdict(l), by: job.kind === 'keep' ? 'Keep searching' : job.kind === 'fifty' ? 'today\'s 50' : 'a search', firstSeen: l.firstSeen || job.created, use: FC.USE[FC.useOf(l)][0] },
+      { caseNo, collector: (st.lastCase || {}).collector || '', owner: await FC.ownerFor(l.site) });
+    download(r.blob, r.name);
+    await FC.logReport({ id: r.id, file: r.name, url: l.url, site: l.site, photo: p.name, caseNo });
     banner(null);
   } catch (e) { banner([h('b', { text: 'The report could not be made: ' }), String(e && e.message || e)], 'bad'); }
 }
-
 async function compareLink(p, l) {
   let blob = null, src = '';
   for (const u of [l.img, l.thumb].filter(Boolean)) {
@@ -1125,9 +984,9 @@ async function compareLink(p, l) {
   openTab(api.runtime.getURL('compare.html?from=revsearch'));
 }
 
+// Opens the page in a new tab and captures it (the evidence pack opens when it's done).
 async function captureLinks(urls) {
-  await api.storage.local.set({ batchPrefill: urls });
-  openTab(api.runtime.getURL('batch.html'));
+  for (const url of urls.slice(0, 1)) { try { await api.runtime.sendMessage({ type: 'captureUrl', url }); } catch (e) { openTab(url); } }
 }
 
 // ---------- saving the results ----------
@@ -1207,7 +1066,16 @@ async function initResults() {
     if (area === 'local' && (ch.rsHidden || ch.rsAllowed || ch.rsRejected)) RS_LISTS.load().then(() => renderResults());
   });
   try { const me = await api.tabs.getCurrent(); R.myTab = me.id; R.winId = me.windowId; } catch (e) { /* ignore */ }
-  if (R.myTab) api.storage.local.set({ rsOpenJob: { id: job.id, tab: R.myTab } });
+  if (R.myTab && !job.auto) api.storage.local.set({ rsOpenJob: { id: job.id, tab: R.myTab } });
+  // Never more tabs or photo checks than this computer can take.
+  const lim = job.limits || (await ppHardware()).limits;
+  SLOTS.free = Math.max(1, lim.tabs || 3);
+  POOL_SIZE = Math.max(1, Math.min(POOL_SIZE, lim.checks || 4));
+  // While today's 50 runs, Keep searching waits.
+  if (job.kind === 'fifty') {
+    const beat = () => { if (R.running) api.storage.local.set({ fcFifty: { id: job.id, beat: Date.now() } }); };
+    beat(); setInterval(beat, 20000);
+  }
   for (const p of job.pics) {
     try {
       const rec = await RS_MEM.get(p.hash);
@@ -1221,270 +1089,36 @@ async function initResults() {
   }
   // Pages reopened later: anything that was mid-search is marked as not finished.
   for (const p of job.pics) for (const e of job.engines) if (['go', 'captcha'].includes(p.runs[e].state)) { p.runs[e].state = 'fail'; p.runs[e].why = 'The results window was closed or reloaded during this search.'; }
-  await docsBanner(renderResults);
+  if (!job.auto) await docsBanner(renderResults);
   renderResults();
   scoreAll();
+  for (const p of job.pics) maybeIngest(p);
   if (!job.started) runJob();
   window.addEventListener('beforeunload', e => { if (R.running) { e.preventDefault(); e.returnValue = ''; } });
   window.addEventListener('pagehide', () => { if (saveTimer) saveJob(true); });
 }
 
 // =====================================================================================
-// View 3: My pictures folder
-// =====================================================================================
-async function picsDir() {
-  const custom = await RS_DB.get('handles', 'pics').catch(() => null);
-  if (custom) {
-    const st = await custom.queryPermission({ mode: 'readwrite' }).catch(() => 'denied');
-    return { dir: st === 'granted' ? custom : null, state: st, custom, label: custom.name };
-  }
-  const st = await RS_DOCS.state();
-  if (st !== 'granted') return { dir: null, state: st, label: 'Documents\\PageProof\\My pictures' };
-  const docs = await RS_DOCS.handle();
-  return { dir: await docs.getDirectoryHandle('My pictures', { create: true }), state: 'granted', label: 'Documents\\PageProof\\My pictures' };
-}
-
-// Every picture in the folder, including folders inside it (Client > Year > Day > picture).
-// Each picture is known by its path inside the folder, like "Smith/2024/May 3/photo.jpg".
-const FOLDER_SCAN = { dir: null, at: 0, files: [] };
-async function folderPictures(dir, fresh) {
-  const out = [], notes = new Map();
-  try {
-    const [keys, vals] = await Promise.all([RS_DB.keys('folder'), RS_DB.all('folder')]);
-    keys.forEach((k, i) => notes.set(k, vals[i]));
-    if (!keys.length) {                                     // reinstalled: bring the notes back from the file
-      const md = await RS_MEM.dir();
-      if (md) {
-        const o = JSON.parse(await (await (await md.getFileHandle('folder-notes.json')).getFile()).text());
-        for (const [k, v] of Object.entries(o)) { notes.set(k, v); await RS_DB.put('folder', k, v); }
-      }
-    }
-  } catch (e) { /* none yet */ }
-  const walk = async (d, prefix, depth) => {
-    for await (const [name, handle] of d.entries()) {
-      if (name.startsWith('.') || name.startsWith('$')) continue;
-      if (handle.kind === 'directory') { if (depth < 8) await walk(handle, prefix + name + '/', depth + 1); }
-      else if (RS_UTIL.IMAGE_EXT.test(name)) files.push({ name: prefix + name, file: name, handle });
-    }
-  };
-  // Going through thousands of files takes a while, so the list is kept for 10 minutes
-  // (changing a setting or pressing Refresh after a search does not walk the folder again).
-  // Opening the page again, or "Look for new pictures", always reads it fresh.
-  let files;
-  let same = false;
-  try { same = !fresh && FOLDER_SCAN.dir && Date.now() - FOLDER_SCAN.at < 600000 && await dir.isSameEntry(FOLDER_SCAN.dir); } catch (e) { /* re-read */ }
-  if (same) files = FOLDER_SCAN.files;
-  else { files = []; await walk(dir, '', 0); Object.assign(FOLDER_SCAN, { dir, at: Date.now(), files }); }
-  for (const f of files) out.push({ ...f, note: notes.get(f.name) || {} });
-  // Due order: never checked first, then the ones checked longest ago.
-  out.sort((a, b) => (a.note.lastChecked || '').localeCompare(b.note.lastChecked || '') || a.name.localeCompare(b.name));
-  return out;
-}
-
-async function getDaily() {
-  const d = (await api.storage.local.get('rsDaily')).rsDaily || {};
-  return { mode: d.mode || 'remind', time: d.time || '09:00', perDay: d.perDay || 30, lastRun: d.lastRun || '' };
-}
-
-let folderFilter = 'all', FOLDERQ = '';
-async function renderFolder(autoStart, fresh) {
-  const F = await picsDir();
-  const daily = await getDaily();
-  const setDaily = async ch => { await api.storage.local.set({ rsDaily: { ...daily, ...ch } }); renderFolder(); };
-  const today = RS_UTIL.today();
-  if (!F.dir) {
-    side(h('div', {}, h('div', { id: 'domain', text: 'My pictures folder' }), h('div', { id: 'sub', text: 'Keep your pictures in one folder on this PC. PageProof checks some of them each day, only when you say so.' })),
-      h('div', { class: 'links' }, h('a', { href: page(), text: '🔎 Reverse image search' }), h('a', { href: page('view=lists'), text: '🚫 Hidden and allowed sites' })));
-    const needAllow = F.state === 'prompt';
-    $('main').replaceChildren(h('div', { class: 'empty' }, h('div', { class: 'ic', text: '📂' }),
-      h('h1', { text: needAllow ? 'One click to open your pictures folder' : 'Set up your pictures folder' }),
-      h('p', { class: 'lead', text: needAllow ? 'Your browser asks once after it restarts. Press Allow and PageProof opens ' + F.label + '.'
-        : SETUP_STEPS + ' PageProof then makes the My pictures folder inside it by itself.' }),
-      !RS_DOCS.supported ? h('p', { class: 'note', text: 'This needs Chrome or Edge. Firefox does not let extensions use folders on your computer.' })
-        : h('button', { class: 'addbtn', text: needAllow ? 'Allow' : '📂 Set up PageProof folder', onclick: async () => {
-          try {
-            if (needAllow) { if (F.custom) await F.custom.requestPermission({ mode: 'readwrite' }); else await RS_DOCS.allow(); }
-            else await RS_DOCS.choose();
-            await RS_LISTS.load(); banner(null); renderFolder(autoStart);
-          } catch (e) { /* closed the picker */ }
-        } }),
-      h('button', { class: 'btn', text: 'Use a different folder instead', onclick: chooseOtherFolder })));
-    if (autoStart) banner([h('b', { text: 'Time for today\'s picture check. ' }), 'Press Allow above and it starts.'], 'info');
-    return;
-  }
-  if (!(await api.storage.local.get('rsDaily')).rsDaily) await api.storage.local.set({ rsDaily: daily });   // turns the daily reminder on
-  const pics = await folderPictures(F.dir, fresh);
-  const checkedToday = pics.filter(x => (x.note.lastChecked || '').slice(0, 10) === today).length;
-  const due = pics.filter(x => (x.note.lastChecked || '').slice(0, 10) !== today);
-  const todays = due.slice(0, Math.max(0, daily.perDay - checkedToday));
-  const never = pics.filter(x => !x.note.lastChecked).length;
-  const withNew = pics.filter(x => x.note.newLinks > 0).length;
-  const last = pics.map(x => x.note.lastChecked || '').sort().pop();
-  const cycle = Math.max(1, Math.ceil(pics.length / daily.perDay));
-  // "Check more now": after today's share is done, the next batch in the same order
-  // (never checked first, then oldest), as many as the pictures-per-day setting.
-  const extra = todays.length ? [] : due.slice(0, daily.perDay);
-  const start = async list => {
-    list = Array.isArray(list) ? list : todays;
-    banner([h('b', { text: 'Getting ' + plural(list.length, 'picture') + ' ready…' })], 'info');
-    const ready = [];
-    for (const x of list) {
-      try { const p = await prepare(await x.handle.getFile()); if (!p.error) { p.folderKey = x.name; ready.push(p); } } catch (e) { /* unreadable */ }
-    }
-    if (!ready.length) { banner([h('b', { text: 'None of today\'s pictures could be opened.' })], 'bad'); return; }
-    await api.storage.local.set({ rsDaily: { ...daily, lastRun: today } });
-    await startJob(ready, { folder: true });
-    banner([h('b', { text: 'Search started in a new window. ' }), 'This list updates as each picture finishes. Press Refresh to see it.', h('span', { class: 'sp' }), h('button', { text: 'Refresh', onclick: () => { banner(null); renderFolder(); } })], 'info');
-  };
-  side(h('div', {}, h('div', { id: 'domain', text: 'My pictures folder' }), h('div', { id: 'sub', class: 'path', text: '📂 ' + F.label })),
-    h('div', { class: 'card' }, h('div', { style: 'font-size:14px' }, h('b', { text: plural(pics.length, 'picture') }), never ? ' · ' + never + ' never checked' : ''),
-      h('div', { class: 'hint', style: 'margin-top:2px', text: last ? 'Last check: ' + new Date(last).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Not checked yet' })),
-    h('button', { class: 'big', disabled: !todays.length, text: todays.length ? '🔎 Check today\'s ' + todays.length : '✓ All done for today', onclick: () => start(todays) }),
-    extra.length ? h('button', { class: 'btn', style: 'width:100%;margin-top:6px', text: '＋ Check ' + extra.length + ' more now', title: 'Searches the next ' + extra.length + ' pictures in line, even though today\'s are done', onclick: () => start(extra) }) : null,
-    h('p', { class: 'hint', style: 'margin:-4px 0 0;text-align:center', text: 'New pictures first, then the ones checked longest ago.' + (pics.length ? ' All ' + pics.length + ' get checked ' + (cycle === 1 ? 'every day' : 'every ' + cycle + ' days') + '.' : '') }),
-    h('div', { class: 'card' }, h('h3', { text: 'Every day' }), h('div', { class: 'radio' },
-      h('label', {}, h('input', { type: 'radio', name: 'dm', checked: daily.mode === 'remind', onchange: () => setDaily({ mode: 'remind' }) }), 'Remind me at'),
-      h('label', {}, h('input', { type: 'radio', name: 'dm', checked: daily.mode === 'auto', onchange: () => setDaily({ mode: 'auto' }) }), 'Start by itself at'),
-      h('label', {}, h('input', { type: 'radio', name: 'dm', checked: daily.mode === 'off', onchange: () => setDaily({ mode: 'off' }) }), 'Only when I press the button')),
-      daily.mode !== 'off' ? h('div', { style: 'margin-top:6px;font-size:13px' }, 'Time: ', h('input', { type: 'time', value: daily.time, onchange: e => e.target.value && setDaily({ time: e.target.value }) })) : null,
-      h('p', { class: 'hint', text: 'Chrome has to be open. A reminder is safest: you are there if Google asks for a robot check.' })),
-    h('div', { class: 'card' }, h('h3', { text: 'Pictures per day' }), h('div', { class: 'seg' }, [15, 30, 50].map(n => h('button', { class: daily.perDay === n ? 'on' : '', text: n, onclick: () => setDaily({ perDay: n }) })))),
-    h('div', { class: 'links' },
-      h('button', { text: '🔄 Look for new pictures', title: 'Reads the folder again, for pictures you added in Windows', onclick: () => { banner(null); renderFolder(false, true); } }),
-      h('button', { text: '📂 Use a different folder…', title: 'Point PageProof at any folder, for example your client folders. Folders inside it (client > year > day) are included. Nothing is copied.', onclick: chooseOtherFolder }),
-      F.custom ? h('button', { text: '📂 Go back to Documents\\PageProof\\My pictures', onclick: async () => { await RS_DB.del('handles', 'pics'); renderFolder(); } }) : null,
-      h('a', { href: page(), text: '🔎 Reverse image search' }),
-      h('a', { href: page('view=lists'), text: '🚫 Hidden and allowed sites' }),
-      h('a', { href: page('view=past'), text: '📒 Past searches' })));
-
-  const addFiles = async files => {
-    const list = [...files].filter(f => /^image\//.test(f.type) || RS_UTIL.IMAGE_EXT.test(f.name));
-    if (!list.length) return;
-    banner([h('b', { text: 'Adding ' + plural(list.length, 'picture') + ' to your folder…' })], 'info');
-    let added = 0, same = 0;
-    for (const f of list) {
-      let name = f.name.replace(/[\\/:*?"<>|]/g, '_');
-      try {
-        const exists = await F.dir.getFileHandle(name).then(x => x.getFile()).catch(() => null);
-        if (exists && exists.size === f.size) { same++; continue; }
-        if (exists) { const dot = name.lastIndexOf('.'); name = name.slice(0, dot) + ' (' + Date.now().toString(36) + ')' + name.slice(dot); }
-        const w = await (await F.dir.getFileHandle(name, { create: true })).createWritable();
-        await w.write(f); await w.close(); added++;
-      } catch (e) { /* skip */ }
-    }
-    banner(added ? [h('b', { text: plural(added, 'picture') + ' added to ' + F.label + '.' }), same ? ' ' + plural(same, 'picture was', 'pictures were') + ' already there.' : '', ' New pictures are checked first.']
-      : [h('b', { text: same === 1 ? 'That picture is already in your folder.' : 'Those pictures are already in your folder.' })], 'info');
-    renderFolder(false, true);
-  };
-  folderAddFiles = addFiles;
-  const nextCheck = idx => {
-    const x = pics[idx];
-    if ((x.note.lastChecked || '').slice(0, 10) === today) return 'Checked today';
-    const pos = due.indexOf(x);
-    const d = Math.floor((pos + checkedToday) / daily.perDay);
-    return d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : 'In ' + d + ' days';
-  };
-  const fq = FOLDERQ.trim().toLowerCase();
-  const matching = pics.map((x, i) => [x, i]).filter(([x]) => (folderFilter === 'all' || (folderFilter === 'new' && x.note.newLinks > 0) || (folderFilter === 'never' && !x.note.lastChecked) || (folderFilter === 'today' && todays.includes(x)))
-    && (!fq || x.name.toLowerCase().includes(fq)));
-  const SHOWN = 200, shown = matching.slice(0, SHOWN);
-  const findBox = h('input', { type: 'search', class: 'ffind', value: FOLDERQ, placeholder: '🔎 Find a client, year or file name' });
-  let ft; findBox.addEventListener('input', () => { clearTimeout(ft); ft = setTimeout(() => { FOLDERQ = findBox.value; renderFolder().then(() => { const b = document.querySelector('.ffind'); if (b) { b.focus(); b.setSelectionRange(b.value.length, b.value.length); } }); }, 300); });
-  const fb = (k, label, cls) => h('button', { class: (cls || '') + (folderFilter === k ? ' on' : ''), text: label, onclick: () => { folderFilter = k; renderFolder(); } });
-  $('main').replaceChildren(
-    h('div', {}, h('h1', { text: plural(pics.length, 'picture') + ' in your folder' }),
-      h('p', { class: 'lead', text: 'Add pictures with the button, by dragging them onto this page, or straight into the folder in File Explorer.' })),
-    h('button', { class: 'addbtn', text: '＋ Add pictures to this folder', onclick: () => $('folderAdd').click() }),
-    h('div', { class: 'ftabs' }, fb('all', 'All ' + pics.length), fb('new', '⭐ Have new links ' + withNew, 'newf'), fb('never', 'Never checked ' + never), fb('today', 'Due today ' + todays.length), h('span', { class: 'sp' }), findBox),
-    shown.length ? h('div', { class: 'tbl' },
-      h('div', { class: 'tr h' }, h('span'), h('span', { text: 'Picture' }), h('span', { text: 'Last checked' }), h('span', { text: 'Links found' }), h('span', { text: 'Next check' }), h('span')),
-      shown.map(([x, i]) => {
-        const img = h('img', { alt: '', loading: 'lazy' });
-        x.handle.getFile().then(f => { img.src = URL.createObjectURL(f); }).catch(() => {});
-        return h('div', { class: 'tr' }, img, h('b', { text: x.name, title: x.name }),
-          x.note.lastChecked ? h('span', { text: RS_UTIL.niceDate(x.note.lastChecked) }) : h('span', {}, h('span', { class: 'tag new', text: 'Never checked' })),
-          h('span', {}, x.note.lastChecked ? String(x.note.links || 0) : '·', x.note.newLinks ? [' ', h('span', { class: 'tag new', text: '+' + x.note.newLinks + ' new' })] : ''),
-          h('span', { class: /^Today/.test(nextCheck(i)) ? 'due' : '', text: nextCheck(i) }), h('span'));
-      }),
-      matching.length > SHOWN ? h('div', { class: 'tr', style: 'color:#64748b;display:block' }, 'Showing ' + SHOWN + ' of ' + matching.length.toLocaleString() + '. Type a client, year or file name in the box above to find others.') : null)
-      : h('div', { class: 'none', text: pics.length ? 'No pictures match this filter.' : 'Your folder is empty. Add some pictures to get started.' }));
-  if (autoStart && todays.length && daily.lastRun !== today) start();
-}
-let folderAddFiles = null;
-
-async function chooseOtherFolder() {
-  try {
-    const d = await window.showDirectoryPicker({ id: 'pageproof-pics', mode: 'readwrite' });
-    await RS_DB.put('handles', 'pics', d);
-    renderFolder(false, true);
-  } catch (e) { /* closed the picker */ }
-}
-
-// =====================================================================================
-// View 4: hidden and allowed sites
-// =====================================================================================
-let LISTQ = '';
-async function renderLists() {
-  await RS_LISTS.load();
-  const st = RS_LISTS.fileState;
-  const fileCard = h('div', { class: 'card' }, h('h3', { text: 'Saved files' }),
-    h('div', { class: 'path' }, '📄 Documents\\PageProof\\hidden-sites.txt', h('br'), '📄 Documents\\PageProof\\allowed-sites.txt', h('br'), '📄 Documents\\PageProof\\rejected-links.txt (' + plural(RS_REJECT.items.length, 'link') + ' rejected with 🗑)'),
-    h('div', { class: st === 'granted' ? 'ok' : 'warn', style: 'margin-top:4px;font-size:13px', text: st === 'granted' ? '✓ Found and in use' : st === 'prompt' ? 'Needs one click on Allow' : RS_DOCS.supported ? 'Not set up yet' : 'Not available in this browser' }),
-    h('p', { class: 'hint', text: st === 'granted' ? 'PageProof reads both files every time it searches, so changes you make in Notepad count straight away.' : 'Until then the lists are kept inside the browser only.' }));
-  const firstBtn = !RS_DOCS.supported ? null : st === 'granted'
-    ? h('button', { class: 'big', text: '📂 Use a different folder', onclick: async () => { try { await RS_DOCS.choose(); renderLists(); } catch (e) { /* closed */ } } })
-    : st === 'prompt' ? h('button', { class: 'big', text: 'Allow', onclick: async () => { await RS_DOCS.allow(); banner(null); renderLists(); } })
-      : h('button', { class: 'big', text: '📂 Set up PageProof folder', onclick: async () => { try { await RS_DOCS.choose(); banner(null); renderLists(); } catch (e) { /* closed */ } } });
-  side(h('div', {}, h('div', { id: 'domain', text: 'Hidden and allowed sites' }), h('div', { id: 'sub', text: 'Hidden sites never show. Allowed sites show with a green label.' })),
-    fileCard, firstBtn,
-    h('div', { class: 'grid2' },
-      h('button', { class: 'ghost', text: '💾 Save a copy', onclick: () => { download(new Blob([RS_LISTS.text('hidden')], { type: 'text/plain' }), 'hidden-sites.txt'); setTimeout(() => download(new Blob([RS_LISTS.text('allowed')], { type: 'text/plain' }), 'allowed-sites.txt'), 400); } }),
-      h('button', { class: 'ghost', text: '📂 Load a file', title: 'Adds the sites in a hidden-sites.txt or allowed-sites.txt file', onclick: () => $('listLoad').click() })),
-    h('p', { class: 'hint', text: 'Load a file adds its sites (a file called allowed-sites.txt goes to Allowed, anything else to Hidden). Nothing is removed unless you press ✕.' }),
-    h('div', { class: 'links' }, h('a', { href: page(), text: '🔎 Reverse image search' }), h('a', { href: page('view=folder'), text: '📂 My pictures folder' })));
-  const input = h('input', { type: 'text', value: LISTQ, placeholder: 'Type a site (pinterest.com), an ending (.gov) or a part (x.com/nypostsports)' });
-  const add = async kind => { if (await RS_LISTS.add(kind, input.value)) { LISTQ = ''; renderLists(); } else input.focus(); };
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') add('hidden'); });
-  // Long lists (thousands of sites) show the newest 300; typing in the box above finds any of them.
-  const SHOW = 300;
-  const rows = (kind, empty) => {
-    if (!RS_LISTS[kind].length) return h('div', { class: 'none', text: empty });
-    const q = LISTQ.trim().toLowerCase();
-    const all = RS_LISTS[kind].filter(d => !q || d.includes(q)).reverse();
-    return h('div', { class: 'site' + (kind === 'allowed' ? ' allowed' : '') },
-      all.slice(0, SHOW).map(d => h('div', { class: 'lrow' }, h('b', { text: d }), h('button', { class: 'btn', text: kind === 'hidden' ? '✕ Show again' : '✕ Remove', onclick: () => RS_LISTS.remove(kind, d).then(renderLists) }))),
-      all.length > SHOW ? h('div', { class: 'lrow', style: 'color:#64748b' }, 'Showing the newest ' + SHOW + ' of ' + all.length.toLocaleString() + '. Type in the box above to find one.') : null,
-      q && !all.length ? h('div', { class: 'lrow', style: 'color:#64748b' }, 'None match "' + q + '".') : null);
-  };
-  let typing;
-  input.addEventListener('input', () => { clearTimeout(typing); typing = setTimeout(() => { LISTQ = input.value; renderLists().then(() => { const i = document.querySelector('.addsite input'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }); }, 300); });
-  $('main').replaceChildren(
-    h('div', {}, h('h1', { text: plural(RS_LISTS.hidden.length, 'hidden site') }), h('p', { class: 'lead', text: 'Each site is one line in the text file. A whole site is hidden, including its www and mobile versions (m.facebook.com).' })),
-    h('div', { class: 'addsite' }, input, h('button', { class: 'btn blue', text: '🚫 Hide it', onclick: () => add('hidden') }), h('button', { class: 'btn', style: 'color:#166534;border-color:#86efac', text: '✓ Allow it', onclick: () => add('allowed') })),
-    rows('hidden', 'No hidden sites yet. Type one above, or press "Hide this site" in your results.'),
-    h('h2', { class: 'sec' }, plural(RS_LISTS.allowed.length, 'allowed site'), ' ', h('span', { class: 'tag ok', text: '✓ Allowed' })),
-    h('p', { class: 'lead', text: 'Your own site, licensees and anyone else allowed to use the pictures. Their links still show, with a green label, so real copies stand out.' }),
-    rows('allowed', 'No allowed sites yet.'),
-    h('div', { class: 'howbox', style: 'max-width:none' }, h('b', { text: 'What hidden-sites.txt looks like' }), ' (open it in Notepad to read or change it):', h('pre', { class: 'txt', text: RS_LISTS.text('hidden') })));
-}
-
-// =====================================================================================
-// View 5: past searches
+// View 3: all searches
 // =====================================================================================
 async function renderPast() {
   const jobs = (await RS_DB.all('jobs')).sort((a, b) => b.created.localeCompare(a.created));
   await RS_LISTS.load();
-  side(h('div', {}, h('div', { id: 'domain', text: 'Past searches' }), h('div', { id: 'sub', text: 'The last 40 searches are kept.' })),
-    h('div', { class: 'links' }, h('a', { href: page(), text: '🔎 New search' }), h('a', { href: page('view=folder'), text: '📂 My pictures folder' }), h('a', { href: page('view=lists'), text: '🚫 Hidden and allowed sites' })));
-  $('main').replaceChildren(h('h1', { text: plural(jobs.length, 'past search', 'past searches') }),
+  side(h('div', {}, h('div', { id: 'domain', text: 'All searches' }), h('div', { id: 'sub', text: 'The last 40 searches are kept. Every copy they found is also in All copies found.' })),
+    h('div', { class: 'links' }, appLink('search', '🔎 New search'), appLink('found', '🗂 All copies found'), appLink('keep', '📂 Today\'s 50 and Keep searching')));
+  const KIND = { keep: ' · Keep searching', fifty: ' · today\'s 50' };
+  $('main').replaceChildren(h('h1', { text: plural(jobs.length, 'search', 'searches') }),
     jobs.length ? h('div', { class: 'tbl' }, jobs.map(j => {
       const links = j.pics.reduce((a, p) => a + p.links.filter(l => !RS_LISTS.isHidden(l.site, l.url) && isSame(l)).length, 0);
       const nNew = j.pics.reduce((a, p) => a + p.links.filter(l => l.isNew && isSame(l) && !RS_LISTS.isHidden(l.site, l.url)).length, 0);
       return h('div', { class: 'tr' }, h('img', { src: j.pics[0] && j.pics[0].thumb, alt: '' }),
-        h('b', { text: new Date(j.created).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) + (j.folder ? ' · from my folder' : '') }),
+        h('b', { text: new Date(j.created).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) + (KIND[j.kind] || (j.folder ? ' · daily 50' : '')) }),
         h('span', { text: plural(j.pics.length, 'picture') }), h('span', {}, plural(links, 'same-photo link'), nNew ? [' ', h('span', { class: 'tag new', text: nNew + ' new' })] : ''),
         h('span', {}, h('button', { class: 'btn', text: 'Open', onclick: () => goResults(j.id) })),
-        h('button', { class: 'del', title: 'Delete this search', text: '🗑', onclick: async () => { if (confirm('Delete this search from the list? This cannot be undone.')) { await RS_DB.del('jobs', j.id); renderPast(); } } }));
+        h('button', { class: 'del', title: 'Delete this search from the list (the copies it found stay in All copies found)', text: '🗑', onclick: async () => {
+          await RS_DB.del('jobs', j.id); renderPast();
+          banner([h('b', { text: 'Search deleted. ' }), 'The copies it found are still in All copies found.', h('span', { class: 'sp' }), h('button', { text: '↶ Undo', onclick: async () => { await RS_DB.put('jobs', j.id, j); banner(null); renderPast(); } })], 'info');
+        } }));
     })) : h('div', { class: 'none', text: 'No searches yet.' }));
 }
 
@@ -1492,29 +1126,14 @@ async function renderPast() {
 // Start
 // =====================================================================================
 $('filePick').addEventListener('change', e => { const f = [...e.target.files]; e.target.value = ''; addToDraft(f); });
-$('folderAdd').addEventListener('change', e => { const f = [...e.target.files]; e.target.value = ''; if (folderAddFiles) folderAddFiles(f); });
-$('listLoad').addEventListener('change', async e => {
-  const f = e.target.files[0]; e.target.value = '';
-  if (!f) return;
-  const kind = /allow/i.test(f.name) ? 'allowed' : 'hidden';
-  const sites = RS_LISTS.parse(await f.text());
-  const have = new Set(RS_LISTS[kind]);
-  for (const s of sites) if (!have.has(s)) { have.add(s); RS_LISTS[kind].push(s); }
-  await RS_LISTS.save();
-  renderLists();
-});
 
 (async () => {
   await RS_LISTS.load();
   if (VIEW === 'results') return initResults();
-  if (VIEW === 'folder') {
-    document.title = 'PageProof: my pictures folder';
-    setupDropAndPaste(files => folderAddFiles && folderAddFiles(files));
-    await renderFolder(PARAMS.get('auto') === '1');
-    return;
-  }
-  if (VIEW === 'lists') { document.title = 'PageProof: hidden and allowed sites'; return renderLists(); }
-  if (VIEW === 'past') { document.title = 'PageProof: past searches'; return renderPast(); }
+  // Old addresses (bookmarks, the old menu) go to their new pages.
+  if (VIEW === 'folder') { location.replace(appUrl('keep')); return; }
+  if (VIEW === 'lists') { location.replace(appUrl('hidden')); return; }
+  if (VIEW === 'past') { document.title = 'PageProof: all searches'; return renderPast(); }
   setupDropAndPaste(addToDraft);
   renderSetup();
   docsBanner();

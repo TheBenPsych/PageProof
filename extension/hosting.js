@@ -1,7 +1,6 @@
 // "Who hosts this site?": looks up public registration records (RDAP, the official
 // replacement for WHOIS) for the website's domain and its server's IP address.
-// Gives the hosting company, the domain registrar, and their abuse contacts,
-// which is who a DMCA takedown notice goes to.
+// Gives the hosting company, the domain registrar and when the domain was registered.
 const PP_HOSTING = (() => {
   const RDAP = 'https://rdap.org';
   // Common two-part endings, so "shop.example.co.uk" is looked up as "example.co.uk".
@@ -102,8 +101,8 @@ const PP_HOSTING = (() => {
     const who = ((result.ip && (result.ip.host + ' ' + result.ip.network)) || '').toLowerCase();
     const cdn = ['cloudflare', 'akamai', 'fastly', 'amazon', 'google', 'microsoft', 'sucuri', 'incapsula', 'imperva']
       .find(c => who.includes(c) || (result.domain && result.domain.nameservers.join(' ').includes(c)));
-    if (cdn === 'cloudflare') result.note = 'This site uses Cloudflare, which hides the real hosting company. Cloudflare\'s abuse form (https://abuse.cloudflare.com) forwards copyright complaints to the real host and can reveal it to you.';
-    else if (cdn) result.note = 'The server belongs to a large network or cloud provider (' + cdn + '). The site owner rents space there; send notices to that provider\'s abuse contact.';
+    if (cdn === 'cloudflare') result.note = 'This site uses Cloudflare, which hides the real hosting company. The real hosting company is not shown in public records.';
+    else if (cdn) result.note = 'The server belongs to a large network or cloud provider (' + cdn + '). The site owner rents space there.';
     return result;
   };
 })();

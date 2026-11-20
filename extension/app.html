@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PageProof</title>
+<link rel="icon" href="icons/icon32.png">
+<script src="theme.js"></script>
+<link rel="stylesheet" href="ui/app.css">
+</head>
+<body>
+<div class="app">
+  <aside class="side" id="side" aria-label="PageProof menu"></aside>
+  <div class="main">
+    <header class="top">
+      <button class="btn menu-btn" id="menuBtn" aria-label="Open menu">☰</button>
+      <div class="crumb" id="crumb"></div>
+      <button class="btn" id="themeBtn" aria-label="Switch between light and dark" style="min-height:40px;padding:0 12px;margin-left:auto"></button>
+    </header>
+    <main class="content" id="view"></main>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="hidLoad" accept=".txt,text/plain" hidden>
+<script src="ui/icons.js"></script>
+<script src="ui/shell.js"></script>
+<script src="db.js"></script>
+<script src="rs-store.js"></script>
+<script src="ui/hardware.js"></script>
+<script src="meta.js"></script>
+<script src="pdf.js"></script>
+<script src="rs-job.js"></script>
+<script src="fc-store.js"></script>
+<script src="evidence.js"></script>
+<script src="app.js"></script>
+<script src="ui/fc-found.js"></script>
+<script src="ui/fc-photos.js"></script>
+<script src="ui/fc-owners.js"></script>
+</body>
+</html>

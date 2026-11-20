@@ -21,12 +21,17 @@ async function inPage(tabId, name, ...args) {
   return res ? res.result : undefined;
 }
 
+// The progress card is hidden for every screenshot, then shown again.
+let ovTab = null;
 async function shoot(windowId) {
   const wait = lastShot + MIN_GAP_MS - Date.now();
   if (wait > 0) await sleep(wait);
+  if (ovTab) await inPage(ovTab, 'ovHide').catch(() => {});
   lastShot = Date.now();
-  return api.tabs.captureVisibleTab(windowId, { format: 'png' });
+  try { return await api.tabs.captureVisibleTab(windowId, { format: 'png' }); }
+  finally { if (ovTab && ovStep) inPage(ovTab, 'ovShow', ovStep[0], ovStep[1]).catch(() => {}); }
 }
+let ovStep = null;
 
 function progress(text) {
   if (stopRequested) return;
@@ -78,6 +83,7 @@ async function capture(tab, auto) {
   const lifted = await inPage(tabId, 'unclamp');
   if (lifted) { expanded += lifted; await sleep(400); }
   const info = await inPage(tabId, 'prepare', true);
+  ovTab = tabId; ovStep = null;
 
   const record = {
     id: 'cap-' + Date.now(),
@@ -107,6 +113,7 @@ async function capture(tab, auto) {
     let y = 0, prevNext = -1;
     for (let i = 0; i < MAX_PAGE_SHOTS; i++) {
       progress(String(i + 1));
+      ovStep = ['Screen ' + (i + 1) + '.', 'Step 1 of 3'];
       const at = await inPage(tabId, 'scrollPage', y);
       await sleep(i === 0 ? SETTLE_MS * 2 : SETTLE_MS);
       // Some sites (like Google) only make their top bar "stick" after you scroll, so check again before every later screen.
@@ -130,6 +137,7 @@ async function capture(tab, auto) {
     for (const s of info.sections) {
       if (stopRequested) break;
       progress('S' + s.n);
+      ovStep = ['Scroll box ' + s.n + ' of ' + info.sections.length + '.', 'Step 2 of 3'];
       const sec = { n: s.n, kind: s.kind, label: s.label, axes: s.axes, width: 0, height: 0, tiles: [] };
       const add = (shot, at, x, y) => {
         sec.tiles.push({ src: shot, crop: at.crop, destX: x, destY: y });
@@ -166,6 +174,7 @@ async function capture(tab, auto) {
     }
     if (stopRequested) record.notes.push('You stopped this capture early, so it holds only what was captured up to that point.');
   } finally {
+    ovTab = null; ovStep = null;
     await inPage(tabId, 'restore').catch(() => {});
   }
 
@@ -197,6 +206,7 @@ async function startCapture(tab) {
     busy = false;
     stopRequested = false;
     api.action.setBadgeText({ text: '' });
+    newBadge();
   }
 }
 
@@ -229,7 +239,7 @@ async function inPicker(tabId, fn) {
 
 // Messages from the icon menu and the picture picker.
 api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (!msg) return false;
+  if (!msg || sender.id !== api.runtime.id) return false;
   const jobs = {
     status: async () => ({ busy }),
     stop: async () => { if (busy) requestStop(); return { ok: true }; },
@@ -251,37 +261,16 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
-// Batch capture: the batch page asks for one tab to be captured at a time.
-api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (!msg || msg.type !== 'capture') return false;
-  (async () => {
-    if (busy) return { ok: false, error: 'another capture is still running' };
-    busy = true;
-    stopRequested = false;
-    try {
-      const tab = await api.tabs.get(msg.tabId);
-      const id = await capture(tab, msg.auto);
-      return { ok: true, id };
-    } catch (err) {
-      return { ok: false, error: String((err && err.message) || err) };
-    } finally {
-      busy = false;
-      api.action.setBadgeText({ text: '' });
-    }
-  })().then(sendResponse);
-  return true;
-});
-
 // Right-click the PageProof icon for its other pages.
-const MENU = { batch: ['Batch capture (many links)...', 'batch.html'], log: ['Capture log', 'log.html'], verify: ['Verify a pack', 'verify.html'] };
+const MENU = { openApp: ['Open full PageProof', 'app.html#home'], found: ['All copies found', 'app.html#found'], keep: ['Keep searching', 'app.html#keep'], library: ['Evidence library', 'app.html#library'], verify: ['Verify a pack', 'app.html#verify'] };
 // Right-click on a website: the browser groups these under its own "PageProof" entry.
 // Picture choices show only when there is a picture under the mouse:
 //  - a normal picture: the browser knows ("image"), so the first set shows by itself;
 //  - a picture hidden under a see-through cover (Instagram): rclick.js spots it the moment you
 //    right-click and asks for the second set ("h_" ids) to be shown.
 const NOT_IMG = ['page', 'selection', 'link', 'video', 'audio', 'frame', 'editable'];
-const PIC_ITEMS = [['inspectImage', 'Inspect picture'], ['jpgImage', 'Save picture as JPG'], ['openImage', 'Open picture in new tab'], ['reverse', 'Reverse image search']];
-const REV_ITEMS = [['revGoogle', 'Google Lens'], ['revYandex', 'Yandex'], ['revBoth', 'Both (two tabs)']];
+const PIC_ITEMS = [['inspectImage', 'Inspect this photo'], ['reverse', 'Find copies of it'], ['jpgImage', 'Save biggest copy…'], ['openImage', 'Open biggest copy in a tab']];
+const REV_ITEMS = [['revGoogle', 'Google Lens'], ['revYandex', 'Yandex'], ['revBing', 'Bing'], ['revAll', 'All three']];
 api.runtime.onInstalled.addListener(() => {
   try {
     api.contextMenus.removeAll(() => {
@@ -291,13 +280,14 @@ api.runtime.onInstalled.addListener(() => {
         for (const [id, title] of REV_ITEMS) api.contextMenus.create({ id: pre + id, parentId: pre + 'reverse', title, contexts });
         api.contextMenus.create({ id: pre + 'webSep', type: 'separator', contexts, visible });
       }
-      api.contextMenus.create({ id: 'savePage', title: 'Save page as evidence', contexts: [...NOT_IMG, 'image'] });
+      api.contextMenus.create({ id: 'savePage', title: 'Capture this page', contexts: ['page', 'selection', 'video', 'audio', 'frame', 'editable', 'image'] });
+      api.contextMenus.create({ id: 'saveLink', title: 'Capture the linked page', contexts: ['link'] });
     });
   } catch (e) { /* menus not available */ }
 });
 
 function showHiddenPictureItems(show) {
-  for (const id of ['inspectImage', 'jpgImage', 'openImage', 'reverse', 'webSep']) {
+  for (const id of ['inspectImage', 'reverse', 'jpgImage', 'openImage', 'webSep']) {
     try { api.contextMenus.update('h_' + id, { visible: show }, () => void api.runtime.lastError); } catch (e) { /* old browser */ }
   }
   try { api.contextMenus.refresh && api.contextMenus.refresh(); } catch (e) { /* Chrome has no refresh */ }
@@ -489,7 +479,11 @@ try {
       if (busy) return note(tab, 0, { kind: 'bad', title: 'A capture is already running', lines: ['Wait for it to finish, or click the PageProof icon to stop it.'] });
       return startCapture(tab);
     }
-    if (['inspectImage', 'jpgImage', 'openImage', 'revGoogle', 'revYandex', 'revBoth'].includes(id)) {
+    if (id === 'saveLink') {
+      if (/^https?:\/\//i.test(info.linkUrl || '')) captureUrl(info.linkUrl, tab);
+      return;
+    }
+    if (['inspectImage', 'jpgImage', 'openImage', 'revGoogle', 'revYandex', 'revBing', 'revAll'].includes(id)) {
       if (!tab) return;
       const found = await rightClickedPicture(info, tab);
       if (!found.item) {
@@ -515,16 +509,17 @@ try {
         // The search sites download the picture from its web address, so it needs a real one.
         const url = /^https?:/.test(item.best || '') ? item.best : item.src;
         if (!/^https?:/.test(url)) {
-          return note(tab, 0, { kind: 'bad', title: 'This picture has no web address to search', lines: ['It only exists inside this page. Use Save picture as JPG, then upload the file on images.google.com or yandex.com/images.'] });
+          return note(tab, 0, { kind: 'bad', title: 'This picture has no web address to search', lines: ['It only exists inside this page. Use Save biggest copy, then drop the file on New search in PageProof.'] });
         }
         const e = encodeURIComponent(url);
-        const sites = { revGoogle: ['https://lens.google.com/uploadbyurl?url=' + e], revYandex: ['https://yandex.com/images/search?rpt=imageview&url=' + e] };
-        sites.revBoth = [sites.revYandex[0], sites.revGoogle[0]];
+        const sites = { revGoogle: ['https://lens.google.com/uploadbyurl?url=' + e], revYandex: ['https://yandex.com/images/search?rpt=imageview&url=' + e],
+          revBing: ['https://www.bing.com/images/search?view=detailv2&iss=sbi&q=imgurl:' + e] };
+        sites.revAll = [sites.revBing[0], sites.revYandex[0], sites.revGoogle[0]];
         for (const s2 of sites[id]) await api.tabs.create({ url: s2, index: tab.index + 1, windowId: tab.windowId, openerTabId: tab.id });
         return;
       }
       try { await saveAsJpg(item, info, tab, big); } catch (err) {
-        note(tab, info.frameId, { kind: 'bad', title: 'Could not save as JPG', lines: [String((err && err.message) || err), 'You can still use Inspect picture, or the browser\'s own "Save image as...".'] });
+        note(tab, info.frameId, { kind: 'bad', title: 'Could not save the picture', lines: [String((err && err.message) || err), 'You can still use Inspect this photo, or the browser\'s own "Save image as...".'] });
       }
       return;
     }
@@ -533,38 +528,124 @@ try {
   });
 } catch (e) { /* menus not available */ }
 
-// ---------- Reverse image search: the daily check of "My pictures folder" ----------
-// Settings come from the folder page (rsDaily): mode remind / auto / off, a time, pictures per day.
-async function rsSchedule() {
+// ---------- Capture a link: open it in a new tab, wait for it to load, then capture ----------
+async function captureUrl(url, near) {
+  if (!/^https?:\/\//i.test(String(url || ''))) return { ok: false, error: 'Only web pages (http or https) can be captured.' };
+  if (busy) return { ok: false, error: 'A capture is already running.' };
+  const opts = { url, active: true };
+  if (near && near.windowId) { opts.windowId = near.windowId; opts.index = near.index + 1; }
+  const tab = await api.tabs.create(opts);
+  await new Promise(resolve => {
+    const t = setTimeout(done, 30000);
+    function done() { clearTimeout(t); api.tabs.onUpdated.removeListener(on); resolve(); }
+    function on(id, ch) { if (id === tab.id && ch.status === 'complete') done(); }
+    api.tabs.onUpdated.addListener(on);
+  });
+  await sleep(1500);   // let the page finish drawing
+  startCapture(await api.tabs.get(tab.id));
+  return { ok: true };
+}
+
+// ---------- Keep searching: keep its small window open ----------
+// It writes a heartbeat (fcStatus.beat) every 30 seconds. If that stops while Keep searching is
+// on, the window is opened again, minimised. If you close it yourself, it stays closed until the
+// browser is opened again.
+async function keepAlive(show, force) {
+  const st = await api.storage.local.get(['fcKeep', 'fcStatus', 'fcDrive']);
+  if (!st.fcKeep || !st.fcKeep.on || !st.fcDrive || !st.fcDrive.done) return;
+  const ss = api.storage.session ? await api.storage.session.get('fcClosed').catch(() => ({})) : {};
+  if (ss.fcClosed && !force) return;
+  if (api.storage.session) await api.storage.session.remove('fcClosed').catch(() => {});
+  // Already open? (Its heartbeat is fresh and its window is still there.)
+  const s = st.fcStatus;
+  if (s && s.win && Date.now() - s.beat < 90000) {
+    try { await api.windows.get(s.win); if (show) await api.windows.update(s.win, { focused: true, state: 'normal' }); return; } catch (e) { /* closed */ }
+  }
+  // A second window closes itself if one is already running (see runner.js).
+  const url = api.runtime.getURL('runner.html');
+  const w = await api.windows.create({ url, type: 'popup', width: 520, height: 420, focused: !!show });
+  if (!show) await api.windows.update(w.id, { state: 'minimized' }).catch(() => {});
+  runnerWin = w.id;
+}
+let runnerWin = null;
+api.windows.onRemoved.addListener(async id => {
+  const st = (await api.storage.local.get('fcStatus')).fcStatus;
+  if (id === runnerWin || (st && st.win === id)) { runnerWin = null; if (api.storage.session) api.storage.session.set({ fcClosed: Date.now() }).catch(() => {}); }
+});
+// Today's 50 at the time you picked (weekdays), if "Start by itself" is on.
+async function fiftySchedule() {
   if (!api.alarms) return;
-  const d = (await api.storage.local.get('rsDaily')).rsDaily;
-  await api.alarms.clear('rsDaily');
-  if (!d || d.mode === 'off') return;
-  const [hh, mm] = String(d.time || '09:00').split(':').map(Number);
+  await api.alarms.clear('fcFifty');
+  const k = (await api.storage.local.get('fcKeep')).fcKeep;
+  if (!k || !k.fiftyAuto) return;
+  const [hh, mm] = String(k.fiftyTime || '09:00').split(':').map(Number);
   const when = new Date(); when.setHours(hh || 0, mm || 0, 0, 0);
   if (when.getTime() <= Date.now()) when.setDate(when.getDate() + 1);
-  api.alarms.create('rsDaily', { when: when.getTime(), periodInMinutes: 1440 });
+  api.alarms.create('fcFifty', { when: when.getTime(), periodInMinutes: 1440 });
 }
-const rsFolderPage = auto => api.runtime.getURL('revsearch.html?view=folder' + (auto ? '&auto=1' : ''));
+// The number of new copies on the toolbar icon (when no capture is running).
+async function newBadge() {
+  if (busy) return;
+  try {
+    const n = await new Promise((res, rej) => {
+      const r = indexedDB.open('pageproof-fc');
+      r.onerror = () => rej(r.error);
+      r.onupgradeneeded = () => { r.transaction.abort(); rej(new Error('none')); };
+      r.onsuccess = () => {
+        const db = r.result;
+        if (!db.objectStoreNames.contains('copies')) { db.close(); return res(0); }
+        const q = db.transaction('copies').objectStore('copies').index('status').count('new');
+        q.onsuccess = () => { db.close(); res(q.result); }; q.onerror = () => { db.close(); rej(q.error); };
+      };
+    });
+    api.action.setBadgeBackgroundColor({ color: '#FF8F4B' });
+    api.action.setBadgeText({ text: n ? (n > 999 ? '999+' : String(n)) : '' });
+  } catch (e) { /* nothing found yet */ }
+}
 if (api.alarms) {
+  api.alarms.create('fcKeep', { periodInMinutes: 1 });
   api.alarms.onAlarm.addListener(async a => {
-    if (a.name !== 'rsDaily') return;
-    const d = (await api.storage.local.get('rsDaily')).rsDaily;
-    if (!d || d.mode === 'off') return;
-    const t = new Date(), today = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
-    if (d.lastRun === today) return;             // already checked today
-    if (d.mode === 'auto' || !api.notifications) { api.windows.create({ url: rsFolderPage(true), focused: true }); return; }
-    api.notifications.create('rsDaily', { type: 'basic', iconUrl: api.runtime.getURL('icons/icon128.png'), title: 'PageProof: time for today\'s picture check',
-      message: 'Click here to search today\'s pictures from your folder on Google, Yandex and Bing.', requireInteraction: true });
+    if (a.name === 'fcKeep') {
+      newBadge();
+      const st = (await api.storage.local.get('fcStatus')).fcStatus;
+      if (!st || Date.now() - st.beat > 90000) keepAlive(false);
+    }
+    if (a.name === 'fcFifty') {
+      const d = new Date().getDay();
+      if (d === 0 || d === 6) return;
+      api.tabs.create({ url: api.runtime.getURL('app.html#keep?start50=1') });
+    }
   });
-  api.storage.onChanged.addListener(ch => { if (ch.rsDaily) rsSchedule(); });
-  api.runtime.onStartup.addListener(rsSchedule);
-  api.runtime.onInstalled.addListener(rsSchedule);
 }
+api.storage.onChanged.addListener(ch => {
+  if (ch.fcKeep) fiftySchedule();
+  if (ch.fcChanged) { clearTimeout(badgeT); badgeT = setTimeout(newBadge, 2000); }
+});
+let badgeT = null;
+api.runtime.onStartup.addListener(() => { fiftySchedule(); keepAlive(false); newBadge(); });
+api.runtime.onInstalled.addListener(d => {
+  fiftySchedule(); newBadge();
+  if (d.reason === 'install') api.tabs.create({ url: api.runtime.getURL('app.html#setup') });
+  try { api.sidePanel && api.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }); } catch (e) { /* no side panel */ }
+  if (api.alarms) api.alarms.clear('rsDaily');
+});
+// Messages from PageProof's own pages (never from websites).
+api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (!msg || sender.id !== api.runtime.id) return false;
+  const jobs = {
+    captureUrl: () => captureUrl(msg.url, sender.tab),
+    fcKeepWake: async () => { await keepAlive(!!msg.show, true); return { ok: true }; },
+    fcKeepStop: async () => ({ ok: true }),   // the window closes itself when Keep searching is turned off
+    fcFiftyAlarm: async () => { await fiftySchedule(); return { ok: true }; },
+  };
+  const job = jobs[msg.type];
+  if (!job) return false;
+  job().catch(err => ({ ok: false, error: String((err && err.message) || err) })).then(sendResponse);
+  return true;
+});
 if (api.notifications) {
   api.notifications.onClicked.addListener(id => {
-    if (id !== 'rsDaily') return;
     api.notifications.clear(id);
-    api.tabs.create({ url: rsFolderPage(true) });
+    if (id === 'fcAllow' || id === 'fcDrive') api.tabs.create({ url: api.runtime.getURL('app.html#keep') });
   });
 }

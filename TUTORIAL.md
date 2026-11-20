@@ -32,7 +32,7 @@ From top to bottom, the capture page shows:
 | Part | What to do |
 | --- | --- |
 | **Status line** | Read it. It tells you about anything special: sections found, endless scrolling, a timestamp service that didn't answer. |
-| **Who hosts this site** | The hosting company, domain registrar and their **abuse contacts**: who your DMCA takedown notice goes to. If the site uses Cloudflare, it says so and points you to Cloudflare's abuse form, which forwards your notice to the real host. |
+| **Who hosts this site** | The hosting company and the domain registrar, from public records. If the site uses Cloudflare, it says so (Cloudflare hides the real host). |
 | **Case boxes** | Fill these in (next step). |
 | **Capture details and fingerprints** | Click to expand and see the full record that goes into the pack. |
 | **Preview** | Scroll through it to make sure the capture shows what you need. |
@@ -100,20 +100,9 @@ PageProof no longer saves to the Wayback Machine itself, but if you've saved a p
 
 ---
 
-## 7. Capture many links at once: batch capture
+## 7. Capture many links at once
 
-Use this for sweeps, when you have a list of infringing pages.
-
-1. **Click the PageProof icon** and choose **Batch capture** (or right-click the icon, or click **Batch capture** at the bottom of the left bar on the capture page).
-2. **Paste the links,** one per line. You can paste straight from a spreadsheet column.
-3. Fill in **Collected by**, **Case / reference number** and any **Notes**. They go into every pack.
-4. Click **Start batch.** A separate window opens and visits each link in turn. **Leave it open and don't minimize it.** You can keep working in your other windows.
-5. Watch the table: each link shows *Loading → Capturing → Building pack → Saved* (or *Failed* with the reason, for example a page that's down).
-6. When it says **Done**, click **Download batch report (.csv)** for a spreadsheet of every link and its pack name.
-
-Batch packs are saved automatically to **Downloads/PageProof/&lt;case number&gt;/**, one zip per link, and each appears in the capture log. Click **Stop after the current link** to end a batch early.
-
-> **Tip:** pages that need you to log in or close a pop-up first won't look right in a batch. Capture those one at a time instead.
+Batch capture was removed in version 4.0 because it wasn't reliable. Capture pages one at a time: from the PageProof icon, with **Alt+Shift+P**, or right-click a link › **PageProof › Capture the linked page** (it opens the page and captures it).
 
 ## 8. Find past captures: the capture log
 
@@ -247,17 +236,17 @@ Click the PageProof icon, then **🗂️ Open odd files**, and add the file. Cli
 
 ## 15. The right-click menu
 
-Right-click on a website and point at **PageProof**. On a picture you get all five choices below. Anywhere else (text, empty space) you only get **Save page as evidence**.
+Right-click on a website and point at **PageProof**. On a photo you get the photo choices; on a link, **Capture the linked page**; anywhere else, **Capture this page**.
 
-- **Inspect picture:** opens the Image Inspector (section 11) for the picture you right-clicked.
-- **Save picture as JPG:** PageProof looks for every size of the same picture on the page, keeps the biggest, and opens the **Save As** window so you can pick the folder and type your own file name (it suggests one made from the website and picture name). WebP, PNG, AVIF and GIF pictures are turned into JPG (see-through parts become white). A picture that is already a JPG is saved untouched. A small note in the bottom-right corner confirms it, with **Show in folder** and **Inspect it**.
-- **Open picture in new tab:** opens just the picture, at the biggest size, in a tab next to the page. The address bar shows the picture's own web address, ready to copy.
-- **Reverse image search ▸ Google Lens / Yandex / Both:** opens a new tab that searches the web for other copies of the picture (the biggest version PageProof found). **Both** opens two tabs. Good for finding where else a photo has been posted.
-- **Save page as evidence:** does exactly what the green **Capture** button does.
+- **Inspect this photo:** opens the Image Inspector (section 11) for the photo you right-clicked.
+- **Find copies of it ▸ Google Lens / Yandex / Bing / All three:** opens a tab (or three) that searches the web for other copies of the photo (the biggest version PageProof found).
+- **Save biggest copy…:** PageProof looks for every size of the same photo on the page, keeps the biggest, and opens the **Save As** window so you can pick the folder and file name. Non-JPG pictures are turned into JPG (see-through parts become white). A JPG is saved untouched.
+- **Open biggest copy in a tab:** just the photo, at the biggest size, in a tab next to the page.
+- **Capture this page / Capture the linked page:** the same full capture as the green button.
 
-**Instagram, Facebook and similar sites.** These sites lay an invisible sheet over their photos, so the browser's own picture options (like "Open image in new tab") don't appear. PageProof looks underneath the spot you right-clicked and finds the real photo anyway. Just right-click on the photo and use the PageProof choices.
+**Instagram, Facebook and similar sites.** These sites lay an invisible sheet over their photos. PageProof looks underneath the spot you right-clicked and finds the real photo anyway.
 
-If the note says **Please reload this page once**, PageProof was installed or updated after the page opened. Press F5 and right-click again. If it says **No picture found here**, right-click right on top of the picture.
+If the note says **Please reload this page once**, PageProof was installed or updated after the page opened. Press F5 and right-click again.
 
 ## 16. Search many pictures at once: reverse image search
 
@@ -277,13 +266,13 @@ Click the PageProof icon and choose **Reverse image search**.
      - **Different photo**: nothing lines up. Usually just a similar-looking picture. Hidden unless you pick it.
    - The number next to a same-photo link (for example "Same photo · 64% lines up") shows how much of the shared area matches. A low number there is normal when the copy has big headlines or text over it.
    - **🔀 Compare** opens your picture and that copy on the Compare page, already lined up, so you can check it by eye and save a PDF or video.
-   - **📄 Evidence** (on Same photo and Maybe links) saves a one-page PDF *sighting report*: your picture and the copy side by side, the page and picture links, the copy's size and whether its hidden data (author, copyright) was removed, how well the two line up, how PageProof found it, and SHA-256 fingerprints of both files. The copy is downloaded again when you press the button, so the report shows what is online at that moment. Each report has a Match ID (PP-S-…) that stays the same for that picture and link.
+   - **📄 Evidence** (on Same photo and Maybe links) asks for the case number, then saves a one-page PDF *evidence report*: your picture and the copy side by side, the page and picture links, the copy's size and whether its hidden data (author, copyright) was removed, how well the two line up, how PageProof found it, and SHA-256 fingerprints of both files. The copy is downloaded again when you press the button, so the report shows what is online at that moment. Each report has a Match ID (PP-S-…) that stays the same for that picture and link.
    - **Size**: the copy's size, flagged **bigger than yours** or **cropped** when that is the case.
    - **New**: links that were not there the last time you searched the same picture. Links you have seen before say "Seen before" with the date they were first found.
    - Which site found it (Google, Yandex, Bing).
 5. **✕ Not a match** is for a link PageProof got wrong: it is a different photo. It moves to **Different photo**, and PageProof keeps its numbers so the checker can be tuned from your choices. **🗑 (trash can)** is for a link you just don't want (licensed, not worth chasing and so on). Trashed links never show again for that picture. Both are saved in `Documents\PageProof\rejected-links.txt`. To bring one back, pick the **🗑 Rejected** filter and press **↩ Put back** (or delete its line from the file).
 6. **Hide this site** hides that site for every picture, now and in future searches (good for Pinterest, stock photo sites and so on). To hide a whole kind of site, type its ending with a dot on the **Hidden and allowed sites** page, for example `.gov` or `.edu`. To hide just one account or section of a site, press the small red **🚫 Hide x.com/nypostsports** under a link, or type it the same way on that page (for example `x.com/nypostsports` or `example.com/forum`). The rest of the site still shows. **Mark allowed** is for your own site and licensees: they still show, with a green **Allowed** label.
-7. Tick the links that matter and press **Capture ticked pages**. They open in batch capture (section 7), ready to save as evidence packs.
+7. Tick links and press **🚫 Hide these sites** to hide several sites at once. To capture a page, press **Capture** on its link.
 8. **Save results** downloads a PDF report and a spreadsheet of everything found.
 
 **"Are you a robot" checks.** The searches run in your own browser, a few at a time with short pauses, which keeps these rare. If one appears anyway, PageProof pauses only that site, shows you the tab and waits. Tick the box and it carries on by itself. If a site keeps asking, press **Skip** and use **Search the rest** later.
@@ -297,14 +286,44 @@ PageProof then makes everything inside it by itself: `hidden-sites.txt`, `allowe
 
 **What PageProof remembers.** For every picture you search, PageProof remembers each link it found, when it first saw it, and how well that link's picture matched. A later search of the same picture only downloads and checks links it has not seen before, so repeat searches are much faster. This memory is kept in the browser and also as small files in `Documents\PageProof\Memory`, so updating PageProof never loses it, and even after a full reinstall it comes back once you pick the PageProof folder again.
 
-**My pictures folder.** Choose **📂 My pictures folder** on the left. PageProof uses `Documents\PageProof\My pictures`:
-- Add pictures with **Add pictures to this folder**, by dragging them onto the page, or straight into the folder in File Explorer.
-- **Already have big client folders?** Press **📂 Use a different folder…** on the left and pick the top folder (for example the one that holds all your client folders). Nothing is copied. PageProof includes every folder inside it, like `Client name › Year › Day › picture`, and shows each picture with its path. Type a client, year or file name in the **Find** box to narrow the list. **Go back to Documents\PageProof\My pictures** switches back.
-- **Check today's 30** searches the pictures that are due: new pictures first, then the ones checked longest ago. Change the number with **Pictures per day**. Once today's are done, **＋ Check 30 more now** searches the next ones in line straight away, as often as you like.
-- **🔄 Look for new pictures** reads the folder again. Use it after you copy pictures into the folder in Windows. (PageProof remembers the folder's list for 10 minutes so the page stays quick with thousands of pictures.)
-- Under **Every day**, pick **Remind me at** (a pop-up at the time you choose; click it to start), **Start by itself at**, or **Only when I press the button** (no reminder). Chrome has to be open at that time.
+**Your clients' photos in Google Drive.** The old *My pictures folder* is replaced by **Find copies** (section 17), which reads the photos straight from the shared Google Drive and searches them all day.
 
 **Good to know.** PageProof reads Google's, Yandex's and Bing's results pages the same way you do. If one of them changes how its page looks, its links may stop filling in until PageProof is updated. The search tabs still open, so you can always read them yourself. Some sites (Facebook, Instagram) block picture downloads, so they show no % match.
+
+## 17. Find copies of your clients' photos, all day
+
+Open the full PageProof page (click the PageProof icon › **Open full PageProof**) and choose **Find copies** on the left.
+
+**Set up once: Connect your photos (4 steps).**
+1. Install **Google Drive for desktop** (google.com/drive/download) and sign in with your work account. File Explorer then shows **Google Drive (G:)**.
+2. In Drive's ⚙ **Preferences › Google Drive**, choose **Stream files** (so your disk doesn't fill up).
+3. Press **Choose the Photos folder** and pick the shared Photos folder (for example G: › Shared drives › Photos). PageProof lists every client folder inside it. Tick the clients **you** search for and press ★ on the ones that matter most. Check the address in the box matches what File Explorer shows (it goes in the evidence report).
+4. Press **Yes, start searching**. PageProof reads every folder once (this can take a while), then **Keep searching** starts.
+
+After the browser restarts, it may ask for **one click on Allow** to read the photos again. A note pops up and a yellow bar shows on the Find copies pages.
+
+**Keep searching** searches one photo at a time in a small window you can minimise. Choose the pace (Gentle, Steady, Faster) and hours (work hours or all day). It pauses by itself when Google Drive can't be reached, when the computer is busy or on low battery, and while today's 50 run. If a search site asks "are you a robot?", PageProof never tries to get past it: that site rests for an hour. Closing the window pauses it until the browser opens again.
+
+**Today's 50** searches the next 50 photos at once in a window you can watch. Press **Check 50 now**, or tick **Start by itself every weekday at** a time.
+
+**Which photos go first:** ⚑ High priority photos (next, then every 3 days), then ★ priority clients, then the newest photos, then ★ Popular photos and photos stolen before (every 7 days), then the rest. Photos where nothing was found 5 times are searched monthly, 10 times every 3 months. Doubles (the same photo saved twice) are searched once and every copy is checked against both.
+
+**Clients and photos.** Turn searching on or off per client, star priority clients (tick several for bulk changes), and press **🔄 Look for new photos** after adding photos. PageProof also looks every hour in this and last quarter's folders, and in every folder on Sunday night. Click a client to see their photos, flag them ⚑ High or ★ Popular, or tick some and press **Search now**.
+
+**All copies found** lists every copy found. Group by client, photo, site or site owner; filter by status, how it's used, suspicious sites, credit removed or selling something; hide whole countries. Hover a thumbnail to see it next to your client's photo. Click a row to open its details:
+- the **copyright registration** (VA number, or the 1-… application number) found in the folder names or an Excel file in the folders, with **Add the number** if none was found;
+- the full **Drive path** of your client's photo, with **Copy path**;
+- the site owner, how the photo is used, the site check, whether the credit was removed, and whether it's still online;
+- **Stolen (Y)**, **Licensed (L)**, **🗑 Remove (N)** or **Skip (→)**. The next copy opens by itself. **Undo (U or Ctrl+Z)** steps back through every answer;
+- **🚫 Hide site** (just this account, just this sub-site, or the whole domain), **Open page**, **Capture**, and **Evidence report** (asks for the case number, then saves a one-page PDF).
+
+**Review new copies** shows one new copy at a time, side by side or with a swipe slider (S switches), with the same keys.
+
+**Site owners** puts together sites run by one company (big media groups, the same company in the footer, the same Google Analytics or ad ID). **Who's behind this site** reads a site's own pages for names, contacts and domain facts, gives quick links to OpenCorporates, USPTO trademarks, Google, LinkedIn and ICANN, and lets you capture its About, Contact and Privacy pages.
+
+**Weekly summary** (Library › Weekly summary) shows what was searched, found and marked each week, and saves as a PDF.
+
+Everything you find is kept in this browser and also in `Documents\PageProof\found-copies.txt`; your settings are in `pageproof-settings.json`. After a reinstall, first-time setup offers to bring them back.
 
 ## Quick troubleshooting
 
