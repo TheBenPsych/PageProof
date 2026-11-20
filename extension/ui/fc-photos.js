@@ -341,7 +341,7 @@ V.photos = async () => {
     const r = regs.get(p.folder);
     return `<div class="pcard${state.phPicked.includes(p.id) ? ' on' : ''}">
       <label class="tick"><input type="checkbox" data-act="phpick" data-v="${esc(p.id)}" ${state.phPicked.includes(p.id) ? 'checked' : ''} aria-label="Pick ${esc(p.name)}"></label>
-      <div class="frame ours" style="aspect-ratio:3/2;border-radius:8px"><img data-lazy="${esc(p.id)}" src="${p.thumb ? safeImg(p.thumb) : 'icons/icon48.png'}" alt="" loading="lazy" style="object-fit:${p.thumb ? 'cover' : 'scale-down'}"></div>
+      <div class="frame ours" style="aspect-ratio:3/2;border-radius:8px"><img data-lazy="${esc(p.id)}" src="${p.thumb ? safeImg(p.thumb) : p.th ? (FC.pics.seen(p.id) || lazyPic(p)) : 'icons/icon48.png'}" alt="" loading="lazy" style="object-fit:${p.thumb || p.th ? 'cover' : 'scale-down'}"></div>
       <b style="font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.name)}">${esc(p.name)}</b>
       <span class="faint" style="font-size:12px">${p.year || ''}${p.quarter ? ' Q' + p.quarter : ''}${p.searches ? ' · searched ' + plural(p.searches, 'time') : ' · not searched yet'}${p.copies ? ' · ' + plural(p.copies, 'copy', 'copies') : ''}</span>
       <div class="row" style="gap:4px">${r && r.va ? `<span class="tag ok" style="font-size:11px">${esc(r.va)}</span>` : r && r.app ? `<span class="tag warn" style="font-size:11px">Applied</span>` : '<span class="tag grey" style="font-size:11px">No number</span>'}${p.doubleOf ? '<span class="tag grey" style="font-size:11px">Double</span>' : ''}${p.empty >= 5 ? `<span class="tag grey" style="font-size:11px" title="${p.empty} searches found nothing: searched ${p.empty >= 10 ? 'every 3 months' : 'monthly'}">Quiet</span>` : ''}${due(p) ? `<span class="tag copy" style="font-size:11px">${due(p)}</span>` : ''}</div>
@@ -388,15 +388,15 @@ function lazyThumbs() {
       const img = queue.shift(); busy++;
       (async () => {
         const p = await FC.DB.get('photos', img.dataset.lazy);
-        if (!p || p.thumb) return;
+        if (!p || p.thumb || p.th) return;
         const f = await FC.fileFor(p);
         const pic = await RS_JOB.prepare(f);
         if (pic.error) return;
-        p.thumb = pic.thumb; p.w = pic.w; p.h = pic.h; p.hash = p.hash || pic.hash;
+        p.w = pic.w; p.h = pic.h; p.hash = p.hash || pic.hash;
         try { p.look = await FC.lookHash(pic.blob); } catch (e) { /* skip */ }
-        await FC.DB.put('photos', p);
+        await FC.setThumb('photos', p, pic.thumb);
         const kept = PH && PH.list.find(x => x.id === p.id);
-        if (kept) Object.assign(kept, { thumb: p.thumb, w: p.w, h: p.h, hash: p.hash, look: p.look });
+        if (kept) Object.assign(kept, { thumb: p.thumb, th: p.th, w: p.w, h: p.h, hash: p.hash, look: p.look });
         img.src = pic.thumb; img.style.objectFit = 'cover';
       })().catch(() => {}).finally(() => { busy--; pump(); });
     }

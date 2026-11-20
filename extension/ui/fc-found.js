@@ -59,10 +59,20 @@ function flagsFor(c) {
   if (c.use === 'shop') f.push(['sell', 'ok', 'Selling something with it']);
   return f.map(([k, col, t]) => `<span class="flag" style="color:var(--${col});background:var(--${col}-soft)" title="${esc(t)}" aria-label="${esc(t)}">${FLAG_ICON[k]}</span>`).join('') || '<span class="faint" style="font-size:12px">—</span>';
 }
-const theirImg = c => safeImg(c.thumb || c.img);
+// Preview pictures live in their own small database (FC.pics). A picture already looked at is
+// drawn straight away; otherwise the <img> gets data-th and ppLoadPics() fills it in a moment later.
+const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+const lazyPic = (rec, fallback) => `${BLANK}" data-th="${esc(rec.id)}${fallback ? `" data-fb="${fallback}` : ''}`;   // goes inside src="…"; fallback is already made safe
+const theirImg = c => c.thumb ? safeImg(c.thumb) : c.th ? (FC.pics.seen(c.id) || lazyPic(c, safeImg(c.img))) : safeImg(c.img);
+async function ppLoadPics(root = document) {
+  const imgs = [...root.querySelectorAll('img[data-th]')];
+  if (!imgs.length) return;
+  const got = await FC.pics.getMany(imgs.map(i => i.dataset.th)).catch(() => []);
+  imgs.forEach((img, i) => { const src = got[i] || img.dataset.fb; if (src) img.src = src; img.removeAttribute('data-th'); });
+}
 // Your client's photo: the small copy kept with the finds, swapped for the real file from Drive.
 const OURS = new Map();
-const oursImg = p => (p && OURS.get(p.id)) || (p && p.thumb && safeImg(p.thumb)) || 'icons/icon48.png';
+const oursImg = p => (p && OURS.get(p.id)) || (p && p.thumb && safeImg(p.thumb)) || (p && p.th && (FC.pics.seen(p.id) || lazyPic(p, 'icons/icon48.png'))) || 'icons/icon48.png';
 async function loadOurs(root = document) {
   for (const img of root.querySelectorAll('img[data-our]')) {
     const id = img.dataset.our;
@@ -313,6 +323,7 @@ function bindHover() {
       card.innerHTML = `<div class="pair"><div class="frame ours"><img src="${oursImg(p)}" alt=""><span class="lab">Your client's</span></div><div class="frame theirs"><img src="${theirImg(c)}" alt="" referrerpolicy="no-referrer"><span class="lab">Theirs</span></div></div>
         <div class="row" style="gap:8px;font-size:13px"><b>${esc(c.site)}</b>${c.pct >= 0 && c.pct != null ? `<span class="muted">${c.pct}% lines up</span>` : ''}${c.w ? `<span class="faint" style="margin-left:auto">${c.w} × ${c.h}</span>` : ''}</div>`;
       document.body.appendChild(card);
+      ppLoadPics(card);
       const b = img.getBoundingClientRect();
       card.style.left = Math.min(innerWidth - card.offsetWidth - 12, b.right + 12) + 'px';
       card.style.top = Math.max(12, Math.min(innerHeight - card.offsetHeight - 12, b.top - 40)) + 'px';
@@ -389,7 +400,8 @@ async function hideSite(entry, label) {
 // The current copy's photo file (from Drive), or the small copy if Drive can't be reached.
 async function ourBlob(p) {
   try { if (p && p.rel) return await FC.fileFor(p); } catch (e) { /* not reachable */ }
-  if (p && p.thumb) return (await fetch(p.thumb)).blob();
+  const th = await FC.thumbOf(p);
+  if (th) return (await fetch(th)).blob();
   throw new Error('Your client\'s photo can\'t be opened right now. Check that Google Drive is running.');
 }
 
@@ -487,7 +499,7 @@ Object.assign(ACTS, {
     try {
       const a = await ourBlob(p);
       let b = null, src = '';
-      for (const u of [c.img, c.thumb].filter(Boolean)) { try { const r = await fetch(u, { credentials: 'omit' }); if (r.ok) { b = await r.blob(); src = u; break; } } catch (e) { /* next */ } }
+      for (const u of [c.img, await FC.thumbOf(c)].filter(Boolean)) { try { const r = await fetch(u, { credentials: 'omit' }); if (r.ok) { b = await r.blob(); src = u; break; } } catch (e) { /* next */ } }
       if (!b) return toast('Their copy could not be downloaded. Open the page and save the photo instead.');
       await PP_DB.put({ id: 'compare-rs', a: { blob: a, name: c.photoName }, b: { blob: b, name: c.site + ' copy', src: src.startsWith('data:') ? c.url : src } });
       api.tabs.create({ url: api.runtime.getURL('compare.html?from=revsearch') });

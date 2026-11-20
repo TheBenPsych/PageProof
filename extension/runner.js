@@ -209,6 +209,7 @@ $('open').onclick = e => { e.preventDefault(); api.tabs.create({ url: api.runtim
   }
   try { const me = await api.tabs.getCurrent(); S.win = me.windowId; } catch (e) { /* not in a tab */ }
   await RS_LISTS.load().catch(() => {});
+  FC.movePics().catch(() => {});
   tick();
   setInterval(tick, 30000);
 })();

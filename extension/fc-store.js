@@ -83,6 +83,104 @@ const FC = (() => {
     },
   };
   const meta = { get: k => DB.get('meta', k), set: (k, v) => DB.put('meta', v, k) };
+
+  // ---------------------------------------------------------------- small preview pictures
+  // Preview pictures are kept in their own small database ("pageproof-fc-pics"), one per copy or
+  // photo, so lists of thousands of copies load without them. A record that has one says th: 1.
+  let picsP = null;
+  function picsOpen() {
+    if (picsP) return picsP;
+    picsP = new Promise((resolve, reject) => {
+      const req = indexedDB.open('pageproof-fc-pics', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('p');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => { picsP = null; reject(req.error); };
+    });
+    return picsP;
+  }
+  const PICMEM = new Map();                    // the last few hundred shown, so a redraw doesn't flicker
+  const remember = (id, v) => { PICMEM.delete(id); PICMEM.set(id, v); if (PICMEM.size > 900) PICMEM.delete(PICMEM.keys().next().value); };
+  const pics = {
+    seen: id => PICMEM.get(id) || '',
+    async getMany(ids) {
+      const need = ids.filter(id => !PICMEM.has(id));
+      if (need.length) {
+        const db = await picsOpen();
+        await new Promise((resolve, reject) => {
+          const t = db.transaction('p', 'readonly'), o = t.objectStore('p');
+          need.forEach(id => { o.get(id).onsuccess = e => { if (e.target.result) remember(id, e.target.result); }; });
+          t.oncomplete = resolve; t.onerror = () => reject(t.error); t.onabort = () => reject(t.error);
+        });
+      }
+      return ids.map(id => PICMEM.get(id) || '');
+    },
+    get: async id => (await pics.getMany([id]))[0],
+    async putMany(list) {                      // [[id, dataUrl], …]
+      if (!list.length) return;
+      const db = await picsOpen();
+      await new Promise((resolve, reject) => {
+        const t = db.transaction('p', 'readwrite'), o = t.objectStore('p');
+        for (const [id, v] of list) { o.put(v, id); if (PICMEM.has(id)) remember(id, v); }
+        t.oncomplete = resolve; t.onerror = () => reject(t.error); t.onabort = () => reject(t.error || new Error('The browser could not save a preview picture'));
+      });
+    },
+    async count() { const db = await picsOpen(); return new Promise((res, rej) => { const r = db.transaction('p', 'readonly').objectStore('p').count(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  };
+  // Take the preview out of a record before it is saved. Returns [id, picture] to save, or null.
+  // (A preview that is just a web address stays where it is: it is tiny.)
+  function splitPic(rec) {
+    const t = rec && rec.thumb;
+    if (typeof t !== 'string' || !t.startsWith('data:')) return null;
+    rec.thumb = ''; rec.th = 1;
+    return [rec.id, t];
+  }
+  // A record's preview picture, wherever it is kept.
+  async function thumbOf(rec) {
+    if (!rec) return '';
+    if (rec.thumb) return rec.thumb;
+    return rec.th ? pics.get(rec.id) : '';
+  }
+  async function setThumb(store, rec, dataUrl) {
+    rec.thumb = dataUrl;
+    const pair = splitPic(rec);
+    if (pair) await pics.putMany([pair]);
+    await DB.put(store, rec);
+  }
+  // One time, after updating from a version that kept previews inside each record: move them.
+  // A few hundred at a time, so the pages stay quick while it runs. Safe to stop part-way.
+  async function movePics(progress) {
+    if (await meta.get('picsMoved')) return 0;
+    const run = async () => {
+      if (await meta.get('picsMoved')) return 0;
+      let moved = 0;
+      for (const [store, step] of [['copies', 300], ['photos', 3000]]) {
+        let last = null;
+        for (;;) {
+          const part = await tx(store, 'readonly', o => o.getAll(last === null ? null : IDBKeyRange.lowerBound(last, true), step));
+          if (!part.length) break;
+          last = part[part.length - 1].id;
+          const pairs = [], changed = [];
+          for (const r of part) { const pr = splitPic(r); if (pr) { pairs.push(pr); changed.push(r); } }
+          if (pairs.length) {
+            await pics.putMany(pairs);
+            // Only records nobody changed in the meantime are written back.
+            const now = await DB.getMany(store, changed.map(r => r.id));
+            const safe = now.filter(r => r && typeof r.thumb === 'string' && r.thumb.startsWith('data:'));
+            for (const r of safe) splitPic(r);
+            await DB.putMany(store, safe);
+            moved += safe.length;
+          }
+          if (progress) progress(moved);
+          await new Promise(r => setTimeout(r, 0));
+        }
+      }
+      await meta.set('picsMoved', new Date().toISOString());
+      if (moved) touch('pics');
+      return moved;
+    };
+    if (globalThis.navigator && navigator.locks) return navigator.locks.request('pageproof-move-pics', run);
+    return run();
+  }
   // The copies list and the "how up to date" numbers are kept in this page's memory between
   // looks, because reading thousands of copies or hundreds of thousands of photos takes seconds.
   // They are dropped the moment anything changes them, here or in another PageProof page.
@@ -686,6 +784,7 @@ const FC = (() => {
         pct: l.pct, inl: l.inl, tiles: l.tiles, str: l.str, mid: l.mid, match: l.verdict, w: l.w, h: l.h };
       if (c) {
         if (!base.thumb && c.thumb) base.thumb = c.thumb;
+        if (!base.thumb && !c.thumb && c.th) delete base.thumb;      // its preview is already kept
         if (!base.img && c.img) base.img = c.img;
         Object.assign(c, base, { lastSeen: now, times: (c.times || 1) + 1 });
         if (c.online === 'gone') { c.online = 'back'; c.backAt = now; }
@@ -697,6 +796,8 @@ const FC = (() => {
         out.push(n); fresh++;
       }
     }
+    const newPics = out.map(splitPic).filter(Boolean);
+    await pics.putMany(newPics);
     await DB.putMany('copies', out);
     const all = await copiesOf(p.id);
     p.searches = (p.searches || 0) + 1;
@@ -704,7 +805,7 @@ const FC = (() => {
     p.empty = links.length ? 0 : (p.empty || 0) + 1;
     p.copies = all.filter(c => c.status !== 'removed').length;
     p.stolen = all.filter(c => c.status === 'stolen').length;
-    if (all.length && pic.thumb && !p.thumb) p.thumb = pic.thumb;
+    if (all.length && pic.thumb && !p.thumb && !p.th) { p.thumb = pic.thumb; const pr = splitPic(p); if (pr) await pics.putMany([pr]); }
     await DB.put('photos', p);
     if (client) { client.lastSearched = now; await DB.put('clients', client); }
     // Keep today's tally for the side panel and Home.
@@ -727,9 +828,11 @@ const FC = (() => {
       engines: l.engines || [], exact: !!l.exact, pct: l.pct, inl: l.inl, tiles: l.tiles, str: l.str, mid: l.mid, match: l.verdict || 'maybe', w: l.w, h: l.h,
       firstSeen: now, lastSeen: now, times: 1, by: (by || 'a search') + ' (added by hand)', status: 'new', online: 'up' };
     n.country = countryOf(l.site); n.use = useOf(n);
+    const np = splitPic(n);
+    if (np) await pics.putMany([np]);
     await DB.put('copies', n);
     p.copies = (await copiesOf(p.id)).filter(c => c.status !== 'removed').length;
-    if (pic.thumb && !p.thumb) p.thumb = pic.thumb;
+    if (pic.thumb && !p.thumb && !p.th) { p.thumb = pic.thumb; const pr = splitPic(p); if (pr) await pics.putMany([pr]); }
     await DB.put('photos', p);
     queueDirty(true); backupCopiesSoon(); touch('copies');
   }
@@ -1170,7 +1273,7 @@ const FC = (() => {
     if (left.length !== list.length) backupSoon(true);
   }
 
-  return { DB, meta, open, touch, countNew, siteFinds, driveStateSoft, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
+  return { DB, meta, open, touch, pics, thumbOf, setThumb, movePics, countNew, siteFinds, driveStateSoft, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, setPicked, pickInside, SCAN, applyPendingFlags, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, setClientOf, setFlag, setClients, checkOnline, logWeek, week, weekKey,
     hiddenCountries, setHiddenCountries, ownerFor, pathOf, logReport, USE, useOf, riskOf, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,

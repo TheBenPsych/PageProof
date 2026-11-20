@@ -32,7 +32,7 @@ const PP_EVIDENCE = (() => {
     return null;
   }
   // Their copy right now (the full picture, else the search site's preview).
-  const grabCopy = c => grab([[c.img, 'full'], [c.thumb, 'preview']]);
+  const grabCopy = async c => grab([[c.img, 'full'], [typeof FC !== 'undefined' ? await FC.thumbOf(c) : c.thumb, 'preview']]);
 
   // Does their copy still carry the photographer / copyright line that the client's photo has?
   function credit(om, cm) {

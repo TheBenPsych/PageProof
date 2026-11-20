@@ -63,6 +63,7 @@ async function render(keep) {
     const inner = keep ? [...view.querySelectorAll(SCROLLERS)].map(e => [e.scrollTop, e.scrollLeft]) : [];
     const html = await V[r]();
     view.innerHTML = html;
+    if (typeof ppLoadPics === 'function') ppLoadPics(view);
     if (keep) {
       window.scrollTo(0, sy);
       if (main) main.scrollTop = my;
@@ -596,4 +597,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const st = await api.storage.local.get(['ppSetupDone']);
   if (!st.ppSetupDone && (!location.hash || location.hash === '#home')) location.hash = 'setup';
   render();
+  // One time after an update: preview pictures move to their own small database.
+  FC.movePics().catch(e => console.warn('PageProof: moving preview pictures', e));
 });
