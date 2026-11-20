@@ -14,8 +14,25 @@ const routeArg = k => new URLSearchParams(location.hash.split('?')[1] || '').get
 const FRAMES = {
   search: 'revsearch.html', searches: 'revsearch.html?view=past',
   inspect: 'inspect.html', compare: 'compare.html', markup: 'markup.html',
-  files: 'convert.html', openfiles: 'convert.html?open=1', verify: 'verify.html'
+  files: 'convert.html', openfiles: 'convert.html?open=1', verify: 'verify.html',
+  results: 'revsearch.html' // a search's results; see LIVE below
 };
+// Results of a search that is running or was just opened (#results?job=ID). Each one lives in its
+// own frame that is kept (hidden) while you look at other PageProof pages, so the search carries
+// on. Closing the PageProof tab stops it, as closing its window used to.
+const LIVE = new Map();
+function showLive(id) {
+  const box = document.getElementById('live');
+  if (id && !LIVE.has(id)) {
+    const f = document.createElement('iframe');
+    f.className = 'tool'; f.title = 'Search results'; f.src = 'revsearch.html?job=' + encodeURIComponent(id);
+    box.append(f); LIVE.set(id, f);
+    // Keep at most 4 open; drop the oldest.
+    while (LIVE.size > 4) { const [k, old] = LIVE.entries().next().value; old.remove(); LIVE.delete(k); }
+  }
+  for (const [k, f] of LIVE) f.hidden = k !== id;
+  box.style.display = id ? '' : 'none'; view.style.display = id ? 'none' : '';
+}
 
 async function render(keep) {
   let r = route();
@@ -25,6 +42,14 @@ async function render(keep) {
   document.body.classList.toggle('framed', !!FRAMES[r]);
   if (V[r] && V[r].guard) { const g = await V[r].guard(); if (g) r = g; }
   state.shown = r; // the page really on screen (a guard can show setup under another page's address)
+  if (r === 'results') {
+    const id = routeArg('job') || state.liveJob;
+    if (!id) { location.hash = 'searches'; return; }
+    state.liveJob = id; showLive(id);
+    document.getElementById('side').classList.remove('open');
+    return;
+  }
+  showLive(null);
   if (FRAMES[r]) {
     const want = FRAMES[r];
     const f = view.querySelector('iframe.tool');
