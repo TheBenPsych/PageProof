@@ -61,7 +61,7 @@ V.connect = async () => {
     const extras = await FC.extraHandles();
     body = `<h2>3. Pick your clients</h2>
     <p class="muted" style="margin:0">Choose the top folder (for example G: › Shared drives, or one shared drive). Then click <b>▸</b> to open a folder and <b>tick only the folders you search</b>. Each ticked folder is one client, and everything inside it is searched. Star the ones that matter most.</p>
-    <p class="faint" style="margin:0;font-size:13px">PageProof reads the same text files as your other platform: a folder with <b>client_info.txt</b> gets that client ID as its name (also for folders deeper inside a ticked folder), and a folder with <b>client_info_ignore.txt</b> is skipped with everything inside it.</p>
+    <p class="faint" style="margin:0;font-size:13px">PageProof reads the same text files as your other platform: a folder with <b>client_info.txt</b> gets that client ID as its name (also for folders deeper inside a ticked folder), and a folder with <b>client_info_ignore.txt</b> is skipped with everything inside it. The ID or Skipped tag shows here when you tick or open that folder; folders deeper inside are sorted out when the photos are read.</p>
     <div class="row"><button class="btn${root ? '' : ' primary'}" data-act="cspick">${ic('files', 18)} ${root ? 'Choose a different top folder' : 'Choose the top folder'}</button>${root && st === 'granted' ? `<button class="btn primary" data-act="csaddone">＋ Add one folder</button>` : ''}${st === 'prompt' ? '<button class="btn primary" data-act="csallow">Allow PageProof to read it</button>' : ''}${state.csBusy ? `<span class="muted">${esc(state.csBusy)}</span>` : ''}</div>
     ${root ? `<span class="faint" style="font-size:12.5px;margin-top:-6px">Top folder: <b>${esc(root.name)}</b>. "Add one folder" opens the folder window so you can go straight to a big folder and pick it.</span>` : ''}
     <label class="field" for="csLabel">Where the top folder is, as File Explorer shows it<input id="csLabel" value="${esc(d.label)}" placeholder="G:\\Shared drives"><span class="faint" style="font-size:12.5px">Your browser can't see the full path, so it's typed here once. It goes in the evidence report next to the photo.</span></label>
@@ -127,21 +127,20 @@ async function csLoad(rel) {
   for (const k of kids) { const old = had && had.info && had.info[k.name]; if (old) entry.info[k.name] = old; }
   cache[rel] = entry; csCacheSave();
   csDraw(true);
-  // Read (or re-read) the client_info tags, a few folders at a time.
-  let i = 0;
-  const worker = async () => {
-    while (i < kids.length) {
-      const k = kids[i++];
-      let info = {};
-      try { info = await FC.folderInfo(k.rel); } catch (e) { /* unreadable: no tags */ }
-      state.csInfo.set(k.rel, info);
-      if (Object.keys(info).length) entry.info[k.name] = info; else delete entry.info[k.name];
-      csDraw();
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(6, kids.length) }, worker));
-  csCacheSave();
-  csDraw();
+}
+// The client_info tag of ONE folder, read only when you tick or open it. (Reading it for every
+// folder in a list made Google Drive crawl: asking Drive for a file that isn't there is slow.)
+async function csInfoOne(rel) {
+  if (!rel || state.csInfo.has(rel)) return;
+  state.csInfo.set(rel, {});
+  let info = {};
+  try { info = await FC.folderInfo(rel); } catch (e) { return; }
+  state.csInfo.set(rel, info);
+  if (!Object.keys(info).length) return;
+  if (info.ignore && state.csPick) state.csPick.delete(rel);
+  const cache = await csCacheGet(), i = rel.lastIndexOf('/'), par = cache[i < 0 ? '' : rel.slice(0, i)];
+  if (par) { (par.info = par.info || {})[rel.slice(i + 1)] = info; csCacheSave(); }
+  csDraw(true);
 }
 function csReset() { state.csTree = new Map(); state.csInfo = new Map(); state.csOpen = new Set(); state.csPick = null; state.csStar = new Set(); state.csBusy = ''; }
 Object.assign(ACTS, {
@@ -156,14 +155,14 @@ Object.assign(ACTS, {
   },
   csallow: async () => { if (await FC.allowDrive()) { csReset(); render(true); } },
   csopen: v => {
-    if (state.csOpen.has(v)) state.csOpen.delete(v); else { state.csOpen.add(v); csLoad(v); }
+    if (state.csOpen.has(v)) state.csOpen.delete(v); else { state.csOpen.add(v); csLoad(v); csInfoOne(v); }
     render(true);
   },
   csretry: v => { state.csTree.delete(v); csLoad(v); render(true); },
   cspk: v => {
     const p = state.csPick || (state.csPick = new Set());
     if (p.has(v)) { p.delete(v); state.csStar.delete(v); }
-    else { p.add(v); for (const o of [...p]) if (o.startsWith(v + '/')) { p.delete(o); state.csStar.delete(o); } }
+    else { p.add(v); for (const o of [...p]) if (o.startsWith(v + '/')) { p.delete(o); state.csStar.delete(o); } csInfoOne(v); }
     render(true);
   },
   csnone: () => { state.csPick = new Set(); state.csStar = new Set(); render(true); },
