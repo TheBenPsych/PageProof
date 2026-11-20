@@ -304,7 +304,7 @@ const FC = (() => {
     const y = d.getFullYear(), q = Math.floor(d.getMonth() / 3) + 1;
     return [{ year: y, quarter: q }, q === 1 ? { year: y - 1, quarter: 4 } : { year: y, quarter: q - 1 }];
   }
-  // Look through the folders and update the photo list. full = every folder (Sunday night, or
+  // Look through the folders and update the photo list. full = every folder (the weekly check, or
   // "Look for new photos"); otherwise only this and last quarter's folders.
   // Returns { clients, photos, added, removed }. progress(text) is called as it goes.
   async function scan({ full = true, clients: onlyClients = null, progress } = {}) {

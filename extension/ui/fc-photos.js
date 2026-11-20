@@ -234,7 +234,7 @@ V.clients = async () => {
   const sc = await FC.meta.get('scan');
   return `${head('Find copies', 'Clients and photos', 'Every client folder in your shared Google Drive. Pick which clients you search for, and star the ones that matter most.', `<button class="btn" data-act="cscan"${FC.SCAN.busy ? ' disabled' : ''}>🔄 ${FC.SCAN.busy ? 'Looking…' : 'Look for new photos'}</button><a class="btn" href="#connect" data-act="csreset">Change folder</a>`)}
   ${await driveBanner()}
-  ${state.scanText ? `<div class="scanbar"><span class="spin"></span>${esc(state.scanText)}</div>` : sc ? `<p class="faint" style="margin:0;font-size:13px">Last looked ${fmtDate(sc.at)}${sc.added ? ' · ' + sc.added + ' new photos' : ''}. PageProof looks in this and last quarter's folders every hour, and every folder on Sunday night.</p>` : ''}
+  ${state.scanText ? `<div class="scanbar"><span class="spin"></span>${esc(state.scanText)}</div>` : sc ? `<p class="faint" style="margin:0;font-size:13px">Last looked ${fmtDate(sc.at)}${sc.added ? ' · ' + sc.added + ' new photos' : ''}. PageProof looks in this and last quarter's folders every hour, and every folder once a week on a weekday (8 AM to 6 PM).</p>` : ''}
   <section class="card" style="overflow:hidden">
     <div class="toolbar">
       <div class="tabs" role="tablist">${Object.keys(tabs).map(t => `<button role="tab" aria-selected="${state.cTab === t}" class="${state.cTab === t ? 'on' : ''}" data-act="ctab" data-v="${t}">${t} <span>${clients.filter(tabs[t]).length}</span></button>`).join('')}</div>

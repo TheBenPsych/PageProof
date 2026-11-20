@@ -308,7 +308,7 @@ After the browser restarts, it may ask for **one click on Allow** to read the ph
 
 **Which photos go first:** ⚑ High priority photos (next, then every 3 days), then ★ priority clients, then the newest photos, then ★ Popular photos and photos stolen before (every 7 days), then the rest. Photos where nothing was found 5 times are searched monthly, 10 times every 3 months. Doubles (the same photo saved twice) are searched once and every copy is checked against both.
 
-**Clients and photos.** Turn searching on or off per client, star priority clients (tick several for bulk changes), and press **🔄 Look for new photos** after adding photos. PageProof also looks every hour in this and last quarter's folders, and in every folder on Sunday night. Click a client to see their photos, flag them ⚑ High or ★ Popular, or tick some and press **Search now**.
+**Clients and photos.** Turn searching on or off per client, star priority clients (tick several for bulk changes), and press **🔄 Look for new photos** after adding photos. PageProof also looks every hour in this and last quarter's folders, and in every folder once a week (on a weekday between 8 AM and 6 PM, when the office computers are on). Click a client to see their photos, flag them ⚑ High or ★ Popular, or tick some and press **Search now**.
 
 **All copies found** lists every copy found. Group by client, photo, site or site owner; filter by status, how it's used, suspicious sites, credit removed or selling something; hide whole countries. Hover a thumbnail to see it next to your client's photo. Click a row to open its details:
 - the **copyright registration** (VA number, or the 1-… application number) found in the folder names or an Excel file in the folders, with **Add the number** if none was found;
