@@ -1,6 +1,6 @@
 // Find copies › Connect your photos (setup), Clients and photos, a client's photos, and
 // Keep searching with today's 50.
-Object.assign(state, { cs: 0, csClients: null, csBusy: '', cTab: 'All', cQ: '', cSort: 'name', cPicked: [], phClient: '', phQ: '', phMore: 50, phPicked: [], phOpen: [] });
+Object.assign(state, { cs: 0, csClients: null, csBusy: '', csTree: new Map(), csOpen: new Set(), csPick: null, csStar: new Set(), cTab: 'All', cQ: '', cSort: 'name', cPicked: [], phClient: '', phQ: '', phMore: 50, phPicked: [], phOpen: [] });
 
 // ---------------------------------------------------------------- Connect your photos
 const CS_STEPS = ['Install Drive for desktop', 'Stream your files', 'Pick your clients', 'Check and start'];
@@ -8,7 +8,7 @@ V.connect = async () => {
   const d = await FC.drive();
   const st = await FC.driveState(false);
   const s = state.cs;
-  const dots = `<div class="steps" aria-label="Steps">${CS_STEPS.map((t, i) => `<div class="${i < s ? 'done' : i === s ? 'on' : ''}"><span>${i < s ? '✓' : i + 1}</span>${t}</div>`).join('')}</div>`;
+  const dots = `<ol class="steps csteps" aria-label="Steps">${CS_STEPS.map((t, i) => `<li class="${i < s ? 'done' : i === s ? 'cur' : 'wait'}"${i === s ? ' aria-current="step"' : ''}><span class="s">${i < s ? '✓' : i + 1}</span>${t}</li>`).join('')}</ol>`;
   const nav = (back, next, nextLabel = 'Next') => `<div class="row" style="margin-top:6px">${back ? '<button class="btn" data-act="csgo" data-v="-1">Back</button>' : ''}${next ? `<button class="btn primary" style="margin-left:auto" data-act="${next}" data-v="1">${nextLabel}</button>` : ''}</div>`;
   let body = '';
   if (s === 0) body = `<h2>1. Install Google Drive for desktop</h2>
@@ -27,15 +27,44 @@ V.connect = async () => {
       <li>Click <b>Save</b>.</li>
     </ol>${nav(true, 'csgo')}`;
   else if (s === 2) {
-    const list = state.csClients;
+    const root = await FC.rootHandle();
+    if (root && st === 'granted' && !state.csPick) {
+      // Coming back to this step: show what was ticked before, with its folders opened.
+      state.csPick = new Set((await FC.picked()) || []);
+      state.csStar = new Set((await FC.DB.all('clients')).filter(c => c.priority && c.pick).map(c => c.pick));
+      for (const r of state.csPick) { const parts = r.split('/'); for (let k = 1; k < parts.length; k++) state.csOpen.add(parts.slice(0, k).join('/')); }
+    }
+    if (root && st === 'granted') { try { await csKids(''); for (const r of state.csOpen) await csKids(r); } catch (e) { state.csBusy = 'Can\'t read the folder. Is Google Drive running?'; } }
+    const pick = state.csPick || new Set();
+    const under = r => [...pick].some(p => r.startsWith(p + '/'));
+    const rows = [];
+    const walk = (rel, depth) => {
+      for (const f of state.csTree.get(rel) || []) {
+        const on = pick.has(f.rel), inherited = under(f.rel), open = state.csOpen.has(f.rel);
+        rows.push(`<div class="crow" style="padding-left:${10 + depth * 22}px">
+          <button class="btn ghost sm" style="min-height:28px;width:28px;padding:0" data-act="csopen" data-v="${esc(f.rel)}" aria-label="${open ? 'Close' : 'Open'} ${esc(f.name)}" aria-expanded="${open}">${open ? '▾' : '▸'}</button>
+          <label style="display:flex;gap:10px;align-items:center;flex:1;min-width:0;cursor:pointer"><input type="checkbox" data-act="cspk" data-v="${esc(f.rel)}" ${on || inherited ? 'checked' : ''} ${inherited ? 'disabled title="Included: the folder above it is ticked"' : ''}><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${on ? ';font-weight:700' : ''}">${esc(f.name)}</span></label>
+          ${on ? `<button class="starbtn${state.csStar.has(f.rel) ? ' on' : ''}" data-act="csstar" data-v="${esc(f.rel)}" aria-label="Priority client" title="Priority: searched right after High priority photos">★</button>` : ''}</div>`);
+        if (open) {
+          if (state.csTree.get(f.rel) === undefined) rows.push(`<div class="faint" style="padding:6px 0 6px ${42 + depth * 22}px;font-size:13px">Opening…</div>`);
+          else if (!state.csTree.get(f.rel).length) rows.push(`<div class="faint" style="padding:6px 0 6px ${42 + depth * 22}px;font-size:13px">No folders inside</div>`);
+          else walk(f.rel, depth + 1);
+        }
+      }
+    };
+    walk('', 0);
+    const extras = await FC.extraHandles();
     body = `<h2>3. Pick your clients</h2>
-    <p class="muted" style="margin:0">Choose your <b>Photos</b> folder in the shared drive (for example G: › Shared drives › Photos). PageProof lists every client folder in it. Tick the clients <b>you</b> search for, and star the ones that matter most.</p>
-    <div class="row"><button class="btn primary" data-act="cspick">${ic('files', 18)} ${st === 'none' ? 'Choose the Photos folder' : 'Choose a different folder'}</button>${st === 'prompt' ? '<button class="btn" data-act="csallow">Allow PageProof to read it</button>' : ''}${state.csBusy ? `<span class="muted">${esc(state.csBusy)}</span>` : ''}</div>
-    <label class="field" for="csLabel">Where it is, as File Explorer shows it<input id="csLabel" value="${esc(d.label)}" placeholder="G:\\Shared drives\\Photos"><span class="faint" style="font-size:12.5px">Your browser can't see the full path, so it's typed here once. It goes in the evidence report next to the photo.</span></label>
-    ${list ? `<div class="row"><b>${plural(list.length, 'client folder')} found</b><button class="btn ghost sm" data-act="csall" data-v="1">Tick all</button><button class="btn ghost sm" data-act="csall" data-v="0">Tick none</button></div>
-      <div class="cpick">${list.map((c, i) => `<label class="crow"><input type="checkbox" data-act="cstick" data-v="${i}" ${c.searching ? 'checked' : ''}><span style="flex:1;min-width:0"><b>${esc(c.name)}</b><span class="faint" style="display:block;font-size:12.5px">${esc(c.extra ? 'Folder you added' : c.baseName ? c.folder + ' › ' + c.baseName : c.folder + ' (no Registered images folder: the whole folder is used)')}</span></span><button class="starbtn${c.priority ? ' on' : ''}" data-act="csstar" data-v="${i}" aria-label="Priority client" title="Priority: searched right after High priority photos">★</button></label>`).join('')}</div>` : ''}
-    <details><summary class="muted" style="cursor:pointer">A client's photos are somewhere else?</summary><div class="row" style="margin-top:8px"><input id="csExtra" class="chip" style="min-height:36px;padding:0 10px;font-size:14px;flex:1 1 200px" placeholder="Client name"><button class="btn" data-act="csextra">Add their folder</button></div></details>
-    ${nav(true, list && list.length ? 'csgo' : '')}`;
+    <p class="muted" style="margin:0">Choose the top folder (for example G: › Shared drives, or one shared drive). Then click <b>▸</b> to open a folder and <b>tick only the folders you search</b>. Each ticked folder is one client, and everything inside it is searched. Star the ones that matter most.</p>
+    <div class="row"><button class="btn${root ? '' : ' primary'}" data-act="cspick">${ic('files', 18)} ${root ? 'Choose a different top folder' : 'Choose the top folder'}</button>${root && st === 'granted' ? `<button class="btn primary" data-act="csaddone">＋ Add one folder</button>` : ''}${st === 'prompt' ? '<button class="btn primary" data-act="csallow">Allow PageProof to read it</button>' : ''}${state.csBusy ? `<span class="muted">${esc(state.csBusy)}</span>` : ''}</div>
+    ${root ? `<span class="faint" style="font-size:12.5px;margin-top:-6px">Top folder: <b>${esc(root.name)}</b>. "Add one folder" opens the folder window so you can go straight to a big folder and pick it.</span>` : ''}
+    <label class="field" for="csLabel">Where the top folder is, as File Explorer shows it<input id="csLabel" value="${esc(d.label)}" placeholder="G:\\Shared drives"><span class="faint" style="font-size:12.5px">Your browser can't see the full path, so it's typed here once. It goes in the evidence report next to the photo.</span></label>
+    ${rows.length ? `<div class="row"><b>${plural(pick.size + extras.length, 'folder')} ticked</b>${pick.size ? '<button class="btn ghost sm" data-act="csnone">Untick all</button>' : ''}<span class="faint" style="font-size:12.5px;margin-left:auto">Ticking a folder includes every folder inside it.</span></div>
+      <div class="cpick" style="max-height:440px">${rows.join('')}</div>` : ''}
+    ${pick.size ? `<div class="chips">${[...pick].sort().map(r => `<button class="chip" data-act="cspk" data-v="${esc(r)}" title="Untick">${state.csStar.has(r) ? '★ ' : ''}${esc(r.split('/').pop())} ✕</button>`).join('')}</div>` : ''}
+    ${extras.length ? `<div class="faint" style="font-size:13px">Folders outside the top folder: ${extras.map(x => `<b>${esc(x.client)}</b>`).join(', ')}</div>` : ''}
+    <details><summary class="muted" style="cursor:pointer">A client's photos are outside the top folder?</summary><div class="row" style="margin-top:8px"><input id="csExtra" class="chip" style="min-height:36px;padding:0 10px;font-size:14px;flex:1 1 200px" placeholder="Client name"><button class="btn" data-act="csextra">Add their folder</button></div></details>
+    ${nav(true, pick.size || extras.length ? 'cssave' : '')}`;
   } else {
     const list = state.csClients || [];
     const on = list.filter(c => c.searching);
@@ -50,16 +79,14 @@ V.connect = async () => {
   <p class="faint" style="font-size:13px">Just want to search a few photos from your computer? <a href="#search">New search</a> works without this.</p>`;
 };
 V.connect.noAutoRedraw = true;
-async function csLoad() {
-  state.csBusy = 'Reading the client folders…'; render(true);
-  try {
-    const list = await FC.quickClients();
-    // First time: every client ticked, so nothing is missed. Your picks are kept after that.
-    state.csClients = list.map(c => ({ ...c, searching: c.searching === null ? true : c.searching }));
-    state.csBusy = '';
-  } catch (e) { state.csBusy = 'That folder could not be read: ' + (e.message || e); }
-  render(true);
+// The folders inside one folder (read once, then kept while setup is open).
+async function csKids(rel) {
+  if (state.csTree.has(rel)) return state.csTree.get(rel);
+  const kids = await FC.subfolders(rel);
+  state.csTree.set(rel, kids);
+  return kids;
 }
+function csReset() { state.csTree = new Map(); state.csOpen = new Set(); state.csPick = null; state.csStar = new Set(); state.csBusy = ''; }
 Object.assign(ACTS, {
   csgo: v => {
     const l = document.getElementById('csLabel');
@@ -68,24 +95,67 @@ Object.assign(ACTS, {
   },
   cspick: async () => {
     try { await FC.pickRoot(); } catch (e) { if (e.name !== 'AbortError') toast('That folder could not be opened.'); return; }
-    await csLoad();
+    csReset(); state.csPick = new Set(); render(true);
   },
-  csallow: async () => { if (await FC.allowDrive()) csLoad(); },
-  cstick: (v, el) => { state.csClients[+v].searching = el.checked; },
-  csstar: (v, el) => { const c = state.csClients[+v]; c.priority = !c.priority; el.classList.toggle('on', c.priority); if (c.priority) { c.searching = true; el.closest('label').querySelector('input').checked = true; } },
-  csall: v => { for (const c of state.csClients || []) c.searching = v === '1'; render(true); },
+  csallow: async () => { if (await FC.allowDrive()) { csReset(); render(true); } },
+  csopen: async v => {
+    if (state.csOpen.has(v)) state.csOpen.delete(v); else state.csOpen.add(v);
+    render(true);
+  },
+  cspk: v => {
+    const p = state.csPick || (state.csPick = new Set());
+    if (p.has(v)) { p.delete(v); state.csStar.delete(v); }
+    else { p.add(v); for (const o of [...p]) if (o.startsWith(v + '/')) { p.delete(o); state.csStar.delete(o); } }
+    render(true);
+  },
+  csnone: () => { state.csPick = new Set(); state.csStar = new Set(); render(true); },
+  csstar: v => { if (state.csStar.has(v)) state.csStar.delete(v); else state.csStar.add(v); render(true); },
+  csaddone: async () => {
+    let r;
+    try { r = await FC.pickInside(); } catch (e) { if (e.name !== 'AbortError') toast('That folder could not be opened.'); return; }
+    if (r.rel === null) return toast('That folder is not inside the top folder. Use "A client\'s photos are outside the top folder?" below.');
+    if (!r.rel) return toast('That is the top folder itself. Pick a folder inside it.');
+    ACTS.cspk(r.rel);
+    const parts = r.rel.split('/');
+    for (let k = 1; k < parts.length; k++) state.csOpen.add(parts.slice(0, k).join('/'));
+    toast(parts[parts.length - 1] + ' ticked.');
+    render(true);
+  },
   csextra: async () => {
     const n = (document.getElementById('csExtra') || {}).value || '';
     if (!n.trim()) return toast('Type the client\'s name first.');
-    try { await FC.pickExtra(n); await csLoad(); } catch (e) { if (e.name !== 'AbortError') toast('That folder could not be opened.'); }
+    try { await FC.pickExtra(n); render(true); } catch (e) { if (e.name !== 'AbortError') toast('That folder could not be opened.'); }
+  },
+  cssave: async () => {
+    const l = document.getElementById('csLabel');
+    if (l) await FC.setDrive({ label: l.value.trim() || 'G:\\Shared drives' });
+    state.csBusy = 'Reading the folders you ticked…'; render(true);
+    try {
+      const picks = await FC.setPicked([...(state.csPick || [])]);
+      const list = await FC.quickClients();
+      state.csClients = list.map(c => ({ ...c, searching: c.extra || picks.includes(c.pick), priority: c.extra ? c.priority : state.csStar.has(c.pick) }));
+      state.csBusy = ''; state.cs = 3;
+    } catch (e) { state.csBusy = 'Those folders could not be read: ' + (e.message || e); }
+    render(true);
   },
   csstart: async () => {
     const list = state.csClients || [];
+    const names = new Set(list.map(c => c.name));
+    // Folders you didn't tick: forgotten if nothing was found for them, otherwise kept (not searched).
+    const copies = await FC.allCopies();
+    for (const c of await FC.DB.all('clients')) {
+      if (names.has(c.name)) continue;
+      if (!copies.some(x => x.client === c.name)) {
+        const ps = await FC.DB.by('photos', 'client', c.name);
+        await FC.DB.delMany('photos', ps.map(p => p.id));
+        await FC.DB.del('clients', c.name);
+      } else if (c.searching === true) { c.searching = false; await FC.DB.put('clients', c); }
+    }
     for (const c of list) { const old = (await FC.DB.get('clients', c.name)) || {}; await FC.DB.put('clients', { ...old, ...c }); }
     FC.queueDirty();
     await FC.setDrive({ done: true });
     await FC.setKeep({ on: true });
-    state.csClients = null; state.cs = 0;
+    state.csClients = null; state.cs = 0; csReset();
     api.runtime.sendMessage({ type: 'fcKeepWake' }).catch(() => {});
     location.hash = 'keep';
     toast('Reading your photo folders. Keep searching starts as soon as there are photos to search.');
@@ -154,7 +224,7 @@ Object.assign(ACTS, {
   },
   cphotos: v => { state.phClient = v; state.phMore = 50; state.phQ = ''; location.hash = 'photos'; },
   cfound: v => { location.hash = 'found?client=' + encodeURIComponent(v); },
-  csreset: () => { state.cs = 2; location.hash = 'connect'; },
+  csreset: () => { state.cs = 2; csReset(); location.hash = 'connect'; },
   cscan: async () => {
     toast('Looking through every folder for new photos…');
     const r = await FC.scan({ full: true, progress: t => { state.scanText = t; const b = document.querySelector('.scanbar'); if (b) b.lastChild.textContent = t; } });

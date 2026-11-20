@@ -297,7 +297,7 @@ Open the full PageProof page (click the PageProof icon › **Open full PageProof
 **Set up once: Connect your photos (4 steps).**
 1. Install **Google Drive for desktop** (google.com/drive/download) and sign in with your work account. File Explorer then shows **Google Drive (G:)**.
 2. In Drive's ⚙ **Preferences › Google Drive**, choose **Stream files** (so your disk doesn't fill up).
-3. Press **Choose the Photos folder** and pick the shared Photos folder (for example G: › Shared drives › Photos). PageProof lists every client folder inside it. Tick the clients **you** search for and press ★ on the ones that matter most. Check the address in the box matches what File Explorer shows (it goes in the evidence report).
+3. Press **Choose the top folder** and pick it (for example G: › Shared drives, or one shared drive). Click **▸** to open a folder and see the folders inside, then **tick only the folders you search**. Each ticked folder is one client and everything inside it is searched. Or press **＋ Add one folder** to go straight to a big folder in the folder window. Press ★ on the clients that matter most. Check the address in the box matches what File Explorer shows (it goes in the evidence report).
 4. Press **Yes, start searching**. PageProof reads every folder once (this can take a while), then **Keep searching** starts.
 
 After the browser restarts, it may ask for **one click on Allow** to read the photos again. A note pops up and a yellow bar shows on the Find copies pages.
