@@ -44,32 +44,59 @@ const FC = (() => {
   }
   const DB = {
     get: (s, k) => tx(s, 'readonly', o => o.get(k)),
-    put: (s, v, k) => tx(s, 'readwrite', o => (k === undefined ? o.put(v) : o.put(v, k))),
-    del: (s, k) => tx(s, 'readwrite', o => o.delete(k)),
+    put: (s, v, k) => { stale(s); return tx(s, 'readwrite', o => (k === undefined ? o.put(v) : o.put(v, k))); },
+    del: (s, k) => { stale(s); return tx(s, 'readwrite', o => o.delete(k)); },
     all: s => tx(s, 'readonly', o => o.getAll()),
     count: s => tx(s, 'readonly', o => o.count()),
     by: (s, index, v) => tx(s, 'readonly', o => o.index(index).getAll(v)),
+    // How many (without reading them), and several by id in one go.
+    countBy: (s, index, v) => tx(s, 'readonly', o => o.index(index).count(v)),
+    async getMany(s, keys) {
+      if (!keys.length) return [];
+      const db = await open();
+      return new Promise((resolve, reject) => {
+        const t = db.transaction(s, 'readonly'), o = t.objectStore(s), out = new Array(keys.length);
+        keys.forEach((k, i) => { o.get(k).onsuccess = e => { out[i] = e.target.result; }; });
+        t.oncomplete = () => resolve(out); t.onerror = () => reject(t.error); t.onabort = () => reject(t.error);
+      });
+    },
     prefix: (s, p) => tx(s, 'readonly', o => o.getAll(IDBKeyRange.bound(p, p + '\uffff'))),
     async putMany(s, list) {
       if (!list.length) return;
+      stale(s);
       const db = await open();
       await new Promise((resolve, reject) => {
         const t = db.transaction(s, 'readwrite'), o = t.objectStore(s);
         for (const v of list) o.put(v);
-        t.oncomplete = resolve; t.onerror = () => reject(t.error);
+        t.oncomplete = resolve; t.onerror = () => reject(t.error); t.onabort = () => reject(t.error || new Error('The browser could not save (is the disk full?)'));
       });
     },
     async delMany(s, keys) {
       if (!keys.length) return;
+      stale(s);
       const db = await open();
       await new Promise((resolve, reject) => {
         const t = db.transaction(s, 'readwrite'), o = t.objectStore(s);
         for (const k of keys) o.delete(k);
-        t.oncomplete = resolve; t.onerror = () => reject(t.error);
+        t.oncomplete = resolve; t.onerror = () => reject(t.error); t.onabort = () => reject(t.error || new Error('The browser could not save'));
       });
     },
   };
   const meta = { get: k => DB.get('meta', k), set: (k, v) => DB.put('meta', v, k) };
+  // The copies list and the "how up to date" numbers are kept in this page's memory between
+  // looks, because reading thousands of copies or hundreds of thousands of photos takes seconds.
+  // They are dropped the moment anything changes them, here or in another PageProof page.
+  let COPIES = null, COPIES_GEN = 0, COVER = null;
+  function stale(store) {
+    if (store === 'copies') { COPIES = null; COPIES_GEN++; }
+    if (store === 'photos' || store === 'clients') COVER = null;
+  }
+  try {
+    api.storage.onChanged.addListener(ch => {
+      if (ch.fcChanged) { COPIES = null; COPIES_GEN++; COVER = null; }
+      if (ch.fcQueueDirty) COVER = null;
+    });
+  } catch (e) { /* no storage events here */ }
   // Tell every open PageProof page that something changed (they redraw).
   const touch = what => api.storage.local.set({ fcChanged: { what, at: Date.now() } }).catch(() => {});
 
@@ -106,8 +133,18 @@ const FC = (() => {
     }
     return 'granted';
   }
+  // The same check, remembered for a minute: asking Google Drive for a folder can be slow, and
+  // the pages ask every time they are drawn.
+  let driveSeen = null;
+  async function driveStateSoft(fresh) {
+    if (!fresh && driveSeen && Date.now() - driveSeen.at < 60000) return driveSeen.st;
+    const st = await driveState(true);
+    driveSeen = { at: Date.now(), st };
+    return st;
+  }
   // Must be called from a click.
   async function allowDrive() {
+    driveSeen = null;
     const h = await rootHandle();
     if (h && (await h.requestPermission({ mode: 'read' })) !== 'granted') return false;
     for (const x of await extraHandles()) { try { await x.h.requestPermission({ mode: 'read' }); } catch (e) { /* skip */ } }
@@ -446,7 +483,9 @@ const FC = (() => {
   }
   const hamming = (a, b) => { let n = 0; for (let i = 0; i < 16; i += 8) { let v = (parseInt(a.slice(i, i + 8), 16) ^ parseInt(b.slice(i, i + 8), 16)) >>> 0; while (v) { n += v & 1; v >>>= 1; } } return n; };
   async function findDoubles() {
-    const all = (await DB.all('photos')).filter(p => p.look && !p.gone);
+    // Photos get their "look" together with their fingerprint, so the fingerprint list holds
+    // every photo that can be compared (a small part of a big library).
+    const all = (await tx('photos', 'readonly', o => o.index('hash').getAll())).filter(p => p.look && !p.gone);
     const byClient = {};
     for (const p of all) (byClient[p.client] = byClient[p.client] || []).push(p);
     const changed = [];
@@ -523,19 +562,24 @@ const FC = (() => {
   }
   // How up to date each group is ("Where the searches go").
   async function coverage() {
+    if (COVER && Date.now() - COVER.at < 600000) return COVER.v;
     const clients = new Map((await DB.all('clients')).map(c => [c.name, c]));
-    const photos = (await DB.all('photos')).filter(p => !p.gone && !p.doubleOf && (clients.get(p.client) || {}).searching === true);
     const g = { top: [0, 0], recent: [0, 0], year: [0, 0], older: [0, 0] };
-    let quiet = 0, doubles = 0;
-    for (const p of photos) {
-      const c = clients.get(p.client), since = ageDays(p.lastSearched), age = monthsOld(p);
+    let quiet = 0, doubles = 0, total = 0;
+    for (const p of await DB.all('photos')) {
+      if (p.gone) continue;
+      if (p.doubleOf) { doubles++; continue; }
+      const c = clients.get(p.client);
+      if (!c || c.searching !== true) continue;
+      total++;
+      const since = ageDays(p.lastSearched), age = monthsOld(p);
       const k = p.flag === 'hi' || (c && c.priority) ? 'top' : age <= 3 ? 'recent' : age <= 12 ? 'year' : 'older';
       const ok = k === 'top' ? since <= 7 : k === 'recent' ? since <= 30 : k === 'year' ? since <= 183 : since <= 365;
       g[k][1]++; if (ok) g[k][0]++;
       if (p.empty >= 5) quiet++;
     }
-    doubles = (await DB.all('photos')).filter(p => p.doubleOf && !p.gone).length;
-    return { groups: g, total: photos.length, quiet, doubles };
+    COVER = { at: Date.now(), v: { groups: g, total, quiet, doubles } };
+    return COVER.v;
   }
 
   // ---------------------------------------------------------------- photos from a search
@@ -593,7 +637,33 @@ const FC = (() => {
     return { level: strong >= 1 && why.length >= 2 ? 'sus' : why.length ? 'watch' : 'ok', why };
   }
   async function copiesOf(photoId) { return DB.by('copies', 'photo', photoId); }
-  async function allCopies() { return DB.all('copies'); }
+  async function allCopies() {
+    if (COPIES) return COPIES;
+    const gen = COPIES_GEN, list = await DB.all('copies');
+    if (gen === COPIES_GEN) COPIES = list;      // nothing changed while reading
+    return list;
+  }
+  const countNew = () => DB.countBy('copies', 'status', 'new');
+  // Is this website in your finds? Read from a small list (site -> how many copies), so the
+  // toolbar menu and side panel never have to read every copy.
+  async function siteFinds(site) {
+    const ix = (await api.storage.local.get('fcSiteIx')).fcSiteIx;
+    if (ix) { const e = ix[site]; return e ? { n: e[0], stolen: !!e[1], first: e[2] } : null; }
+    const here = (await allCopies()).filter(c => c.site === site && c.status !== 'removed');
+    siteIndexSoon();
+    return here.length ? { n: here.length, stolen: here.some(c => c.status === 'stolen'), first: here[0].id } : null;
+  }
+  let siteIxT = null;
+  function siteIndexSoon() { clearTimeout(siteIxT); siteIxT = setTimeout(() => writeSiteIndex().catch(() => {}), 4000); }
+  async function writeSiteIndex(all) {
+    const ix = {};
+    for (const c of all || await allCopies()) {
+      if (c.status === 'removed' || !c.site) continue;
+      const e = ix[c.site] || (ix[c.site] = [0, 0, c.id]);
+      e[0]++; if (c.status === 'stolen') e[1] = 1;
+    }
+    await api.storage.local.set({ fcSiteIx: ix });
+  }
 
   // Add what one photo's search found. links = the search's links for that photo, with their
   // match result (verdict 'same' or 'maybe'). by = 'Keep searching' | 'Daily 50' | 'New search'.
@@ -610,9 +680,13 @@ const FC = (() => {
     for (const l of links) {
       const id = p.id + '|' + l.key;
       const c = old.get(id);
-      const base = { url: l.url, key: l.key, site: l.site, title: l.title || '', thumb: String(l.thumb || '').slice(0, 60000), img: l.img || '', engines: l.engines || [], exact: !!l.exact,
+      // A small picture that is too big to keep is left out (cutting it short would break it).
+      const th = String(l.thumb || '');
+      const base = { url: l.url, key: l.key, site: l.site, title: l.title || '', thumb: th.length <= 60000 ? th : '', img: l.img || '', engines: l.engines || [], exact: !!l.exact,
         pct: l.pct, inl: l.inl, tiles: l.tiles, str: l.str, mid: l.mid, match: l.verdict, w: l.w, h: l.h };
       if (c) {
+        if (!base.thumb && c.thumb) base.thumb = c.thumb;
+        if (!base.img && c.img) base.img = c.img;
         Object.assign(c, base, { lastSeen: now, times: (c.times || 1) + 1 });
         if (c.online === 'gone') { c.online = 'back'; c.backAt = now; }
         out.push(c);
@@ -652,29 +726,37 @@ const FC = (() => {
     const before = [];
     const now = new Date().toISOString();
     const touchedPhotos = new Set();
-    for (const id of [].concat(ids)) {
-      const c = await DB.get('copies', id);
-      if (!c) continue;
+    const got = (await DB.getMany('copies', [].concat(ids))).filter(Boolean);
+    const names = new Map();                    // photo id -> file name (for the rejected-links list)
+    const tally = {};                           // client -> how many, for the weekly summary
+    let rejects = 0;
+    for (const c of got) {
       before.push(JSON.parse(JSON.stringify(c)));
       if (status === 'skip') { c.skipped = now; }
       else { c.status = status; c.answered = now; delete c.skipped; }
       Object.assign(c, extra);
-      await DB.put('copies', c);
       touchedPhotos.add(c.photo);
       if (status === 'removed') {
-        const p = await DB.get('photos', c.photo);
-        try { await RS_REJECT.add(c.url, p ? p.name : '', ''); } catch (e) { /* lists not loaded */ }
+        if (!names.has(c.photo)) { const p = await DB.get('photos', c.photo); names.set(c.photo, p ? p.name : ''); }
+        try { if (!RS_REJECT.find(c.url, names.get(c.photo), '')) { RS_REJECT.items.push({ url: c.url, pic: names.get(c.photo) || '', why: '' }); RS_REJECT._keys = null; rejects++; } } catch (e) { /* lists not loaded */ }
       }
-      if (status === 'stolen' || status === 'licensed' || status === 'removed') await logWeek({ [status]: 1, client: c.client });
+      if (status === 'stolen' || status === 'licensed' || status === 'removed') tally[c.client || ''] = (tally[c.client || ''] || 0) + 1;
     }
+    await DB.putMany('copies', got);
+    if (rejects) { try { await RS_REJECT.save(); } catch (e) { /* lists not loaded */ } }
+    for (const [client, n] of Object.entries(tally)) await logWeek({ [status]: n, client });
     await recount(touchedPhotos);
     backupCopiesSoon(); touch('copies');
     if (status === 'stolen') queueDirty();
     return async () => {
-      for (const c of before) {
-        await DB.put('copies', c);
-        if (status === 'removed') { const p = await DB.get('photos', c.photo); try { await RS_REJECT.remove(c.url, p ? p.name : '', ''); } catch (e) { /* ignore */ } }
+      await DB.putMany('copies', before);
+      if (status === 'removed') {
+        try {
+          for (const c of before) { const k = RS_UTIL.key(c.url), pic = names.get(c.photo) || ''; RS_REJECT.items = RS_REJECT.items.filter(r => !(RS_UTIL.key(r.url) === k && (!r.pic || r.pic === pic) && !(r.why || ''))); }
+          await RS_REJECT.save();
+        } catch (e) { /* ignore */ }
       }
+      for (const [client, n] of Object.entries(tally)) await logWeek({ [status]: -n, client });
       await recount(touchedPhotos);
       backupCopiesSoon(); touch('copies');
     };
@@ -718,7 +800,7 @@ const FC = (() => {
     p.flag = p.flag === flag ? '' : flag;
     p.flagged = new Date().toISOString();
     await DB.put('photos', p);
-    queueDirty(); backupSoon();
+    queueDirty(); backupSoon(true);
     return p.flag;
   }
   async function setClients(names, ch) {
@@ -763,10 +845,10 @@ const FC = (() => {
   async function logWeek(add) {
     const k = 'week:' + weekKey();
     const w = (await meta.get(k)) || { searched: 0, found: 0, stolen: 0, licensed: 0, removed: 0, wentOffline: 0, backOnline: 0, clients: {}, offline: [], back: [] };
-    for (const f of ['searched', 'found', 'stolen', 'licensed', 'removed', 'wentOffline', 'backOnline']) if (add[f]) w[f] += add[f];
+    for (const f of ['searched', 'found', 'stolen', 'licensed', 'removed', 'wentOffline', 'backOnline']) if (add[f]) w[f] = Math.max(0, (w[f] || 0) + add[f]);
     if (add.client !== undefined) {
       const c = w.clients[add.client || 'Client unknown'] = w.clients[add.client || 'Client unknown'] || { searched: 0, found: 0, stolen: 0 };
-      if (add.searched) c.searched += add.searched; if (add.found) c.found += add.found; if (add.stolen) c.stolen += add.stolen;
+      if (add.searched) c.searched += add.searched; if (add.found) c.found += add.found; if (add.stolen) c.stolen = Math.max(0, c.stolen + add.stolen);
     }
     if (add.wentOffline && add.site) w.offline.push([add.site, new Date().toISOString()]);
     if (add.backOnline && add.site) w.back.push([add.site, new Date().toISOString()]);
@@ -795,6 +877,8 @@ const FC = (() => {
     'Reach plc': ['mirror.co.uk', 'express.co.uk', 'dailystar.co.uk', 'manchestereveningnews.co.uk', 'liverpoolecho.co.uk', 'birminghammail.co.uk', 'walesonline.co.uk', 'dailyrecord.co.uk'],
     'Patch Media': ['patch.com'],
   };
+  // Words many unrelated sites put after the © sign. They never count as a company name.
+  const GENERIC_NAME = /^(the|all|this|our|copyright|by|blog|news|admin|home|website|web ?site|site|company|inc|llc|team|staff|editor|author|media|press|magazine|daily|online|official|wordpress|blogger|untitled|my (blog|site|website)|all rights reserved)$/i;
   const FOOTER_COMPANIES = ['Townsquare Media', 'iHeartMedia', 'Cumulus Media', 'Audacy', 'Gannett', 'Hearst', 'Advance Local', 'Nexstar', 'Sinclair', 'TEGNA', 'Gray Media', 'Gray Television', 'Patch Media', 'McClatchy', 'Lee Enterprises', 'Alden Global Capital', 'MediaNews Group', 'Tribune Publishing', 'Daily Mail', 'Reach plc', 'News Corp', 'Future plc', 'Dotdash Meredith', 'Vox Media', 'BuzzFeed', 'Bustle Digital Group', 'Penske Media', 'Condé Nast', 'Valnet', 'Salem Media', 'Beasley Media', 'Entercom', 'Graham Media', 'Scripps'];
   function groupOf(site) {
     for (const [g, list] of Object.entries(GROUPS)) for (const d of list) if (site === d || site.endsWith('.' + d)) return { name: g, how: site === d ? 'On PageProof\'s list of big media groups' : 'A sub-site of ' + d };
@@ -846,7 +930,7 @@ const FC = (() => {
       const text = clean((doc.body && doc.body.textContent) || '');
       for (const m of text.matchAll(/(?:©|\(c\)|copyright)\s*(?:(?:19|20)\d{2}\s*(?:[-–]\s*(?:19|20)?\d{2,4})?\s*,?\s*)?([A-Z][A-Za-z0-9&.,' -]{2,70}?)(?=\s*(?:\.|\||All rights|$|Powered|Privacy|Terms|·|-\s))/g)) {
         const n = clean(m[1]).replace(/[.,\s-]+$/, '');
-        if (n.length > 2 && !/^(the|all|this|our|copyright)$/i.test(n) && !f.names.includes(n)) { f.names.push(n); addClue('doc', 'Company name in the footer', '“© ' + n + '”', label); }
+        if (n.length > 2 && !GENERIC_NAME.test(n) && !f.names.includes(n)) { f.names.push(n); addClue('doc', 'Company name in the footer', '“© ' + n + '”', label); }
       }
       for (const co of FOOTER_COMPANIES) if (text.includes(co) && !f.names.includes(co) && /(©|copyright|owned|operated|part of|a division|member of|network)/i.test(text.slice(Math.max(0, text.indexOf(co) - 200), text.indexOf(co) + 200))) { f.names.push(co); addClue('doc', 'Company named on the site', co, label); }
       for (const a of doc.querySelectorAll('a[href]')) {
@@ -929,7 +1013,7 @@ const FC = (() => {
       const f = allFacts.get(s);
       if (!f) continue;
       for (const id of f.ids || []) claim(s, 'id:' + id.replace(/^ca-pub-|^pub-/, 'pub-'), /^G-|^UA-|^GTM-/.test(id) ? 'Same Google Analytics ID' : 'Same ad account');
-      for (const n of f.names || []) { const k = 'n:' + n.toLowerCase().replace(/[,.]|\b(inc|llc|ltd|plc|corp|co|limited|company|gmbh|the)\b/g, '').replace(/\s+/g, ' ').trim(); if (k.length > 4) { claim(s, k, 'Same company named on their sites'); if (!NAMES.has(k)) NAMES.set(k, n); } }
+      for (const n of f.names || []) { const k = 'n:' + n.toLowerCase().replace(/[,.]|\b(inc|llc|ltd|plc|corp|co|limited|company|gmbh|the)\b/g, '').replace(/\s+/g, ' ').trim(); if (k.length > 4 && !GENERIC_NAME.test(k.slice(2))) { claim(s, k, 'Same company named on their sites'); if (!NAMES.has(k)) NAMES.set(k, n); } }
     }
     const groups = new Map();
     for (const s of sites) { const r = find(s); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(s); }
@@ -980,9 +1064,14 @@ const FC = (() => {
   function backupCopiesSoon() { clearTimeout(copiesT); copiesT = setTimeout(writeCopies, 5000); }
   async function writeCopies() {
     try {
-      const all = await DB.all('copies');
-      const photos = new Map((await DB.all('photos')).map(p => [p.id, p]));
-      const lines = all.map(c => [c.status, c.online, c.client || '', (photos.get(c.photo) || {}).rel || (photos.get(c.photo) || {}).name || c.photo, c.url, c.pct == null ? '' : c.pct, (c.firstSeen || '').slice(0, 10), (c.lastSeen || '').slice(0, 10), c.photo].map(v => String(v).replace(/[\t\r\n]+/g, ' ')).join('\t'));
+      const all = await allCopies();
+      writeSiteIndex(all).catch(() => {});
+      if ((await RS_DOCS.state()) !== 'granted') return;
+      // A Drive photo's id is its path. Only photos searched from the computer need looking up.
+      const up = [...new Set(all.map(c => c.photo).filter(id => !String(id).startsWith('d:')))];
+      const upNames = new Map((await DB.getMany('photos', up)).map((p, i) => [up[i], p && p.name]));
+      const nameOf = c => (String(c.photo).startsWith('d:') ? String(c.photo).slice(2).replace(/^\+/, '') : upNames.get(c.photo) || c.photoName || c.photo);
+      const lines = all.map(c => [c.status, c.online, c.client || '', nameOf(c), c.url, c.pct == null ? '' : c.pct, (c.firstSeen || '').slice(0, 10), (c.lastSeen || '').slice(0, 10), c.photo].map(v => String(v).replace(/[\t\r\n]+/g, ' ')).join('\t'));
       await RS_DOCS.writeText('found-copies.txt', '# PageProof copies found, one per line (tab separated):\n# status\tonline\tclient\tphoto\tpage\tlines up %\tfirst seen\tlast seen\tphoto id\n' + lines.join('\n') + '\n');
     } catch (e) { /* folder not set up */ }
   }
@@ -1000,13 +1089,26 @@ const FC = (() => {
       out.push({ id: photo + '|' + key, photo, client, url, key, site: RS_SITE.of(url), title: '', thumb: '', img: '', engines: [], pct: pct === '' ? null : +pct, match: 'same', firstSeen: first, lastSeen: last, times: 1, status: status || 'new', online: online || 'up', restored: true, photoName });
     }
     await DB.putMany('copies', out);
+    siteIndexSoon();
     return out.length;
   }
-  function backupSoon() { clearTimeout(settingsT); settingsT = setTimeout(writeSettings, 3000); }
+  // flags = true when a photo's flag (or "not a double") changed: only then is every photo read
+  // again for the backup. Otherwise the list of flagged photos from last time is reused.
+  let flagsDirty = false;
+  function backupSoon(flags) { if (flags) flagsDirty = true; clearTimeout(settingsT); settingsT = setTimeout(writeSettings, 3000); }
+  async function flagList() {
+    let list = flagsDirty ? null : await meta.get('flagsBackup');
+    if (!Array.isArray(list)) {
+      flagsDirty = false;
+      list = (await DB.all('photos')).filter(p => p.flag || p.notDouble).map(p => [p.id, p.flag || '', p.notDouble ? 1 : 0]);
+      await meta.set('flagsBackup', list);
+    }
+    return list;
+  }
   async function settingsSnapshot() {
     const st = await api.storage.local.get(['lastCase', 'ppTheme', 'rsSettings', 'fcKeep', 'fcDrive', 'fcHiddenCountries', 'ppHw']);
     const clients = await DB.all('clients');
-    const flags = (await DB.all('photos')).filter(p => p.flag || p.notDouble).map(p => [p.id, p.flag || '', p.notDouble ? 1 : 0]);
+    const flags = await flagList();
     const regs = Object.fromEntries(Object.entries((await meta.get('regs')) || {}).filter(([, v]) => v.manual));
     return { app: 'PageProof', version: api.runtime.getManifest().version, saved: new Date().toISOString(), name: (st.lastCase || {}).collector || '', theme: st.ppTheme || 'light',
       search: st.rsSettings || null, keep: st.fcKeep || null, drive: st.fcDrive || null, hiddenCountries: st.fcHiddenCountries || [], hardware: st.ppHw || null,
@@ -1049,9 +1151,10 @@ const FC = (() => {
     const left = [];
     for (const [id, flag, nd] of list) { const p = await DB.get('photos', id); if (p) { p.flag = flag; if (nd) p.notDouble = true; await DB.put('photos', p); } else left.push([id, flag, nd]); }
     await meta.set('pendingFlags', left);
+    if (left.length !== list.length) backupSoon(true);
   }
 
-  return { DB, meta, open, touch, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
+  return { DB, meta, open, touch, countNew, siteFinds, driveStateSoft, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, setPicked, pickInside, SCAN, applyPendingFlags, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, searchedNothing, copiesOf, allCopies, answer, licenseSite, setClientOf, setFlag, setClients, checkOnline, logWeek, week, weekKey,
     hiddenCountries, setHiddenCountries, ownerFor, pathOf, logReport, USE, useOf, riskOf, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,

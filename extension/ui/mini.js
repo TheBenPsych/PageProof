@@ -20,10 +20,10 @@ async function draw() {
   let busy = false;
   try { busy = !!(await api.runtime.sendMessage({ type: 'status' }) || {}).busy; } catch (e) { /* not busy */ }
   const [k, store, drive] = [await FC.keep(), await api.storage.local.get(['fcStatus', 'fcPause', 'fcToday']), await FC.drive()];
-  let nNew = 0, here = [];
+  let nNew = 0, here = null;
   try {
-    nNew = (await FC.DB.by('copies', 'status', 'new')).length;
-    if (canUse(tab) && /^https?:/.test(tab.url)) { const s = RS_SITE.of(tab.url); here = (await FC.allCopies()).filter(c => c.site === s && c.status !== 'removed'); }
+    nNew = await FC.countNew();
+    if (canUse(tab) && /^https?:/.test(tab.url)) here = await FC.siteFinds(RS_SITE.of(tab.url));
   } catch (e) { /* nothing found yet */ }
   const st = store.fcStatus, alive = st && Date.now() - st.beat < 90000;
   const s = !k.on ? 'off' : store.fcPause ? 'paused' : alive ? st.state : 'waiting';
@@ -31,7 +31,7 @@ async function draw() {
   const today = store.fcToday && store.fcToday.day === new Date().toDateString() ? store.fcToday : { searched: 0, found: 0 };
   const site = canUse(tab) && /^https?:/.test(tab.url) ? RS_SITE.of(tab.url) : '';
   $('mini').innerHTML = `
-    ${here.length ? `<div class="msec mfind" role="alert"><b>This site is in your finds</b><span style="font-size:13.5px">${here.length} ${here.length === 1 ? 'copy' : 'copies'} of your clients' photos on ${esc(site)}${here.some(c => c.status === 'stolen') ? ', marked stolen' : ''}.</span><div class="mrow"><button class="btn sm" data-go="found?open=${encodeURIComponent(here[0].id)}">See ${here.length === 1 ? 'it' : 'them'}</button></div></div>` : ''}
+    ${here ? `<div class="msec mfind" role="alert"><b>This site is in your finds</b><span style="font-size:13.5px">${here.n} ${here.n === 1 ? 'copy' : 'copies'} of your clients' photos on ${esc(site)}${here.stolen ? ', marked stolen' : ''}.</span><div class="mrow"><button class="btn sm" data-go="found?open=${encodeURIComponent(here.first)}">See ${here.n === 1 ? 'it' : 'them'}</button></div></div>` : ''}
     ${busy ? `<button class="mcap stop" id="stop"><span style="font-size:24px">⏹</span><span><b>Stop the capture</b><small>Keeps what's captured so far</small></span></button>`
       : `<button class="mcap" id="cap"${canUse(tab) ? '' : ' disabled'}><span style="font-size:24px">${ic('capture', 26)}</span><span><b>Capture this page</b><small>${site ? esc(site) + ': PDF, web copy, fingerprints, timestamps' : 'Open a website first'}</small></span></button>`}
     <div class="msec"><h3>Photos on this page</h3><div class="mrow"><button class="btn" id="pick">${ic('find', 16)} Inspect one</button><button class="btn" id="all">${ic('photo', 16)} Show them all</button></div><span class="faint" style="font-size:12.5px">Or right-click any photo › PageProof › Find copies of it.</span></div>

@@ -27,9 +27,11 @@ async function loadFC() {
   const [copies, clients, countries, sites] = [await FC.allCopies(), await FC.DB.all('clients'), await FC.hiddenCountries(), await FC.DB.all('sites')];
   const ids = new Set(copies.map(c => c.photo));
   const photos = new Map();
-  for (const id of ids) { const p = await FC.DB.get('photos', id); if (p) photos.set(id, p); }
+  const idList = [...ids];
+  (await FC.DB.getMany('photos', idList)).forEach((p, i) => { if (p) photos.set(idList[i], p); });
   const facts = new Map(sites.map(f => [f.site, f]));
   for (const c of copies) {
+    if (!STATUS[c.status]) c.status = 'new';     // a line edited by hand in found-copies.txt
     c.risk = FC.riskOf(c, facts.get(c.site));
     c.use = c.use || FC.useOf(c);
     const p = photos.get(c.photo);
@@ -359,16 +361,21 @@ async function undoLast() {
 function toastUndo(msg) { toast(msg, undoLast); }
 
 // In the details panel: answer, then open the next copy in the same list.
+let answering = false;    // a second key press while the first answer is still being saved is ignored
 async function drawerVerdict(status) {
   const id = state.open;
   const c = FCD && FCD.copies.find(x => x.id === id);
-  if (!c) return;
+  if (!c || answering) return;
+  answering = true;
+  try { await drawerVerdict2(status, id, c); } finally { answering = false; }
+}
+async function drawerVerdict2(status, id, c) {
   const i = LIST.indexOf(id);
   const nextId = LIST.slice(i + 1).find(x => x !== id) || LIST.slice(0, Math.max(0, i)).reverse().find(x => x !== id) || '';
   await answerCopies([id], status, c.site + ' ' + VERB[status]);
   state.open = nextId;
   toastUndo(c.site + ' ' + VERB[status] + (status === 'stolen' ? '. Save its Evidence report when you\'re ready.' : '.') + (nextId ? ' Next copy opened.' : ''));
-  render(true);
+  await render(true);
 }
 
 async function hideSite(entry, label) {
@@ -596,11 +603,14 @@ Object.assign(ACTS, {
   rvtab: v => { state.rvTab = v; render(true); },
   cmode: v => { state.cmpMode = v; render(true); },
   rverdict: async v => {
-    const c = FCD.copies.find(x => x.id === state.rvCurrent);
-    if (!c) return;
-    await answerCopies([c.id], v, c.site + ' ' + VERB[v]);
-    toastUndo(c.site + ' ' + VERB[v] + '.');
-    render(true);
+    const c = FCD && FCD.copies.find(x => x.id === state.rvCurrent);
+    if (!c || answering) return;
+    answering = true;
+    try {
+      await answerCopies([c.id], v, c.site + ' ' + VERB[v]);
+      toastUndo(c.site + ' ' + VERB[v] + '.');
+      await render(true);
+    } finally { answering = false; }
   },
   rvall: async v => {
     const ids = v.split('\n').filter(Boolean);
@@ -632,12 +642,12 @@ document.addEventListener('keydown', e => {
 
 // Shown on Find copies pages when Google Drive can't be reached or needs a click.
 async function driveBanner() {
-  const st = await FC.driveState(true);
+  const st = await FC.driveStateSoft();
   if (st === 'prompt') return `<div class="banner warn" role="alert">${ic('help', 22)}<div style="flex:1 1 260px;min-width:0"><b>One click needed: let PageProof read your photos again</b><div style="font-size:13.5px">Your browser asks once after it restarts. Searching waits until you press Allow.</div></div><button class="btn primary" data-act="driveallow">Allow</button></div>`;
   if (st === 'offline') return `<div class="banner bad" role="alert">${ic('help', 22)}<div style="flex:1 1 260px;min-width:0"><b>Can't reach Google Drive. Searching is paused.</b><div style="font-size:13.5px;color:var(--ink)">Drive for desktop is signed out or not running, so the photos folder is missing. Nothing is lost: it picks up where it left off.</div></div><button class="btn primary" data-act="driveretry">Try again</button></div>`;
   return '';
 }
 Object.assign(ACTS, {
   driveallow: async () => { if (await FC.allowDrive()) { toast('Thanks. PageProof can read your photos again.'); } render(true); },
-  driveretry: async () => { const st = await FC.driveState(true); toast(st === 'granted' ? 'Google Drive is back. Searching carries on.' : 'Still can\'t reach Google Drive.'); render(true); },
+  driveretry: async () => { const st = await FC.driveStateSoft(true); toast(st === 'granted' ? 'Google Drive is back. Searching carries on.' : 'Still can\'t reach Google Drive.'); render(true); },
 });

@@ -314,13 +314,21 @@ Object.assign(ACTS, {
 });
 
 // ---------------------------------------------------------------- one client's photos
+// A client can have tens of thousands of photos, so the list is read once and kept while you
+// tick, flag and scroll. It is read again when another page or a search changes the photos.
+let PH = null;
+api.storage.onChanged.addListener(ch => { if (ch.fcChanged || ch.fcQueueDirty) PH = null; });
+const phFolder = p => String(p.year || 'No year') + ' ' + (p.quarter ? 'Q' + p.quarter : 'Other');
 V.photos = async () => {
   const clients = (await FC.DB.all('clients')).sort((a, b) => a.name.localeCompare(b.name));
   if (!state.phClient || !clients.some(c => c.name === state.phClient)) state.phClient = (clients.find(c => c.searching === true) || clients[0] || {}).name || '';
   const cl = clients.find(c => c.name === state.phClient);
-  const all = (await FC.DB.by('photos', 'client', state.phClient)).filter(p => !p.gone);
-  const q = state.phQ.toLowerCase();
-  const list = all.filter(p => !q || p.name.toLowerCase().includes(q) || (p.rel || '').toLowerCase().includes(q)).sort((a, b) => (b.flag === 'hi') - (a.flag === 'hi') || (b.order || 0) - (a.order || 0) || a.name.localeCompare(b.name));
+  if (!PH || PH.client !== state.phClient) PH = { client: state.phClient, list: (await FC.DB.by('photos', 'client', state.phClient)).filter(p => !p.gone) };
+  const all = PH.list;
+  const q = state.phQ.toLowerCase(), fy = state.phYear || '';
+  // A folder on the left shows only that year (or that quarter).
+  const inFolder = p => !fy || (fy.includes(' ') ? phFolder(p) === fy : String(p.year || 'No year') === fy);
+  const list = all.filter(p => inFolder(p) && (!q || p.name.toLowerCase().includes(q) || (p.rel || '').toLowerCase().includes(q))).sort((a, b) => (b.flag === 'hi') - (a.flag === 'hi') || (b.order || 0) - (a.order || 0) || a.name.localeCompare(b.name));
   const doubles = all.filter(p => p.doubleOf);
   const show = list.slice(0, state.phMore);
   const regs = new Map();
@@ -342,7 +350,7 @@ V.photos = async () => {
   };
   return `${head('Find copies › Clients and photos', 'Photos', 'Flag the photos that matter: ⚑ High priority are searched next and every 3 days, ★ Popular every 7 days.', `<a class="btn" href="#clients">All clients</a>`)}
   ${await driveBanner()}
-  <div class="clientbar row" style="gap:10px">
+  <div class="row" style="gap:10px">
     <label class="mini">Client<select data-act="phclient">${clients.map(c => `<option ${c.name === state.phClient ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
     ${cl ? `<span class="tag ${cl.searching === true ? 'ok' : 'grey'}">${cl.searching === true ? 'Searching' : 'Not searching'}</span>${cl.priority ? '<span class="tag warn">★ Priority</span>' : ''}<span class="muted" style="font-size:13.5px">${all.length.toLocaleString()} photos</span>` : ''}
     <input type="search" id="phQ" class="chip" style="min-height:36px;padding:0 10px;font-size:14px;margin-left:auto" placeholder="Find a photo by name" value="${esc(state.phQ)}" aria-label="Find a photo by name">
@@ -351,10 +359,12 @@ V.photos = async () => {
   <div class="split">
     <aside class="card pad" style="flex:0 1 220px;display:flex;flex-direction:column;gap:6px;align-self:flex-start" aria-label="Folders">
       <b style="font-size:14px">Folders</b>
-      ${Object.keys(tree).sort((a, b) => String(b).localeCompare(String(a))).map(y => `<div><button class="btn ghost sm" data-act="phyear" data-v="${y}" style="width:100%;justify-content:flex-start">${y} <span class="faint" style="margin-left:auto">${Object.values(tree[y]).reduce((a, b) => a + b, 0)}</span></button>${Object.entries(tree[y]).sort().map(([qq, n]) => `<button class="btn ghost sm" data-act="phyear" data-v="${y} ${qq}" style="width:100%;justify-content:flex-start;padding-left:22px;font-weight:400">${qq} <span class="faint" style="margin-left:auto">${n}</span></button>`).join('')}</div>`).join('') || '<span class="faint" style="font-size:13px">No photos read yet.</span>'}
+      ${Object.keys(tree).length ? `<button class="btn ghost sm" data-act="phyear" data-v="" aria-pressed="${!fy}" style="width:100%;justify-content:flex-start${!fy ? ';background:var(--accent-soft);color:var(--accent)' : ''}">All folders <span class="faint" style="margin-left:auto">${all.length.toLocaleString()}</span></button>` : ''}
+      ${Object.keys(tree).sort((a, b) => String(b).localeCompare(String(a))).map(y => `<div><button class="btn ghost sm" data-act="phyear" data-v="${y}" aria-pressed="${fy === String(y)}" style="width:100%;justify-content:flex-start${fy === String(y) ? ';background:var(--accent-soft);color:var(--accent)' : ''}">${y} <span class="faint" style="margin-left:auto">${Object.values(tree[y]).reduce((a, b) => a + b, 0).toLocaleString()}</span></button>${Object.entries(tree[y]).sort().map(([qq, n]) => `<button class="btn ghost sm" data-act="phyear" data-v="${y} ${qq}" aria-pressed="${fy === y + ' ' + qq}" style="width:100%;justify-content:flex-start;padding-left:22px;font-weight:400${fy === y + ' ' + qq ? ';background:var(--accent-soft);color:var(--accent);font-weight:600' : ''}">${qq} <span class="faint" style="margin-left:auto">${n.toLocaleString()}</span></button>`).join('')}</div>`).join('') || '<span class="faint" style="font-size:13px">No photos read yet.</span>'}
     </aside>
     <div style="flex:4 1 520px;min-width:0;display:flex;flex-direction:column;gap:14px">
-      <div class="pgrid">${show.map(card).join('') || '<p class="muted">No photos found. Try "Look for new photos" on Clients and photos.</p>'}</div>
+      ${fy || q ? `<div class="row" style="gap:8px"><span class="muted" style="font-size:13.5px">Showing ${list.length.toLocaleString()} of ${all.length.toLocaleString()} photos</span>${fy ? `<button class="chip" style="cursor:pointer" data-act="phyear" data-v="">${esc(fy)} ✕</button>` : ''}</div>` : ''}
+      <div class="pgrid">${show.map(card).join('') || `<p class="muted">${fy || q ? 'No photos match.' : 'No photos found. Try "Look for new photos" on Clients and photos.'}</p>`}</div>
       ${list.length > show.length ? `<button class="btn" style="align-self:center" data-act="phmore">Show 50 more (${(list.length - show.length).toLocaleString()} not shown)</button>` : ''}
     </div>
   </div>
@@ -385,6 +395,8 @@ function lazyThumbs() {
         p.thumb = pic.thumb; p.w = pic.w; p.h = pic.h; p.hash = p.hash || pic.hash;
         try { p.look = await FC.lookHash(pic.blob); } catch (e) { /* skip */ }
         await FC.DB.put('photos', p);
+        const kept = PH && PH.list.find(x => x.id === p.id);
+        if (kept) Object.assign(kept, { thumb: p.thumb, w: p.w, h: p.h, hash: p.hash, look: p.look });
         img.src = pic.thumb; img.style.objectFit = 'cover';
       })().catch(() => {}).finally(() => { busy--; pump(); });
     }
@@ -393,27 +405,28 @@ function lazyThumbs() {
   view.querySelectorAll('img[data-lazy]').forEach(i => THUMB_OBS.observe(i));
 }
 Object.assign(ACTS, {
-  phclient: (v, el) => { state.phClient = el.value; state.phMore = 50; state.phPicked = []; render(); },
+  phclient: (v, el) => { state.phClient = el.value; state.phMore = 50; state.phPicked = []; state.phYear = ''; render(); },
   phmore: () => { state.phMore += 50; render(true); },
-  phyear: v => { state.phQ = ''; const [y, qq] = v.split(' '); state.phYear = v; const el = document.getElementById('phQ'); render(true).then(() => { const first = [...view.querySelectorAll('.pcard .faint')].find(s => s.textContent.startsWith(y + (qq ? ' ' + qq : ''))); if (first) first.closest('.pcard').scrollIntoView({ behavior: 'smooth', block: 'center' }); else toast('Click "Show 50 more" to reach ' + v + '.'); }); },
+  phyear: v => { state.phYear = state.phYear === v ? '' : v; state.phMore = 50; render(true); },
   phpick: v => { const i = state.phPicked.indexOf(v); if (i >= 0) state.phPicked.splice(i, 1); else state.phPicked.push(v); render(true); },
   phclear: () => { state.phPicked = []; render(true); },
   phflag: async v => {
     const [id, fl] = [v.slice(0, v.lastIndexOf('|')), v.slice(v.lastIndexOf('|') + 1)];
     const was = (await FC.DB.get('photos', id) || {}).flag || '';
     const now = await FC.setFlag(id, fl);
-    HIST.push({ label: 'flag changed', undo: async () => { const p = await FC.DB.get('photos', id); p.flag = was; await FC.DB.put('photos', p); FC.queueDirty(); } });
+    PH = null;
+    HIST.push({ label: 'flag changed', undo: async () => { const p = await FC.DB.get('photos', id); p.flag = was; await FC.DB.put('photos', p); PH = null; FC.queueDirty(); FC.backupSoon(true); } });
     toast(now === 'hi' ? 'High priority: searched next, then every 3 days.' : now === 'pop' ? 'Popular: searched every 7 days.' : 'Flag removed.', undoLast);
     render(true);
   },
   phbulkflag: async v => {
     const ids = state.phPicked.slice(), was = [];
     for (const id of ids) { const p = await FC.DB.get('photos', id); if (!p) continue; was.push([id, p.flag || '']); p.flag = v; p.flagged = new Date().toISOString(); await FC.DB.put('photos', p); }
-    FC.queueDirty(); FC.backupSoon(); state.phPicked = [];
-    HIST.push({ label: 'flags changed', undo: async () => { for (const [id, f] of was) { const p = await FC.DB.get('photos', id); p.flag = f; await FC.DB.put('photos', p); } FC.queueDirty(); } });
+    PH = null; FC.queueDirty(); FC.backupSoon(true); state.phPicked = [];
+    HIST.push({ label: 'flags changed', undo: async () => { for (const [id, f] of was) { const p = await FC.DB.get('photos', id); p.flag = f; await FC.DB.put('photos', p); } PH = null; FC.queueDirty(); FC.backupSoon(true); } });
     toast(plural(ids.length, 'photo') + ' changed.', undoLast); render(true);
   },
-  phnotdouble: async v => { const p = await FC.DB.get('photos', v); p.notDouble = true; p.doubleOf = null; await FC.DB.put('photos', p); await FC.findDoubles(); FC.queueDirty(); toast('Kept as a separate photo. It gets its own searches.'); render(true); },
+  phnotdouble: async v => { const p = await FC.DB.get('photos', v); p.notDouble = true; p.doubleOf = null; await FC.DB.put('photos', p); await FC.findDoubles(); PH = null; FC.queueDirty(); FC.backupSoon(true); toast('Kept as a separate photo. It gets its own searches.'); render(true); },
   phsearch: async () => {
     const ids = state.phPicked.slice(0, 50);
     toast('Getting ' + plural(ids.length, 'photo') + ' ready…');
@@ -518,6 +531,8 @@ Object.assign(ACTS, {
     const pics = [];
     for (const p of ps) {
       if (pics.length >= n) break;
+      // Each photo is downloaded from Google Drive first, so say how far along it is.
+      toast('Getting photo ' + (pics.length + 1) + ' of ' + Math.min(n, ps.length) + ' ready from Google Drive…');
       try { const pic = await RS_JOB.prepare(await FC.fileFor(p), { fcId: p.id, folderKey: p.rel }); if (!pic.error) pics.push(pic); } catch (e) { /* skip */ }
     }
     if (!pics.length) return toast('Nothing to search right now. Every photo is up to date.');

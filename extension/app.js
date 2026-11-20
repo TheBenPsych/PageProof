@@ -55,14 +55,17 @@ window.addEventListener('hashchange', () => render());
 // The number of new copies next to Find copies in the menu.
 async function ppBadges() {
   try {
-    const n = (await FC.DB.by('copies', 'status', 'new')).length;
+    const n = await FC.countNew();
     if (PP_BADGES.newCopies !== n) { PP_BADGES.newCopies = n || 0; ppRenderSide(PP_ROUTES[route()] ? route() : 'home'); }
   } catch (e) { /* no copies yet */ }
 }
 // Another PageProof page (the search window, Keep searching) changed something: redraw.
 let redrawT = null;
+// Keep searching writes a heartbeat every 30 seconds. Only what you can see counts as a change.
+const statusLook = s => (s ? [s.state, s.text, s.current && s.current.id].join('|') : '');
 api.storage.onChanged.addListener(ch => {
   if (!ch.fcChanged && !ch.fcStatus) return;
+  if (!ch.fcChanged && statusLook(ch.fcStatus.oldValue) === statusLook(ch.fcStatus.newValue)) return;
   if (ch.fcStatus && !['keep', 'home'].includes(route())) return;
   if (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
   if (document.querySelector('dialog[open]')) return;
