@@ -5,13 +5,34 @@ name: Build download
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  # The automatic checks (tests/app). They start a real browser with PageProof loaded and a
+  # pretend library. If any check fails, the "zip" job below does not run: nothing is released.
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Get the test browser
+        run: |
+          cd tests/app
+          npm install --no-save playwright@1
+          npx playwright install --with-deps chromium
+      - name: Run every check
+        run: xvfb-run -a node tests/app/run.js
+
   zip:
+    needs: checks
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

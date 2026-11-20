@@ -83,6 +83,104 @@ const FC = (() => {
     },
   };
   const meta = { get: k => DB.get('meta', k), set: (k, v) => DB.put('meta', v, k) };
+
+  // ---------------------------------------------------------------- small preview pictures
+  // Preview pictures are kept in their own small database ("pageproof-fc-pics"), one per copy or
+  // photo, so lists of thousands of copies load without them. A record that has one says th: 1.
+  let picsP = null;
+  function picsOpen() {
+    if (picsP) return picsP;
+    picsP = new Promise((resolve, reject) => {
+      const req = indexedDB.open('pageproof-fc-pics', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('p');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => { picsP = null; reject(req.error); };
+    });
+    return picsP;
+  }
+  const PICMEM = new Map();                    // the last few hundred shown, so a redraw doesn't flicker
+  const remember = (id, v) => { PICMEM.delete(id); PICMEM.set(id, v); if (PICMEM.size > 900) PICMEM.delete(PICMEM.keys().next().value); };
+  const pics = {
+    seen: id => PICMEM.get(id) || '',
+    async getMany(ids) {
+      const need = ids.filter(id => !PICMEM.has(id));
+      if (need.length) {
+        const db = await picsOpen();
+        await new Promise((resolve, reject) => {
+          const t = db.transaction('p', 'readonly'), o = t.objectStore('p');
+          need.forEach(id => { o.get(id).onsuccess = e => { if (e.target.result) remember(id, e.target.result); }; });
+          t.oncomplete = resolve; t.onerror = () => reject(t.error); t.onabort = () => reject(t.error);
+        });
+      }
+      return ids.map(id => PICMEM.get(id) || '');
+    },
+    get: async id => (await pics.getMany([id]))[0],
+    async putMany(list) {                      // [[id, dataUrl], …]
+      if (!list.length) return;
+      const db = await picsOpen();
+      await new Promise((resolve, reject) => {
+        const t = db.transaction('p', 'readwrite'), o = t.objectStore('p');
+        for (const [id, v] of list) { o.put(v, id); if (PICMEM.has(id)) remember(id, v); }
+        t.oncomplete = resolve; t.onerror = () => reject(t.error); t.onabort = () => reject(t.error || new Error('The browser could not save a preview picture'));
+      });
+    },
+    async count() { const db = await picsOpen(); return new Promise((res, rej) => { const r = db.transaction('p', 'readonly').objectStore('p').count(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  };
+  // Take the preview out of a record before it is saved. Returns [id, picture] to save, or null.
+  // (A preview that is just a web address stays where it is: it is tiny.)
+  function splitPic(rec) {
+    const t = rec && rec.thumb;
+    if (typeof t !== 'string' || !t.startsWith('data:')) return null;
+    rec.thumb = ''; rec.th = 1;
+    return [rec.id, t];
+  }
+  // A record's preview picture, wherever it is kept.
+  async function thumbOf(rec) {
+    if (!rec) return '';
+    if (rec.thumb) return rec.thumb;
+    return rec.th ? pics.get(rec.id) : '';
+  }
+  async function setThumb(store, rec, dataUrl) {
+    rec.thumb = dataUrl;
+    const pair = splitPic(rec);
+    if (pair) await pics.putMany([pair]);
+    await DB.put(store, rec);
+  }
+  // One time, after updating from a version that kept previews inside each record: move them.
+  // A few hundred at a time, so the pages stay quick while it runs. Safe to stop part-way.
+  async function movePics(progress) {
+    if (await meta.get('picsMoved')) return 0;
+    const run = async () => {
+      if (await meta.get('picsMoved')) return 0;
+      let moved = 0;
+      for (const [store, step] of [['copies', 300], ['photos', 3000]]) {
+        let last = null;
+        for (;;) {
+          const part = await tx(store, 'readonly', o => o.getAll(last === null ? null : IDBKeyRange.lowerBound(last, true), step));
+          if (!part.length) break;
+          last = part[part.length - 1].id;
+          const pairs = [], changed = [];
+          for (const r of part) { const pr = splitPic(r); if (pr) { pairs.push(pr); changed.push(r); } }
+          if (pairs.length) {
+            await pics.putMany(pairs);
+            // Only records nobody changed in the meantime are written back.
+            const now = await DB.getMany(store, changed.map(r => r.id));
+            const safe = now.filter(r => r && typeof r.thumb === 'string' && r.thumb.startsWith('data:'));
+            for (const r of safe) splitPic(r);
+            await DB.putMany(store, safe);
+            moved += safe.length;
+          }
+          if (progress) progress(moved);
+          await new Promise(r => setTimeout(r, 0));
+        }
+      }
+      await meta.set('picsMoved', new Date().toISOString());
+      if (moved) touch('pics');
+      return moved;
+    };
+    if (globalThis.navigator && navigator.locks) return navigator.locks.request('pageproof-move-pics', run);
+    return run();
+  }
   // The copies list and the "how up to date" numbers are kept in this page's memory between
   // looks, because reading thousands of copies or hundreds of thousands of photos takes seconds.
   // They are dropped the moment anything changes them, here or in another PageProof page.
@@ -129,7 +227,9 @@ const FC = (() => {
     try { p = await h.queryPermission({ mode: 'read' }); } catch (e) { return 'none'; }
     if (p !== 'granted') return 'prompt';
     if (check) {
+      const t0 = Date.now();
       try { const it = h.entries(); await it.next(); } catch (e) { return 'offline'; }
+      perf('driveAnswer', Date.now() - t0);
     }
     return 'granted';
   }
@@ -352,6 +452,7 @@ const FC = (() => {
     if (SCAN.busy) return { busy: true };
     if (background && await setupOpen()) return { busy: true };
     SCAN.busy = true;
+    const scanT0 = Date.now();
     let lastCheck = Date.now();
     const check = !background ? null : async () => {
       if (Date.now() - lastCheck < 3000) return;
@@ -419,6 +520,7 @@ const FC = (() => {
       queueDirty();
       await findDoubles().catch(() => {});
       touch('photos');
+      perf(full ? 'readEveryFolder' : 'readNewFolders', Date.now() - scanT0, total);
       return { clients: folders.length, photos: total, added, removed };
     } finally { SCAN.busy = false; }
   }
@@ -520,6 +622,10 @@ const FC = (() => {
   }
   function plan(p, client) {
     const since = ageDays(p.lastSearched);
+    if (p.retry) return { tier: 0, due: true };                       // "Try again" on the Skipped photos page
+    // A photo that could not be opened is tried again every 3 months (never, if it is a kind
+    // of file that can't be searched).
+    if (p.unreadable) return { tier: 6, due: p.skip !== 'type' && since > 90, quiet: true };
     if (p.flag === 'hi' && (since > 3 || !p.lastSearched || (p.flagged && p.flagged > (p.lastSearched || '')))) return { tier: 0, due: true };
     const quiet = p.empty >= 10 ? 90 : p.empty >= 5 ? 30 : 0;
     if (quiet && !p.flag) return { tier: 6, due: since > quiet, quiet: true };
@@ -536,6 +642,7 @@ const FC = (() => {
   function queueDirty(quiet) { QUEUE = null; if (!quiet) api.storage.local.set({ fcQueueDirty: Date.now() }).catch(() => {}); }
   function resetQueue() { QUEUE = null; }
   async function buildQueue() {
+    const t0 = Date.now();
     const clients = new Map((await DB.all('clients')).map(c => [c.name, c]));
     const photos = await DB.all('photos');
     const out = [];
@@ -549,6 +656,7 @@ const FC = (() => {
     // Inside each tier: never searched first, then newest folders, then searched longest ago.
     out.sort((a, b) => a.tier - b.tier || (!!a.last - !!b.last) || b.order - a.order || a.last.localeCompare(b.last));
     QUEUE = out; QUEUE_AT = Date.now();
+    perf('searchLine', Date.now() - t0, photos.length);
     return out;
   }
   // The next n photos to search (skipping ids in "skip": already running or just done).
@@ -581,6 +689,134 @@ const FC = (() => {
     COVER = { at: Date.now(), v: { groups: g, total, quiet, doubles } };
     return COVER.v;
   }
+
+  // ---------------------------------------------------------------- photos that could not be searched
+  // Kept as a short list (newest first) so the Skipped photos page never has to read every photo.
+  const SKIP_WHY = {
+    type: 'TIFF and HEIC photos can\'t be searched. Save a JPG copy in the same folder and that copy is searched.',
+    gone: 'The file is no longer in that Drive folder (moved, renamed or deleted).',
+    empty: 'The file is empty (0 bytes). Google Drive may still be uploading it.',
+    broken: 'The file would not open as a picture. It may be damaged, or not really a photo.',
+  };
+  const SKIP_LABEL = { type: 'Kind of file', gone: 'File not found', empty: 'Empty file', broken: 'Would not open' };
+  async function skipped() { const l = await meta.get('skipped'); return Array.isArray(l) ? l : []; }
+  async function noteSkip(p, kind) {
+    p.unreadable = SKIP_WHY[kind] || SKIP_WHY.broken; p.skip = kind;
+    p.lastSearched = new Date().toISOString(); delete p.retry;
+    await DB.put('photos', p);
+    const list = (await skipped()).filter(x => x[0] !== p.id);
+    list.unshift([p.id, p.name, p.client || '', kind, p.lastSearched]);
+    await meta.set('skipped', list.slice(0, 5000));
+    queueDirty(true); touch('skipped');
+  }
+  async function clearSkip(ids) {
+    const drop = new Set(ids);
+    const list = await skipped();
+    if (list.some(x => drop.has(x[0]))) { await meta.set('skipped', list.filter(x => !drop.has(x[0]))); touch('skipped'); }
+  }
+  // "Try again": the photos go to the front of the line.
+  async function retrySkipped(ids) {
+    const all = await skipped();
+    const want = ids ? all.filter(x => ids.includes(x[0])) : all.filter(x => x[3] !== 'type');
+    const got = (await DB.getMany('photos', want.map(x => x[0]))).filter(Boolean);
+    for (const p of got) { delete p.unreadable; delete p.skip; p.retry = 1; }
+    await DB.putMany('photos', got);
+    await clearSkip(want.map(x => x[0]));
+    queueDirty();
+    return got.length;
+  }
+  // Open one photo from Drive, ready to search. Never throws: { error, soft } when it can't.
+  // soft = nothing wrong with the photo (Drive can't be reached): it is simply tried again later.
+  async function readPhoto(p) {
+    const t0 = Date.now();
+    if (/\.(tiff?|heic|heif)$/i.test(p.name || '')) { await noteSkip(p, 'type'); return { error: SKIP_WHY.type }; }
+    let file;
+    try { file = await fileFor(p); }
+    catch (e) {
+      if (e && e.name === 'NotFoundError' && (await driveState(true)) === 'granted') { await noteSkip(p, 'gone'); return { error: SKIP_WHY.gone }; }
+      return { error: 'Google Drive could not be reached for this photo.', soft: true };
+    }
+    if (!file.size) { await noteSkip(p, 'empty'); return { error: SKIP_WHY.empty }; }
+    let pic;
+    try { pic = await RS_JOB.prepare(file, { fcId: p.id, folderKey: p.rel }); } catch (e) { pic = { error: String(e && e.message || e) }; }
+    if (pic.error) { await noteSkip(p, 'broken'); return { error: SKIP_WHY.broken }; }
+    if (p.unreadable || p.skip) { delete p.unreadable; delete p.skip; await DB.put('photos', p); await clearSkip([p.id]); }
+    perf('openPhoto', Date.now() - t0, Math.round(file.size / 1024));
+    return pic;
+  }
+
+  // ---------------------------------------------------------------- are the search sites working?
+  // Each search site keeps a tally: how many photos in a row came back with nothing at all, or
+  // with no answer. Past the limit the site is treated as broken (its page has probably changed):
+  // it rests for 6 hours, you are told, and the empty results of that run are not held against
+  // the photos (a photo with 5 empty searches is otherwise searched only monthly).
+  const ENGINE_LIMIT = { google: 10, yandex: 30, bing: 30 }, FAIL_LIMIT = 8, ENGINE_REST = 6 * 3600000;
+  const ENGINE_NAME = { google: 'Google Lens', yandex: 'Yandex', bing: 'Bing' };
+  async function engines() { return (await api.storage.local.get('fcEngines')).fcEngines || {}; }
+  // results: { google: 12, yandex: 0, bing: -1 } = links read off each site (-1 = no answer).
+  // emptied = this photo's search found no copies at all (so its "empty" count went up).
+  async function engineResults(results, photoId, emptied) {
+    const all = await engines(), now = Date.now();
+    const anyAnswer = Object.values(results).some(n => n >= 0);
+    const broke = [];
+    for (const [e, n] of Object.entries(results)) {
+      const h = all[e] = { zeros: 0, fails: 0, ids: [], ...(all[e] || {}) };
+      h.last = now;
+      if (n > 0) { all[e] = { ok: now, zeros: 0, fails: 0, ids: [], last: now }; continue; }
+      if (n === 0) { h.zeros++; h.fails = 0; if (emptied && photoId) h.ids = [...h.ids, photoId].slice(-40); }
+      // No answer only counts when another site did answer, or the computer says it is online
+      // (otherwise it is the internet connection, not the site).
+      else if (anyAnswer || (globalThis.navigator && navigator.onLine)) h.fails++;
+      const why = h.zeros >= (ENGINE_LIMIT[e] || 30) ? 'zeros' : h.fails >= FAIL_LIMIT ? 'fails' : '';
+      if (why && !(h.until > now)) {
+        h.until = now + ENGINE_REST; h.brokenAt = now; h.why = why;
+        broke.push([e, h.ids.slice(), why === 'zeros' ? h.zeros : h.fails, why]);
+        h.ids = [];
+      }
+    }
+    await api.storage.local.set({ fcEngines: all });
+    for (const [e, ids, n, why] of broke) {
+      // Take back the "found nothing" marks of that run.
+      const ps = (await DB.getMany('photos', [...new Set(ids)])).filter(p => p && p.empty > 0);
+      for (const p of ps) p.empty--;
+      await DB.putMany('photos', ps);
+      queueDirty();
+      try {
+        api.notifications.create('fcEngine:' + e, { type: 'basic', iconUrl: api.runtime.getURL('icons/icon128.png'), title: ENGINE_NAME[e] + ' may have stopped working',
+          message: (why === 'zeros' ? 'It found nothing at all for ' + n + ' photos in a row.' : 'It gave no answer for ' + n + ' photos in a row.') + ' PageProof is resting it for 6 hours. Those empty results are not counted against your photos.', priority: 1 });
+      } catch (err) { /* no notifications here */ }
+    }
+    return broke.map(b => b[0]);
+  }
+  // Sites resting because they look broken: { google: untilTime }.
+  async function brokenEngines() {
+    const now = Date.now();
+    return Object.fromEntries(Object.entries(await engines()).filter(([, h]) => h.until > now).map(([e, h]) => [e, h.until]));
+  }
+  // "Try it now": the very next photo tests the site again.
+  async function retryEngine(e) {
+    const all = await engines();
+    if (all[e]) { delete all[e].until; all[e].zeros = Math.max(0, (ENGINE_LIMIT[e] || 30) - 1) * (all[e].why === 'zeros' ? 1 : 0); all[e].fails = all[e].why === 'fails' ? FAIL_LIMIT - 1 : 0; await api.storage.local.set({ fcEngines: all }); }
+  }
+
+  // ---------------------------------------------------------------- how long things take
+  // The last time and the slowest time of a few jobs, for "Is everything working?" and
+  // "Copy details for support". Numbers only: never a file name or a client's name.
+  let perfBuf = null, perfT = null;
+  function perf(name, ms, n) {
+    perfBuf = perfBuf || {};
+    perfBuf[name] = { ms: Math.round(ms), n: n == null ? undefined : n };
+    clearTimeout(perfT);
+    perfT = setTimeout(async () => {
+      const buf = perfBuf; perfBuf = null;
+      try {
+        const all = (await api.storage.local.get('fcPerf')).fcPerf || {};
+        for (const [k, v] of Object.entries(buf)) { const o = all[k] || { max: 0, runs: 0 }; all[k] = { ms: v.ms, n: v.n, at: Date.now(), max: Math.max(o.max || 0, v.ms), runs: (o.runs || 0) + 1 }; }
+        await api.storage.local.set({ fcPerf: all });
+      } catch (e) { /* not important */ }
+    }, 1500);
+  }
+  const timed = async (name, fn, count) => { const t0 = Date.now(); const r = await fn(); perf(name, Date.now() - t0, count ? count(r) : undefined); return r; };
 
   // ---------------------------------------------------------------- photos from a search
   // A photo you searched that is not in Drive (dragged in, pasted) is kept by its fingerprint.
@@ -639,8 +875,9 @@ const FC = (() => {
   async function copiesOf(photoId) { return DB.by('copies', 'photo', photoId); }
   async function allCopies() {
     if (COPIES) return COPIES;
-    const gen = COPIES_GEN, list = await DB.all('copies');
+    const t0 = Date.now(), gen = COPIES_GEN, list = await DB.all('copies');
     if (gen === COPIES_GEN) COPIES = list;      // nothing changed while reading
+    perf('readCopies', Date.now() - t0, list.length);
     return list;
   }
   const countNew = () => DB.countBy('copies', 'status', 'new');
@@ -686,25 +923,30 @@ const FC = (() => {
         pct: l.pct, inl: l.inl, tiles: l.tiles, str: l.str, mid: l.mid, match: l.verdict, w: l.w, h: l.h };
       if (c) {
         if (!base.thumb && c.thumb) base.thumb = c.thumb;
+        if (!base.thumb && !c.thumb && c.th) delete base.thumb;      // its preview is already kept
         if (!base.img && c.img) base.img = c.img;
         Object.assign(c, base, { lastSeen: now, times: (c.times || 1) + 1 });
         if (c.online === 'gone') { c.online = 'back'; c.backAt = now; }
         out.push(c);
       } else {
         const n = { id, photo: p.id, client: p.client || '', ...base, firstSeen: now, lastSeen: now, times: 1, by, status: 'new', online: 'up' };
-        if (lic.has(baseOf(l.site)) || lic.has(l.site)) { n.status = 'licensed'; n.auto = 'Licensed site for this client'; }
+        if (lic.has(baseOf(l.site)) || lic.has(l.site)) { n.status = 'licensed'; n.auto = 'Approved site for this client'; }
+        else if (approvedForAll(l.site)) { n.status = 'licensed'; n.auto = 'Approved site for every client'; }
         n.country = countryOf(l.site); n.use = useOf(n);
         out.push(n); fresh++;
       }
     }
+    const newPics = out.map(splitPic).filter(Boolean);
+    await pics.putMany(newPics);
     await DB.putMany('copies', out);
     const all = await copiesOf(p.id);
     p.searches = (p.searches || 0) + 1;
     p.lastSearched = now;
+    delete p.retry;
     p.empty = links.length ? 0 : (p.empty || 0) + 1;
     p.copies = all.filter(c => c.status !== 'removed').length;
     p.stolen = all.filter(c => c.status === 'stolen').length;
-    if (all.length && pic.thumb && !p.thumb) p.thumb = pic.thumb;
+    if (all.length && pic.thumb && !p.thumb && !p.th) { p.thumb = pic.thumb; const pr = splitPic(p); if (pr) await pics.putMany([pr]); }
     await DB.put('photos', p);
     if (client) { client.lastSearched = now; await DB.put('clients', client); }
     // Keep today's tally for the side panel and Home.
@@ -712,7 +954,7 @@ const FC = (() => {
     const t = (await api.storage.local.get('fcToday')).fcToday || {};
     const today = t.day === day ? t : { day, searched: 0, found: 0 };
     today.searched++; today.found += fresh;
-    await api.storage.local.set({ fcToday: today });
+    await api.storage.local.set({ fcToday: today, fcLastSearch: Date.now() });
     await logWeek({ searched: 1, found: fresh, client: p.client || '' });
     queueDirty(true); backupCopiesSoon(); touch('copies');
     return { photo: p, fresh };
@@ -727,9 +969,11 @@ const FC = (() => {
       engines: l.engines || [], exact: !!l.exact, pct: l.pct, inl: l.inl, tiles: l.tiles, str: l.str, mid: l.mid, match: l.verdict || 'maybe', w: l.w, h: l.h,
       firstSeen: now, lastSeen: now, times: 1, by: (by || 'a search') + ' (added by hand)', status: 'new', online: 'up' };
     n.country = countryOf(l.site); n.use = useOf(n);
+    const np = splitPic(n);
+    if (np) await pics.putMany([np]);
     await DB.put('copies', n);
     p.copies = (await copiesOf(p.id)).filter(c => c.status !== 'removed').length;
-    if (pic.thumb && !p.thumb) p.thumb = pic.thumb;
+    if (pic.thumb && !p.thumb && !p.th) { p.thumb = pic.thumb; const pr = splitPic(p); if (pr) await pics.putMany([pr]); }
     await DB.put('photos', p);
     queueDirty(true); backupCopiesSoon(); touch('copies');
   }
@@ -796,6 +1040,28 @@ const FC = (() => {
     if (on) s.add(baseOf(site)); else s.delete(baseOf(site));
     c.licensed = [...s];
     await DB.put('clients', c); backupSoon();
+  }
+  // Approved sites: allowed to use the photos. client = one client's name, or '' for every client.
+  // Every copy on the site that is still New becomes Licensed (later finds too: see ingest).
+  // Returns an undo.
+  const approvedForAll = site => { try { return RS_LISTS.isAllowed(site, 'https://' + site + '/'); } catch (e) { return false; } };
+  async function approveSite(site, client, alsoId) {
+    const base = baseOf(site);
+    let had = false;
+    if (client) {
+      const c = await DB.get('clients', client);
+      had = !!c && (c.licensed || []).includes(base);
+      await licenseSite(client, base, true);
+    } else { await RS_LISTS.load(); had = RS_LISTS.allowed.includes(base); await RS_LISTS.add('allowed', base); }
+    const ids = (await DB.by('copies', 'status', 'new')).filter(c => baseOf(c.site) === base && (!client || c.client === client)).map(c => c.id);
+    if (alsoId && !ids.includes(alsoId)) ids.push(alsoId);        // the copy you were looking at, whatever it said before
+    const undoAns = ids.length ? await answer(ids, 'licensed', { auto: client ? 'Approved site for this client' : 'Approved site for every client' }) : null;
+    touch('approved');
+    return async () => {
+      if (undoAns) await undoAns();
+      if (!had) { if (client) await licenseSite(client, base, false); else { await RS_LISTS.load(); await RS_LISTS.remove('allowed', base); } }
+      touch('approved');
+    };
   }
   async function setClientOf(photoId, clientName) {
     const p = await DB.get('photos', photoId);
@@ -1170,9 +1436,9 @@ const FC = (() => {
     if (left.length !== list.length) backupSoon(true);
   }
 
-  return { DB, meta, open, touch, countNew, siteFinds, driveStateSoft, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
+  return { DB, meta, open, touch, pics, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, setPicked, pickInside, SCAN, applyPendingFlags, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
-    photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, setClientOf, setFlag, setClients, checkOnline, logWeek, week, weekKey,
+    photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, setClientOf, setFlag, setClients, checkOnline, logWeek, week, weekKey,
     hiddenCountries, setHiddenCountries, ownerFor, pathOf, logReport, USE, useOf, riskOf, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
     backupSoon, backupCopiesSoon, writeSettings, writeCopies, readBackup, restore, restoreCopies, settingsSnapshot, monthsOld, newness, yearOf, quarterOf, dayOf };
 })();

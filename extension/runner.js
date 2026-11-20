@@ -140,9 +140,10 @@ async function step() {
   const rest = await RS_JOB.resting();
   const s = await RS_JOB.settings();
   const on = RS_JOB.ENGINES.filter(e => s.engines[e]);
-  const restingNow = on.filter(e => rest[e]);
-  const restText = restingNow.map(e => NAMES[e] + ' is resting until ' + time(rest[e])).join('. ');
-  if (on.length && restingNow.length === on.length) return status('resting', restText + '. Search sites rest for an hour after an "are you a robot" check. PageProof never tries to get past it.');
+  const broken = await FC.brokenEngines();
+  const restingNow = on.filter(e => rest[e] || broken[e]);
+  const restText = restingNow.map(e => NAMES[e] + (broken[e] ? ' looks broken and is resting until ' + time(broken[e]) : ' is resting until ' + time(rest[e]))).join('. ');
+  if (on.length && restingNow.length === on.length) return status('resting', restText + '. A search site rests for an hour after an "are you a robot" check (PageProof never tries to get past it), and for 6 hours if it stops giving results.');
   // The pace: minutes between photos (never faster than this computer allows).
   const hw = await ppHardware();
   const order = ['Gentle', 'Steady', 'Faster'];
@@ -154,15 +155,10 @@ async function step() {
   const [p] = await FC.next(1, S.skip);
   if (!p) return status('idle', 'Every photo is up to date. PageProof looks again every hour. ' + tally + '.');
   S.skip.add(p.id);
-  let pic;
-  try {
-    pic = await RS_JOB.prepare(await FC.fileFor(p), { fcId: p.id, folderKey: p.rel });
-  } catch (e) { pic = { error: String(e && e.message || e) }; }
+  const pic = await FC.readPhoto(p);
   if (pic.error) {
-    // Unreadable (deleted, or not a real photo): note it so it doesn't hold up the line.
-    p.unreadable = pic.error; p.lastSearched = new Date().toISOString(); p.searches = (p.searches || 0) + 1;
-    await FC.DB.put('photos', p); FC.queueDirty();
-    return status('waiting', 'Skipped ' + p.name + ': it could not be opened.');
+    // Could not be opened: it goes on the Skipped photos list (with the reason) and the line moves on.
+    return status('waiting', pic.soft ? 'Google Drive did not hand over ' + p.name + '. It is tried again later.' : 'Skipped ' + p.name + '. See why in Find copies › Skipped photos.');
   }
   const job = await RS_JOB.create([pic], { kind: 'keep', auto: true });
   if (!job) return status('resting', restText || 'No search sites are switched on. Tick them in Find copies › New search.');
@@ -209,6 +205,7 @@ $('open').onclick = e => { e.preventDefault(); api.tabs.create({ url: api.runtim
   }
   try { const me = await api.tabs.getCurrent(); S.win = me.windowId; } catch (e) { /* not in a tab */ }
   await RS_LISTS.load().catch(() => {});
+  FC.movePics().catch(() => {});
   tick();
   setInterval(tick, 30000);
 })();

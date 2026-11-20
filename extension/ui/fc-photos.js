@@ -251,7 +251,8 @@ V.clients = async () => {
   const list = clients.filter(tabs[state.cTab] || tabs.All).filter(c => !q || c.name.toLowerCase().includes(q))
     .sort((a, b) => state.cSort === 'new' ? (nNew[b.name] || 0) - (nNew[a.name] || 0) : state.cSort === 'photos' ? (b.photos || 0) - (a.photos || 0) : (b.priority - a.priority) || a.name.localeCompare(b.name));
   const sc = await FC.meta.get('scan');
-  return `${head('Find copies', 'Clients and photos', 'Every client folder in your shared Google Drive. Pick which clients you search for, and star the ones that matter most.', `<button class="btn" data-act="cscan"${FC.SCAN.busy ? ' disabled' : ''}>🔄 ${FC.SCAN.busy ? 'Looking…' : 'Look for new photos'}</button><a class="btn" href="#connect" data-act="csreset">Change folder</a>`)}
+  const nSkipped = (await FC.skipped()).length;
+  return `${head('Find copies', 'Clients and photos', 'Every client folder in your shared Google Drive. Pick which clients you search for, and star the ones that matter most.', `${nSkipped ? `<a class="btn" href="#skipped">Skipped photos <span class="pill-n" style="background:var(--warn);margin:0">${nSkipped > 999 ? '999+' : nSkipped}</span></a>` : ''}<button class="btn" data-act="cscan"${FC.SCAN.busy ? ' disabled' : ''}>🔄 ${FC.SCAN.busy ? 'Looking…' : 'Look for new photos'}</button><a class="btn" href="#connect" data-act="csreset">Change folder</a>`)}
   ${await driveBanner()}
   ${state.scanText ? `<div class="scanbar"><span class="spin"></span>${esc(state.scanText)}</div>` : sc ? `<p class="faint" style="margin:0;font-size:13px">Last looked ${fmtDate(sc.at)}${sc.added ? ' · ' + sc.added + ' new photos' : ''}. PageProof looks in this and last quarter's folders every hour, and every folder once a week on a weekday (8 AM to 6 PM).</p>` : ''}
   <section class="card" style="overflow:hidden">
@@ -341,7 +342,7 @@ V.photos = async () => {
     const r = regs.get(p.folder);
     return `<div class="pcard${state.phPicked.includes(p.id) ? ' on' : ''}">
       <label class="tick"><input type="checkbox" data-act="phpick" data-v="${esc(p.id)}" ${state.phPicked.includes(p.id) ? 'checked' : ''} aria-label="Pick ${esc(p.name)}"></label>
-      <div class="frame ours" style="aspect-ratio:3/2;border-radius:8px"><img data-lazy="${esc(p.id)}" src="${p.thumb ? safeImg(p.thumb) : 'icons/icon48.png'}" alt="" loading="lazy" style="object-fit:${p.thumb ? 'cover' : 'scale-down'}"></div>
+      <div class="frame ours" style="aspect-ratio:3/2;border-radius:8px"><img data-lazy="${esc(p.id)}" src="${p.thumb ? safeImg(p.thumb) : p.th ? (FC.pics.seen(p.id) || lazyPic(p)) : 'icons/icon48.png'}" alt="" loading="lazy" style="object-fit:${p.thumb || p.th ? 'cover' : 'scale-down'}"></div>
       <b style="font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.name)}">${esc(p.name)}</b>
       <span class="faint" style="font-size:12px">${p.year || ''}${p.quarter ? ' Q' + p.quarter : ''}${p.searches ? ' · searched ' + plural(p.searches, 'time') : ' · not searched yet'}${p.copies ? ' · ' + plural(p.copies, 'copy', 'copies') : ''}</span>
       <div class="row" style="gap:4px">${r && r.va ? `<span class="tag ok" style="font-size:11px">${esc(r.va)}</span>` : r && r.app ? `<span class="tag warn" style="font-size:11px">Applied</span>` : '<span class="tag grey" style="font-size:11px">No number</span>'}${p.doubleOf ? '<span class="tag grey" style="font-size:11px">Double</span>' : ''}${p.empty >= 5 ? `<span class="tag grey" style="font-size:11px" title="${p.empty} searches found nothing: searched ${p.empty >= 10 ? 'every 3 months' : 'monthly'}">Quiet</span>` : ''}${due(p) ? `<span class="tag copy" style="font-size:11px">${due(p)}</span>` : ''}</div>
@@ -388,15 +389,15 @@ function lazyThumbs() {
       const img = queue.shift(); busy++;
       (async () => {
         const p = await FC.DB.get('photos', img.dataset.lazy);
-        if (!p || p.thumb) return;
+        if (!p || p.thumb || p.th) return;
         const f = await FC.fileFor(p);
         const pic = await RS_JOB.prepare(f);
         if (pic.error) return;
-        p.thumb = pic.thumb; p.w = pic.w; p.h = pic.h; p.hash = p.hash || pic.hash;
+        p.w = pic.w; p.h = pic.h; p.hash = p.hash || pic.hash;
         try { p.look = await FC.lookHash(pic.blob); } catch (e) { /* skip */ }
-        await FC.DB.put('photos', p);
+        await FC.setThumb('photos', p, pic.thumb);
         const kept = PH && PH.list.find(x => x.id === p.id);
-        if (kept) Object.assign(kept, { thumb: p.thumb, w: p.w, h: p.h, hash: p.hash, look: p.look });
+        if (kept) Object.assign(kept, { thumb: p.thumb, th: p.th, w: p.w, h: p.h, hash: p.hash, look: p.look });
         img.src = pic.thumb; img.style.objectFit = 'cover';
       })().catch(() => {}).finally(() => { busy--; pump(); });
     }
@@ -433,7 +434,7 @@ Object.assign(ACTS, {
     const pics = [];
     for (const id of ids) {
       const p = await FC.DB.get('photos', id);
-      try { const pic = await RS_JOB.prepare(await FC.fileFor(p), { fcId: p.id, folderKey: p.rel }); if (!pic.error) pics.push(pic); } catch (e) { /* skip unreadable */ }
+      { const pic = await FC.readPhoto(p); if (!pic.error) pics.push(pic); }
     }
     if (!pics.length) return toast('Those photos could not be read. Check that Google Drive is running.');
     const job = await RS_JOB.create(pics, { kind: 'new' });
@@ -453,6 +454,7 @@ V.keep = async () => {
   const [tl, tc] = STATE_TAG[s] || ['Starting', 'grey'];
   const today = store.fcToday && store.fcToday.day === new Date().toDateString() ? store.fcToday : { searched: 0, found: 0 };
   const rest = Object.entries(store.fcRest || {}).filter(([, t]) => t > Date.now());
+  const broken = Object.entries(await FC.brokenEngines());
   const ORDER = ['Gentle', 'Steady', 'Faster'];
   const pace = ORDER[Math.min(ORDER.indexOf(k.pace), ORDER.indexOf(hw.limits.pace))] || 'Steady';
   const perHour = 60 / FC.PACE[pace];
@@ -468,7 +470,7 @@ V.keep = async () => {
     <div class="row"><label class="switch"><input type="checkbox" data-act="keepon" ${k.on ? 'checked' : ''}><span></span></label><h2>Keep searching is ${k.on ? 'on' : 'off'}</h2><span class="tag ${tc}" style="margin-left:auto">${tl}</span></div>
     ${k.on ? `<p class="muted" style="margin:0">${esc(alive ? st.text : 'Starting the search window…')}</p>
       ${alive && st.current ? `<div class="row" style="gap:10px"><img class="thumb" src="${safeImg(st.current.thumb) || 'icons/icon48.png'}" width="64" height="44" alt=""><div><b>${esc(st.current.name)}</b><div class="muted" style="font-size:13px">${esc(st.current.sub || '')}</div></div></div>` : ''}
-      <div class="row"><button class="btn" data-act="keeppause">${store.fcPause ? 'Resume' : 'Pause'}</button><button class="btn" data-act="keepshow">Show the search window</button>${rest.length ? `<span class="muted" style="font-size:13.5px">Resting after a robot check: ${rest.map(([e, t]) => esc({ google: 'Google', yandex: 'Yandex', bing: 'Bing' }[e] || e) + ' until ' + new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })).join(', ')}</span>` : ''}</div>`
+      <div class="row"><button class="btn" data-act="keeppause">${store.fcPause ? 'Resume' : 'Pause'}</button><button class="btn" data-act="keepshow">Show the search window</button>${broken.length ? `<span style="font-size:13.5px;color:var(--bad)">May have stopped working, resting: ${broken.map(([e, t]) => esc(FC.ENGINE_NAME[e]) + ' until ' + new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })).join(', ')}. <a href="#health">Details</a></span>` : ''}${rest.length ? `<span class="muted" style="font-size:13.5px">Resting after a robot check: ${rest.map(([e, t]) => esc({ google: 'Google', yandex: 'Yandex', bing: 'Bing' }[e] || e) + ' until ' + new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })).join(', ')}</span>` : ''}</div>`
     : '<p class="muted" style="margin:0">Turn it on and PageProof searches in the background while you work. You can stop it any time.</p>'}
     <div class="grid g3">
       <div class="stat"><b>${today.searched}</b><span>photos searched today</span></div>
@@ -523,7 +525,7 @@ Object.assign(ACTS, {
   keeptime: async (v, el) => { if (/^\d\d:\d\d$/.test(el.value)) { await FC.setKeep({ fiftyTime: el.value }); api.runtime.sendMessage({ type: 'fcFiftyAlarm' }).catch(() => {}); } },
   fifty: async () => {
     const st = await FC.driveState(true);
-    if (st !== 'granted') { toast(st === 'offline' ? 'Can\'t reach Google Drive.' : 'Click Allow first so PageProof can read your photos.'); return render(true); }
+    if (st !== 'granted') { if (st === 'prompt') state.wantFifty = true; toast(st === 'offline' ? 'Can\'t reach Google Drive.' : 'Press Allow (the yellow bar at the top) and today\'s ' + (await FC.keep()).perDay + ' start by themselves.'); return render(true); }
     const k = await FC.keep();
     const n = Math.min(k.perDay, 100);
     toast('Getting the next ' + n + ' photos ready…');
@@ -533,7 +535,7 @@ Object.assign(ACTS, {
       if (pics.length >= n) break;
       // Each photo is downloaded from Google Drive first, so say how far along it is.
       toast('Getting photo ' + (pics.length + 1) + ' of ' + Math.min(n, ps.length) + ' ready from Google Drive…');
-      try { const pic = await RS_JOB.prepare(await FC.fileFor(p), { fcId: p.id, folderKey: p.rel }); if (!pic.error) pics.push(pic); } catch (e) { /* skip */ }
+      { const pic = await FC.readPhoto(p); if (!pic.error) pics.push(pic); }
     }
     if (!pics.length) return toast('Nothing to search right now. Every photo is up to date.');
     const job = await RS_JOB.create(pics, { kind: 'fifty' });

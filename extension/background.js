@@ -598,15 +598,75 @@ async function newBadge() {
         q.onsuccess = () => { db.close(); res(q.result); }; q.onerror = () => { db.close(); rej(q.error); };
       };
     });
+    // A red "!" wins: Google Drive is waiting for its one click (see driveNudge).
+    if ((await api.storage.local.get('fcNeedsAllow')).fcNeedsAllow) { api.action.setBadgeBackgroundColor({ color: '#E11D48' }); api.action.setBadgeText({ text: '!' }); return; }
     api.action.setBadgeBackgroundColor({ color: '#FF8F4B' });
     api.action.setBadgeText({ text: n ? (n > 999 ? '999+' : String(n)) : '' });
   } catch (e) { /* nothing found yet */ }
+}
+// ---------- the morning nudge: Google Drive needs one click after the browser restarts ----------
+// The browser forgets PageProof's permission to read the photos folder when it closes. Until
+// someone clicks Allow, nothing can be searched. So when searching is switched on (Keep searching
+// or today's batch starting by itself), the toolbar icon shows a red "!" and, once after the
+// browser starts, a notification says so.
+async function driveNeedsClick() {
+  try {
+    const h = await new Promise((res, rej) => {
+      const r = indexedDB.open('pageproof-rs');
+      r.onerror = () => rej(r.error);
+      r.onupgradeneeded = () => { r.transaction.abort(); rej(new Error('none')); };
+      r.onsuccess = () => {
+        const db = r.result;
+        if (!db.objectStoreNames.contains('handles')) { db.close(); return res(null); }
+        const q = db.transaction('handles').objectStore('handles').get('fcRoot');
+        q.onsuccess = () => { db.close(); res(q.result); }; q.onerror = () => { db.close(); rej(q.error); };
+      };
+    });
+    if (!h || !h.queryPermission) return false;
+    return (await h.queryPermission({ mode: 'read' })) !== 'granted';
+  } catch (e) { return false; }
+}
+async function driveNudge(notify) {
+  const st = await api.storage.local.get(['fcKeep', 'fcDrive', 'fcNeedsAllow']);
+  const wanted = st.fcDrive && st.fcDrive.done && st.fcKeep && (st.fcKeep.on || st.fcKeep.fiftyAuto);
+  const need = wanted ? await driveNeedsClick() : false;
+  if (!!st.fcNeedsAllow !== need) { await api.storage.local.set({ fcNeedsAllow: need ? Date.now() : 0 }); newBadge(); }
+  if (need && notify && api.notifications) {
+    api.notifications.create('fcAllow', { type: 'basic', iconUrl: api.runtime.getURL('icons/icon128.png'), title: 'PageProof: one click to start today\'s search',
+      message: 'Your browser asks once after it restarts. Click here, then press Allow, and PageProof starts searching your photos.', priority: 2, requireInteraction: true });
+  }
+}
+// ---------- is there a newer PageProof? Asked once a day, on a weekday morning or when the browser starts ----------
+async function updateCheck(force) {
+  try {
+    const u = (await api.storage.local.get('ppUpdate')).ppUpdate;
+    if (!force && u && Date.now() - u.at < 20 * 3600000) return;
+    const cur = api.runtime.getManifest().version;
+    const st = { at: Date.now(), latest: '', has: false, error: '' };
+    const REPO = 'TheBenPsych/PageProof';
+    let m = null;
+    for (const [url, cred] of [['https://raw.githubusercontent.com/' + REPO + '/main/extension/manifest.json', 'omit'], ['https://github.com/' + REPO + '/raw/main/extension/manifest.json', 'include']]) {
+      try { const r = await fetch(url + '?t=' + Date.now(), { cache: 'no-store', credentials: cred }); if (r.ok && !/text\/html/.test(r.headers.get('content-type') || '')) { m = await r.json(); break; } } catch (e) { /* next */ }
+    }
+    if (!m) {
+      const tk = ((await api.storage.local.get('ppGhToken')).ppGhToken || '').trim();
+      if (tk) { try { const r = await fetch('https://api.github.com/repos/' + REPO + '/contents/extension/manifest.json', { cache: 'no-store', credentials: 'omit', headers: { Authorization: 'Bearer ' + tk, Accept: 'application/vnd.github.raw+json' } }); if (r.ok) m = await r.json(); } catch (e) { /* none */ } }
+    }
+    if (m && /^\d+(\.\d+){1,3}$/.test(m.version || '')) {
+      const a = m.version.split('.').map(Number), b = cur.split('.').map(Number);
+      for (let i = 0; i < Math.max(a.length, b.length); i++) { const d = (a[i] || 0) - (b[i] || 0); if (d) { st.has = d > 0; break; } }
+      st.latest = m.version;
+    } else st.error = 'PageProof could not reach its code on GitHub. The code is private, so this browser has to be signed in to GitHub with an account that can see it.';
+    const told = u && u.has && u.latest === st.latest;
+    await api.storage.local.set({ ppUpdate: st });
+    if (st.has && !told && api.notifications) api.notifications.create('ppUpdate', { type: 'basic', iconUrl: api.runtime.getURL('icons/icon128.png'), title: 'PageProof ' + st.latest + ' is ready', message: 'Click here, then press Update now. It takes about a minute and keeps everything you have.', priority: 1 });
+  } catch (e) { /* tried again tomorrow */ }
 }
 if (api.alarms) {
   api.alarms.create('fcKeep', { periodInMinutes: 1 });
   api.alarms.onAlarm.addListener(async a => {
     if (a.name === 'fcKeep') {
-      newBadge();
+      newBadge(); driveNudge(false); updateCheck(false);
       const st = (await api.storage.local.get('fcStatus')).fcStatus;
       if (!st || Date.now() - st.beat > 90000) keepAlive(false);
     }
@@ -618,11 +678,12 @@ if (api.alarms) {
   });
 }
 api.storage.onChanged.addListener(ch => {
-  if (ch.fcKeep) fiftySchedule();
+  if (ch.fcKeep) { fiftySchedule(); driveNudge(false); }
+  if (ch.fcNeedsAllow) newBadge();
   if (ch.fcChanged) { clearTimeout(badgeT); badgeT = setTimeout(newBadge, 2000); }
 });
 let badgeT = null;
-api.runtime.onStartup.addListener(() => { fiftySchedule(); keepAlive(false); newBadge(); });
+api.runtime.onStartup.addListener(() => { fiftySchedule(); keepAlive(false); newBadge(); driveNudge(true); updateCheck(false); });
 api.runtime.onInstalled.addListener(d => {
   fiftySchedule(); newBadge();
   if (d.reason === 'install') api.tabs.create({ url: api.runtime.getURL('app.html#setup') });
@@ -647,5 +708,6 @@ if (api.notifications) {
   api.notifications.onClicked.addListener(id => {
     api.notifications.clear(id);
     if (id === 'fcAllow' || id === 'fcDrive') api.tabs.create({ url: api.runtime.getURL('app.html#keep') });
+    if (id === 'ppUpdate' || id.startsWith('fcEngine:')) api.tabs.create({ url: api.runtime.getURL('app.html#health') });
   });
 }

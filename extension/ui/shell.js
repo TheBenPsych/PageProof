@@ -11,7 +11,7 @@ const PP_MENU = [
   { g: 'Collect evidence', items: [
     { id: 'capture', label: 'Capture a page', desc: 'Save a web page as proof', href: 'capture' },
     { id: 'find', label: 'Find copies', desc: 'Search the web for your photos', href: 'found', badgeKey: 'newCopies',
-      subs: [['All copies found', 'found'], ['Review new copies', 'review'], ['Clients and photos', 'clients'], ['Site owners', 'owners'], ['Keep searching', 'keep'], ['New search', 'search'], ['All searches', 'searches']] },
+      subs: [['All copies found', 'found'], ['Review new copies', 'review'], ['Clients and photos', 'clients'], ['Skipped photos', 'skipped'], ['Site owners', 'owners'], ['Keep searching', 'keep'], ['New search', 'search'], ['All searches', 'searches']] },
   ] },
   { g: 'Look closer', items: [
     { id: 'tools', label: 'Photo tools', desc: 'Hidden data, compare, mark up', href: 'inspect', subs: [['Inspect a photo', 'inspect'], ['Compare two photos', 'compare'], ['Mark up a copy', 'markup']] },
@@ -30,7 +30,7 @@ const PP_ROUTES = {
   clients: ['find', 'clients'], photos: ['find', 'clients'], owners: ['find', 'owners'], who: ['find', 'owners'], keep: ['find', 'keep'], connect: ['find', 'found'], weekly: ['library', 'weekly'],
   inspect: ['tools', 'inspect'], compare: ['tools', 'compare'], markup: ['tools', 'markup'], files: ['files', 'files'], openfiles: ['files', 'openfiles'],
   library: ['library', 'library'], verify: ['verify'], browser: ['browser'], settings: ['settings'], hidden: ['settings'], computer: ['settings'],
-  whatsnew: ['settings'], setup: ['browser'], help: ['help']
+  whatsnew: ['settings'], health: ['settings'], skipped: ['find', 'skipped'], setup: ['browser'], help: ['help']
 };
 const PP_CRUMBS = {
   results: 'Find copies › Search results',
@@ -39,7 +39,7 @@ const PP_CRUMBS = {
   who: 'Find copies › Who\'s behind this site', keep: 'Find copies › Keep searching', connect: 'Find copies › Connect your photos', weekly: 'Evidence library › Weekly summary',
   inspect: 'Photo tools › Inspect a photo', compare: 'Photo tools › Compare two photos', markup: 'Photo tools › Mark up a copy', files: 'Open files › Convert files',
   openfiles: 'Open files › Open odd files', library: 'Evidence library › All evidence', verify: 'Verify a pack', browser: 'Toolbar and side panel', settings: 'Settings',
-  hidden: 'Settings › Hidden and allowed sites', computer: 'Settings › Your computer', whatsnew: 'Settings › What\'s new', setup: 'First-time setup', help: 'Help and tutorial'
+  hidden: 'Settings › Hidden and approved sites', computer: 'Settings › Your computer', whatsnew: 'Settings › What\'s new', health: 'Settings › Is everything working?', skipped: 'Find copies › Skipped photos', setup: 'First-time setup', help: 'Help and tutorial'
 };
 const PP_BADGES = {};
 
@@ -55,7 +55,7 @@ function ppRenderSide(route) {
     }
   }
   h += `<div class="grow"></div>
-  <a class="nav${sec === 'settings' ? ' on' : ''}" href="#settings">${ic('settings')}<span class="t"><b>Settings</b><i>Name, folder, hidden sites</i></span></a>
+  <a class="nav${sec === 'settings' ? ' on' : ''}" href="#settings">${ic('settings')}<span class="t"><b>Settings</b><i>Name, folder, health, updates</i></span></a>
   <a class="nav${sec === 'help' ? ' on' : ''}" href="#help">${ic('help')}<span class="t"><b>Help and tutorial</b></span></a>`;
   document.getElementById('side').innerHTML = h;
 }

@@ -258,7 +258,7 @@ Click the PageProof icon and choose **Reverse image search**.
    - PageProof switches to the results page (Find copies › Search results). You can look at other PageProof pages while it runs and come back.
    - The Google, Yandex and Bing search tabs open as small pinned tabs at the left of the tab bar, so they don't fill it. These are the same pages you would get searching by hand. Each search tab closes by itself once PageProof has read it, which keeps the computer fast. The **Google tab / Yandex tab / Bing tab** buttons on a picture's results open it again. If a search fails, its tab stays so you can look at it, but Chrome puts it to sleep so it uses almost no memory until you click it.
    - Leave the PageProof tab open until the progress bar on the left finishes. About 2 to 3 minutes for 30 pictures.
-4. **The review is in Find copies › All copies found.** Every Same photo and Maybe link goes there by itself (press **Review new copies**). The Search results page only shows progress, plus a folded **Thrown out by the checker** list (Different photo and Can't check); press **＋ It is a copy** on one to send it to All copies found. Pick a picture on the left to see its progress. Under each picture on the left, **⏳ Checking matches · 12 left** means PageProof is still comparing the copies it found; **✓ All checked · ready to review** means that picture's list is final. If you open **Hidden and allowed sites** or **Past searches** while a search runs, use **↩ Back to search results** to return to it (the search keeps going in its own tab). The comparing runs in the background on your computer's spare processor cores, so the page stays smooth while it works. A picture that takes longer than 30 seconds to compare is skipped and shown as **Can't check**.
+4. **The review is in Find copies › All copies found.** Every Same photo and Maybe link goes there by itself (press **Review new copies**). The Search results page only shows progress, plus a folded **Thrown out by the checker** list (Different photo and Can't check); press **＋ It is a copy** on one to send it to All copies found. Pick a picture on the left to see its progress. Under each picture on the left, **⏳ Checking matches · 12 left** means PageProof is still comparing the copies it found; **✓ All checked · ready to review** means that picture's list is final. If you open **Hidden and approved sites** or **Past searches** while a search runs, use **↩ Back to search results** to return to it (the search keeps going in its own tab). The comparing runs in the background on your computer's spare processor cores, so the page stays smooth while it works. A picture that takes longer than 30 seconds to compare is skipped and shown as **Can't check**.
    - PageProof does not trust the search sites' own "exact match" labels. It downloads every copy it found and lines it up with your picture, the same way the Compare page does, then sorts each link into:
      - **✅ Same photo**: many details line up. This is your photo, even if it was cropped, resized, mirrored, colour-changed or had text put over it. This is the list shown first.
      - **Maybe**: a few details line up. Worth a quick look. Same-photo checks also look at the middle of your picture, so a different photo taken in front of the same logo wall or backdrop is not counted as the same photo.
@@ -271,7 +271,7 @@ Click the PageProof icon and choose **Reverse image search**.
    - **New**: links that were not there the last time you searched the same picture. Links you have seen before say "Seen before" with the date they were first found.
    - Which site found it (Google, Yandex, Bing).
 5. **✕ Not a match** is for a link PageProof got wrong: it is a different photo. It moves to **Different photo**, and PageProof keeps its numbers so the checker can be tuned from your choices. **🗑 (trash can)** is for a link you just don't want (licensed, not worth chasing and so on). Trashed links never show again for that picture. Both are saved in `Documents\PageProof\rejected-links.txt`. To bring one back, pick the **🗑 Rejected** filter and press **↩ Put back** (or delete its line from the file).
-6. **Hide this site** hides that site for every picture, now and in future searches (good for Pinterest, stock photo sites and so on). To hide a whole kind of site, type its ending with a dot on the **Hidden and allowed sites** page, for example `.gov` or `.edu`. To hide just one account or section of a site, press the small red **🚫 Hide x.com/nypostsports** under a link, or type it the same way on that page (for example `x.com/nypostsports` or `example.com/forum`). The rest of the site still shows. **Mark allowed** is for your own site and licensees: they still show, with a green **Allowed** label.
+6. **Hide this site** hides that site for every picture, now and in future searches (good for Pinterest, stock photo sites and so on). To hide a whole kind of site, type its ending with a dot on the **Hidden and approved sites** page, for example `.gov` or `.edu`. To hide just one account or section of a site, press the small red **🚫 Hide x.com/nypostsports** under a link, or type it the same way on that page (for example `x.com/nypostsports` or `example.com/forum`). The rest of the site still shows. **Mark allowed** is for your own site and licensees: they still show, with a green **Allowed** label.
 7. Tick links and press **🚫 Hide these sites** to hide several sites at once. To capture a page, press **Capture** on its link.
 8. **Save results** downloads a PDF report and a spreadsheet of everything found.
 
@@ -311,19 +311,38 @@ After the browser restarts, it may ask for **one click on Allow** to read the ph
 **Clients and photos.** Turn searching on or off per client, star priority clients (tick several for bulk changes), and press **🔄 Look for new photos** after adding photos. PageProof also looks every hour in this and last quarter's folders, and in every folder once a week (on a weekday between 8 AM and 6 PM, when the office computers are on). Click a client to see their photos, flag them ⚑ High or ★ Popular, or tick some and press **Search now**.
 
 **All copies found** lists every copy found. Group by client, photo, site or site owner; filter by status, how it's used, suspicious sites, credit removed or selling something; hide whole countries. Hover a thumbnail to see it next to your client's photo. Click a row to open its details:
-- the **copyright registration** (VA number, or the 1-… application number) found in the folder names or an Excel file in the folders, with **Add the number** if none was found;
+- the **copyright registration** (VA number, or the 1-… application number) when one is found in the folder names or an Excel file in the folders;
 - the full **Drive path** of your client's photo, with **Copy path**;
 - the site owner, how the photo is used, the site check, whether the credit was removed, and whether it's still online;
 - **Stolen (Y)**, **Licensed (L)**, **🗑 Remove (N)** or **Skip (→)**. The next copy opens by itself. **Undo (U or Ctrl+Z)** steps back through every answer;
+- **✅ Approve site** when the site is allowed to use the photo: for that one client, or for every client. Its copies are marked Licensed by themselves from then on (change it in Settings › Hidden and approved sites);
 - **🚫 Hide site** (just this account, just this sub-site, or the whole domain), **Open page**, **Capture**, and **Evidence report** (asks for the case number, then saves a one-page PDF).
 
-**Review new copies** shows one new copy at a time, side by side or with a swipe slider (S switches), with the same keys.
+**Review new copies** shows one new copy at a time, side by side or with a swipe slider (S switches), with the same keys. **Repeat offenders come first:** a new copy on a site, or a site owner, that you already marked Stolen gets a red **stolen before** badge.
+
+**Skipped photos** (Find copies › Skipped photos) lists photos that could not be searched and why: the file is gone, empty, damaged, or a TIFF or HEIC (those can't be searched; save a JPG copy next to it). **Try again** puts a photo at the front of the line.
 
 **Site owners** puts together sites run by one company (big media groups, the same company in the footer, the same Google Analytics or ad ID). **Who's behind this site** reads a site's own pages for names, contacts and domain facts, gives quick links to OpenCorporates, USPTO trademarks, Google, LinkedIn and ICANN, and lets you capture its About, Contact and Privacy pages.
 
 **Weekly summary** (Library › Weekly summary) shows what was searched, found and marked each week, and saves as a PDF.
 
 Everything you find is kept in this browser and also in `Documents\PageProof\found-copies.txt`; your settings are in `pageproof-settings.json`. After a reinstall, first-time setup offers to bring them back.
+
+## 18. Is everything working, and updating PageProof
+
+**Settings › Is everything working?** shows a light for each part: Google Drive, Keep searching, the last photo searched, each search site, your backup, skipped photos and the PageProof version. Green is fine, yellow needs a look, red is stopped.
+
+- **A search site may have stopped working.** If Google Lens finds nothing at all for 10 photos in a row (30 for Yandex or Bing), or a site gives no answer 8 times in a row, PageProof rests it for 6 hours and tells you. The empty results of that run are **not** counted against your photos. Press **Try it now** to test it straight away.
+- **Copy details for support** copies numbers and settings only (how many photos, how long things take). Never a photo's name, a client's name, a site or a folder path. The page shows exactly what was copied.
+
+**Updating.** PageProof asks GitHub each morning whether there is a newer version, and says so on Home and on the PageProof icon's menu.
+1. Open **Settings › Is everything working?** and scroll to **Updates**.
+2. The first time on a computer, press **Pick the PageProof folder** and choose the folder PageProof was installed from (the unzipped PageProof folder you loaded on the extensions page).
+3. Press **Update now**. PageProof downloads the new version, puts the files in that folder and restarts. Your finds, settings and lists are kept.
+
+PageProof's code on GitHub is private, so the browser must be signed in to GitHub with an account that can see it (or paste a read-only access key once, under **How "Update now" works**). If Update now can't be used, **Download the zip instead** opens the download page: unzip it over your PageProof folder and press the reload arrow on the extensions page.
+
+**The red "!" on the PageProof icon** means Google Drive is waiting for its one click on **Allow** after the browser restarted. Click the icon and press **Allow**.
 
 ## Quick troubleshooting
 
