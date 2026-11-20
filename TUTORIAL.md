@@ -340,7 +340,7 @@ Everything you find is kept in this browser and also in `Documents\PageProof\fou
 2. The first time on a computer, press **Pick the PageProof folder** and choose the folder PageProof was installed from (the unzipped PageProof folder you loaded on the extensions page).
 3. Press **Update now**. PageProof downloads the new version, puts the files in that folder and restarts. Your finds, settings and lists are kept.
 
-PageProof's code on GitHub is private, so the browser must be signed in to GitHub with an account that can see it (or paste a read-only access key once, under **How "Update now" works**). If Update now can't be used, **Download the zip instead** opens the download page: unzip it over your PageProof folder and press the reload arrow on the extensions page.
+If Update now can't be used, **Download the zip instead** opens the download page: unzip it over your PageProof folder and press the reload arrow on the extensions page.
 
 **The red "!" on the PageProof icon** means Google Drive is waiting for its one click on **Allow** after the browser restarted. Click the icon and press **Allow**.
 

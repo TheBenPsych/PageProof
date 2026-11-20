@@ -639,24 +639,19 @@ async function driveNudge(notify) {
 // ---------- is there a newer PageProof? Asked once a day, on a weekday morning or when the browser starts ----------
 async function updateCheck(force) {
   try {
+    api.storage.local.remove('ppGhToken'); // left over from 4.1.0, when the code was private
     const u = (await api.storage.local.get('ppUpdate')).ppUpdate;
     if (!force && u && Date.now() - u.at < 20 * 3600000) return;
     const cur = api.runtime.getManifest().version;
     const st = { at: Date.now(), latest: '', has: false, error: '' };
     const REPO = 'TheBenPsych/PageProof';
     let m = null;
-    for (const [url, cred] of [['https://raw.githubusercontent.com/' + REPO + '/main/extension/manifest.json', 'omit'], ['https://github.com/' + REPO + '/raw/main/extension/manifest.json', 'include']]) {
-      try { const r = await fetch(url + '?t=' + Date.now(), { cache: 'no-store', credentials: cred }); if (r.ok && !/text\/html/.test(r.headers.get('content-type') || '')) { m = await r.json(); break; } } catch (e) { /* next */ }
-    }
-    if (!m) {
-      const tk = ((await api.storage.local.get('ppGhToken')).ppGhToken || '').trim();
-      if (tk) { try { const r = await fetch('https://api.github.com/repos/' + REPO + '/contents/extension/manifest.json', { cache: 'no-store', credentials: 'omit', headers: { Authorization: 'Bearer ' + tk, Accept: 'application/vnd.github.raw+json' } }); if (r.ok) m = await r.json(); } catch (e) { /* none */ } }
-    }
+    try { const r = await fetch('https://raw.githubusercontent.com/' + REPO + '/main/extension/manifest.json?t=' + Date.now(), { cache: 'no-store', credentials: 'omit' }); if (r.ok) m = await r.json(); } catch (e) { /* offline */ }
     if (m && /^\d+(\.\d+){1,3}$/.test(m.version || '')) {
       const a = m.version.split('.').map(Number), b = cur.split('.').map(Number);
       for (let i = 0; i < Math.max(a.length, b.length); i++) { const d = (a[i] || 0) - (b[i] || 0); if (d) { st.has = d > 0; break; } }
       st.latest = m.version;
-    } else st.error = 'PageProof could not reach its code on GitHub. The code is private, so this browser has to be signed in to GitHub with an account that can see it.';
+    } else st.error = 'PageProof could not reach GitHub just now. It will try again later.';
     const told = u && u.has && u.latest === st.latest;
     await api.storage.local.set({ ppUpdate: st });
     if (st.has && !told && api.notifications) api.notifications.create('ppUpdate', { type: 'basic', iconUrl: api.runtime.getURL('icons/icon128.png'), title: 'PageProof ' + st.latest + ' is ready', message: 'Click here, then press Update now. It takes about a minute and keeps everything you have.', priority: 1 });
