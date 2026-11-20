@@ -34,6 +34,8 @@ V.connect = async () => {
       state.csStar = new Set((await FC.DB.all('clients')).filter(c => c.priority && c.pick).map(c => c.pick));
       for (const r of state.csPick) { const parts = r.split('/'); for (let k = 1; k < parts.length; k++) state.csOpen.add(parts.slice(0, k).join('/')); }
     }
+    // Tell the automatic photo checks to wait while this page is open (they keep Google Drive busy).
+    if (Date.now() - csHoldAt > 20000) { csHoldAt = Date.now(); ppApi.storage.local.set({ fcSetupAt: csHoldAt }).catch(() => {}); }
     // Folders are opened in the background, so the page never waits on a big folder.
     if (root && st === 'granted') { csLoad(''); for (const r of state.csOpen) csLoad(r); }
     const pick = state.csPick || new Set();
@@ -88,7 +90,9 @@ V.connect.noAutoRedraw = true;
 // The folders inside one folder (read once, then kept while setup is open).
 // Open a folder in the background: its folders show first, then the client_info tags fill in
 // a few at a time. The page is redrawn as things arrive.
-let csDrawT = null;
+let csDrawT = null, csHoldAt = 0;
+// Keep saying "setup is open" while someone sits on the folder step.
+setInterval(() => { if (route() === 'connect' && state.cs === 2 && !document.hidden) { csHoldAt = Date.now(); ppApi.storage.local.set({ fcSetupAt: csHoldAt }).catch(() => {}); } }, 30000);
 // Redraw at most every 300 ms. (It must not keep pushing the redraw back while tags are still
 // being read, or a big folder shows nothing until every tag is in.)
 const csDraw = now => {

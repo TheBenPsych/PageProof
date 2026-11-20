@@ -81,10 +81,10 @@ async function chores() {
     if (!m.full) ch.full = now;
     else if (workTime && now - m.full > 6.5 * 86400000) {
       await status('running', 'Reading every folder in Google Drive for new photos (weekly check)…');
-      const r = await FC.scan({ full: true }); if (!r.busy && !r.state) ch.full = now;
+      const r = await FC.scan({ full: true, background: true }); if (!r.busy && !r.state) ch.full = now;
       await FC.applyPendingFlags();
     } else if (now - (m.quick || 0) > 3600000) {
-      const r = await FC.scan({ full: false }); if (!r.busy && !r.state) ch.quick = now;
+      const r = await FC.scan({ full: false, background: true }); if (!r.busy && !r.state) ch.quick = now;
     }
     // Once a week: are the copies marked Stolen still online? A few at a time.
     if (now - (m.online || 0) > 7 * 86400000) {
