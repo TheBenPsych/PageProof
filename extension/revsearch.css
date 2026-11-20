@@ -174,3 +174,16 @@ h2.sec { margin: 6px 0 0; font-size: 18px; }
 .pitem .ck.busy { color: #fde68a; } .pitem .ck.ready { color: #86efac; }
 .row .act button.nomatch { color: #92400e; border-color: #fcd34d; }
 .row .act button.nomatch:hover { background: #fffbeb; }
+
+/* Search results as a progress page (the review itself is in All copies found). */
+.sumcard { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+.sumcard > div { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.sumcard b { font-size: 16px; } .sumcard small { color: #475569; font-size: 13px; }
+.sumcard a.btn { text-decoration: none; padding: 9px 14px; border-radius: 8px; font-weight: 600; font-size: 14px; border: 1px solid #cbd5e1; background: #fff; color: #1e3a8a; }
+.sumcard a.btn.blue { background: var(--accent); color: #fff; border-color: var(--accent); }
+details.thrown { margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; padding: 4px 14px; }
+details.thrown > summary { cursor: pointer; padding: 10px 0; font-size: 14.5px; color: #334155; }
+details.thrown .hint { margin: 0 0 10px; color: #64748b; font-size: 13px; }
+details.thrown .row { grid-template-columns: 96px minmax(0, 1fr) auto auto; padding: 10px 6px; }
+details.thrown .row .th { width: 96px; height: 68px; }
+@media (max-width: 1100px) { details.thrown .row { grid-template-columns: 96px minmax(0, 1fr); } details.thrown .row .tags { grid-column: 1 / -1; justify-content: flex-start; } }

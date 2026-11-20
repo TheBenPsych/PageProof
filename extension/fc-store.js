@@ -643,6 +643,22 @@ const FC = (() => {
     queueDirty(true); backupCopiesSoon(); touch('copies');
     return { photo: p, fresh };
   }
+  // Add ONE link to the copies of a photo by hand (a link the checker threw out that you say is
+  // a copy). Unlike ingest(), it doesn't count as a search.
+  async function rescue(pic, l, by) {
+    const p = await photoForPic(pic);
+    const id = p.id + '|' + l.key, now = new Date().toISOString();
+    if (await DB.get('copies', id)) return;
+    const n = { id, photo: p.id, client: p.client || '', url: l.url, key: l.key, site: l.site, title: l.title || '', thumb: String(l.thumb || '').slice(0, 60000), img: l.img || '',
+      engines: l.engines || [], exact: !!l.exact, pct: l.pct, inl: l.inl, tiles: l.tiles, str: l.str, mid: l.mid, match: l.verdict || 'maybe', w: l.w, h: l.h,
+      firstSeen: now, lastSeen: now, times: 1, by: (by || 'a search') + ' (added by hand)', status: 'new', online: 'up' };
+    n.country = countryOf(l.site); n.use = useOf(n);
+    await DB.put('copies', n);
+    p.copies = (await copiesOf(p.id)).filter(c => c.status !== 'removed').length;
+    if (pic.thumb && !p.thumb) p.thumb = pic.thumb;
+    await DB.put('photos', p);
+    queueDirty(true); backupCopiesSoon(); touch('copies');
+  }
   // Mark a photo as searched with nothing found (so it moves down the line).
   async function searchedNothing(pic, by) { return ingest(pic, [], by); }
 
@@ -1053,7 +1069,7 @@ const FC = (() => {
 
   return { DB, meta, open, touch, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, setPicked, pickInside, SCAN, applyPendingFlags, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
-    photoForPic, ingest, searchedNothing, copiesOf, allCopies, answer, licenseSite, setClientOf, setFlag, setClients, checkOnline, logWeek, week, weekKey,
+    photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, setClientOf, setFlag, setClients, checkOnline, logWeek, week, weekKey,
     hiddenCountries, setHiddenCountries, ownerFor, pathOf, logReport, USE, useOf, riskOf, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
     backupSoon, backupCopiesSoon, writeSettings, writeCopies, readBackup, restore, restoreCopies, settingsSnapshot, monthsOld, newness, yearOf, quarterOf, dayOf };
 })();
