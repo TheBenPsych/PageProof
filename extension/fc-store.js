@@ -205,11 +205,14 @@ const FC = (() => {
     return d;
   }
   // The folders inside one folder, for the folder tree in setup. [{ name, rel }]
+  // Quick: names only. folderInfo() reads the client_info files of one folder (slower on Drive).
   async function subfolders(rel) {
     const d = await dirAt(rel);
-    const out = [];
-    for (const [name, h] of await listDirs(d)) out.push({ name, rel: (rel ? rel + '/' : '') + name, ...(await readInfo(h)) });
-    return out;
+    return (await listDirs(d)).map(([name]) => ({ name, rel: (rel ? rel + '/' : '') + name }));
+  }
+  async function folderInfo(rel) {
+    // Asks for the two file names directly, so a folder full of photos is never listed.
+    return readInfo(await dirAt(rel));
   }
   // The folders you ticked (paths inside the top folder). null = never picked (older setups:
   // every folder directly inside the top folder is a client).
@@ -1037,7 +1040,7 @@ const FC = (() => {
   }
 
   return { DB, meta, open, touch, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
-    regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, picked, setPicked, pickInside, SCAN, applyPendingFlags, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
+    regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, setPicked, pickInside, SCAN, applyPendingFlags, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, searchedNothing, copiesOf, allCopies, answer, licenseSite, setClientOf, setFlag, setClients, checkOnline, logWeek, week, weekKey,
     hiddenCountries, setHiddenCountries, ownerFor, pathOf, logReport, USE, useOf, riskOf, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
     backupSoon, backupCopiesSoon, writeSettings, writeCopies, readBackup, restore, restoreCopies, settingsSnapshot, monthsOld, newness, yearOf, quarterOf, dayOf };
