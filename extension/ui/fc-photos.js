@@ -89,21 +89,26 @@ V.connect.noAutoRedraw = true;
 // Open a folder in the background: its folders show first, then the client_info tags fill in
 // a few at a time. The page is redrawn as things arrive.
 let csDrawT = null;
-const csDraw = () => { clearTimeout(csDrawT); csDrawT = setTimeout(() => { if (route() === 'connect' && state.cs === 2) render(true); }, 120); };
+// Redraw at most every 300 ms. (It must not keep pushing the redraw back while tags are still
+// being read, or a big folder shows nothing until every tag is in.)
+const csDraw = now => {
+  const go = () => { csDrawT = null; if (route() === 'connect' && state.cs === 2) render(true); };
+  if (now) { clearTimeout(csDrawT); go(); } else if (!csDrawT) csDrawT = setTimeout(go, 300);
+};
 async function csLoad(rel) {
   if (state.csTree.has(rel)) return;
   state.csTree.set(rel, 'loading');
   let kids;
   try { kids = await FC.subfolders(rel); } catch (e) { state.csTree.set(rel, { error: String(e.message || e) }); csDraw(); return; }
   state.csTree.set(rel, kids);
-  csDraw();
+  csDraw(true);
   const todo = kids.filter(k => !state.csInfo.has(k.rel));
   let i = 0;
   const worker = async () => {
     while (i < todo.length) {
       const k = todo[i++];
       try { state.csInfo.set(k.rel, await FC.folderInfo(k.rel)); } catch (e) { state.csInfo.set(k.rel, {}); }
-      if (i % 8 === 0 || i === todo.length) csDraw();
+      csDraw();
     }
   };
   await Promise.all(Array.from({ length: Math.min(6, todo.length) }, worker));
