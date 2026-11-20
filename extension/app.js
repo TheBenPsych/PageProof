@@ -189,8 +189,8 @@ async function homeFinds() {
   let alerts = '';
   if (store.fcDriveOffline) alerts += `<div class="banner bad" role="alert">${ic('help', 22)}<div style="flex:1 1 260px"><b>Can't reach Google Drive. Searching is paused.</b><div style="font-size:13.5px;color:var(--ink)">Drive for desktop is signed out or not running. It picks up where it left off.</div></div><a class="btn" href="#keep">Keep searching</a></div>`;
   else if (ds === 'prompt') alerts += `<div class="banner warn" role="alert">${ic('help', 22)}<div style="flex:1 1 260px"><b>One click needed: let PageProof read your photos again</b></div><button class="btn primary" data-act="driveallow">Allow</button></div>`;
-  const upd = await PP_UPDATE.state();
-  if (upd && upd.has) alerts += `<div class="banner info" role="status"><div style="flex:1 1 260px"><b>PageProof ${esc(upd.latest)} is ready</b><div style="font-size:13.5px">You have ${VERSION}. Updating takes about a minute and keeps everything you have.</div></div><a class="btn primary" href="#health" data-act="upgo">Update</a></div>`;
+  const upd = await ppUpState();
+  if (upd && upd.has) alerts += `<div class="banner info" role="status"><div style="flex:1 1 260px"><b>PageProof ${esc(upd.latest)} is ready</b><div style="font-size:13.5px">You have ${VERSION}. Updating keeps everything you have.</div></div><a class="btn primary" href="#health" data-act="upgo">Update</a></div>`;
   for (const [e, until] of Object.entries(await FC.brokenEngines())) alerts += `<div class="banner bad" role="alert">${ic('help', 22)}<div style="flex:1 1 260px"><b>${FC.ENGINE_NAME[e]} may have stopped working</b><div style="font-size:13.5px;color:var(--ink)">It gave nothing for many photos in a row, so PageProof is resting it until ${new Date(until).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}. Those empty results are not counted against your photos. The other search sites carry on.</div></div><a class="btn" href="#health">See details</a></div>`;
   if (back.length) alerts += `<div class="banner bad" role="alert"><div style="flex:1 1 260px"><b>${back.length} ${back.length === 1 ? 'copy is' : 'copies are'} back online</b><div style="font-size:13.5px;color:var(--ink)">They had gone, and came back: ${esc([...new Set(back.map(c => c.site))].slice(0, 3).join(', '))}</div></div><a class="btn primary" href="#found?filter=Back%20online">See them</a></div>`;
   const main = `<section class="card pad" style="display:flex;flex-direction:column;gap:12px">
@@ -334,14 +334,14 @@ V.browser.after = async () => {
 V.settings = async () => {
   const [name, hw, docs] = [await getName(), await ppHardware(), await RS_DOCS.state()];
   await RS_LISTS.load();
-  const upd = await PP_UPDATE.state();
+  const upd = await ppUpState();
   return `${head('Settings', 'Settings', 'These apply to everything in PageProof and are saved on this computer.')}
   <div class="grid g2">
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>You</h2>
       <label class="field" for="sName">Your name on every pack and report<input id="sName" value="${esc(name)}" placeholder="For example, Ben"></label>
       <div class="dsh" style="margin-top:6px">Version</div>
       <p class="muted" style="margin:0;font-size:14px">PageProof ${VERSION}${upd && upd.has ? ` · <b style="color:var(--warn)">version ${esc(upd.latest)} is ready</b>` : ''}</p>
-      <div class="row" style="gap:8px"><a class="btn${upd && upd.has ? ' primary' : ''}" href="#health" data-act="upgo">${upd && upd.has ? 'Update now' : 'Updates'}</a><a class="btn" href="#whatsnew">What's new</a><button class="btn" data-act="tour">Take the tour again</button></div></section>
+      <div class="row" style="gap:8px"><a class="btn${upd && upd.has ? ' primary' : ''}" href="#health" data-act="upgo">${upd && upd.has ? 'Get the update' : 'Updates'}</a><a class="btn" href="#whatsnew">What's new</a><button class="btn" data-act="tour">Take the tour again</button></div></section>
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>Is everything working?</h2>
       <p class="muted" style="margin:0;font-size:14px">Green and red lights for Google Drive, Keep searching, each search site and your backup. One button copies the details to send for support.</p>
       <a class="btn" style="align-self:flex-start" href="#health">Check now</a></section>
@@ -443,6 +443,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Updating is a plain download now', 'PageProof no longer changes its own files (Windows security did not like that). When a new version is out, Settings › Is everything working? gives you the download and three steps.'],
   ['A new look', 'A shorter menu, a search box and Undo at the top, a Tools page for everything else, and a new shield logo. Nothing was taken away: Tools has every older page.'],
   ['Answer right on the row', 'Copies found has Stolen, Licensed and Remove on every row, with the page link in view. The ⋯ menu has Approve site, Hide site, Compare, Evidence report and Capture.'],
   ['Quick filters', 'One-click chips (Back online, Repeat offenders, Suspicious sites and more), plus Found (today, this week, this month), Match (exact, strong, loose) and the photo\'s year and quarter.'],
@@ -451,7 +452,7 @@ const NEWS = [
   ['Their picture is kept when found', 'PageProof saves their copy of the photo (up to 4 MB) with its fingerprint the moment it is found, in case they take it down. It is deleted a week after you remove a copy.'],
   ['Undo list', 'The ▾ next to Undo lists your last ten answers. Take back any one of them, not only the last.'],
   ['Most copied photos', 'Home shows the photos with the most copies. Click one to see all of its copies.'],
-  ['Update with one button', 'Settings › Is everything working? has "Update now". Show PageProof its folder once, and from then on one press downloads the new version and restarts PageProof.'],
+  ['Told when there is an update', 'PageProof tells you when a newer version is out. Settings › Is everything working? has the download button and the three steps.'],
   ['Is everything working?', 'Green, yellow and red lights for Google Drive, Keep searching, each search site and your backup. "Copy details for support" copies numbers only, never names.'],
   ['A broken search site is spotted', 'If Google, Yandex or Bing suddenly gives nothing for many photos in a row, PageProof rests it, tells you, and does not count those empty results against your photos.'],
   ['Skipped photos', 'Find copies › Skipped photos lists every photo that could not be searched, with the reason and a Try again button.'],
@@ -646,5 +647,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!st.ppSetupDone && (!location.hash || location.hash === '#home')) location.hash = 'setup';
   render();
   // One time after an update: preview pictures move to their own small database.
+  // 4.1 kept a link to PageProof's own folder for the old self-updater. That is gone; forget the folder.
+  try { RS_DB.del('handles', 'ppInstall').catch(() => {}); api.storage.local.remove('ppUpdated'); } catch (e) { /* none */ }
   FC.movePics().catch(e => console.warn('PageProof: moving preview pictures', e));
 });

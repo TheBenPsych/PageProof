@@ -654,7 +654,7 @@ async function updateCheck(force) {
     } else st.error = 'PageProof could not reach GitHub just now. It will try again later.';
     const told = u && u.has && u.latest === st.latest;
     await api.storage.local.set({ ppUpdate: st });
-    if (st.has && !told && api.notifications) api.notifications.create('ppUpdate', { type: 'basic', iconUrl: api.runtime.getURL('icons/icon128.png'), title: 'PageProof ' + st.latest + ' is ready', message: 'Click here, then press Update now. It takes about a minute and keeps everything you have.', priority: 1 });
+    if (st.has && !told && api.notifications) api.notifications.create('ppUpdate', { type: 'basic', iconUrl: api.runtime.getURL('icons/icon128.png'), title: 'PageProof ' + st.latest + ' is ready', message: 'Click here for the download and the three steps. It keeps everything you have.', priority: 1 });
   } catch (e) { /* tried again tomorrow */ }
 }
 if (api.alarms) {

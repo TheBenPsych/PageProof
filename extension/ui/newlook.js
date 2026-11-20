@@ -96,7 +96,7 @@ V.tools = async () => {
       ['skipped', 'flag', 'Skipped photos', 'Photos the search could not use, and why.'],
       ['owners', 'owner', 'Site owners', 'Sites that belong to one company.'],
       ['hidden', 'ban', 'Hidden and approved sites', 'Sites you never want, and sites that are allowed.'],
-      ['health', 'check', 'Is everything working?', 'Lights for each part, and Update now.'],
+      ['health', 'check', 'Is everything working?', 'Lights for each part, and updates.'],
     ]],
   ];
   return `${head('', 'Tools', 'Everything else PageProof can do, in one place.')}
