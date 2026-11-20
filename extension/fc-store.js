@@ -240,8 +240,8 @@ const FC = (() => {
     if (root) {
       const picks = await picked();
       const list = [];
-      if (picks) for (const rel of picks) { try { list.push([rel, await dirAt(rel)]); } catch (e) { /* folder gone or Drive offline */ } }
-      else for (const [name, h] of await listDirs(root)) list.push([name, h]);
+      // Only ticked folders. (Nothing ticked = nothing read: never the whole drive.)
+      for (const rel of picks || []) { try { list.push([rel, await dirAt(rel)]); } catch (e) { /* folder gone or Drive offline */ } }
       for (const [rel, h] of list) {
         const parts = rel.split('/');
         let base = null, baseName = '', name = parts[parts.length - 1], folderRel = rel;
@@ -264,6 +264,7 @@ const FC = (() => {
   async function walkClient(cf, onFile, only, onDir) {
     const regs = {};
     const walk = async (dir, rel, depth, ctx) => {
+      if (cf.check) await cf.check();
       const files = [], dirs = [], txt = [];
       for await (const [name, h] of dir.entries()) {
         if (/^[.$~]/.test(name)) continue;
@@ -307,9 +308,19 @@ const FC = (() => {
   // Look through the folders and update the photo list. full = every folder (the weekly check, or
   // "Look for new photos"); otherwise only this and last quarter's folders.
   // Returns { clients, photos, added, removed }. progress(text) is called as it goes.
-  async function scan({ full = true, clients: onlyClients = null, progress } = {}) {
+  // background = the automatic checks of Keep searching. They wait (and stop part-way) while the
+  // folder setup page is open, so Google Drive is free to list folders quickly.
+  const setupOpen = async () => { try { return Date.now() - ((await api.storage.local.get('fcSetupAt')).fcSetupAt || 0) < 90000; } catch (e) { return false; } };
+  async function scan({ full = true, clients: onlyClients = null, progress, background = false } = {}) {
     if (SCAN.busy) return { busy: true };
+    if (background && await setupOpen()) return { busy: true };
     SCAN.busy = true;
+    let lastCheck = Date.now();
+    const check = !background ? null : async () => {
+      if (Date.now() - lastCheck < 3000) return;
+      lastCheck = Date.now();
+      if (await setupOpen()) throw new Error('Paused: folder setup is open');
+    };
     try {
       const st = await driveState(true);
       if (st !== 'granted') return { state: st };
@@ -320,6 +331,7 @@ const FC = (() => {
       let added = 0, removed = 0, total = 0;
       const only = full ? null : recentQuarters();
       for (const cf of folders) {
+        cf.check = check;
         const old = known.get(cf.name);
         const client = { name: cf.name, folder: cf.folder, rel: cf.rel, baseName: cf.baseName, extra: !!cf.extra, searching: old ? old.searching : null, priority: old ? !!old.priority : false,
           photos: old ? old.photos : 0, licensed: old ? old.licensed || [] : [], scanned: old && old.scanned, lastSearched: old && old.lastSearched };
