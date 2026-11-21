@@ -10,9 +10,11 @@ const RS_JOB = (() => {
     let bmp;
     try { bmp = await createImageBitmap(file); } catch (e) { return { error: (file.name || 'A photo') + ' could not be opened (HEIC and TIFF photos need converting to JPG first, with Open files › Convert files)' }; }
     const w = bmp.width, hgt = bmp.height;
-    let blob = file;
+    // The search sites always get a fresh copy drawn from the pixels: it carries none of the
+    // photo's hidden data (camera, GPS, copyright notes, names), and never the file itself.
+    let blob;
     const max = 2000;
-    if (Math.max(w, hgt) > max || file.size > 4e6 || !/^image\/(jpeg|png|webp|gif)$/.test(file.type)) {
+    {
       const f = Math.min(1, max / Math.max(w, hgt));
       const c = new OffscreenCanvas(Math.max(1, Math.round(w * f)), Math.max(1, Math.round(hgt * f)));
       const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(bmp, 0, 0, c.width, c.height);
