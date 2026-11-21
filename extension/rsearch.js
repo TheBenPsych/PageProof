@@ -147,14 +147,18 @@
   // nearest to it. Used for Google, and as a backup when the other sites change their pages.
   function genericLinks(exact) {
     const byUrl = new Map();
+    // Each link's real address is worked out once. (It was worked out again for every link
+    // around every link, which took seconds on Google's long "Visual matches" pages.)
+    const memo = new Map();
+    const extOf = a => { let v = memo.get(a); if (v === undefined) { v = external(a.href); memo.set(a, v); } return v; };
     for (const a of document.querySelectorAll('a[href]')) {
-      const url = external(a.href);
+      const url = extOf(a);
       if (!url || a.closest('header, footer, nav, [role="navigation"]')) continue;
       // The block around this link: grow until it would also hold a different result.
       let box = a;
       while (box.parentElement && box.parentElement !== document.body) {
         const p = box.parentElement;
-        const others = [...p.querySelectorAll('a[href]')].some(o => { const u = external(o.href); return u && u !== url; });
+        const others = [...p.querySelectorAll('a[href]')].some(o => { const u = extOf(o); return u && u !== url; });
         if (others) break;
         box = p;
       }

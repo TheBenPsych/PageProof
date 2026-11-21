@@ -487,23 +487,31 @@ const FC = (() => {
       if (own && depth > 0) regs[rel] = { ...own, ...(regs[rel] || {}), from: regs[rel] ? regs[rel].from : 'Folder name: ' + dir.name };
       if (onDir) onDir(rel, files.length);
       for (const f of files) {
-        onFile({ rel: rel + '/' + f, name: f, folder: rel, year: ctx.year || yearOf(f), quarter: ctx.quarter, day: dayOf(f) || ctx.day, client: ctx.client || '' });
+        onFile({ rel: rel + '/' + f, name: f, folder: rel, year: ctx.year || yearOf(f), quarter: ctx.quarter || 0, day: dayOf(f) || ctx.day || 0, client: ctx.client || '' });
       }
       if (depth >= 8) return;
       for (const [name, h] of dirs) {
         const c2 = { ...ctx };
         const y = yearOf(name), q = quarterOf(name), d = dayOf(name);
+        // A folder that is clearly a year ("2024", "2024 Q1", "Year 2024"), at any depth. Right
+        // under the client folder, any year in the name counts (as before).
+        const yearDir = y && !ctx.year && (depth === 0 || YEAR_DIR.test(name));
         if (y && !c2.year) c2.year = y;
+        if (yearDir) c2.yearDir = true;
         if (q) c2.quarter = q;
         if (d && (c2.quarter || c2.year)) c2.day = d;
-        if (only && depth === 0 && c2.year && !only.some(k => k.year === c2.year)) continue;
-        if (only && c2.year && c2.quarter && depth <= 2 && !only.some(k => k.year === c2.year && (!k.quarter || k.quarter === c2.quarter))) continue;
+        // The hourly look only opens this and last quarter's folders. (It used to stop only at
+        // year folders straight inside the client folder, so a ticked folder holding several
+        // clients, each with its own year folders, was read from top to bottom every hour.)
+        if (only && yearDir && !only.some(k => k.year === c2.year)) continue;
+        if (only && q && c2.yearDir && !only.some(k => k.year === c2.year && (!k.quarter || k.quarter === c2.quarter))) continue;
         await walk(h, rel + '/' + name, depth + 1, c2);
       }
     };
     await walk(cf.base, cf.rel, 0, { year: 0, quarter: 0, day: 0 });
     return regs;
   }
+  const YEAR_DIR = /^\s*(?:year|fy)?[\s._-]*(?:19|20)\d{2}(?!\d)/i;
   const newness = p => (p.year || 0) * 1000 + (p.quarter || 0) * 200 + (p.day || 0);
   // This quarter and last quarter (for the hourly look for new photos).
   function recentQuarters(d = new Date()) {
@@ -542,14 +550,20 @@ const FC = (() => {
         const client = { name: cf.name, folder: cf.folder, rel: cf.rel, baseName: cf.baseName, extra: !!cf.extra, searching: old ? old.searching : null, priority: old ? !!old.priority : false,
           photos: old ? old.photos : 0, licensed: old ? old.licensed || [] : [], scanned: old && old.scanned, lastSearched: old && old.lastSearched };
         if (onlyClients && !onlyClients.includes(cf.name)) { await DB.put('clients', client); continue; }
-        if (!full && client.searching !== true) continue;
-        // What's already known about this client's photos, so flags and search history stay.
+        // The hourly look skips clients nobody searches. A ticked folder that holds several
+        // clients (each named by its client_info.txt) is still read if any of those is searched.
+        if (!full && client.searching !== true && ![...known.values()].some(c => c.from === cf.name && c.searching === true)) continue;
         const pre = 'd:' + (cf.extra ? '+' : '') + cf.rel + '/';
-        const have = new Map((await DB.prefix('photos', pre)).map(p => [p.id, p]));
-        const seen = new Set(), batch = [], subs = {};
-        let n = 0, skipped = 0;
+        const seen = new Set(), batch = [], subs = {}, subsNew = {}, found = [];
+        let n = 0, skipped = 0, mineNew = 0;
         if (progress) progress('Reading ' + cf.name + '…');
-        const r = await walkClient(cf, f => {
+        const r = await walkClient(cf, f => { found.push(f); }, only, (rel, k, ignored) => { if (ignored) skipped++; });
+        // What's already known about these photos, so flags and search history stay. The weekly
+        // check reads all of this client's photos (to spot the ones that are gone); the hourly
+        // look only reads the few it found, not the whole library.
+        const have = full ? new Map((await DB.prefix('photos', pre)).map(p => [p.id, p]))
+          : new Map((await DB.getMany('photos', found.map(f => 'd:' + (cf.extra ? '+' : '') + f.rel))).filter(Boolean).map(p => [p.id, p]));
+        for (const f of found) {
           const id = 'd:' + (cf.extra ? '+' : '') + f.rel;
           // A client_info.txt further down names a different client for those photos.
           const who = f.client || cf.name;
@@ -557,15 +571,16 @@ const FC = (() => {
           seen.add(id);
           if (who === cf.name) n++; else subs[who] = (subs[who] || 0) + 1;
           const p = have.get(id);
-          if (p) { if (p.year !== f.year || p.quarter !== f.quarter || p.day !== f.day || p.gone || p.client !== who) { Object.assign(p, f, { gone: false, client: who }); p.order = newness(p); batch.push(p); } return; }
+          if (p) { if (p.year !== f.year || p.quarter !== f.quarter || p.day !== f.day || p.gone || p.client !== who) { Object.assign(p, f, { gone: false, client: who }); p.order = newness(p); batch.push(p); } continue; }
           const np = { id, client: who, extra: !!cf.extra, ...f, flag: '', searches: 0, empty: 0, copies: 0, stolen: 0, added: gen };
           np.order = newness(np);
           batch.push(np); added++;
-        }, only, (rel, k, ignored) => { if (ignored) skipped++; });
+          if (who === cf.name) mineNew++; else subsNew[who] = (subsNew[who] || 0) + 1;
+        }
         // Clients named by a client_info.txt inside this folder: searched like the folder they're in.
         for (const [name, cnt] of Object.entries(subs)) {
           const o = known.get(name) || (await DB.get('clients', name));
-          await DB.put('clients', { name, searching: o ? o.searching : client.searching, priority: o ? !!o.priority : client.priority, photos: full ? cnt : Math.max(cnt, (o && o.photos) || 0), licensed: o ? o.licensed || [] : [], from: cf.name, scanned: new Date().toISOString() });
+          await DB.put('clients', { ...(o || {}), name, searching: o ? o.searching : client.searching, priority: o ? !!o.priority : client.priority, photos: full ? cnt : ((o && o.photos) || 0) + (subsNew[name] || 0), licensed: o ? o.licensed || [] : [], from: cf.name, scanned: full || !o ? new Date().toISOString() : o.scanned });
         }
         client.ignored = skipped;
         for (const [k, v] of Object.entries(r)) regs[k] = { ...v, ...(regs[k] && regs[k].manual ? regs[k] : {}) };
@@ -577,7 +592,7 @@ const FC = (() => {
           removed += gone.length;
           await DB.putMany('photos', gone);
           client.photos = n;
-        } else client.photos = (old ? old.photos : 0) + batch.filter(p => p.added === gen).length;
+        } else client.photos = (old ? old.photos : 0) + mineNew;
         if (full) client.scanned = new Date().toISOString();
         total += client.photos;
         await DB.put('clients', client);
@@ -719,7 +734,11 @@ const FC = (() => {
       const c = clients.get(p.client);
       if (!c || c.searching !== true) continue;
       const pl = plan(p, c);
-      out.push({ id: p.id, tier: pl.due ? pl.tier : 9 + pl.tier, order: p.order || 0, last: p.lastSearched || '' });
+      // Only photos that are due. (Photos that are not due used to sit at the end of the line,
+      // so once everything due was done, quiet photos, photos searched last week and TIFF/HEIC
+      // files that can never be searched were tried anyway, one after another.)
+      if (!pl.due) continue;
+      out.push({ id: p.id, tier: pl.tier, order: p.order || 0, last: p.lastSearched || '' });
     }
     // Inside each tier: never searched first, then newest folders, then searched longest ago.
     out.sort((a, b) => a.tier - b.tier || (!!a.last - !!b.last) || b.order - a.order || a.last.localeCompare(b.last));
@@ -1086,7 +1105,7 @@ const FC = (() => {
       touchedPhotos.add(c.photo);
       if (status === 'removed') {
         if (!names.has(c.photo)) { const p = await DB.get('photos', c.photo); names.set(c.photo, p ? p.name : ''); }
-        try { if (!RS_REJECT.find(c.url, names.get(c.photo), '')) { RS_REJECT.items.push({ url: c.url, pic: names.get(c.photo) || '', why: '' }); RS_REJECT._keys = null; rejects++; } } catch (e) { /* lists not loaded */ }
+        try { if (!RS_REJECT.find(c.url, names.get(c.photo), '')) { RS_REJECT.items.push({ url: c.url, pic: names.get(c.photo) || '', why: '' }); RS_REJECT.noteKey(c.url, names.get(c.photo) || '', ''); rejects++; } } catch (e) { /* lists not loaded */ }
       }
       if (status === 'stolen' || status === 'licensed' || status === 'removed') tally[c.client || ''] = (tally[c.client || ''] || 0) + 1;
     }

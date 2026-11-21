@@ -24,6 +24,21 @@ const PP_ALIGN = (() => {
     if (typeof document !== 'undefined') { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
     return new OffscreenCanvas(w, h);
   }
+  // One reusable drawing surface per size for the line-up checks (refine draws the copy
+  // 30 to 60 times per check; a new canvas each time was a lot of memory churn).
+  const SURF = new Map();
+  function surface(w, h) {
+    const k = w + 'x' + h;
+    let ctx = SURF.get(k);
+    if (!ctx) {
+      if (SURF.size > 6) SURF.delete(SURF.keys().next().value);
+      ctx = mkCanvas(w, h).getContext('2d', { willReadFrequently: true });
+      SURF.set(k, ctx);
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    return ctx;
+  }
   function grayOf(bitmap, w, h) {
     w = Math.max(1, Math.round(w)); h = Math.max(1, Math.round(h));
     const c = mkCanvas(w, h);
@@ -238,7 +253,9 @@ const PP_ALIGN = (() => {
     const s = num / den;
     return { a: s, b: 0, c: 0, d: s, tx: ax - s * bx, ty: ay - s * by };
   }
-  const err = (M, m) => Math.hypot(M.a * m.bx + M.b * m.by + M.tx - m.ax, M.c * m.bx + M.d * m.by + M.ty - m.ay);
+  // How far a pair lands from where the guess puts it, squared (compared with thr * thr: the
+  // same answer as the distance itself, without the slow square root).
+  const err2 = (M, m) => { const dx = M.a * m.bx + M.b * m.by + M.tx - m.ax, dy = M.c * m.bx + M.d * m.by + M.ty - m.ay; return dx * dx + dy * dy; };
   // Turns an affine model into a placement: size, stretch, turn. Tiny turns and stretches are
   // set to exactly none, so a plain copy reads as plainly resized.
   function toPlace(M, B, flip) {
@@ -264,6 +281,7 @@ const PP_ALIGN = (() => {
     let s0 = 0x2545f491;
     const rnd = n => { s0 ^= s0 << 13; s0 ^= s0 >>> 17; s0 ^= s0 << 5; return (s0 >>> 0) % n; };
     let best = null, bestN = 0;
+    const thr2 = thr * thr;
     for (let it = 0; it < 6000; it++) {
       const p = ms[rnd(ms.length)], q = ms[rnd(ms.length)];
       const dbx = q.bx - p.bx, dby = q.by - p.by, dax = q.ax - p.ax, day = q.ay - p.ay;
@@ -284,15 +302,23 @@ const PP_ALIGN = (() => {
         M = { a: sx, b: 0, c: 0, d: sy };
       }
       M.tx = p.ax - M.a * p.bx - M.b * p.by; M.ty = p.ay - M.c * p.bx - M.d * p.by;
+      // Count the pairs that agree. Stops early once this guess can no longer beat the best
+      // one (same result, much less work: most guesses are wrong).
       let n = 0;
-      for (const m of ms) if (err(M, m) < thr) n++;
+      const { a, b, c, d, tx, ty } = M;
+      for (let i = 0, left = ms.length; i < ms.length; i++, left--) {
+        if (n + left <= bestN) break;
+        const m = ms[i], dx = a * m.bx + b * m.by + tx - m.ax, dy = c * m.bx + d * m.by + ty - m.ay;
+        if (dx * dx + dy * dy < thr2) n++;
+      }
       if (n > bestN) { bestN = n; best = M; }
     }
     if (!best) return null;
-    let M = best, inl = ms.filter(m => err(M, m) < thr);
+    let M = best, inl = ms.filter(m => err2(M, m) < thr2);
     for (let k = 0; k < 4 && inl.length >= 4; k++) {
       const F = fitAffine(inl); if (!F) break;
-      M = F; inl = ms.filter(m => err(M, m) < thr * (k ? 0.6 : 1));
+      const t = thr * (k ? 0.6 : 1);
+      M = F; inl = ms.filter(m => err2(M, m) < t * t);
     }
     if (Math.sqrt(Math.abs(M.a * M.d - M.b * M.c)) < minScale) return null;
     return { M, inl, inliers: inl.length, matches: ms.length };
@@ -303,8 +329,7 @@ const PP_ALIGN = (() => {
   // Only the area where the two overlap counts, and a square where the copy has something
   // printed over it (a headline, a logo) simply doesn't match; it doesn't drag the rest down.
   function render(B, T, w, h, f) {
-    const c = mkCanvas(w, h);
-    const ctx = c.getContext('2d', { willReadFrequently: true });
+    const ctx = surface(w, h);
     ctx.imageSmoothingQuality = 'high';
     drawCopy(ctx, B, T, f);
     const d = ctx.getImageData(0, 0, w, h).data, g = new Float32Array(w * h), m = new Uint8Array(w * h);
@@ -347,9 +372,18 @@ const PP_ALIGN = (() => {
     return total ? (t.matched + t.flatSame * 0.25) / total : 0;
   }
   // Score a placement T (in the original's pixels).
+  // The original in grey at one size, worked out once per original (it is the same every time).
+  const grayCache = new WeakMap();
+  function grayAt(Abm, f) {
+    let m = grayCache.get(Abm);
+    if (!m) grayCache.set(Abm, m = new Map());
+    const k = Math.round(Abm.width * f) + 'x' + Math.round(Abm.height * f);
+    if (!m.has(k)) { if (m.size > 3) m.delete(m.keys().next().value); m.set(k, grayOf(Abm, Abm.width * f, Abm.height * f)); }
+    return m.get(k);
+  }
   function score(Abm, Bbm, T, side = 480) {
     const f = side / Math.max(Abm.width, Abm.height);
-    const a = grayOf(Abm, Abm.width * f, Abm.height * f), b = render(Bbm, T, a.w, a.h, f);
+    const a = grayAt(Abm, f), b = render(Bbm, T, a.w, a.h, f);
     const t = tiles(a, b, 12);
     let inside = 0; for (let i = 0; i < b.m.length; i++) inside += b.m[i];
     const { bw, bh } = sizes(T, Bbm);
@@ -359,7 +393,7 @@ const PP_ALIGN = (() => {
   // Nudge the position, size, stretch and turn a little at a time, keeping whatever lines up best.
   async function refine(Abm, Bbm, T0) {
     const side = Math.min(720, Math.max(Abm.width, Abm.height)), f = side / Math.max(Abm.width, Abm.height);
-    const a = grayOf(Abm, Abm.width * f, Abm.height * f);
+    const a = grayAt(Abm, f);
     const val = T => tiles(a, render(Bbm, T, a.w, a.h, f), 16).sumR;
     let T = { ...T0 }, best = val(T);
     const steps = { x: 2 / f, y: 2 / f, s: 0.006, w: T.w !== 1 ? 0.006 : 0, r: T.r !== 0 ? 0.3 : 0, k: T.k !== 0 ? 0.005 : 0 };
@@ -431,6 +465,7 @@ const PP_ALIGN = (() => {
   // opts.fast (reverse search, many copies to check): reuse the original's details between
   // calls and skip the slow whole-picture search, which only helps plain copies with few details.
   const featCache = new WeakMap();
+  const FAST_MIN_INLIERS = 10;
   async function align(A, B, progress = () => {}, opts = {}) {
     const tries = [], tick = pause;
     progress('Finding details in both pictures...');
@@ -444,7 +479,10 @@ const PP_ALIGN = (() => {
       const ms = await match(FA, FB);
       // The copy must cover at least 8% of the original's width or height once lined up.
       const R1 = ransac(ms, thr, 20 / FB.f0, Math.max(0.02, 0.08 * Math.max(A.width, A.height) / Math.max(Bimg.width, Bimg.height)));
-      if (!R1 || R1.inliers < 6) return;
+      // Reverse search (fast) needs at least 10 matching details to call anything a copy (see
+      // verdict() in revsearch.js), so a guess with fewer is not fine-tuned: that fine-tuning was
+      // most of the time spent on the many different photos a search turns up.
+      if (!R1 || R1.inliers < (opts.fast ? FAST_MIN_INLIERS : 6)) return;
       progress('Fine-tuning the position...');
       const T0 = toPlace(R1.M, B, flip), cands = [];
       if (T0.ok) cands.push(T0);
@@ -466,7 +504,10 @@ const PP_ALIGN = (() => {
     const sure = () => { const b = best(); return b && (b.sc.lines >= 0.5 || (b.inliers >= 40 && b.sc.strength >= 0.85 && b.sc.lines >= 0.25)); };
     await viaDetails(B, false);
     // Copies are sometimes mirrored to dodge detection. Try that if the straight way didn't fit well.
-    if (!sure()) await viaDetails(await mirrored(B), true);
+    if (!sure()) {
+      const M = await mirrored(B);
+      try { await viaDetails(M, true); } finally { try { M.close && M.close(); } catch (e) { /* already freed */ } }
+    }
     // Backup: the whole-picture search, for plain resized copies with few sharp details.
     if (!sure() && !opts.fast) {
       progress('Trying different sizes and positions...');

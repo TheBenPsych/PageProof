@@ -462,6 +462,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Finding copies is faster and steadier', 'The photo check is about a third faster on copies and almost twice as fast on the many different photos a search turns up, with the same answers. On slower computers, good checks are no longer stopped and shown as "Can\'t check". The hourly look for new photos only opens this and last quarter\'s folders again, also inside a folder that holds several clients. Keep searching no longer tries photos that are not due yet, and its small window no longer opens and closes by itself during the weekly folder check.'],
   ['Capture page: a proof checklist and two clear steps', 'The Capture page shows four green ticks as the proof is made (whole page, pictures, fingerprints, trusted timestamps), then step 1 Case details and step 2 Save. Every button is still there.'],
   ['One at a time matches Copies found', 'A progress bar, Undo, big Stolen / Licensed / Remove / Skip buttons, the page link in view, and Their page on the right. Compare, Evidence report, Capture and Approve site sit underneath.'],
   ['Dark mode all the way through, with matching icons', 'Inspect, Compare, Markup, Convert and New search are now dark inside as well, not only their side panels. Their buttons use the same line icons as the rest of PageProof.'],

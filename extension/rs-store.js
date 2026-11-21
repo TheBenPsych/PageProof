@@ -238,10 +238,26 @@ const RS_REJECT = {
     if ((await RS_DOCS.state()) === 'granted') await RS_DOCS.writeText(RS_REJECT.FILE, RS_REJECT.text());
   },
   // why: '' = trash (do not want it), 'nomatch' = not the same photo.
+  // The list grows with every "Remove", and this is asked for every link each time a results
+  // page is drawn, so it is looked up by link instead of read from top to bottom.
   find(url, pic, why) {
-    if (!RS_REJECT._keys) RS_REJECT._keys = RS_REJECT.items.map(r => ({ k: RS_UTIL.key(r.url), pic: r.pic, why: r.why || '' }));
+    if (!RS_REJECT._keys) {
+      RS_REJECT._keys = new Map();
+      for (const r of RS_REJECT.items) {
+        const k = RS_UTIL.key(r.url);
+        if (!RS_REJECT._keys.has(k)) RS_REJECT._keys.set(k, []);
+        RS_REJECT._keys.get(k).push({ pic: r.pic, why: r.why || '' });
+      }
+    }
+    const list = RS_REJECT._keys.get(RS_UTIL.key(url));
+    return !!list && list.some(r => (!r.pic || r.pic === pic) && r.why === (why || ''));
+  },
+  // A line was just added to items: add it to the look-up too (instead of building it again).
+  noteKey(url, pic, why) {
+    if (!RS_REJECT._keys) return;
     const k = RS_UTIL.key(url);
-    return RS_REJECT._keys.some(r => r.k === k && (!r.pic || r.pic === pic) && r.why === (why || ''));
+    if (!RS_REJECT._keys.has(k)) RS_REJECT._keys.set(k, []);
+    RS_REJECT._keys.get(k).push({ pic: pic || '', why: why || '' });
   },
   is(url, pic) { return RS_REJECT.find(url, pic, ''); },
   notMatch(url, pic) { return RS_REJECT.find(url, pic, 'nomatch'); },
@@ -294,6 +310,15 @@ const RS_UTIL = {
   },
   // Links are the same page even if the tracking bits on the end differ.
   key(url) {
+    const hit = RS_UTIL._keyMemo.get(url);
+    if (hit !== undefined) return hit;
+    const k = RS_UTIL._key(url);
+    if (RS_UTIL._keyMemo.size > 20000) RS_UTIL._keyMemo.clear();
+    RS_UTIL._keyMemo.set(url, k);
+    return k;
+  },
+  _keyMemo: new Map(),
+  _key(url) {
     try {
       const u = new URL(url);
       for (const k of [...u.searchParams.keys()]) if (/^(utm_|fbclid|gclid|igsh|ref$|ref_src|si$)/i.test(k)) u.searchParams.delete(k);
