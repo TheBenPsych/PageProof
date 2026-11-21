@@ -256,7 +256,10 @@ const PP_ALIGN = (() => {
     T.ok = sx > 0 && sy > 0 && sx / sy > 0.5 && sx / sy < 2 && Math.abs(r) < 0.35 && Math.abs(k) < 0.3;
     return T;
   }
-  function ransac(ms, thr, minDist) {
+  // minScale: the smallest size the copy may be shrunk to. Without it, a guess that shrinks the
+  // whole copy to a dot "agrees" with every match that happens to land on that dot, and two
+  // different photos end up compared over two tiny squares (and could score 100%).
+  function ransac(ms, thr, minDist, minScale = 0.02) {
     if (ms.length < 4) return null;
     let s0 = 0x2545f491;
     const rnd = n => { s0 ^= s0 << 13; s0 ^= s0 >>> 17; s0 ^= s0 << 5; return (s0 >>> 0) % n; };
@@ -270,14 +273,14 @@ const PP_ALIGN = (() => {
       if (it % 2 === 0) {
         // guess 1: resized and maybe turned a little (up to 20 degrees)
         const s = da / db, ang = Math.atan2(day, dax) - Math.atan2(dby, dbx), r = Math.atan2(Math.sin(ang), Math.cos(ang));
-        if (s < 0.02 || s > 50 || Math.abs(r) > 0.35) continue;
+        if (s < minScale || s > 50 || Math.abs(r) > 0.35) continue;
         const cs = s * Math.cos(r), sn = s * Math.sin(r);
         M = { a: cs, b: -sn, c: sn, d: cs };
       } else {
         // guess 2: stretched wider or taller, not turned
         if (Math.abs(dbx) < minDist || Math.abs(dby) < minDist) continue;
         const sx = dax / dbx, sy = day / dby;
-        if (sx < 0.02 || sy < 0.02 || sx / sy < 0.5 || sx / sy > 2) continue;
+        if (sx < minScale || sy < minScale || sx / sy < 0.5 || sx / sy > 2) continue;
         M = { a: sx, b: 0, c: 0, d: sy };
       }
       M.tx = p.ax - M.a * p.bx - M.b * p.by; M.ty = p.ay - M.c * p.bx - M.d * p.by;
@@ -291,6 +294,7 @@ const PP_ALIGN = (() => {
       const F = fitAffine(inl); if (!F) break;
       M = F; inl = ms.filter(m => err(M, m) < thr * (k ? 0.6 : 1));
     }
+    if (Math.sqrt(Math.abs(M.a * M.d - M.b * M.c)) < minScale) return null;
     return { M, inl, inliers: inl.length, matches: ms.length };
   }
 
@@ -438,7 +442,8 @@ const PP_ALIGN = (() => {
       const FB = features(Bimg, 900); await tick();
       progress(flip ? 'Checking whether the copy was mirrored...' : 'Pairing up matching details...');
       const ms = await match(FA, FB);
-      const R1 = ransac(ms, thr, 20 / FB.f0);
+      // The copy must cover at least 8% of the original's width or height once lined up.
+      const R1 = ransac(ms, thr, 20 / FB.f0, Math.max(0.02, 0.08 * Math.max(A.width, A.height) / Math.max(Bimg.width, Bimg.height)));
       if (!R1 || R1.inliers < 6) return;
       progress('Fine-tuning the position...');
       const T0 = toPlace(R1.M, B, flip), cands = [];
