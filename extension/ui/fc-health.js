@@ -123,6 +123,68 @@ async function supportDetails() {
   return lines.join('\n');
 }
 
+// ---------------------------------------------------------------- how much room PageProof takes
+// Measured only when this page is open (it reads every stored picture's size, which takes a
+// moment on a big list). Copies marked Stolen are never offered for clearing.
+const STORE_PARTS = [['kept', 'Kept copies of their pictures', '#2563EB'], ['pages', 'Pictures of their pages', '#0EA5E9'], ['prev', 'Preview pictures', '#8B5CF6'], ['caps', 'Captures waiting in the browser', '#15803D'], ['rest', 'Lists and settings', '#94A3B8']];
+const sizeText = n => n >= 1073741824 ? (n / 1073741824).toFixed(1) + ' GB' : n >= 1048576 ? (n / 1048576).toFixed(n >= 104857600 ? 0 : 1) + ' MB' : n >= 1024 ? Math.round(n / 1024) + ' KB' : n ? '1 KB' : '0 KB';
+async function ppStorage() {
+  const [kept, pages, prev, est, capKeys] = await Promise.all([FC.kept.stats(), FC.pages.stats(), FC.pics.stats(), navigator.storage && navigator.storage.estimate ? navigator.storage.estimate().catch(() => ({})) : {}, PP_DB.keys().catch(() => [])]);
+  const caps = { n: 0, bytes: 0, old: [], oldBytes: 0 };
+  const dayAgo = Date.now() - 864e5;
+  for (const k of capKeys.filter(k => String(k).startsWith('cap-'))) {
+    const rec = await PP_DB.get(k).catch(() => null); if (!rec) continue;
+    let b = (rec.html || '').length;
+    for (const part of [rec.main, ...(rec.sections || [])]) for (const t of (part && part.tiles) || []) b += Math.round((t.src || '').length * 0.75);
+    caps.n++; caps.bytes += b;
+    if (new Date(rec.time).getTime() < dayAgo) { caps.old.push(k); caps.oldBytes += b; }
+  }
+  // What may be cleared: only things that belong to copies you did NOT mark Stolen.
+  const ids = [...new Set([...kept.ids, ...pages.ids])];
+  const recs = await FC.DB.getMany('copies', ids);
+  const status = new Map(ids.map((id, i) => [id, recs[i] ? recs[i].status : 'gone']));
+  const ans = { kept: [], pages: [], bytes: 0 }, old = { pages: [], bytes: 0 };
+  const cut = new Date(Date.now() - 90 * 864e5).toISOString();
+  for (const [id, b] of kept.each) if (['licensed', 'removed', 'gone'].includes(status.get(id))) { ans.kept.push(id); ans.bytes += b; }
+  for (const [id, b, at] of pages.each) {
+    const st = status.get(id);
+    if (['licensed', 'removed', 'gone'].includes(st)) { ans.pages.push(id); ans.bytes += b; }
+    else if (st !== 'stolen' && at && at < cut) { old.pages.push(id); old.bytes += b; }
+  }
+  const known = kept.bytes + pages.bytes + prev.bytes + caps.bytes;
+  const used = Math.max(est.usage || 0, known);
+  return { kept, pages, prev, caps, ans, old, used, quota: est.quota || 0, sizes: { kept: kept.bytes, pages: pages.bytes, prev: prev.bytes, caps: caps.bytes, rest: Math.max(0, used - known) }, at: Date.now() };
+}
+function storageCard() {
+  const s = state.storage;
+  if (!s) {
+    if (!state.storageBusy) { state.storageBusy = true; ppStorage().then(r => { state.storage = r; }, e => { state.storage = { error: e.message || String(e) }; }).then(() => { state.storageBusy = false; if (state.shown === 'health') render(true); }); }
+    return `<section class="card pad" id="storage"><div class="row"><h2>Space PageProof is using</h2></div><div class="scanbar" style="margin-top:10px"><span class="spin"></span>Measuring…</div></section>`;
+  }
+  if (s.error) return `<section class="card pad" id="storage"><h2>Space PageProof is using</h2><p class="muted" style="margin:8px 0 0">Could not measure it right now (${esc(s.error)}).</p></section>`;
+  const pick = state.stPick || (state.stPick = {});
+  const opts = [
+    ['ans', 'Kept pictures for copies you answered Licensed or Removed', s.ans.kept.length + s.ans.pages.length, s.ans.bytes, 'Their copy and the picture of their page. The answer itself and the link stay in your list.'],
+    ['old', 'Pictures of their pages older than 3 months', s.old.pages.length, s.old.bytes, 'Only for copies you have not answered yet. PageProof can take the picture again when you open the copy.'],
+    ['caps', 'Captures from before today that are still held in the browser', s.caps.old.length, s.caps.oldBytes, 'The evidence packs you saved are files on your computer. They are not touched.'],
+  ];
+  const chosen = opts.filter(o => pick[o[0]] && o[2]);
+  const total = chosen.reduce((a, o) => a + o[3], 0);
+  const pct = s.quota ? Math.min(100, s.used / s.quota * 100) : 0;
+  return `<section class="card pad" id="storage" style="display:flex;flex-direction:column;gap:14px">
+    <div class="row"><h2>Space PageProof is using</h2><span class="tag ${pct > 80 ? 'warn' : 'ok'}" style="margin-left:auto">${pct > 80 ? 'Getting full' : 'Plenty of room'}</span></div>
+    <div><div class="row" style="align-items:baseline;gap:8px"><b style="font-size:26px;letter-spacing:-.02em">${sizeText(s.used)}</b>${s.quota ? `<span class="muted">used of the ${sizeText(s.quota)} your browser allows on this computer</span>` : ''}</div>
+      <div class="stbar" role="img" aria-label="What the space is used for">${STORE_PARTS.map(([k, l, c]) => s.sizes[k] ? `<i style="flex:${Math.max(s.sizes[k], s.used / 150)} 0 0;background:${c}" title="${l}: ${sizeText(s.sizes[k])}"></i>` : '').join('')}</div></div>
+    <div class="stlist">${STORE_PARTS.map(([k, l, c]) => `<div><i style="background:${c}"></i><span>${l}${{ kept: ' (' + s.kept.n.toLocaleString() + ')', pages: ' (' + s.pages.n.toLocaleString() + ')', prev: ' (' + s.prev.n.toLocaleString() + ')', caps: ' (' + s.caps.n + ' of the 10 most recent)' }[k] || ''}</span><b>${sizeText(s.sizes[k])}</b></div>`).join('')}</div>
+    <div style="border-top:1px solid var(--line);padding-top:14px;display:flex;flex-direction:column;gap:10px">
+      <h3 style="margin:0;font-size:15px">Free up space</h3>
+      ${opts.map(([k, l, n, b, why]) => `<label class="stopt${n ? '' : ' none'}"><input type="checkbox" data-act="stpick" data-v="${k}"${pick[k] && n ? ' checked' : ''}${n ? '' : ' disabled'}><span><b>${l}</b><small>${n ? n.toLocaleString() + (n === 1 ? ' item, ' : ' items, ') + sizeText(b) + '. ' : 'Nothing to clear. '}${why}</small></span></label>`).join('')}
+      <div class="row" style="gap:12px"><button class="btn primary" data-act="stfree"${chosen.length ? '' : ' disabled'}>${chosen.length ? 'Free up ' + sizeText(total) : 'Tick what to clear'}</button>
+        <span class="muted" style="font-size:13.5px;display:inline-flex;align-items:center;gap:6px">${ic('check', 16)} Copies you marked Stolen are never deleted here.</span></div>
+    </div>
+  </section>`;
+}
+
 // ---------------------------------------------------------------- the page
 V.health = async () => {
   const lights = await healthLights();
@@ -135,6 +197,7 @@ V.health = async () => {
       <span style="width:14px;height:14px;border-radius:50%;flex-shrink:0;background:${LIGHT[c]}" role="img" aria-label="${{ ok: 'Working', warn: 'Needs a look', bad: 'Stopped', grey: 'Not in use' }[c]}"></span>
       <div style="flex:1;min-width:0"><b>${esc(title)}</b><div class="muted" style="font-size:13.5px">${esc(text)}</div></div>${btn || ''}</div>`).join('')}
   </section>
+  ${storageCard()}
   <section class="card pad" id="updates" style="display:flex;flex-direction:column;gap:12px">
     <div class="row"><h2>Updates</h2><span class="tag ${up && up.has ? 'warn' : up && !up.error ? 'ok' : 'grey'}" style="margin-left:auto">${up && up.has ? 'Version ' + esc(up.latest) + ' is ready' : up && !up.error ? 'Up to date' : 'Not checked'}</span></div>
     <p class="muted" style="margin:0;font-size:14px">You have PageProof ${VERSION}. PageProof asks GitHub for a newer version every morning.</p>
@@ -177,7 +240,18 @@ V.skipped = async () => {
 V.skipped.guard = async () => ((await FC.drive()).done ? null : 'connect');
 
 Object.assign(ACTS, {
-  healthagain: async () => { state.support = ''; toast('Checked again.'); render(true); },
+  healthagain: async () => { state.support = ''; state.storage = null; toast('Checked again.'); render(true); },
+  stpick: (v, el) => { (state.stPick || (state.stPick = {}))[v] = el.checked; render(true); },
+  stfree: async () => {
+    const s = state.storage, p = state.stPick || {}; if (!s || s.error) return;
+    let bytes = 0;
+    if (p.ans) { await FC.kept.del(s.ans.kept); await FC.pages.del(s.ans.pages); bytes += s.ans.bytes; }
+    if (p.old) { await FC.pages.del(s.old.pages); bytes += s.old.bytes; }
+    if (p.caps) { for (const k of s.caps.old) await PP_DB.del(k).catch(() => {}); bytes += s.caps.oldBytes; }
+    state.stPick = {}; state.storage = null;
+    toast('Freed ' + sizeText(bytes) + '. Nothing marked Stolen was touched.');
+    render(true);
+  },
   supportcopy: async () => {
     toast('Measuring…');
     state.support = await supportDetails();

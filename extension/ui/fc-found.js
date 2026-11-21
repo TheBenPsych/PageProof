@@ -214,11 +214,11 @@ async function drawer(list) {
   <a class="lookup" href="#who" data-act="gowho" data-v="${esc(c.id)}">${ic('owner', 18)}<span><b>Who's behind this site</b><br><span class="muted" style="font-size:13px">${f ? esc(f.names && f.names[0] ? 'Probably ' + f.names[0] : 'Names, contacts and domain facts') : 'Read names, contacts and domain facts off the site'}</span></span><span style="margin-left:auto">${ic('chev', 16)}</span></a>
   <details class="hidebox" id="okbox"><summary><b>Is this site allowed to use the photo?</b> <span class="muted" style="font-size:13px">Approve it</span></summary>
     <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
-    ${c.clientName ? `<button class="lookup" style="text-align:left;cursor:pointer" data-act="approvesite" data-v="client"><span style="font-size:18px">✅</span><span><b>Approved for ${esc(c.clientName)} only</b><br><span class="muted" style="font-size:12.5px">${esc(FC.baseOf(c.site))} may use this client's photos. Other clients' photos there still show as new.</span></span></button>` : ''}
-    <button class="lookup" style="text-align:left;cursor:pointer" data-act="approvesite" data-v="all"><span style="font-size:18px">✅</span><span><b>Approved for every client</b><br><span class="muted" style="font-size:12.5px">${esc(FC.baseOf(c.site))} may use any client's photos (a partner, a wire service, your own site).</span></span></button>
+    ${c.clientName ? `<button class="lookup" style="text-align:left;cursor:pointer" data-act="approvesite" data-v="client"><span style="color:var(--ok);display:inline-flex">${ic('check', 20)}</span><span><b>Approved for ${esc(c.clientName)} only</b><br><span class="muted" style="font-size:12.5px">${esc(FC.baseOf(c.site))} may use this client's photos. Other clients' photos there still show as new.</span></span></button>` : ''}
+    <button class="lookup" style="text-align:left;cursor:pointer" data-act="approvesite" data-v="all"><span style="color:var(--ok);display:inline-flex">${ic('check', 20)}</span><span><b>Approved for every client</b><br><span class="muted" style="font-size:12.5px">${esc(FC.baseOf(c.site))} may use any client's photos (a partner, a wire service, your own site).</span></span></button>
     <span class="faint" style="font-size:12.5px">Copies on an approved site are marked Licensed by themselves, now and in every later search. Change it in Settings › Hidden and approved sites.</span></div></details>
   <details class="hidebox" id="hidebox"><summary><b>Don't want results from this site?</b> <span class="muted" style="font-size:13px">Hide it</span></summary>
-    <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">${hideChoices(c).map(([v, l, d]) => `<button class="lookup" style="text-align:left;cursor:pointer" data-act="hidesite" data-v="${esc(v)}"><span style="font-size:18px">🚫</span><span><b>${esc(l)}</b><br><span class="muted" style="font-size:12.5px">${esc(d)}</span></span></button>`).join('')}
+    <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">${hideChoices(c).map(([v, l, d]) => `<button class="lookup" style="text-align:left;cursor:pointer" data-act="hidesite" data-v="${esc(v)}"><span style="color:var(--bad);display:inline-flex">${ic('ban', 20)}</span><span><b>${esc(l)}</b><br><span class="muted" style="font-size:12.5px">${esc(d)}</span></span></button>`).join('')}
     <span class="faint" style="font-size:12.5px">Hidden sites never show again in any search. Bring them back from the Sites chips above the list, or Settings › Hidden and approved sites.</span></div></details>
   <div class="dacts" style="display:flex;flex-direction:column;gap:8px;margin-top:auto">
   ${c.status === 'removed' ? `<div class="banner info" style="padding:10px 12px"><span style="flex:1;font-size:14px"><b>Removed</b><br><span class="muted">Hidden from your results. It won't come back for this photo.</span></span><button class="btn" data-act="putback">Put back</button></div>` : `
@@ -408,7 +408,7 @@ V.found = async () => {
     ${active.length || recent.length ? `<div class="row activebar">${active.map(([k, v]) => `<button class="chip" style="cursor:pointer" data-act="unfilter" data-v="${k}">${esc(v)} ✕</button>`).join('')}${active.length ? `<button class="btn ghost" style="min-height:28px;padding:0 6px;font-size:13px" data-act="unfilter" data-v="all">Clear all</button>` : ''}
       ${recent.length ? `<span class="faint" style="margin-left:auto">Just hidden</span>${recent.map(h => `<button class="chip" style="cursor:pointer;text-decoration:line-through;text-decoration-color:var(--faint)" data-act="showsite" data-v="${esc(h)}" title="Show ${esc(h)} again">${esc(h)} <span style="text-decoration:none">↺</span></button>`).join('')}` : ''}</div>` : ''}
     <div class="cbody">${body || `<div class="cempty"><b>${state.fFilter === 'New' && !active.length && state.fWhen === 'any' && state.fMatch === 'any' ? 'All caught up' : 'Nothing matches'}</b>${state.fFilter === 'New' && !active.length && state.fWhen === 'any' && state.fMatch === 'any' ? 'Every new copy has an answer. New finds show up here.' : 'Try another tab, or clear a filter.'}</div>`}</div>
-    <div class="row faint cfoot"><span>Keys with a copy open: <span class="kbd">Y</span> stolen <span class="kbd">L</span> licensed <span class="kbd">N</span> remove <span class="kbd">→</span> skip <span class="kbd">U</span> undo. Also kept in Documents › PageProof › found-copies.txt.</span></div>
+    <div class="row faint cfoot"><span>Keys with a copy open: <span class="kbd">Y</span> stolen <span class="kbd">L</span> licensed <span class="kbd">N</span> remove <span class="kbd">→</span> skip <span class="kbd">U</span> undo <span class="kbd">↑</span><span class="kbd">↓</span> move <span class="kbd">?</span> all keys. Also kept in Documents › PageProof › found-copies.txt.</span></div>
   </section>
   ${state.sis ? `<div class="bulk sis"><div style="flex:1 1 300px;min-width:0"><b>Same ${state.sis.same ? 'photo' : 'article'} on ${plural(state.sis.sites.length, 'sister site')} of ${esc(state.sis.owner)}</b><div style="font-size:13px;opacity:.85;overflow-wrap:anywhere">${esc(state.sis.sites.slice(0, 5).join(', '))}${state.sis.sites.length > 5 ? '…' : ''}</div></div><button class="btn" data-act="sisall">Mark ${state.sis.ids.length === 1 ? 'it' : 'all ' + state.sis.ids.length} stolen too</button><button class="btn" data-act="sisno">Not now</button></div>` : ''}
   ${state.picked.length ? `<div class="bulk"><b>${state.picked.length} picked</b><button class="btn" style="margin-left:auto" data-act="bulkhide">Hide these sites</button><button class="btn" data-act="bulk" data-v="removed">Remove</button><button class="btn" data-act="bulk" data-v="licensed">Mark licensed</button><button class="btn" data-act="bulk" data-v="stolen">Mark stolen</button><button class="btn" data-act="clearpick">Clear</button></div>` : ''}
@@ -794,22 +794,32 @@ V.review = async () => {
     ? `<div class="swipe" id="swipe" style="--cut:${state.cut}%"><img data-our="${esc(c.photo)}" src="${oursImg(p)}" alt="Your client's photo"><img class="top-img" src="${theirImg(c)}" alt="Their copy" referrerpolicy="no-referrer"><div class="handle"></div><span class="l1">Your client's</span><span class="l2">Their copy</span></div>
       <input type="range" min="0" max="100" value="${state.cut}" id="cut" aria-label="Slide between your client's photo and their copy">`
     : `<div class="pair"><div class="frame ours"><img data-our="${esc(c.photo)}" src="${oursImg(p)}" alt="Your client's photo" style="object-fit:contain"><span class="lab">Your client's</span></div><div class="frame theirs"><img src="${theirImg(c)}" alt="Their copy" referrerpolicy="no-referrer" style="object-fit:contain"><span class="lab">Their copy</span></div></div>`;
-  return `${hd}${tabs}
-  <div class="row"><div class="queue" aria-label="Review progress">${Q.slice(0, 40).map((_, i) => `<i class="${i === 0 ? 'cur' : ''}"></i>`).join('')}</div><span class="muted" style="font-size:13.5px">${plural(Q.length, 'new copy', 'new copies')} to go${c.skipped ? ' · skipped before' : ''}</span>
-  <div class="seg" style="margin-left:auto" role="radiogroup" aria-label="View">${[['side', 'Side by side'], ['swipe', 'Swipe']].map(([k, l]) => `<button role="radio" aria-checked="${state.cmpMode === k}" class="${state.cmpMode === k ? 'on' : ''}" data-act="cmode" data-v="${k}">${l}</button>`).join('')}</div></div>
-  <div class="split">
-    <section class="card pad review-cap" style="flex:3 1 520px;display:flex;flex-direction:column;gap:14px" aria-label="Your client's photo and their copy">
+  // How far along you are: counted from the most copies this visit has seen waiting.
+  state.rvStart = Math.max(state.rvStart || 0, Q.length);
+  const at = state.rvStart - Q.length + 1;
+  return `${hd}
+  <div class="rvtop">${tabs}
+    <div class="rvprog" aria-label="Review progress"><div class="bar"><i style="width:${Math.max(2, (at - 1) / state.rvStart * 100)}%"></i></div><b class="num">${at.toLocaleString()} of ${state.rvStart.toLocaleString()}</b>${c.skipped ? '<span class="faint">skipped before</span>' : ''}</div>
+    <button class="btn" data-act="undo"${HIST.length ? ` title="Undo: ${esc(HIST[HIST.length - 1].label)}"` : ' disabled'}>${ic('undo', 16)} Undo <span class="kbd">U</span></button>
+    <div class="seg" role="radiogroup" aria-label="View">${[['side', 'Side by side'], ['swipe', 'Swipe']].map(([k, l]) => `<button role="radio" aria-checked="${state.cmpMode === k}" class="${state.cmpMode === k ? 'on' : ''}" data-act="cmode" data-v="${k}">${l}</button>`).join('')}</div></div>
+  <div class="split rv">
+    <section class="card pad review-cap" style="flex:3 1 560px;display:flex;flex-direction:column;gap:14px" aria-label="Your client's photo and their copy">
       ${pics}
-      ${HIST.length ? `<button class="btn" style="min-height:34px;justify-content:flex-start;font-size:13.5px;width:100%" data-act="undo">↶ Undo: ${esc(HIST[HIST.length - 1].label)}<span class="kbd" style="margin-left:auto">U</span></button>` : ''}
-      <div class="verdicts">
-        <button class="vbtn stolen" data-act="rverdict" data-v="stolen"><b>Stolen <span class="kbd">Y</span></b><span>Watch it, save evidence</span></button>
-        <button class="vbtn" data-act="rverdict" data-v="licensed"><b>Licensed <span class="kbd">L</span></b><span>OK for ${esc(c.clientName || 'this client')} only</span></button>
-        <button class="vbtn" data-act="rverdict" data-v="removed"><b>🗑 Remove <span class="kbd">N</span></b><span>Not wanted, hide it</span></button>
-        <button class="vbtn" data-act="rverdict" data-v="skip"><b>Skip <span class="kbd">→</span></b><span>Decide later</span></button>
+      <div class="rvsite"><div class="l1"><h2>${esc(c.site)}</h2><span class="tag ${c.match === 'same' ? 'bad' : 'warn'}">${c.match === 'same' ? 'Same photo' : 'Maybe'}${c.pct >= 0 && c.pct != null ? ' · ' + c.pct + '% lines up' : ''}</span>${repeatTag(c)}${flagWords(c)}${onlineTag(c)}</div>
+        <a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" title="Open this page in a new tab"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>
+        <div class="l3">${esc(c.photoName)} · ${esc(c.clientName || 'Client unknown')} · ${esc(FC.USE[c.use][0])} · found ${shortDate(c.firstSeen).toLowerCase()}</div></div>
+      ${c.repeat ? `<div class="banner warn" style="padding:8px 12px;font-size:13.5px"><span><b>Repeat offender.</b> You already marked ${plural(c.repeat, 'copy', 'copies')} on ${esc(c.repeatWho)} as Stolen. These come first.</span></div>` : ''}
+      <div class="rvans" role="group" aria-label="Your answer">
+        <button class="stolen" data-act="rverdict" data-v="stolen"><b>Stolen</b><span class="kbd">Y</span></button>
+        <button class="licensed" data-act="rverdict" data-v="licensed" title="OK for ${esc(c.clientName || 'this client')} only"><b>Licensed</b><span class="kbd">L</span></button>
+        <button data-act="rverdict" data-v="removed" title="Not wanted: hide it"><b>Remove</b><span class="kbd">N</span></button>
+        <button data-act="rverdict" data-v="skip" title="Decide later"><b>Skip</b><span class="kbd">→</span></button>
       </div>
+      <div class="row rvmore"><button class="btn" data-act="rvcompare">${ic('layers', 16)} Compare</button><button class="btn" data-act="evidence" data-v="${esc(c.id)}">${ic('doc', 16)} Evidence report</button><button class="btn" data-act="rvcapture">${ic('capture', 16)} Capture</button>
+        <details class="rvok"><summary class="btn">${ic('check', 16)} Approve site</summary><div class="tmenu">${c.clientName ? `<button data-act="rvapprove" data-v="client"><b>For ${esc(c.clientName)} only</b><span>${esc(FC.baseOf(c.site))} may use this client's photos</span></button>` : ''}<button data-act="rvapprove" data-v="all"><b>For every client</b><span>${esc(FC.baseOf(c.site))} may use any photo</span></button></div></details></div>
     </section>
-    <aside class="card pad" style="flex:2 1 320px;display:flex;flex-direction:column;gap:16px" aria-label="About this copy">
-      <div><div class="row" style="gap:8px"><h2 style="overflow-wrap:anywhere">${esc(c.site)}</h2><span class="tag ${c.match === 'same' ? 'bad' : 'warn'}">${c.match === 'same' ? 'Same photo' : 'Maybe'}${c.pct >= 0 && c.pct != null ? ' · ' + c.pct + '% lines up' : ''}</span></div>${c.repeat ? `<div class="banner warn" style="padding:8px 12px;margin-top:8px;font-size:13.5px"><span><b>Repeat offender.</b> You already marked ${plural(c.repeat, 'copy', 'copies')} on ${esc(c.repeatWho)} as Stolen. These come first in Review.</span></div>` : ''}<a href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" class="mono" style="overflow-wrap:anywhere;display:block;margin-top:4px">${esc(c.url)}</a></div>
+    <aside class="card pad" style="flex:2 1 340px;display:flex;flex-direction:column;gap:16px" aria-label="About this copy">
+      ${pageBoxHtml(c)}
       <dl class="facts">
         <dt>Your client's photo</dt><dd>${esc(c.photoName)}<br><span class="muted">${p && p.w ? p.w + ' × ' + p.h + ' · ' : ''}${esc(c.clientName || 'Client unknown')}</span></dd>
         <dt>Their copy</dt><dd>${c.w ? c.w + ' × ' + c.h : 'Size not known'} · ${esc(FC.USE[c.use][0])}</dd>
@@ -819,16 +829,16 @@ V.review = async () => {
         ${o && o.real ? `<dt>Company</dt><dd>${esc(o.name)}${o.sites.length > 1 ? `<br><span class="muted" style="font-size:13px">${Q.filter(x => o.sites.includes(x.site)).length} new copies on their sites. Use "By site and company" to mark them all at once.</span>` : ''}</dd>` : ''}
         ${id ? `<dt>Match ID</dt><dd class="mono">${id}</dd>` : ''}
       </dl>
-      <div class="row"><button class="btn primary" data-act="evidence" data-v="${esc(c.id)}">${ic('doc', 18)} Evidence report</button><button class="btn" data-act="rvcompare">Compare closely</button><a class="btn" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer">${ic('link', 16)} Open page</a></div>
     </aside>
   </div>
-  <p class="faint" style="font-size:13px;margin:0">Keyboard: <span class="kbd">Y</span> stolen, <span class="kbd">L</span> licensed, <span class="kbd">N</span> remove, <span class="kbd">→</span> skip, <span class="kbd">U</span> undo, <span class="kbd">S</span> switch view.</p>`;
+  <p class="faint" style="font-size:13px;margin:0">Keys: <span class="kbd">Y</span> stolen <span class="kbd">L</span> licensed <span class="kbd">N</span> remove <span class="kbd">→</span> skip <span class="kbd">U</span> undo <span class="kbd">S</span> switch view <span class="kbd">?</span> all keys</p>`;
 };
 V.review.guard = V.found.guard;
 V.review.after = () => {
   loadOurs();
   const cut = document.getElementById('cut');
   if (cut) cut.oninput = () => { state.cut = +cut.value; document.getElementById('swipe').style.setProperty('--cut', cut.value + '%'); };
+  ppPagePic();
 };
 Object.assign(ACTS, {
   rvtab: v => { state.rvTab = v; render(true); },
@@ -849,6 +859,9 @@ Object.assign(ACTS, {
     toastUndo(plural(ids.length, 'copy', 'copies') + ' marked stolen.'); render(true);
   },
   rvcompare: () => { state.open = state.rvCurrent; return ACTS.compare(); },
+  // The same Capture and Approve site as the details panel, for the copy on screen here.
+  rvcapture: async () => { state.open = state.rvCurrent; try { await ACTS.capturecopy(); } finally { state.open = ''; } },
+  rvapprove: async v => { state.open = state.rvCurrent; try { await ACTS.approvesite(v); } finally { state.open = ''; } },
 });
 
 // Keyboard: answers in the details panel and on Review.

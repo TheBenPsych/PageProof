@@ -331,10 +331,25 @@ V.browser.after = async () => {
 // =====================================================================================
 // Settings
 // =====================================================================================
+// Text size: the browser's own zoom, set for every PageProof page at once (the browser keeps it
+// per site, and all of PageProof counts as one site), so layouts stay right at every size.
+const TEXT_SIZES = [['normal', 'Normal', 1], ['large', 'Large', 1.1], ['larger', 'Larger', 1.25]];
+async function ppZoomKey() {
+  let z = 1;
+  try { z = await api.tabs.getZoom(); } catch (e) { /* not available: say Normal */ }
+  return TEXT_SIZES.reduce((best, t) => Math.abs(t[2] - z) < Math.abs(best[2] - z) ? t : best)[0];
+}
+ACTS.textsize = async v => {
+  const t = TEXT_SIZES.find(x => x[0] === v); if (!t) return;
+  try { await api.tabs.setZoom(t[2]); await api.storage.local.set({ ppTextSize: v }); toast('Text size: ' + t[1] + '.'); }
+  catch (e) { toast('Could not change the size here. Hold Ctrl and press + instead.'); }
+  render(true);
+};
 V.settings = async () => {
   const [name, hw, docs] = [await getName(), await ppHardware(), await RS_DOCS.state()];
   await RS_LISTS.load();
   const upd = await ppUpState();
+  const zoomKey = await ppZoomKey();
   return `${head('Settings', 'Settings', 'These apply to everything in PageProof and are saved on this computer.')}
   <div class="grid g2">
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>You</h2>
@@ -342,6 +357,10 @@ V.settings = async () => {
       <div class="dsh" style="margin-top:6px">Version</div>
       <p class="muted" style="margin:0;font-size:14px">PageProof ${VERSION}${upd && upd.has ? ` · <b style="color:var(--warn)">version ${esc(upd.latest)} is ready</b>` : ''}</p>
       <div class="row" style="gap:8px"><a class="btn${upd && upd.has ? ' primary' : ''}" href="#health" data-act="upgo">${upd && upd.has ? 'Get the update' : 'Updates'}</a><a class="btn" href="#whatsnew">What's new</a><button class="btn" data-act="tour">Take the tour again</button></div></section>
+    <section class="card pad" id="textsize" style="display:flex;flex-direction:column;gap:12px"><h2>Text size</h2>
+      <p class="muted" style="margin:0;font-size:14px">Makes everything in PageProof bigger: words, buttons and pictures. Saved on this computer only.</p>
+      <div class="seg" role="group" aria-label="Text size">${TEXT_SIZES.map(([k, l, z]) => `<button class="${zoomKey === k ? 'on' : ''}" aria-pressed="${zoomKey === k}" data-act="textsize" data-v="${k}"><span style="font-size:${Math.round(14 * z)}px">${l}</span></button>`).join('')}</div>
+      <span class="faint" style="font-size:12.5px">Ctrl and + or − also works on any PageProof page, and PageProof remembers it.</span></section>
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>Is everything working?</h2>
       <p class="muted" style="margin:0;font-size:14px">Green and red lights for Google Drive, Keep searching, each search site and your backup. One button copies the details to send for support.</p>
       <a class="btn" style="align-self:flex-start" href="#health">Check now</a></section>
@@ -443,6 +462,11 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Capture page: a proof checklist and two clear steps', 'The Capture page shows four green ticks as the proof is made (whole page, pictures, fingerprints, trusted timestamps), then step 1 Case details and step 2 Save. Every button is still there.'],
+  ['One at a time matches Copies found', 'A progress bar, Undo, big Stolen / Licensed / Remove / Skip buttons, the page link in view, and Their page on the right. Compare, Evidence report, Capture and Approve site sit underneath.'],
+  ['Dark mode all the way through, with matching icons', 'Inspect, Compare, Markup, Convert and New search are now dark inside as well, not only their side panels. Their buttons use the same line icons as the rest of PageProof.'],
+  ['See the space PageProof uses', 'Settings › Is everything working? shows what takes room and lets you free some. Copies you marked Stolen are never deleted there.'],
+  ['Keyboard help and bigger text', 'Press ? for every key. New keys in Copies found: up and down arrows move between copies, Enter opens one, / jumps to the search box. Settings › Text size makes everything bigger.'],
   ['Every page double-checked', 'The older tools (Inspect, Compare, Markup, Convert, Verify, New search) now match the new look, in light and dark. PageProof no longer squashes into a thin strip in a narrow window. One blue to match the shield, and old menu names are gone from page titles.'],
   ['No more false "100% lines up"', 'The photo check could shrink a found picture to a dot and call two different photos a 100% match. It now needs a real shared area. Wrong matches it had let in, that you had not answered yet, were moved to Removed.'],
   ['Updating is a plain download now', 'PageProof no longer changes its own files (Windows security did not like that). When a new version is out, Settings › Is everything working? gives you the download and three steps.'],
@@ -463,7 +487,7 @@ const NEWS = [
   ['Lighter and faster', 'Preview pictures now live in their own small store, so big lists use far less memory.'],
   ['Find copies, all day', 'Connect the shared Google Drive once. Keep searching then looks for copies of your clients\' photos one at a time, gently, and today\'s 50 runs a bigger batch.'],
   ['All copies found', 'Every copy in one list: group by client, photo, site or site owner, filter by how it\'s used, suspicious sites or credit removed, and hover for a quick side-by-side.'],
-  ['Answer and move on', 'Stolen, Licensed, 🗑 Remove or Skip opens the next copy. Every answer can be undone (U or Ctrl+Z).'],
+  ['Answer and move on', 'Stolen, Licensed, Remove or Skip opens the next copy. Every answer can be undone (U or Ctrl+Z).'],
   ['Registration numbers and Drive paths', 'Each copy shows the VA or application number found in the folders, and the exact Drive path of your client\'s photo.'],
   ['Evidence report', 'One PDF per copy, with both photos, the match check, hidden data compared and fingerprints. The case number is asked when you save.'],
   ['Site owners and Who\'s behind this site', 'Sites run by one company are put together, and each site is read for names, contacts and domain facts.'],

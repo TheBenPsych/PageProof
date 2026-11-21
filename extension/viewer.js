@@ -2,6 +2,13 @@
 const $ = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 
+// The proof checklist in the side panel: each line turns green as that part of the proof is ready.
+function proof(id, state, text) {
+  const li = document.getElementById(id);
+  if (!li) return;
+  li.className = state;
+  if (text) li.querySelector('span').textContent = text;
+}
 function setStatus(text, isError) {
   $('status').textContent = text;
   $('status').className = isError ? 'error' : '';
@@ -293,6 +300,14 @@ async function start() {
   // Who hosts this site (public registration records). Runs alongside everything else.
   const hostingJob = /^https?:/.test(rec.url) ? PP_HOSTING(rec.url, (rec.server || {}).ip).catch(e => ({ files: [], domainError: e.message })) : Promise.resolve(null);
 
+  // Case details are step 1, so they are there to fill in while the rest gets ready. Only the
+  // collector's name is remembered; case number and notes start empty for every capture.
+  let last = {};
+  try { last = (await api.storage.local.get('lastCase')).lastCase || {}; } catch (e) { /* ignore */ }
+  $('collector').value = last.collector || '';
+  $('caseRef').value = '';
+  $('caseBox').hidden = false;
+
   setStatus('Stitching the screenshots together...');
   for (const part of [rec.main, ...rec.sections]) {
     for (const t of part.tiles) t.bmp = await loadBitmap(t.src);
@@ -364,6 +379,7 @@ async function start() {
     const jpg = await toBlob(renderSlice(plan, y0, h), 'image/jpeg', 0.92);
     pages.push({ jpeg: await bytesOf(jpg), width: plan.W, height: h });
   }
+  proof('pfPage', 'ok', 'Whole page captured' + (rec.sections.length ? ', plus ' + rec.sections.length + ' scroll box' + (rec.sections.length > 1 ? 'es' : '') : ''));
   let pdf = makePdf(pages, { title: 'PageProof capture of ' + host, subject: rec.url + ' captured ' + rec.time });
   $('pdf').disabled = false;
   $('pdf').onclick = () => download(pdf, base + '.pdf');
@@ -396,6 +412,9 @@ async function start() {
     });
   }
   await buildHtml();
+  proof('pfPics', saved.failed.length ? 'part' : 'ok', saved.images.length
+    ? saved.images.length + ' picture' + (saved.images.length > 1 ? 's' : '') + ' saved' + (saved.failed.length ? ' (' + saved.failed.length + ' file' + (saved.failed.length > 1 ? 's' : '') + ' could not be)' : '')
+    : 'No pictures on this page to save');
   if (saved.failed.length) notes.push(saved.failed.length + ' file' + (saved.failed.length > 1 ? 's' : '') + ' could not be saved into the HTML backup (they are listed in capture-details.txt).');
   setStatus(notes.join(' '));
 
@@ -464,19 +483,16 @@ async function start() {
   const fpText = files.map(f => f.hash + '  ' + f.name).join('\n') + '\n';
   const fpBytes = new TextEncoder().encode(fpText);
   const fpHash = await sha256(fpBytes);
+  proof('pfPrint', 'ok', 'Fingerprints made for ' + files.length + ' files');
   setStatus([...notes, 'Getting trusted timestamps...'].join(' '));
   const stamps = await PP_TSA.stampAll(new Uint8Array(await crypto.subtle.digest('SHA-256', fpBytes)));
   const good = stamps.filter(t => !t.error);
+  proof('pfStamp', !good.length ? 'bad' : good.length < stamps.length ? 'part' : 'ok',
+    good.length ? good.length + ' of ' + stamps.length + ' trusted timestamps' : 'No trusted timestamp (services did not answer)');
   if (!good.length) notes.push('No trusted timestamp could be added (' + stamps.map(t => t.service + ': ' + t.error).join('; ') + '). Everything else is saved.');
   else if (good.length < stamps.length) notes.push('Timestamped by ' + good.map(t => t.service).join(' and ') + ' (' + stamps.filter(t => t.error).map(t => t.service).join(', ') + ' did not answer).');
   setStatus(notes.join(' '));
 
-  // Case details: remember the collector's name and last case number for next time.
-  let last = {};
-  try { last = (await api.storage.local.get('lastCase')).lastCase || {}; } catch (e) { /* ignore */ }
-  $('collector').value = last.collector || '';
-  $('caseRef').value = '';   // case number and notes start empty for every capture; only the name is remembered
-  $('caseBox').hidden = false;
 
   const detailsText = () => {
     const c = { collector: $('collector').value.trim(), caseRef: $('caseRef').value.trim(), notes: $('caseNotes').value.trim() };

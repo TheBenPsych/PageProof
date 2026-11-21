@@ -239,14 +239,14 @@ function renderSetup(busy) {
         h('li', { text: 'Every link found is listed on one results page, with a % match. Hide the sites you never care about.' })))));
     return;
   }
-  $('main').replaceChildren(
+  $('main').replaceChildren(...[
     h('div', {}, h('h1', { text: plural(draft.length, 'picture') + (busy ? ' (adding more…)' : ' ready') }), h('p', { class: 'lead', text: 'Numbers match the pictures in the results window. Press ✕ to take a picture out.' })),
     notes,
     h('div', { class: 'pics' }, draft.map((p, i) => h('div', { class: 'pic' },
       h('img', { src: p.thumb, alt: '' }), h('span', { class: 'num', text: i + 1 }),
       h('button', { class: 'x', title: 'Take this picture out', text: '✕', onclick: () => { draft.splice(i, 1); renderSetup(); } }),
       h('div', { class: 'nm', text: p.name, title: p.name }), h('div', { class: 'sz', text: p.w + ' × ' + p.h + ' · ' + (p.size / 1e6).toFixed(1) + ' MB' })))),
-    draft.length < MAX_PICS ? h('button', { class: 'addbtn small', text: '＋ Add more pictures', onclick: () => $('filePick').click() }) : null);
+    draft.length < MAX_PICS ? h('button', { class: 'addbtn small', text: '＋ Add more pictures', onclick: () => $('filePick').click() }) : null].filter(Boolean));
 }
 
 function setupDropAndPaste(onFiles) {
