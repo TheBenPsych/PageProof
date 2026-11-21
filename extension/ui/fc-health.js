@@ -60,7 +60,8 @@ async function healthLights() {
     else L.push(['grey', name, h.last ? 'Has not given any results yet (' + (h.zeros || 0) + ' photos tried).' : 'Not used yet.']);
   }
   // Backup
-  if (docs === 'granted') { const at = st.ppBackupAt ? Date.parse(st.ppBackupAt) : 0; L.push([at ? 'ok' : 'grey', 'Backup in Documents › PageProof', at ? 'Settings saved ' + agoText(at) + '.' : 'Nothing has been saved there yet.']); }
+  if (docs === 'granted' && await RS_DOCS.touchesPhotos(await RS_DOCS.handle())) L.push(['bad', 'Backup in Documents › PageProof', 'This folder is part of your photos folder, so PageProof saves nothing there (it never writes in your photos). Pick a folder in Documents instead.', '<button class="btn primary sm" data-act="docschoose">Pick folder</button>']);
+  else if (docs === 'granted') { const at = st.ppBackupAt ? Date.parse(st.ppBackupAt) : 0; L.push([at ? 'ok' : 'grey', 'Backup in Documents › PageProof', at ? 'Settings saved ' + agoText(at) + '.' : 'Nothing has been saved there yet.']); }
   else if (docs === 'prompt') L.push(['warn', 'Backup in Documents › PageProof', 'Needs one click before PageProof can save there.', '<button class="btn primary sm" data-act="docsallow">Allow</button>']);
   else L.push(['warn', 'Backup in Documents › PageProof', 'Not set up, so a reinstall would lose your hidden sites and finds.', '<a class="btn sm" href="#settings">Set it up</a>']);
   // Skipped photos

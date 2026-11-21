@@ -462,6 +462,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Your Drive photos: read only, double-checked', 'PageProof only ever reads your Google Drive photos. It never changes, moves, renames, deletes or adds anything there. Now it also refuses to use a folder inside your photos for its own lists, and the search sites get a clean copy of each photo with no hidden data and a plain name (photo.jpg).'],
   ['Finding copies is faster and steadier', 'The photo check is about a third faster on copies and almost twice as fast on the many different photos a search turns up, with the same answers. On slower computers, good checks are no longer stopped and shown as "Can\'t check". The hourly look for new photos only opens this and last quarter\'s folders again, also inside a folder that holds several clients. Keep searching no longer tries photos that are not due yet, and its small window no longer opens and closes by itself during the weekly folder check.'],
   ['Capture page: a proof checklist and two clear steps', 'The Capture page shows four green ticks as the proof is made (whole page, pictures, fingerprints, trusted timestamps), then step 1 Case details and step 2 Save. Every button is still there.'],
   ['One at a time matches Copies found', 'A progress bar, Undo, big Stolen / Licensed / Remove / Skip buttons, the page link in view, and Their page on the right. Compare, Evidence report, Capture and Approve site sit underneath.'],
@@ -596,7 +597,7 @@ async function act(a, v, el) {
     try { const w = await api.windows.getCurrent(); await api.sidePanel.open({ windowId: w.id }); } catch (e) { toast('Your browser has no side panel. Use Chrome or Edge.'); }
   }
   else if (a === 'shortcuts') api.tabs.create({ url: /Edg\//.test(navigator.userAgent) ? 'edge://extensions/shortcuts' : 'chrome://extensions/shortcuts' });
-  else if (a === 'docschoose') { try { await RS_DOCS.choose(); await RS_LISTS.load(); await RS_LISTS.save(); toast('PageProof folder ready'); } catch (e) { if (e.name !== 'AbortError') toast('Chrome refused that folder. Make a new folder called PageProof inside Documents and pick that.'); } render(true); }
+  else if (a === 'docschoose') { try { await RS_DOCS.choose(); await RS_LISTS.load(); await RS_LISTS.save(); toast('PageProof folder ready'); } catch (e) { if (e.name === 'PhotosFolder') toast(e.message); else if (e.name !== 'AbortError') toast('Chrome refused that folder. Make a new folder called PageProof inside Documents and pick that.'); } render(true); }
   else if (a === 'docsallow') { await RS_DOCS.allow(); render(true); }
   else if (a === 'hidtab') { state.hidTab = v; state.hidQ = ''; state.hidMore = 0; render(true); }
   else if (a === 'hidkind') { state.hidKind = v; render(true); }

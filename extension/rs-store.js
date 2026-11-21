@@ -125,6 +125,9 @@ const RS_DOCS = {
   // PageProof uses (or makes) a "PageProof" folder inside it, unless it already is one.
   async choose() {
     const picked = await window.showDirectoryPicker({ id: 'pageproof-docs', mode: 'readwrite', startIn: 'documents' });
+    // Never inside (or around) the photos folders: PageProof only ever READS those.
+    if (await RS_DOCS.touchesPhotos(picked)) { const e = new Error('That folder is part of your photos folder. PageProof never writes there. Pick a folder in Documents instead.'); e.name = 'PhotosFolder'; throw e; }
+    RS_DOCS._safe = null;
     const dir = /^pageproof$/i.test(picked.name) ? picked : await picked.getDirectoryHandle('PageProof', { create: true });
     try { await dir.getDirectoryHandle('My pictures', { create: true }); } catch (e) { /* made later instead */ }
     await RS_DB.put('handles', 'docs', dir);
@@ -132,7 +135,32 @@ const RS_DOCS = {
   },
   async dir() {
     if ((await RS_DOCS.state()) !== 'granted') return null;
-    return RS_DOCS.handle();
+    const d = await RS_DOCS.handle();
+    // Safety net: if this folder is the photos folder, inside it, or holds it (for example the
+    // photos folder was picked later), PageProof writes nothing at all. Checked every 10 minutes.
+    if (!RS_DOCS._safe || Date.now() - RS_DOCS._safe.at > 600000) RS_DOCS._safe = { at: Date.now(), ok: !(await RS_DOCS.touchesPhotos(d)) };
+    return RS_DOCS._safe.ok ? d : null;
+  },
+  _safe: null,
+  // True when a folder is one of the picked photos folders, sits inside one, or contains one.
+  async photoHandles() {
+    const out = [];
+    try {
+      const keys = await RS_DB.keys('handles');
+      for (const k of keys) if (k === 'fcRoot' || String(k).startsWith('fcExtra:')) { const h = await RS_DB.get('handles', k); if (h) out.push(h); }
+    } catch (e) { /* none */ }
+    return out;
+  },
+  async touchesPhotos(d) {
+    if (!d) return false;
+    for (const p of await RS_DOCS.photoHandles()) {
+      try {
+        if (await p.isSameEntry(d)) return true;
+        if ((await p.resolve(d)) !== null) return true;        // picked folder is inside the photos
+        if ((await d.resolve(p)) !== null) return true;        // picked folder holds the photos
+      } catch (e) { /* can't tell for this one */ }
+    }
+    return false;
   },
   async readText(name) {
     const d = await RS_DOCS.dir();
