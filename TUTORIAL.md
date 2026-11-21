@@ -27,15 +27,18 @@ This guide shows how to use PageProof day to day, once it's installed in your br
 
 ## 2. Check the capture page
 
-From top to bottom, the capture page shows:
+The capture page has a panel on the left and the captured page on the right. From top to bottom, the panel shows:
 
 | Part | What to do |
 | --- | --- |
-| **Status line** | Read it. It tells you about anything special: sections found, endless scrolling, a timestamp service that didn't answer. |
+| **Website, address, time and Capture ID** | Check it is the page you meant. Click the address to copy it. |
+| **Proof checklist** | Four lines that turn green as each part of the proof is ready: **Whole page captured**, **pictures saved**, **Fingerprints made**, **trusted timestamps**. Yellow or red means that part is missing something (for example a timestamp service that didn't answer). The pack still saves. |
+| **1 Case details** | Fill these in (next step). You can type while the checklist is still working. |
+| **2 Save** | The big green **Save evidence pack**, then **Copy**, **Markup**, **PDF** and **HTML**. |
 | **Who hosts this site** | The hosting company and the domain registrar, from public records. If the site uses Cloudflare, it says so (Cloudflare hides the real host). |
-| **Case boxes** | Fill these in (next step). |
 | **Capture details and fingerprints** | Click to expand and see the full record that goes into the pack. |
-| **Preview** | Scroll through it to make sure the capture shows what you need. |
+
+The blue line above the captured page tells you about anything special: sections found, endless scrolling, a timestamp service that didn't answer. Scroll through the captured page to make sure it shows what you need.
 
 **About the preview:**
 - The **dark banner** at the top shows the website, full web address, page title, capture time and time zone, the Capture ID (for example `PP-7KQ2MX`) and window size.
@@ -46,9 +49,9 @@ From top to bottom, the capture page shows:
 
 ## 3. Fill in the case details
 
-- **Collected by:** your name. It's remembered for next time.
 - **Case / reference number:** for example `CASE-2026-114`. It starts empty for each capture, so enter it every time. It goes at the start of the zip's file name.
 - **Notes:** what this shows, for example "Client photo used without licence on product page." It starts empty for each capture.
+- **Collected by:** your name. It's remembered for next time.
 
 ---
 
@@ -343,6 +346,12 @@ Everything you find is kept in this browser and also in `Documents\PageProof\fou
 
 - **A search site may have stopped working.** If Google Lens finds nothing at all for 10 photos in a row (30 for Yandex or Bing), or a site gives no answer 8 times in a row, PageProof rests it for 6 hours and tells you. The empty results of that run are **not** counted against your photos. Press **Try it now** to test it straight away.
 - **Copy details for support** copies numbers and settings only (how many photos, how long things take). Never a photo's name, a client's name, a site or a folder path. The page shows exactly what was copied.
+
+**Space PageProof is using.** The same page shows how much room PageProof takes on this computer and what it is used for (kept copies of their pictures, pictures of their pages, preview pictures, captures). Under **Free up space**, tick what you no longer need and press **Free up**. Copies you marked **Stolen** are never deleted there, and the evidence packs you saved are files on your computer, so they are not touched either.
+
+**Bigger text.** **Settings › Text size** has Normal, Large and Larger. It makes everything in PageProof bigger and is saved on that computer only.
+
+**Keyboard keys.** Press **?** anywhere in PageProof (or the **?** button at the top) for the full list. In Copies found: **↑ ↓** move between copies, **Enter** opens one, **Y / L / N / →** answer it, **U** undoes, **/** jumps to the search box, **Esc** closes.
 
 **Updating.** PageProof asks GitHub each morning whether there is a newer version, and says so on Home and on the PageProof icon's menu.
 1. Open **Settings › Is everything working?** and scroll to **Updates**.

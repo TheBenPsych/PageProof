@@ -71,3 +71,192 @@ button{border-radius:10px}
 :root[data-theme="dark"] :is(.howbox,.ways span,.can span){color:#334155}
 :root[data-theme="dark"] .howbox b{color:#0F172A}
 :root[data-theme="dark"] :is(#empty,.empty) .howbox :is(b,h2){color:#0F172A}
+
+/* ---- line icons that take the place of emoji (ui/tool-icons.js) */
+.tic{display:inline-flex;vertical-align:-0.2em;margin-right:.35em;line-height:0}
+.tic svg{display:block}
+#side .tile .tic,#side .tile span>.tic{margin-right:0}
+#side .tile span{font-size:17px;line-height:0}
+:is(#empty,.empty) .big .tic,:is(#empty,.empty)>.tic:first-child{color:var(--t-accent);margin:0}
+
+/* ---- Capture page (4.3): proof checklist, numbered steps, the page on a clean sheet */
+#proof{list-style:none;margin:0;padding:10px 12px;display:flex;flex-direction:column;gap:7px;background:var(--t-sunk);border-radius:12px;font-size:13px}
+#proof li{display:flex;align-items:flex-start;gap:8px;line-height:1.35;color:var(--t-ink)}
+#proof li i{flex:0 0 16px;width:16px;height:16px;margin-top:1px;border-radius:50%;box-sizing:border-box;border:2px solid var(--t-line);border-top-color:var(--t-accent);animation:pfspin .9s linear infinite}
+#proof li.wait{color:var(--t-muted)}
+#proof li:not(.wait) i{animation:none;border:0;background:var(--t-ok) center/11px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5 9-10'/%3E%3C/svg%3E")}
+#proof li.part i{background-color:var(--t-warn);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='4' stroke-linecap='round'%3E%3Cpath d='M12 6v8M12 18v.5'/%3E%3C/svg%3E")}
+#proof li.bad i{background-color:var(--t-bad);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='4' stroke-linecap='round'%3E%3Cpath d='M7 7l10 10M17 7L7 17'/%3E%3C/svg%3E")}
+@keyframes pfspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){#proof li i{animation:none}}
+#side #saveBox{display:flex;flex-direction:column;gap:8px;padding:10px 12px;background:var(--t-sunk);border-radius:12px}
+#side h3 .stepn{display:inline-grid;place-items:center;width:20px;height:20px;margin-right:6px;border-radius:50%;background:var(--t-accent);color:#fff;font-size:12px;letter-spacing:0}
+:root[data-theme="dark"] #side h3 .stepn{color:#04121C}
+#side #caseBox h3,#side #saveBox h3{text-transform:none;letter-spacing:0;font-size:14px;color:var(--t-ink);display:flex;align-items:center}
+body.with-side #content{background:var(--t-sunk)}
+body.with-side #preview{max-width:1100px;margin:0 auto 28px;padding:0 20px}
+body.with-side #preview>canvas,body.with-side #preview>img{display:block;max-width:100%;height:auto;background:#fff;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.12),0 10px 30px rgba(0,0,0,.14)}
+
+/* DARK-AUTO-START (written by tools/make-tools-dark.py, do not edit by hand) */
+/* viewer.css */
+:root[data-theme="dark"] #status.error{background-color:color-mix(in srgb,var(--t-bad) 18%,var(--t-surface));color:var(--t-bad)}
+:root[data-theme="dark"] #caseBox input,:root[data-theme="dark"] #caseBox textarea{border-color:var(--t-line)}
+:root[data-theme="dark"] details.more .menu{background-color:var(--t-surface);color:var(--t-ink)}
+:root[data-theme="dark"] #content #status.error{background-color:color-mix(in srgb,var(--t-bad) 18%,var(--t-surface))}
+/* inspect.css */
+:root[data-theme="dark"] .warnbox{background-color:color-mix(in srgb,var(--t-warn) 18%,var(--t-surface));color:var(--t-warn)}
+:root[data-theme="dark"] .warnbox b{color:var(--t-warn)}
+:root[data-theme="dark"] .aibox{background-color:var(--t-accent-soft);color:var(--t-accent)}
+:root[data-theme="dark"] #empty{color:var(--t-ink)}
+:root[data-theme="dark"] #empty kbd{background-color:var(--t-surface);border-color:var(--t-line)}
+:root[data-theme="dark"] #shown .frame{background-color:var(--t-surface)}
+:root[data-theme="dark"] #noPreview{color:var(--t-muted)}
+:root[data-theme="dark"] #shown figcaption{color:var(--t-muted)}
+:root[data-theme="dark"] .galHint{color:var(--t-muted)}
+:root[data-theme="dark"] .gc{background-color:var(--t-surface)}
+:root[data-theme="dark"] .gc .im{background-color:var(--t-sunk)}
+:root[data-theme="dark"] .gc .meta{color:var(--t-muted)}
+:root[data-theme="dark"] .badge.y{background-color:color-mix(in srgb,var(--t-ok) 18%,var(--t-surface));color:var(--t-ok)}
+:root[data-theme="dark"] .badge.s{background-color:color-mix(in srgb,var(--t-warn) 18%,var(--t-surface));color:var(--t-warn)}
+:root[data-theme="dark"] .badge.n{background-color:var(--t-sunk);color:var(--t-muted)}
+:root[data-theme="dark"] .badge.w{background-color:var(--t-sunk)}
+:root[data-theme="dark"] .badge.x{background-color:color-mix(in srgb,var(--t-bad) 18%,var(--t-surface));color:var(--t-bad)}
+/* compare.css */
+:root[data-theme="dark"] .slot.over{border-color:color-mix(in srgb,var(--t-accent) 45%,var(--t-surface))}
+:root[data-theme="dark"] .seg button.on{color:var(--t-ink)}
+:root[data-theme="dark"] #empty{color:var(--t-ink)}
+:root[data-theme="dark"] #empty kbd{background-color:var(--t-surface);border-color:var(--t-line)}
+:root[data-theme="dark"] #empty .alt{color:var(--t-muted)}
+:root[data-theme="dark"] #view{background-color:var(--t-surface)}
+:root[data-theme="dark"] #hint{color:var(--t-muted)}
+/* markup.css */
+:root[data-theme="dark"] #board{background-color:var(--t-surface)}
+/* convert.css */
+:root[data-theme="dark"] .empty{color:var(--t-ink)}
+:root[data-theme="dark"] .empty .alt{color:var(--t-muted)}
+:root[data-theme="dark"] .empty kbd{background-color:var(--t-surface);border-color:var(--t-line)}
+:root[data-theme="dark"] .can span{background-color:var(--t-surface);border-color:var(--t-line);color:var(--t-ink)}
+:root[data-theme="dark"] .topline .hint{color:var(--t-muted)}
+:root[data-theme="dark"] .fc{background-color:var(--t-surface)}
+:root[data-theme="dark"] .fc .im{background-color:var(--t-sunk)}
+:root[data-theme="dark"] .fc .mt{color:var(--t-muted)}
+:root[data-theme="dark"] .badge{background-color:var(--t-sunk);color:var(--t-muted)}
+:root[data-theme="dark"] .badge.mac{background-color:var(--t-accent-soft);color:var(--t-accent)}
+:root[data-theme="dark"] .badge.ok{background-color:color-mix(in srgb,var(--t-ok) 18%,var(--t-surface));color:var(--t-ok)}
+:root[data-theme="dark"] .badge.bad{background-color:color-mix(in srgb,var(--t-bad) 18%,var(--t-surface));color:var(--t-bad)}
+:root[data-theme="dark"] .res{background-color:color-mix(in srgb,var(--t-ok) 14%,var(--t-surface));color:var(--t-ok)}
+:root[data-theme="dark"] .res.bad{background-color:color-mix(in srgb,var(--t-bad) 14%,var(--t-surface));color:var(--t-bad)}
+:root[data-theme="dark"] .res.wait{background-color:var(--t-sunk);color:var(--t-muted)}
+:root[data-theme="dark"] .res a{color:var(--t-accent)}
+:root[data-theme="dark"] .skipped{color:var(--t-muted)}
+:root[data-theme="dark"] .stage{background-color:var(--t-surface)}
+:root[data-theme="dark"] .cropbox{border-color:var(--t-surface)}
+:root[data-theme="dark"] .cropbox i{background-color:var(--t-surface)}
+:root[data-theme="dark"] .strip button{background-color:var(--t-line)}
+:root[data-theme="dark"] .edinfo{color:var(--t-muted)}
+:root[data-theme="dark"] .howto{background-color:var(--t-accent-soft);border-color:color-mix(in srgb,var(--t-accent) 45%,var(--t-surface));color:var(--t-accent)}
+:root[data-theme="dark"] .jf{background-color:var(--t-surface);border-color:color-mix(in srgb,var(--t-ok) 45%,var(--t-surface))}
+:root[data-theme="dark"] .jf.off{border-color:var(--t-line)}
+:root[data-theme="dark"] .ord{color:var(--t-ok);background-color:color-mix(in srgb,var(--t-ok) 18%,var(--t-surface))}
+:root[data-theme="dark"] .mv button,:root[data-theme="dark"] .mini{background-color:var(--t-sunk);color:var(--t-ink);border-color:var(--t-line)}
+:root[data-theme="dark"] .pg{background-color:var(--t-surface)}
+:root[data-theme="dark"] .pg b{color:var(--t-muted)}
+:root[data-theme="dark"] .pg.gone::after{color:var(--t-bad)}
+:root[data-theme="dark"] .pg .ck{border-color:var(--t-line);background-color:var(--t-surface)}
+:root[data-theme="dark"] .more{color:var(--t-muted)}
+:root[data-theme="dark"] .rangeRow input{border-color:var(--t-line)}
+:root[data-theme="dark"] .docs button{background-color:var(--t-surface);color:var(--t-ink);border-color:var(--t-line)}
+:root[data-theme="dark"] iframe.docframe{background-color:var(--t-line)}
+:root[data-theme="dark"] .li{background-color:var(--t-surface)}
+:root[data-theme="dark"] .li:hover{border-color:color-mix(in srgb,var(--t-accent) 45%,var(--t-surface))}
+:root[data-theme="dark"] .li small{color:var(--t-muted)}
+:root[data-theme="dark"] .pane{background-color:var(--t-surface)}
+:root[data-theme="dark"] .okb{color:var(--t-ok);background-color:color-mix(in srgb,var(--t-ok) 18%,var(--t-surface))}
+:root[data-theme="dark"] .warnb{color:var(--t-warn);background-color:color-mix(in srgb,var(--t-warn) 18%,var(--t-surface))}
+:root[data-theme="dark"] .acts button.alt{background-color:var(--t-sunk);color:var(--t-ink);border-color:var(--t-line)}
+:root[data-theme="dark"] .ent td{border-bottom-color:var(--t-line)}
+:root[data-theme="dark"] .ent td.sz{color:var(--t-muted)}
+:root[data-theme="dark"] .att{border-color:var(--t-line)}
+:root[data-theme="dark"] .note{color:var(--t-warn);background-color:color-mix(in srgb,var(--t-warn) 18%,var(--t-surface))}
+:root[data-theme="dark"] .tables td{border-color:var(--t-line)}
+:root[data-theme="dark"] .busy{color:var(--t-muted)}
+/* revsearch.css */
+:root[data-theme="dark"] .lead{color:var(--t-muted)}
+:root[data-theme="dark"] .lead b{color:var(--t-ink)}
+:root[data-theme="dark"] button.btn{background-color:var(--t-surface);color:var(--t-accent);border-color:var(--t-line)}
+:root[data-theme="dark"] button.btn:not(:disabled):hover{background-color:var(--t-accent-soft)}
+:root[data-theme="dark"] .pitem.on{outline-color:color-mix(in srgb,var(--t-accent) 45%,var(--t-surface))}
+:root[data-theme="dark"] .cnt{background-color:var(--t-surface);color:var(--t-accent)}
+:root[data-theme="dark"] .cnt.newc{background-color:color-mix(in srgb,var(--t-warn) 26%,var(--t-surface));color:var(--t-warn)}
+:root[data-theme="dark"] #banner{background-color:color-mix(in srgb,var(--t-warn) 18%,var(--t-surface));color:var(--t-warn);border-color:color-mix(in srgb,var(--t-warn) 45%,var(--t-surface))}
+:root[data-theme="dark"] #banner b{color:var(--t-warn)}
+:root[data-theme="dark"] #banner.info{background-color:var(--t-accent-soft);color:var(--t-accent);border-color:color-mix(in srgb,var(--t-accent) 45%,var(--t-surface))}
+:root[data-theme="dark"] #banner.bad{background-color:color-mix(in srgb,var(--t-bad) 18%,var(--t-surface));color:var(--t-bad);border-color:color-mix(in srgb,var(--t-bad) 45%,var(--t-surface))}
+:root[data-theme="dark"] .empty{color:var(--t-muted)}
+:root[data-theme="dark"] .empty h1{color:var(--t-ink)}
+:root[data-theme="dark"] .ways{color:var(--t-muted)}
+:root[data-theme="dark"] .ways span{background-color:var(--t-surface);border-color:var(--t-line)}
+:root[data-theme="dark"] .howbox{background-color:var(--t-surface);border-color:var(--t-line);color:var(--t-ink)}
+:root[data-theme="dark"] .howbox b{color:var(--t-ink)}
+:root[data-theme="dark"] .pic{background-color:var(--t-surface)}
+:root[data-theme="dark"] .pic img{background-color:var(--t-line)}
+:root[data-theme="dark"] .pic .sz{color:var(--t-muted)}
+:root[data-theme="dark"] .pic .num{background-color:var(--t-surface);color:var(--t-ink)}
+:root[data-theme="dark"] .rhead > img{background-color:var(--t-line)}
+:root[data-theme="dark"] .btns small{color:var(--t-muted)}
+:root[data-theme="dark"] .ftabs button{background-color:var(--t-surface);border-color:var(--t-line);color:var(--t-ink)}
+:root[data-theme="dark"] .ftabs button:hover{background-color:var(--t-surface)}
+:root[data-theme="dark"] .ftabs button.newf{background-color:color-mix(in srgb,var(--t-warn) 18%,var(--t-surface));border-color:color-mix(in srgb,var(--t-warn) 45%,var(--t-surface));color:var(--t-warn)}
+:root[data-theme="dark"] .ftabs input{border-color:var(--t-line)}
+:root[data-theme="dark"] .hidebar{color:var(--t-muted);background-color:var(--t-surface);border-color:var(--t-line)}
+:root[data-theme="dark"] .chip{background-color:color-mix(in srgb,var(--t-bad) 18%,var(--t-surface));color:var(--t-bad)}
+:root[data-theme="dark"] .chip button{color:var(--t-bad)}
+:root[data-theme="dark"] .chip.ok{background-color:color-mix(in srgb,var(--t-ok) 18%,var(--t-surface));color:var(--t-ok)}
+:root[data-theme="dark"] .chip.ok button{color:var(--t-ok)}
+:root[data-theme="dark"] .site{background-color:var(--t-surface);border-color:var(--t-line)}
+:root[data-theme="dark"] .site.allowed{border-color:color-mix(in srgb,var(--t-ok) 45%,var(--t-surface))}
+:root[data-theme="dark"] .site .sh{border-bottom-color:var(--t-line)}
+:root[data-theme="dark"] .site .sh .n{color:var(--t-muted)}
+:root[data-theme="dark"] .site .sh .acts button{background-color:var(--t-surface)}
+:root[data-theme="dark"] .site .sh .acts .hideB{border-color:color-mix(in srgb,var(--t-bad) 45%,var(--t-surface));color:var(--t-bad)}
+:root[data-theme="dark"] .site .sh .acts .allowB{border-color:color-mix(in srgb,var(--t-ok) 45%,var(--t-surface));color:var(--t-ok)}
+:root[data-theme="dark"] .row.allowed{background-color:color-mix(in srgb,var(--t-ok) 14%,var(--t-surface))}
+:root[data-theme="dark"] .row .th{background-color:var(--t-line)}
+:root[data-theme="dark"] .row .t a{color:var(--t-ink)}
+:root[data-theme="dark"] .row .t small{color:var(--t-muted)}
+:root[data-theme="dark"] .tag.ex{background-color:color-mix(in srgb,var(--t-ok) 18%,var(--t-surface));color:var(--t-ok)}
+:root[data-theme="dark"] .tag.sim{background-color:var(--t-sunk);color:var(--t-muted)}
+:root[data-theme="dark"] .tag.maybe{background-color:color-mix(in srgb,var(--t-warn) 18%,var(--t-surface));color:var(--t-warn)}
+:root[data-theme="dark"] .tag.google{background-color:var(--t-accent-soft);color:var(--t-accent)}
+:root[data-theme="dark"] .tag.yandex{background-color:color-mix(in srgb,var(--t-warn) 18%,var(--t-surface));color:var(--t-warn)}
+:root[data-theme="dark"] .tag.bing{background-color:var(--t-accent-soft);color:var(--t-accent)}
+:root[data-theme="dark"] .tag.new{background-color:color-mix(in srgb,var(--t-warn) 18%,var(--t-surface));color:var(--t-warn)}
+:root[data-theme="dark"] .tag.hid{background-color:color-mix(in srgb,var(--t-bad) 18%,var(--t-surface));color:var(--t-bad)}
+:root[data-theme="dark"] .row .act button{background-color:var(--t-surface);border-color:var(--t-line);color:var(--t-accent)}
+:root[data-theme="dark"] .pct.mid{background-color:color-mix(in srgb,var(--t-warn) 26%,var(--t-surface));color:var(--t-warn)}
+:root[data-theme="dark"] .pct.lo{background-color:color-mix(in srgb,var(--t-bad) 18%,var(--t-surface));color:var(--t-bad)}
+:root[data-theme="dark"] .pct.no{background-color:var(--t-sunk);color:var(--t-muted)}
+:root[data-theme="dark"] .mt small{color:var(--t-muted)}
+:root[data-theme="dark"] .mt small b{color:var(--t-warn)}
+:root[data-theme="dark"] .none{background-color:var(--t-surface);border-color:var(--t-line);color:var(--t-muted)}
+:root[data-theme="dark"] .note{color:var(--t-muted)}
+:root[data-theme="dark"] .tbl{background-color:var(--t-surface);border-color:var(--t-line)}
+:root[data-theme="dark"] .tr{border-top-color:var(--t-line)}
+:root[data-theme="dark"] .tr.h{background-color:var(--t-surface);color:var(--t-muted)}
+:root[data-theme="dark"] .tr img{background-color:var(--t-line)}
+:root[data-theme="dark"] .tr .due{color:var(--t-accent)}
+:root[data-theme="dark"] .addsite input{border-color:var(--t-line)}
+:root[data-theme="dark"] .lrow{border-top-color:var(--t-line)}
+:root[data-theme="dark"] pre.txt{background-color:var(--t-surface)}
+:root[data-theme="dark"] .row .act button.trash{color:var(--t-bad);border-color:color-mix(in srgb,var(--t-bad) 45%,var(--t-surface))}
+:root[data-theme="dark"] .row .act button.trash:hover{background-color:color-mix(in srgb,var(--t-bad) 14%,var(--t-surface))}
+:root[data-theme="dark"] .row .t .hidepart{color:var(--t-bad)}
+:root[data-theme="dark"] .row .act button.nomatch{color:var(--t-warn);border-color:color-mix(in srgb,var(--t-warn) 45%,var(--t-surface))}
+:root[data-theme="dark"] .row .act button.nomatch:hover{background-color:color-mix(in srgb,var(--t-warn) 14%,var(--t-surface))}
+:root[data-theme="dark"] .sumcard{background-color:color-mix(in srgb,var(--t-ok) 14%,var(--t-surface));border-color:color-mix(in srgb,var(--t-ok) 45%,var(--t-surface))}
+:root[data-theme="dark"] .sumcard small{color:var(--t-muted)}
+:root[data-theme="dark"] .sumcard a.btn{border-color:var(--t-line);background-color:var(--t-surface);color:var(--t-accent)}
+:root[data-theme="dark"] details.thrown{border-color:var(--t-line);background-color:var(--t-surface)}
+:root[data-theme="dark"] details.thrown > summary{color:var(--t-ink)}
+:root[data-theme="dark"] details.thrown .hint{color:var(--t-muted)}
+/* DARK-AUTO-END */

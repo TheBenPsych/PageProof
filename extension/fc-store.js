@@ -126,7 +126,16 @@ const FC = (() => {
         t.oncomplete = resolve; t.onerror = () => reject(t.error); t.onabort = () => reject(t.error || new Error('The browser could not save a preview picture'));
       });
     },
-    async count() { const db = await picsOpen(); return new Promise((res, rej) => { const r = db.transaction('p', 'readonly').objectStore('p').count(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+    async count() { const db = await picsOpen(); return new Promise((res, rej) => { const r = db.transaction('p', 'readonly').objectStore('p').count(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },    // How many previews there are and roughly how much room they take (for the storage meter).
+    async stats() {
+      const db = await picsOpen();
+      return new Promise((res, rej) => {
+        let n = 0, bytes = 0;
+        const r = db.transaction('p', 'readonly').objectStore('p').openCursor();
+        r.onsuccess = () => { const c = r.result; if (!c) return res({ n, bytes }); n++; bytes += typeof c.value === 'string' ? Math.round(c.value.length * 0.75) : 0; c.continue(); };
+        r.onerror = () => rej(r.error);
+      });
+    },
   };
   // ---------------------------------------------------------------- their copy and their page, kept
   // "kept": their copy of the photo, saved the moment a search finds it, so it is still here if
@@ -140,9 +149,9 @@ const FC = (() => {
     async stats() {                            // how many, and how much room they take
       const db = await picsOpen();
       return new Promise((res, rej) => {
-        let n = 0, bytes = 0; const ids = [];
+        let n = 0, bytes = 0; const ids = [], each = [];
         const r = db.transaction(name, 'readonly').objectStore(name).openCursor();
-        r.onsuccess = () => { const c = r.result; if (!c) return res({ n, bytes, ids }); n++; ids.push(c.key); const v = c.value || {}; bytes += v.size || (v.pic ? Math.round(v.pic.length * 0.75) : 0); c.continue(); };
+        r.onsuccess = () => { const c = r.result; if (!c) return res({ n, bytes, ids, each }); n++; ids.push(c.key); const v = c.value || {}; const b = v.size || (v.pic ? Math.round(v.pic.length * 0.75) : 0); bytes += b; each.push([c.key, b, v.at || '']); c.continue(); };
         r.onerror = () => rej(r.error);
       });
     },

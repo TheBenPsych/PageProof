@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="viewer.css">
 <link rel="stylesheet" href="ui/tools-look.css">
 <script src="theme.js"></script>
+<script src="ui/tool-icons.js" defer></script>
 </head>
 <body class="with-side">
   <aside id="side">
@@ -17,19 +18,29 @@
       <div id="sub"></div>
     </div>
 
-    <button id="pack" class="main save" disabled>⬇ Save evidence pack</button>
-    <div class="grid">
-      <button id="copy" class="tile" disabled title="Copy the whole capture as a picture, to paste into an email, chat or document"><span>📋</span>Copy</button>
-      <button id="markup" class="tile" disabled title="Highlight, draw and type on a copy of this capture"><span>✏️</span>Markup</button>
-      <button id="pdf" class="tile" disabled title="Download just the PDF"><span>📄</span>PDF</button>
-      <button id="html" class="tile" disabled title="Download just the HTML backup"><span>🌐</span>HTML</button>
-    </div>
+    <ul id="proof" aria-label="What this capture proves">
+      <li id="pfPage" class="wait"><i></i><span>Capturing the whole page</span></li>
+      <li id="pfPics" class="wait"><i></i><span>Saving the pictures</span></li>
+      <li id="pfPrint" class="wait"><i></i><span>Making fingerprints</span></li>
+      <li id="pfStamp" class="wait"><i></i><span>Getting trusted timestamps</span></li>
+    </ul>
 
     <section id="caseBox" hidden>
-      <h3>Case details</h3>
-      <label>Collected by <input id="collector" autocomplete="name"></label>
+      <h3><b class="stepn">1</b> Case details</h3>
       <label>Case / reference number <input id="caseRef"></label>
       <label>Notes <textarea id="caseNotes" rows="2" placeholder="e.g. client photo used on product page"></textarea></label>
+      <label>Collected by <input id="collector" autocomplete="name"></label>
+    </section>
+
+    <section id="saveBox">
+      <h3><b class="stepn">2</b> Save</h3>
+      <button id="pack" class="main save" disabled>⬇ Save evidence pack</button>
+      <div class="grid">
+        <button id="copy" class="tile" disabled title="Copy the whole capture as a picture, to paste into an email, chat or document"><span>📋</span>Copy</button>
+        <button id="markup" class="tile" disabled title="Highlight, draw and type on a copy of this capture"><span>✏️</span>Markup</button>
+        <button id="pdf" class="tile" disabled title="Download just the PDF"><span>📄</span>PDF</button>
+        <button id="html" class="tile" disabled title="Download just the HTML backup"><span>🌐</span>HTML</button>
+      </div>
     </section>
 
     <details id="hosting" class="fold" hidden></details>
