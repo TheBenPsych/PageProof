@@ -190,6 +190,15 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     ok(await page.evaluate(async id => (await FC.DB.get('copies', id)).status, sis.b) === 'stolen', 'One click marks the sister-site copy stolen too');
   } else ok(false, 'Sister sites (no owner with two sites in the pretend library)');
 
+  // ---- a narrow window (half a screen) gives the page the whole width, and the older tools wear the new look
+  await page.setViewportSize({ width: 880, height: 800 }); await go('found');
+  const nw = await page.evaluate(() => ({ view: document.getElementById('view').getBoundingClientRect().width, over: document.documentElement.scrollWidth > innerWidth + 2 }));
+  ok(nw.view > 700 && !nw.over, 'Narrow window: the page uses the full width (' + Math.round(nw.view) + ' px) and does not scroll sideways');
+  await page.setViewportSize({ width: 1440, height: 900 }); await go('inspect');
+  const tf = page.frames().find(f => /inspect\.html/.test(f.url()));
+  const tl = tf ? await tf.evaluate(() => ({ bg: getComputedStyle(document.getElementById('side')).backgroundImage, brand: getComputedStyle(document.querySelector('#side .brand')).display })) : null;
+  ok(tl && tl.bg === 'none' && tl.brand === 'none', 'Older tools: the side panel has the new look and no second logo inside PageProof');
+
   // ---- one at a time, and both themes on the main pages
   await go('review'); await shot('review');
   ok(await page.evaluate(() => !!document.querySelector('.pair img, .swipe img')), 'One at a time still shows both pictures');

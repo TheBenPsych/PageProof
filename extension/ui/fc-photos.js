@@ -264,10 +264,10 @@ V.clients = async () => {
     <div class="scroll"><table class="ctable"><thead><tr><th style="width:34px"></th><th style="width:34px" title="Priority">★</th><th>Client</th><th>Photos</th><th>Copies found</th><th>New</th><th>Searching</th><th></th></tr></thead><tbody>
     ${list.map(c => `<tr><td><input type="checkbox" data-act="cpick" data-v="${esc(c.name)}" ${state.cPicked.includes(c.name) ? 'checked' : ''} aria-label="Pick ${esc(c.name)}"></td>
       <td><button class="starbtn${c.priority ? ' on' : ''}" data-act="cstar" data-v="${esc(c.name)}" aria-label="Priority" title="${c.priority ? 'Priority client: searched right after High priority photos' : 'Make a priority client'}">★</button></td>
-      <td><a href="#photos" data-act="cphotos" data-v="${esc(c.name)}" style="font-weight:600">${esc(c.name)}</a>${c.extra ? ' <span class="tag grey" style="font-size:11.5px">Own folder</span>' : ''}</td>
+      <td><a class="cname" href="#photos" data-act="cphotos" data-v="${esc(c.name)}">${esc(c.name)}</a>${c.extra ? ' <span class="tag grey" style="font-size:11.5px">Own folder</span>' : ''}</td>
       <td class="num">${(c.photos || 0).toLocaleString()}</td><td class="num">${nAll[c.name] || 0}</td>
       <td>${nNew[c.name] ? `<a class="tag copy" href="#found" data-act="cfound" data-v="${esc(c.name)}">${nNew[c.name]} new</a>` : '<span class="faint">—</span>'}</td>
-      <td><button class="btn sm${c.searching === true ? '' : ' ghost'}" data-act="csearch" data-v="${esc(c.name)}" aria-pressed="${c.searching === true}">${c.searching === true ? '● On' : '○ Off'}</button></td>
+      <td><button class="swt${c.searching === true ? ' on' : ''}" data-act="csearch" data-v="${esc(c.name)}" role="switch" aria-checked="${c.searching === true}" aria-label="Search for ${esc(c.name)}"><i></i><span>${c.searching === true ? 'On' : 'Off'}</span></button></td>
       <td><a class="btn ghost sm" href="#photos" data-act="cphotos" data-v="${esc(c.name)}">Photos ›</a></td></tr>`).join('') || '<tr><td colspan="8" class="muted" style="padding:24px;text-align:center">No clients here.</td></tr>'}
     </tbody></table></div>
   </section>

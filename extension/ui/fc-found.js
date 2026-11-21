@@ -773,7 +773,7 @@ function reviewQueue() {
 V.review = async () => {
   await loadFC();
   const Q = reviewQueue();
-  const hd = head('Find copies', 'Review new copies', 'PageProof found these and checked each one against your client\'s photo. Decide what each one is. Anything marked stolen is watched every week.', `<a class="btn" href="#found">All copies found</a>`);
+  const hd = head('Copies found', 'One at a time', 'PageProof found these and checked each one against your client\'s photo. Decide what each one is. Anything marked stolen is watched every week.', `<a class="btn" href="#found">All copies found</a>`);
   const tabs = `<div class="seg" role="tablist" aria-label="Show">${[['review', `To review (${Q.length})`], ['sites', 'By site and company']].map(([k, l]) => `<button role="tab" aria-selected="${state.rvTab === k}" class="${state.rvTab === k ? 'on' : ''}" data-act="rvtab" data-v="${k}">${l}</button>`).join('')}</div>`;
   if (state.rvTab === 'sites') {
     const by = new Map();
