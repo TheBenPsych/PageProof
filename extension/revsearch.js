@@ -583,6 +583,7 @@ async function measure(p, bmp) {
       str: best ? +best.sc.strength.toFixed(2) : 0,         // how closely they line up
       // Share of the middle of your picture (where the subject usually is) that lines up.
       mid: best && best.sc.midTex >= 8 ? +(best.sc.midMatched / best.sc.midTex).toFixed(2) : null,
+      n: best ? best.sc.inside || 0 : 0,                   // small squares compared at all (the shared area)
       sv: SCORE_VERSION,
     };
   } catch (e) { return { pct: 0, inl: 0, tiles: 0, str: 0, mid: null, sv: SCORE_VERSION }; }
@@ -618,13 +619,17 @@ async function scoreLink(l) {
 // Two different photos in front of the same backdrop (sponsor wall, logo pattern) line up
 // around the edges but not in the middle: real copies 0.49 to 1.0 there (0.49 = headline over
 // the middle), same-backdrop different photos about 0.3.
-const SCORE_VERSION = 3;
+// Version 4: a copy shrunk to a dot no longer counts (it was compared over two tiny squares and
+// could show 100%); at least 40 squares must be compared and 12 must match for Same photo.
+const SCORE_VERSION = 4;
 const userNo = l => !!(l.url && job && job.pics[l.pic] && RS_REJECT.notMatch(l.url, job.pics[l.pic].name));
 function verdict(l) {
   if (l.rescued) return 'maybe';          // you said it is a copy
   if (userNo(l)) return 'no';
   if (l.sv !== SCORE_VERSION) return l.pct === null ? 'cant' : 'pending';
   if (l.pct === null || l.pct < 0) return 'cant';
+  if (l.n != null && l.n < 40) return 'no';   // shared area too small to say anything
+  if (!(l.tiles >= 12)) return 'no';           // too few matching squares, whatever the %
   if (l.mid !== null && l.mid !== undefined && l.mid < 0.35) return 'no';
   const midOk = l.mid === null || l.mid === undefined || l.mid >= 0.42;
   // Most of the shared area must line up. Copies with a big headline over them (about 55%)

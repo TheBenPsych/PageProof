@@ -120,6 +120,34 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   console.log(sup.split('\n').slice(0, 40).join('\n'));
   ok(sup.includes('Photos: 3,00') && !/Client [A-Z] Media|IMG_0|site\d+\./.test(sup), 'Copy details: numbers only, no client, photo or site names');
 
+  // ---- photo check: a copy compared over a tiny shared area is never "Same photo"
+  const rsSrc = require('fs').readFileSync(require('path').resolve(__dirname, '../../extension/revsearch.js'), 'utf8');
+  const vSrc = rsSrc.slice(rsSrc.indexOf('const SCORE_VERSION'), rsSrc.indexOf('const VERDICT ='));
+  const vd = await page.evaluate(src => {
+    const job = null; const RS_REJECT = { notMatch: () => false };
+    const verdict = new Function('job', 'RS_REJECT', src + '; return verdict;')(job, RS_REJECT);
+    const sv = new Function(src + '; return SCORE_VERSION;')();
+    return {
+      dot: verdict({ sv, pct: 100, inl: 81, tiles: 2, str: 0.9, mid: null, n: 2 }),           // the case Ben saw: 2 squares compared
+      oldDot: verdict({ sv, pct: 100, inl: 40, tiles: 3, str: 0.9, mid: null }),             // stored before n existed
+      real: verdict({ sv, pct: 92, inl: 300, tiles: 600, str: 0.95, mid: 0.9, n: 1100 }),
+      headline: verdict({ sv, pct: 55, inl: 120, tiles: 300, str: 0.93, mid: 0.6, n: 1000 }),
+    };
+  }, vSrc);
+  console.log(JSON.stringify(vd));
+  ok(vd.dot === 'no' && vd.oldDot === 'no' && vd.real === 'same' && vd.headline === 'maybe', 'Photo check: a tiny shared area is Different photo; real copies still Same / Maybe');
+  const dot = await page.evaluate(async () => {
+    const cs = (await FC.DB.all('copies')).filter(c => c.status === 'new').slice(0, 3);
+    const st = (await FC.DB.all('copies')).find(c => c.status === 'stolen');
+    cs[0].tiles = 2; cs[0].pct = 100; cs[1].tiles = 2; cs[1].by = 'a search (added by hand)'; st.tiles = 2;
+    await FC.DB.putMany('copies', [cs[0], cs[1], st]); FC.touch('copies');
+    await FC.meta.set('dotFix', ''); const n = await FC.dropDotMatches(), again = await FC.dropDotMatches();
+    const g = id => FC.DB.get('copies', id).then(c => c.status);
+    return { n, again, a: await g(cs[0].id), b: await g(cs[1].id), c: await g(cs[2].id), s: await g(st.id) };
+  });
+  console.log(JSON.stringify(dot));
+  ok(dot.n === 1 && dot.again === 0 && dot.a === 'removed' && dot.b === 'new' && dot.c === 'new' && dot.s === 'stolen', 'Photo check: wrong "dot" matches already found go to Removed once; answered and hand-added copies stay');
+
   // ---- update: PageProof only reads a version number; it never writes its own files
   await ctx.route('**/raw.githubusercontent.com/**', r => r.fulfill({ status: 200, contentType: 'text/plain', body: JSON.stringify({ version: '99.0.0' }) }));
   const chk = await page.evaluate(async () => ({ st: await ppUpCheck(), newer: [ppNewer('4.1.1', '4.1.0'), ppNewer('4.1.0', '4.1.0'), ppNewer('4.0.15', '4.1.0'), ppNewer('4.10.0', '4.9.9')], gone: typeof PP_UPDATE }));

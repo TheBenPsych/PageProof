@@ -15,7 +15,7 @@ self.onmessage = async e => {
   try {
     if (!A) throw new Error('no original');
     const best = await PP_ALIGN.align(A, m.bmp, undefined, { fast: true });
-    out = best ? { lines: best.sc.lines, inliers: best.inliers || 0, matched: best.sc.matched, strength: best.sc.strength, midTex: best.sc.midTex, midMatched: best.sc.midMatched } : { none: true };
+    out = best ? { lines: best.sc.lines, inliers: best.inliers || 0, matched: best.sc.matched, strength: best.sc.strength, midTex: best.sc.midTex, midMatched: best.sc.midMatched, inside: best.sc.inside } : { none: true };
   } catch (x) { err = String(x && x.message || x); }
   try { m.bmp.close && m.bmp.close(); } catch (x) { /* already freed */ }
   self.postMessage({ id: m.id, out, err });

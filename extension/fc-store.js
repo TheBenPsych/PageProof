@@ -1038,6 +1038,24 @@ const FC = (() => {
     await DB.put('photos', p);
     queueDirty(true); backupCopiesSoon(); touch('copies');
   }
+  // One time (4.2.2): the photo check could shrink their picture to a dot and compare it over a
+  // couple of tiny squares, which showed different photos as "100% lines up". Copies it let in
+  // that way (fewer than 12 matching squares) and that nobody has answered yet go to Removed,
+  // where "Put back" still works. Copies you added by hand or already answered are left alone.
+  async function dropDotMatches() {
+    if (await meta.get('dotFix')) return 0;
+    return navigator.locks.request('pp-dot-fix', async () => {
+      if (await meta.get('dotFix')) return 0;
+      const now = new Date().toISOString(), bad = [], photos = new Set();
+      for (const c of await allCopies()) {
+        if (c.status !== 'new' || typeof c.tiles !== 'number' || c.tiles >= 12 || /by hand/.test(c.by || '')) continue;
+        c.status = 'removed'; c.answered = now; c.removedBy = 'checker'; bad.push(c); photos.add(c.photo);
+      }
+      if (bad.length) { await DB.putMany('copies', bad); await recount(photos); backupCopiesSoon(); touch('copies'); }
+      await meta.set('dotFix', now);
+      return bad.length;
+    });
+  }
   // Mark a photo as searched with nothing found (so it moves down the line).
   async function searchedNothing(pic, by) { return ingest(pic, [], by); }
 
@@ -1497,7 +1515,7 @@ const FC = (() => {
     if (left.length !== list.length) backupSoon(true);
   }
 
-  return { DB, meta, open, touch, pics, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
+  return { DB, meta, open, touch, pics, dropDotMatches, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, setPicked, pickInside, SCAN, applyPendingFlags, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, setClientOf, setFlag, setClients, checkOnline, logWeek, week, weekKey,
     hiddenCountries, setHiddenCountries, ownerFor, pathOf, logReport, USE, useOf, riskOf, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,

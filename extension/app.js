@@ -443,6 +443,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['No more false "100% lines up"', 'The photo check could shrink a found picture to a dot and call two different photos a 100% match. It now needs a real shared area. Wrong matches it had let in, that you had not answered yet, were moved to Removed.'],
   ['Updating is a plain download now', 'PageProof no longer changes its own files (Windows security did not like that). When a new version is out, Settings › Is everything working? gives you the download and three steps.'],
   ['A new look', 'A shorter menu, a search box and Undo at the top, a Tools page for everything else, and a new shield logo. Nothing was taken away: Tools has every older page.'],
   ['Answer right on the row', 'Copies found has Stolen, Licensed and Remove on every row, with the page link in view. The ⋯ menu has Approve site, Hide site, Compare, Evidence report and Capture.'],
@@ -650,4 +651,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 4.1 kept a link to PageProof's own folder for the old self-updater. That is gone; forget the folder.
   try { RS_DB.del('handles', 'ppInstall').catch(() => {}); api.storage.local.remove('ppUpdated'); } catch (e) { /* none */ }
   FC.movePics().catch(e => console.warn('PageProof: moving preview pictures', e));
+  FC.dropDotMatches().then(n => { if (n) { toast(plural(n, 'wrong match was', 'wrong matches were') + ' moved to Removed (the photo check had scored them too high). Put back is still there.'); render(true); } }).catch(e => console.warn('PageProof: wrong matches', e));
 });
