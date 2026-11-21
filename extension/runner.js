@@ -14,6 +14,7 @@ const time = t => new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', m
 
 async function status(state, text, extra = {}) {
   const st = { state, text, beat: Date.now(), win: S.win, ...extra };
+  S.lastSt = st;
   await api.storage.local.set({ fcStatus: st });
   const LABEL = { running: ['Searching', 'ok'], waiting: ['Resting', 'ok'], off: ['Off', 'grey'], paused: ['Paused', 'grey'], hours: ['Outside your hours', 'grey'], fifty: ['Paused for today\'s 50', 'warn'],
     offline: ['Google Drive offline', 'bad'], allow: ['Needs one click', 'warn'], busy: ['Computer busy', 'warn'], resting: ['Search sites resting', 'warn'], setup: ['Not set up', 'warn'], idle: ['Nothing due', 'ok'] };
@@ -172,14 +173,14 @@ async function step() {
   await status('running', 'Searching one photo. ' + tally + '.', { current: S.current });
 }
 
-api.runtime.onMessage.addListener(msg => {
+api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === 'fcAutoDone' && msg.job === S.job) {
     S.job = null; S.tab = null; setTimeout(tick, 2000);
     // The search tab closes straight away, so this window writes the text copy of the finds
     // (Documents › PageProof › found-copies.txt).
     FC.backupCopiesSoon();
   }
-  if (msg && msg.type === 'fcRunnerPing') return Promise.resolve({ ok: true, win: S.win });
+  if (msg && msg.type === 'fcRunnerPing') { sendResponse({ ok: true, win: S.win }); return false; }
   return false;
 });
 api.tabs.onRemoved.addListener(id => { if (id === S.tab) { S.job = null; S.tab = null; } });
@@ -208,4 +209,8 @@ $('open').onclick = e => { e.preventDefault(); api.tabs.create({ url: api.runtim
   FC.movePics().catch(() => {});
   tick();
   setInterval(tick, 30000);
+  // "Still here", every 30 seconds, even in the middle of a long job (the weekly read of every
+  // folder can take many minutes). Without it the background thought this window had closed and
+  // kept opening a new one, which closed itself again straight away, about once a minute.
+  setInterval(() => { if (S.lastSt) api.storage.local.set({ fcStatus: { ...S.lastSt, beat: Date.now() } }).catch(() => {}); }, 30000);
 })();

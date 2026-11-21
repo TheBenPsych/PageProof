@@ -286,7 +286,14 @@ function saveJob(now) {
   saveTimer = setTimeout(go, 4000);                 // the search holds your pictures, so saving it is not free
 }
 let renderTimer = null;
-function renderSoon() { if (renderTimer) return; renderTimer = setTimeout(() => { renderTimer = null; renderResults(); }, 1000); }
+// Not drawn while nobody can see it (a background tab, a minimized window, or kept hidden inside
+// PageProof while you look at another page): it catches up within a second of coming back.
+// The search and the photo checks carry on either way.
+function offScreen() {
+  if (document.visibilityState === 'hidden') return true;
+  try { const fe = window.frameElement; return !!fe && fe.getClientRects().length === 0; } catch (e) { return false; }
+}
+function renderSoon() { if (renderTimer) return; renderTimer = setTimeout(() => { renderTimer = null; if (offScreen()) renderSoon(); else renderResults(); }, 1000); }
 
 const runList = p => job.engines.map(e => p.runs[e]);
 const picDone = p => runList(p).every(r => !['wait', 'go', 'captcha'].includes(r.state));
@@ -534,7 +541,7 @@ const POOL = { list: [], next: 1, failed: false };
 let POOL_SIZE = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));   // lowered to the computer's limit when a search opens
 function newWorker() {
   const w = { worker: new Worker('score-worker.js'), busy: 0, sent: new Set(), waits: new Map() };
-  w.worker.onmessage = e => { const r = w.waits.get(e.data.id); if (r) { w.waits.delete(e.data.id); w.busy--; r(e.data); } };
+  w.worker.onmessage = e => { const r = w.waits.get(e.data.id); if (r) { w.waits.delete(e.data.id); w.busy--; r(e.data); freeWorker(); } };
   w.worker.onerror = () => killWorker(w);
   return w;
 }
@@ -543,22 +550,36 @@ function killWorker(w) {
   for (const r of w.waits.values()) r({ err: 'stopped' });
   w.waits.clear();
   const i = POOL.list.indexOf(w); if (i >= 0) POOL.list.splice(i, 1);
+  freeWorker();
+}
+// Each worker gets ONE check at a time; the others wait here. (Before, several checks queued up
+// inside one worker, and the 30-second "stuck" timer ran while they waited, so on a slower
+// computer good checks were stopped and shown as "Can't check".)
+const POOL_WAIT = [];
+function freeWorker() { while (POOL_WAIT.length && (POOL.list.length < POOL_SIZE || POOL.list.some(x => !x.busy))) POOL_WAIT.shift()(); }
+async function idleWorker() {
+  for (;;) {
+    while (POOL.list.length < POOL_SIZE) POOL.list.push(newWorker());
+    const w = POOL.list.find(x => !x.busy);
+    if (w) return w;
+    await new Promise(r => POOL_WAIT.push(r));
+  }
 }
 async function checkInWorker(p, bmp) {
   if (POOL.failed || typeof Worker === 'undefined' || typeof OffscreenCanvas === 'undefined') return null;
+  let w;
+  try { w = await idleWorker(); } catch (e) { POOL.failed = true; return null; }
+  w.busy++;                                            // taken before any waiting below
   try {
-    while (POOL.list.length < POOL_SIZE) POOL.list.push(newWorker());
-  } catch (e) { POOL.failed = true; return null; }
-  const w = POOL.list.reduce((a, b) => (b.busy < a.busy ? b : a));
-  if (!w.sent.has(p.i)) {
-    const o = await origBitmap(p);
-    const copy = await createImageBitmap(o);
-    w.worker.postMessage({ type: 'orig', key: p.i, bmp: copy }, [copy]);
-    w.sent.add(p.i);
-    if (w.sent.size > 8) { const old = w.sent.values().next().value; w.sent.delete(old); w.worker.postMessage({ type: 'forget', key: old }); }   // keep memory small
-  } else { w.sent.delete(p.i); w.sent.add(p.i); }   // most recently used goes last
+    if (!w.sent.has(p.i)) {
+      const o = await origBitmap(p);
+      const copy = await createImageBitmap(o);
+      w.worker.postMessage({ type: 'orig', key: p.i, bmp: copy }, [copy]);
+      w.sent.add(p.i);
+      if (w.sent.size > 8) { const old = w.sent.values().next().value; w.sent.delete(old); w.worker.postMessage({ type: 'forget', key: old }); }   // keep memory small
+    } else { w.sent.delete(p.i); w.sent.add(p.i); }   // most recently used goes last
+  } catch (e) { w.busy--; freeWorker(); throw e; }
   const id = POOL.next++;
-  w.busy++;
   const res = await new Promise(resolve => {
     w.waits.set(id, resolve);
     w.worker.postMessage({ type: 'check', id, key: p.i, bmp }, [bmp]);
@@ -663,7 +684,12 @@ async function scoreWorker() {
     while (R.scoreQ.length) {
       // Exact matches and the picture on screen go first.
       // The picture on screen first, then the others in order, finishing one list before the next.
-      R.scoreQ.sort((a, b) => (b.pic === R.sel) - (a.pic === R.sel) || a.pic - b.pic || b.exact - a.exact);
+      // (Sorted only when something was added or another picture was picked: sorting thousands
+      // of links before every single check was slow.)
+      if (R.qSorted !== R.scoreQ.length + ':' + R.sel) {
+        R.scoreQ.sort((a, b) => (b.pic === R.sel) - (a.pic === R.sel) || a.pic - b.pic || b.exact - a.exact);
+        R.qSorted = (R.scoreQ.length - 1) + ':' + R.sel;
+      } else R.qSorted = (R.scoreQ.length - 1) + ':' + R.sel;
       const l = R.scoreQ.shift();
       if (l.sv === SCORE_VERSION) continue;
       const p = job.pics[l.pic];
