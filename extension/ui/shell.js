@@ -24,13 +24,13 @@ const PP_ROUTES = {
   whatsnew: ['settings'], health: ['settings'], skipped: ['clients', 'skipped'], setup: ['browser'], help: ['help']
 };
 const PP_CRUMBS = {
-  results: 'Find copies › Search results',
-  home: 'Home', tools: 'Tools', capture: 'Capture a page', search: 'Find copies › New search', searches: 'Find copies › All searches', found: 'Find copies › All copies found',
-  review: 'Find copies › Review new copies', clients: 'Find copies › Clients and photos', photos: 'Find copies › Clients and photos', owners: 'Find copies › Site owners',
-  who: 'Find copies › Who\'s behind this site', keep: 'Find copies › Keep searching', connect: 'Find copies › Connect your photos', weekly: 'Evidence library › Weekly summary',
+  results: 'Search results',
+  home: 'Home', tools: 'Tools', capture: 'Capture a page', search: 'New search', searches: 'All searches', found: 'All copies found',
+  review: 'One at a time', clients: 'Clients and photos', photos: 'Clients and photos', owners: 'Site owners',
+  who: 'Who\'s behind this site', keep: 'Keep searching', connect: 'Connect your photos', weekly: 'Evidence library › Weekly summary',
   inspect: 'Photo tools › Inspect a photo', compare: 'Photo tools › Compare two photos', markup: 'Photo tools › Mark up a copy', files: 'Open files › Convert files',
   openfiles: 'Open files › Open odd files', library: 'Evidence library › All evidence', verify: 'Verify a pack', browser: 'Toolbar and side panel', settings: 'Settings',
-  hidden: 'Settings › Hidden and approved sites', computer: 'Settings › Your computer', whatsnew: 'Settings › What\'s new', health: 'Settings › Is everything working?', skipped: 'Find copies › Skipped photos', setup: 'First-time setup', help: 'Help and tutorial'
+  hidden: 'Settings › Hidden and approved sites', computer: 'Settings › Your computer', whatsnew: 'Settings › What\'s new', health: 'Settings › Is everything working?', skipped: 'Skipped photos', setup: 'First-time setup', help: 'Help and tutorial'
 };
 const PP_BADGES = {};
 
@@ -126,7 +126,10 @@ function ppAddHelp(root = document) {
 })();
 
 // ---------- small building blocks ----------
-const head = (eyebrow, title, lede, right = '') => `<div class="head"><div class="l"><div class="eyebrow">${eyebrow}</div><h1>${title}</h1>${lede ? `<p class="lede">${lede}</p>` : ''}</div>${right ? `<div class="row">${right}</div>` : ''}</div>`;
+// The small line above a page title says where the page lives in the menu. Old section names
+// (from before the short menu) map to today's, and a line that only repeats the title is left out.
+const EYEBROW = { 'Find copies': '', 'Clients and photos': 'Clients and photos', 'Collect evidence': '', 'Keep and prove': '', 'Library': 'Evidence library', 'Help': '', 'In your browser': '' };
+const head = (eyebrow, title, lede, right = '') => `<div class="head"><div class="l"><div class="eyebrow">${(e => (e === title ? '' : e))(eyebrow in EYEBROW ? EYEBROW[eyebrow] : eyebrow)}</div><h1>${title}</h1>${lede ? `<p class="lede">${lede}</p>` : ''}</div>${right ? `<div class="row">${right}</div>` : ''}</div>`;
 const fmtDate = iso => { try { return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { return iso || ''; } };
 const site = url => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return url || ''; } };
 // Only web links and pictures go into the page (never javascript: or other odd addresses).

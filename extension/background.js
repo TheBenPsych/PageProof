@@ -262,7 +262,7 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 // Right-click the PageProof icon for its other pages.
-const MENU = { openApp: ['Open full PageProof', 'app.html#home'], found: ['All copies found', 'app.html#found'], keep: ['Keep searching', 'app.html#keep'], library: ['Evidence library', 'app.html#library'], verify: ['Verify a pack', 'app.html#verify'] };
+const MENU = { openApp: ['Open full PageProof', 'app.html#home'], found: ['Copies found', 'app.html#found'], keep: ['Keep searching', 'app.html#keep'], library: ['Evidence library', 'app.html#library'], verify: ['Verify a pack', 'app.html#verify'] };
 // Right-click on a website: the browser groups these under its own "PageProof" entry.
 // Picture choices show only when there is a picture under the mouse:
 //  - a normal picture: the browser knows ("image"), so the first set shows by itself;

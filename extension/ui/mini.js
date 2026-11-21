@@ -39,7 +39,7 @@ async function draw() {
     ${busy ? `<button class="mcap stop" id="stop"><span style="font-size:24px">⏹</span><span><b>Stop the capture</b><small>Keeps what's captured so far</small></span></button>`
       : `<button class="mcap" id="cap"${canUse(tab) ? '' : ' disabled'}><span style="font-size:24px">${ic('capture', 26)}</span><span><b>Capture this page</b><small>${site ? esc(site) + ': PDF, web copy, fingerprints, timestamps' : 'Open a website first'}</small></span></button>`}
     <div class="msec"><h3>Photos on this page</h3><div class="mrow"><button class="btn" id="pick">${ic('find', 16)} Inspect one</button><button class="btn" id="all">${ic('photo', 16)} Show them all</button></div><span class="faint" style="font-size:12.5px">Or right-click any photo › PageProof › Find copies of it.</span></div>
-    <div class="msec"><h3>Find copies</h3>
+    <div class="msec"><h3>Copies found</h3>
       ${drive.done ? `<div class="mline"><span class="dot ${dot}"></span><b>Keep searching</b><span class="muted" style="margin-left:auto">${label}</span></div>
       ${k.on && alive && st.text ? `<span class="muted" style="font-size:12.5px">${esc(st.text)}</span>` : ''}
       <span class="faint" style="font-size:12.5px">Today: ${today.searched} photos searched, ${today.found} new copies</span>

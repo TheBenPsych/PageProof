@@ -8,6 +8,8 @@ async function standaloneChecker() {
   const inline = async f => '<script>\n' + (await text(f)).replace(/<\/script/gi, '<\\/script') + '\n</script>';
   const css = await text('viewer.css');
   html = html.replace('<link rel="stylesheet" href="viewer.css">', () => '<style>\n' + css + '\n</style>');
+  const look = (await text('ui/tools-look.css')).replace(/@font-face\{[^}]*\}/, '');
+  html = html.replace('<link rel="stylesheet" href="ui/tools-look.css">', () => '<style>\n' + look + '\n</style>');
   html = html.replace('<link rel="icon" href="icons/icon32.png">', () => '<link rel="icon" href="' + iconUrl + '">');
   html = html.replace('src="icons/icon48.png"', () => 'src="' + iconUrl + '"');
   html = html.replace(/<a class="link" href="(log|markup)\.html"[^>]*>[^<]*<\/a>/g, '');

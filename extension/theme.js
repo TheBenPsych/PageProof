@@ -3,6 +3,8 @@
 (() => {
   const api = globalThis.browser || globalThis.chrome;
   const root = document.documentElement;
+  // Shown inside the full PageProof page? Then the page's own logo line is left out (the menu has it).
+  try { if (window.top !== window) root.classList.add('framed'); } catch (e) { root.classList.add('framed'); }
   const set = t => { root.dataset.theme = t === 'dark' ? 'dark' : 'light'; };
   // A quick first guess from this page's own memory, so the page doesn't flash white first.
   try { set(localStorage.getItem('pp-theme2') || 'light'); } catch (e) { set('light'); }

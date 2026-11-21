@@ -282,7 +282,7 @@ V.library = async () => {
     </tbody></table></div>
   </section>
   <section class="card" style="overflow:hidden">
-    <div class="pad row" style="border-bottom:1px solid var(--line)"><h2>Evidence reports</h2><span class="faint" style="font-size:13px">From Find copies: one report per copy</span><a class="btn ghost" style="margin-left:auto" href="#weekly">Weekly summary</a></div>
+    <div class="pad row" style="border-bottom:1px solid var(--line)"><h2>Evidence reports</h2><span class="faint" style="font-size:13px">From Copies found: one report per copy</span><a class="btn ghost" style="margin-left:auto" href="#weekly">Weekly summary</a></div>
     <div class="scroll"><table><thead><tr><th>Made</th><th>Copy</th><th>Client's photo</th><th>Case</th><th>Match ID</th><th style="text-align:right">Open</th></tr></thead><tbody>
     ${reps.slice(0, 300).map(r => `<tr><td class="muted" style="white-space:nowrap">${fmtDate(r.at)}</td><td style="max-width:300px"><b>${esc(r.site)}</b><div class="faint" style="font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.url)}</div></td><td>${esc(r.photo || '')}<div class="faint" style="font-size:12.5px">${esc(r.client || '')}</div></td><td class="mono">${esc(r.caseNo || '—')}</td><td class="mono">${esc(r.id || '')}</td><td style="text-align:right"><a class="btn" style="min-height:32px;font-size:13px" href="${safeUrl(r.url)}" target="_blank" rel="noreferrer">Page</a></td></tr>`).join('') || '<tr><td colspan="6" class="muted" style="padding:22px;text-align:center">No evidence reports yet. Make one from a copy in All copies found.</td></tr>'}
     </tbody></table></div>
@@ -383,7 +383,7 @@ V.hidden = async () => {
     <div class="toolbar"><div class="tabs" role="tablist">${T.map(([k, l, n]) => `<button role="tab" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}" data-act="hidtab" data-v="${k}">${l} <span>${n.toLocaleString()}</span></button>`).join('')}</div></div>
     <div class="row" style="gap:10px;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--bg)">
       <input id="hidq" class="chip" style="min-height:38px;padding:0 12px;font-size:14px;flex:1 1 260px" placeholder="${tab === 'rejected' ? 'Find a rejected link' : tab === 'client' ? 'Find a site or a client' : 'Find or add a site, like patch.com or x.com/nypost'}" value="${esc(state.hidQ)}" aria-label="Find a site">
-      ${tab === 'client' ? '<span class="faint" style="font-size:13px">Add one from a copy: open it in All copies found and press Approve site.</span>' : ''}${!flat ? `<button class="btn primary" data-act="hidadd">＋ ${tab === 'hidden' ? 'Hide' : 'Approve'} it</button>
+      ${tab === 'client' ? '<span class="faint" style="font-size:13px">Add one from a copy: open it in Copies found and press Approve site.</span>' : ''}${!flat ? `<button class="btn primary" data-act="hidadd">＋ ${tab === 'hidden' ? 'Hide' : 'Approve'} it</button>
       <div class="seg">${['All', 'Whole site', 'Sub-site', 'Account or part', 'Ending'].map(k => `<button class="${state.hidKind === k ? 'on' : ''}" data-act="hidkind" data-v="${k}">${k}</button>`).join('')}</div>` : ''}</div>
     <div class="scroll"><table><thead><tr><th>${tab === 'rejected' ? 'Link' : tab === 'client' ? 'Site' : 'Site or account'}</th>${tab === 'rejected' ? '<th>Photo</th>' : tab === 'client' ? '<th>Approved for</th>' : '<th>What it covers</th>'}<th></th></tr></thead><tbody>
       ${page.map(h => { const r = tab === 'rejected' ? RS_REJECT.items.find(x => x.url === h) : null; if (tab === 'client') { const [site, who] = h.split(' | '); return `<tr><td><b class="mono" style="font-size:13px;overflow-wrap:anywhere">${esc(site)}</b></td><td>${esc(who)}</td><td style="text-align:right"><button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ Remove</button></td></tr>`; }
@@ -443,6 +443,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Every page double-checked', 'The older tools (Inspect, Compare, Markup, Convert, Verify, New search) now match the new look, in light and dark. PageProof no longer squashes into a thin strip in a narrow window. One blue to match the shield, and old menu names are gone from page titles.'],
   ['No more false "100% lines up"', 'The photo check could shrink a found picture to a dot and call two different photos a 100% match. It now needs a real shared area. Wrong matches it had let in, that you had not answered yet, were moved to Removed.'],
   ['Updating is a plain download now', 'PageProof no longer changes its own files (Windows security did not like that). When a new version is out, Settings › Is everything working? gives you the download and three steps.'],
   ['A new look', 'A shorter menu, a search box and Undo at the top, a Tools page for everything else, and a new shield logo. Nothing was taken away: Tools has every older page.'],
@@ -519,7 +520,7 @@ V.setup = async () => `${head('Welcome', 'First-time setup', '')}
 // =====================================================================================
 const TOUR = [
   ['capture', 'Capture a page', 'Saves the page you are on as proof: PDF, web copy, fingerprints and timestamps. Also the big button in the toolbar menu.'],
-  ['found', 'Find copies', 'Everything PageProof has found for your clients, from the daily 50 and Keep searching. The number shows new ones.'],
+  ['found', 'Copies found', 'Everything PageProof has found for your clients, from the daily 50 and Keep searching. The number shows new ones.'],
   ['library', 'Evidence library', 'Every capture and evidence report, with case numbers, and the weekly summary.'],
   ['browser', 'Keep it beside every page', 'Open the side panel and PageProof stays next to every website, showing the search as it runs.'],
   ['settings', 'Settings', 'Your name, the PageProof folder, hidden sites and your computer\'s limits.'],
@@ -612,7 +613,7 @@ async function act(a, v, el) {
   else if (a === 'surestore') {
     if (!state.backup) return;
     await FC.restore(state.backup); state.backup = null;
-    toast('Your settings are back. Connect your photos again in Find copies to pick up where you left off.');
+    toast('Your settings are back. Connect your photos again in Clients and photos to pick up where you left off.');
     render(true);
   }
   else if (a === 'newsseen') { await api.storage.local.set({ ppSeenVersion: VERSION }); location.hash = 'home'; }

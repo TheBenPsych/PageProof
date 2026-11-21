@@ -1,0 +1,73 @@
+/* The older tool pages (Capture page, Inspect, Compare, Markup, Convert, New search, Verify, Log)
+   were drawn with a navy side panel. This sheet, loaded last on each of them, gives that panel
+   and the top bar the same look as the full PageProof page, in light and in dark. It only
+   recolours: nothing moves and no button changes what it does. */
+@font-face{font-family:"Plus Jakarta Sans";font-style:normal;font-weight:400 800;font-display:swap;src:url(fonts/plus-jakarta-sans.woff2) format("woff2")}
+:root{--t-surface:#FFFFFF;--t-sunk:#F3F4F8;--t-ink:#1D212B;--t-muted:#50566F;--t-line:#E1E4EC;--t-accent:#005E99;--t-accent-soft:#E3F0F8;--t-go:#15803D;--accent:#005E99;--bg:#EEF0F4}
+:root[data-theme="dark"]{--t-surface:#191C24;--t-sunk:#12151C;--t-ink:#FFFFFF;--t-muted:#AEB3CA;--t-line:#2C2E33;--t-accent:#4DB5F5;--t-accent-soft:#12283A;--t-go:#1E9A4B;--accent:#0070B8;--bg:#000000}
+body{font-family:"Segoe UI",system-ui,-apple-system,sans-serif}
+h1,h2,h3,#side #domain,#side .brand{font-family:"Plus Jakarta Sans","Segoe UI Variable Display","Segoe UI",system-ui,sans-serif}
+
+/* ---- the side panel */
+#side{background:var(--t-surface);color:var(--t-ink);border-right:1px solid var(--t-line)}
+#side .brand{opacity:1;color:var(--t-muted);letter-spacing:0;font-size:14px}
+html.framed #side .brand{display:none}
+#side h3{opacity:1;color:var(--t-muted)}
+#side .url,#side #sub,#side #when{opacity:1;color:var(--t-muted)}
+#side .site,#side .card,#side #caseBox,#side details.fold,#side .slot,#side .gonote,#side #sentence{background:var(--t-sunk);border-radius:12px}
+#side .tile,#side button.task,#side .chip,#side .how button,#side .ghost,#side .pickbtn{background:var(--t-surface);color:var(--t-ink);border:1px solid var(--t-line);border-radius:10px}
+#side .tile:not(:disabled):hover,#side button.task:hover,#side .chip:hover,#side .how button:hover,#side .ghost:hover,#side .pickbtn:hover{background:var(--t-surface);border-color:var(--t-accent);filter:none}
+#side .chip.on,#side .how button.on,#side .chip.on:hover{background:var(--t-accent-soft);color:var(--t-accent);border-color:var(--t-accent)}
+#side button.task.on{background:var(--t-accent-soft);border-color:var(--t-accent)}
+#side .seg{background:var(--t-sunk);border:1px solid var(--t-line)}
+#side .seg button{color:var(--t-muted);opacity:1}
+#side .seg button.on{background:var(--t-surface);color:var(--t-ink);box-shadow:0 1px 3px rgba(0,0,0,.18)}
+#side .save,#side button.main{background:var(--t-go);border-radius:12px}
+#side #caseBox input,#side #caseBox textarea,#side input.fld,#side select.fld{border:1px solid var(--t-line);background:var(--t-surface);color:var(--t-ink);border-radius:8px}
+#side .links{border-top-color:var(--t-line)}
+#side .links a,#side .links button,#side .links .filebtn{color:var(--t-ink);border-radius:8px}
+#side .links a:hover,#side .links button:hover,#side .links .filebtn:hover{background:var(--t-sunk)}
+#side .pitem{color:var(--t-ink)}
+#side .pitem:hover{background:var(--t-sunk)}
+#side .pitem.on{background:var(--t-accent-soft);outline-color:var(--t-accent)}
+#side .cnt{background:var(--t-accent);color:#fff}
+:root[data-theme="dark"] #side .cnt{color:#04121C}
+#side .cnt.z{background:var(--t-line);color:var(--t-muted)}
+#side .tr{border-top-color:var(--t-line)}
+#side .hist::before,#side .prog{background:var(--t-line)}
+#side button.swatch{border-color:var(--t-line)}
+#side button.swatch.on{border-color:var(--t-surface);box-shadow:0 0 0 2px var(--t-accent)}
+#side .slot .th{background:var(--t-line)}
+#side a{color:var(--t-accent)}
+#side .links a{color:var(--t-ink)}
+#side label,#side small,#side summary{color:inherit}
+
+/* ---- the top bar of Verify and the Capture log */
+header{background:var(--t-surface);color:var(--t-ink);box-shadow:none;border-bottom:1px solid var(--t-line)}
+header a.link{color:var(--t-accent)}
+header button.theme{border-color:var(--t-line);color:var(--t-ink)}
+header button.ic{background:var(--t-sunk);color:var(--t-ink)}
+header button.ic:not(:disabled):hover{background:var(--t-line)}
+header details.more summary{color:var(--t-muted)}
+header details.more summary:hover,header details.more[open] summary{background:var(--t-sunk);color:var(--t-ink)}
+button{border-radius:10px}
+
+/* ---- words that were pale (made for navy) get colours that read on both themes */
+:root{--t-ok:#15803D;--t-warn:#92400E;--t-bad:#B91C1C}
+:root[data-theme="dark"]{--t-ok:#86EFAC;--t-warn:#FDE68A;--t-bad:#FCA5A5}
+#side #notice,#side .ok,#side .pitem .ck.ready,#side #score.good .pct{color:var(--t-ok)}
+#side .row .v.own,#side .gonote b,#side .warn,#side .st.go,#side .pitem .ck.busy,#side #score.mid .pct{color:var(--t-warn)}
+#side #score.bad .pct,#side .st.bad{color:var(--t-bad)}
+#side .row a,#side .fold .note a,#side .fold a{color:var(--t-accent)}
+#side .safe{background:color-mix(in srgb,var(--t-ok) 12%,transparent);color:var(--t-ok)}
+#side input[type=range]{accent-color:var(--t-accent)}
+#side .slot.over{border-color:var(--t-accent);background:var(--t-accent-soft)}
+
+/* ---- dark: the empty "add a picture" screens were dark words on a dark page */
+:root[data-theme="dark"] :is(#empty,.empty){color:#C9CEDD}
+:root[data-theme="dark"] :is(#empty,.empty) :is(h1,h2,b){color:#FFFFFF}
+:root[data-theme="dark"] :is(#empty,.empty) .alt{color:#9AA1B9}
+:root[data-theme="dark"] :is(#empty,.empty) kbd{color:#0F172A}
+:root[data-theme="dark"] :is(.howbox,.ways span,.can span){color:#334155}
+:root[data-theme="dark"] .howbox b{color:#0F172A}
+:root[data-theme="dark"] :is(#empty,.empty) .howbox :is(b,h2){color:#0F172A}

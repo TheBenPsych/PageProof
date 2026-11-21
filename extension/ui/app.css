@@ -621,3 +621,36 @@ h2{font-size:16px;font-weight:700;letter-spacing:-.01em}
 .segbar .seggrp{display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap}
 /* With the details panel open the list is narrow: the answers are in the panel, so the row keeps only its ⋯. */
 @media (min-width:1180px){.content:has(> .drawer) .crow .acts .btn:not(.icon){display:none}}
+
+/* =====================================================================================
+   4.2.3 polish: one brand blue (matches the shield), narrow windows, calmer tables
+   ===================================================================================== */
+:root{--hero-a:#2563EB; --hero-b:#0284C7}
+/* Narrow window (half a screen): the menu slides away, so the page gets the whole width. */
+@media (max-width:900px){.app{grid-template-columns:minmax(0,1fr)}}
+/* Home: one coloured card (the count of new copies). Capture is green everywhere, so its card says so with its icon. */
+.start.hero,:root[data-theme="dark"] .start.hero{background:var(--surface);border-color:var(--line);color:var(--ink)}
+.start.hero span,:root[data-theme="dark"] .start.hero span{color:var(--muted)}
+.start.hero .ic,:root[data-theme="dark"] .start.hero .ic{background:var(--go);color:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .start.hero{background:var(--surface);border-color:var(--line);color:var(--ink)}
+  :root:not([data-theme="light"]) .start.hero span{color:var(--muted)}:root:not([data-theme="light"]) .start.hero .ic{background:var(--go);color:#fff}}
+.start{transition:border-color .15s,transform .15s,box-shadow .15s}
+.start:hover{border-color:var(--accent);transform:translateY(-1px)}
+/* Tabs: the dotted "has help" underline made every tab look like a link. */
+.tabs button.hashelp{text-decoration:none}
+/* Clients table */
+a.cname{font-weight:600;color:var(--ink);text-decoration:none}
+a.cname:hover{color:var(--accent);text-decoration:underline}
+td a.tag{text-decoration:none}
+td a.tag:hover{filter:brightness(.96)}
+.swt{display:inline-flex;align-items:center;gap:8px;border:0;background:none;padding:4px 2px;font:inherit;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;min-height:32px}
+.swt i{position:relative;width:34px;height:20px;border-radius:99px;background:var(--line);transition:background .15s;flex:none}
+.swt i::after{content:"";position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .15s}
+.swt.on{color:var(--ink)}
+.swt.on i{background:var(--go)}
+.swt.on i::after{transform:translateX(14px)}
+.swt:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+/* Photos grid: no heavy frame on every photo; a photo with no preview yet shows a quiet mark. */
+.pcard .frame.ours{outline:0;border:1px solid var(--line)}
+.pcard img[src$="icons/icon48.png"]{object-fit:none;opacity:.22;filter:grayscale(1)}
+@media (prefers-reduced-motion:reduce){.start,.swt i,.swt i::after{transition:none}}
