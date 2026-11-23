@@ -465,6 +465,9 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Compare spots AI edits', 'After lining up, Compare draws a green line round the part that is your photo and tints red what was added or redrawn (a new object, changed faces, a headline). Turn it off with Show changes. Heavily edited copies get their own verdict, "Same photo, heavily edited", and the big number then only judges the part that was not painted over.'],
+  ['Compare one face at a time', 'In Compare, click Pick a spot, then click a face or detail (or drag a box round it). PageProof cuts it from both pictures and scores it on its own, and says if it moved. Every spot goes in the PDF.'],
+  ['Which shot did they use?', 'Took many shots of one scene? In Compare, click Check nearby shots and pick them all. PageProof lines each one up with the copy and puts the best one in box 1, or says when two are too close to call.'],
   ['A calmer details panel', 'The copy details panel now shows the pictures first, then a short "Look at these" list with only the things that need you. Everything else sits in four small tabs: Summary, Their page, Claim and Site. Stolen, Licensed, Remove, Skip and Undo stay pinned at the bottom, and Approve site and Hide site are in the More menu.'],
   ['Slide between the two pictures', 'Under the pictures, pick Side by side, Slider (drag across to compare) or Their page (a live look at their page). PageProof remembers your choice.'],
   ['Copies found at a glance', 'Number tiles at the top (New, Found today, Suspicious sites, Back online, Published in the last 3 months) filter the list with one click. Group, Found, Match and Sort are now small dropdowns on one line, and the other quick filters are under Filters.'],
