@@ -138,7 +138,10 @@ Object.assign(ACTS, {
 async function weekData(key) {
   const w = (await FC.week(key)) || { searched: 0, found: 0, stolen: 0, licensed: 0, removed: 0, wentOffline: 0, backOnline: 0, clients: {}, offline: [], back: [] };
   const start = new Date(key + 'T00:00:00'), end = new Date(start.getTime() + 6 * 86400000);
-  return { ...w, start, end, label: start.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) + ' – ' + end.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) };
+  // Clients that reached "every photo searched at least once" this week (4.10).
+  const endKey = new Date(start.getTime() + 7 * 86400000).toISOString();
+  const finished = (await FC.firstNotes()).filter(n => n.at >= start.toISOString() && n.at < endKey);
+  return { ...w, first: w.first || 0, finished, start, end, label: start.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) + ' – ' + end.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) };
 }
 V.weekly = async () => {
   const key = state.wkKey || FC.weekKey();
@@ -153,6 +156,8 @@ V.weekly = async () => {
     <div class="big4"><div><b>${w.removed}</b><span>removed</span></div><div><b>${w.wentOffline}</b><span>went offline</span></div><div><b style="color:var(--bad)">${w.backOnline}</b><span>came back online</span></div><div><b>${reports.length}</b><span>evidence reports</span></div></div>
     <h3>By client</h3>
     ${clients.length ? `<table><thead><tr><th>Client</th><th>Searched</th><th>Found</th><th>Stolen</th></tr></thead><tbody>${clients.map(([n, c]) => `<tr><td>${esc(n)}</td><td class="num">${c.searched}</td><td class="num">${c.found}</td><td class="num">${c.stolen}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nothing searched this week.</p>'}
+    <h3>Every photo searched once</h3>
+    <p style="margin:0">${w.first.toLocaleString()} ${w.first === 1 ? 'photo was' : 'photos were'} searched for the first time this week.${w.finished.length ? ' Every photo now searched at least once: ' + esc(w.finished.map(n => n.name + ' (' + n.n.toLocaleString() + ' photos)').join(', ')) + '.' : ''}</p>
     ${w.back.length ? `<h3>Came back online</h3><ul>${w.back.map(([s, t]) => `<li>${esc(s)} · ${fmtDate(t)}</li>`).join('')}</ul>` : ''}
     ${w.offline.length ? `<h3>Went offline</h3><ul>${w.offline.slice(0, 30).map(([s, t]) => `<li>${esc(s)} · ${fmtDate(t)}</li>`).join('')}</ul>` : ''}
     ${reports.length ? `<h3>Evidence reports</h3><ul>${reports.slice(0, 40).map(r => `<li>${esc(r.site)} · ${esc(r.photo || '')}${r.caseNo ? ' · case ' + esc(r.caseNo) : ''}</li>`).join('')}</ul>` : ''}
@@ -175,6 +180,11 @@ Object.assign(ACTS, {
     x.font = '24px Arial'; x.fillStyle = '#22252E';
     for (const [n, cc] of Object.entries(w.clients).sort((a, b) => b[1].found - a[1].found).slice(0, 28)) {
       x.fillText(n.length > 44 ? n.slice(0, 43) + '…' : n, 80, y); x.fillText(String(cc.searched), 700, y); x.fillText(String(cc.found), 860, y); x.fillText(String(cc.stolen), 1020, y); y += 38;
+    }
+    if (y < H - 220) {
+      y += 30; x.font = 'bold 32px Arial'; x.fillStyle = '#22252E'; x.fillText('Every photo searched once', 80, y); y += 44; x.font = '24px Arial';
+      x.fillText(w.first.toLocaleString() + ' photos searched for the first time this week.', 80, y); y += 34;
+      for (const n of w.finished.slice(0, 4)) { if (y > H - 200) break; x.fillText('• ' + (n.name.length > 50 ? n.name.slice(0, 49) + '…' : n.name) + ': all ' + n.n.toLocaleString() + ' photos searched at least once', 80, y); y += 34; }
     }
     if (w.back.length && y < H - 200) { y += 30; x.font = 'bold 32px Arial'; x.fillText('Came back online', 80, y); y += 44; x.font = '24px Arial'; for (const [s] of w.back.slice(0, Math.floor((H - 150 - y) / 34))) { x.fillText('• ' + s, 80, y); y += 34; } }
     x.fillStyle = '#5E6582'; x.font = '20px Arial'; x.fillText('Made by PageProof ' + VERSION + ' on ' + new Date().toLocaleString(), 80, H - 70);

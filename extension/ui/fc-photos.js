@@ -449,11 +449,73 @@ Object.assign(ACTS, {
   },
 });
 
+// ---------------------------------------------------------------- every photo searched once (4.10)
+// How many first searches a day: Keep searching gives 1 in N of its photos to never-searched
+// photos, Today's 50 (if it starts by itself) too, or all 50 when set to "Never searched first".
+function firstPerDay(k, hw, week) {
+  const ORDER = ['Gentle', 'Steady', 'Faster'];
+  const pace = ORDER[Math.min(ORDER.indexOf(k.pace), ORDER.indexOf(hw.limits.pace))] || 'Steady';
+  const hrs = k.hours === 'all' ? 24 : Math.max(1, k.to - k.from);
+  const share = [2, 3, 4].includes(k.firstShare) ? k.firstShare : 3;
+  let n = k.on ? (60 / FC.PACE[pace]) * hrs / share : 0;
+  if (k.fiftyAuto) n += k.fiftyWhich === 'first' ? k.perDay : k.perDay / share;
+  // What really happened this week counts too (Today's 50 started by hand, other searches).
+  const days = k.weekdays ? 5 : 7;
+  return { perDay: Math.max(n, (week || 0) / days), weekdays: !!k.weekdays };
+}
+// The day "left" first searches are done, at "perDay" a day (weekends skipped if weekdays only).
+function firstDoneBy(left, rate) {
+  if (left <= 0) return 'Done';
+  if (!rate.perDay) return null;
+  let days = Math.ceil(left / rate.perDay);
+  if (days > 3650) return 'over 10 years';
+  const d = new Date();
+  while (days > 0) { d.setDate(d.getDate() + 1); if (!rate.weekdays || (d.getDay() % 6)) days--; }
+  const soon = d.getTime() - Date.now() < 60 * 86400000;
+  return '~ ' + d.toLocaleDateString(undefined, soon ? { month: 'short', day: 'numeric' } : { month: 'long', year: 'numeric' });
+}
+// Done-by for each client. Clients take turns, ★ priority clients first, so a client with r left
+// is done after every earlier group's photos plus min(r, r of each client in its own group).
+function firstClientRows(F) {
+  const rows = Object.entries(F.clients || {}).filter(([, [, t]]) => t > 0).map(([name, [d, t, cant]]) => ({ name, d, t, cant: cant || 0, left: t - d, pri: (F.pri || []).includes(name) }));
+  const pri = rows.filter(r => r.pri), rest = rows.filter(r => !r.pri);
+  const before = pri.reduce((a, r) => a + r.left, 0);
+  for (const r of pri) r.need = pri.reduce((a, o) => a + Math.min(o.left, r.left), 0);
+  for (const r of rest) r.need = before + rest.reduce((a, o) => a + Math.min(o.left, r.left), 0);
+  return rows.sort((a, b) => a.d / a.t - b.d / b.t || b.left - a.left);
+}
+function firstClientTable(F, rate, all) {
+  const rows = firstClientRows(F);
+  if (!rows.length) return '<p class="muted" style="margin:0">No photos yet.</p>';
+  const shown = all ? rows : rows.slice(0, 10);
+  return `<div class="scroll"><table class="firsttbl"><thead><tr><th>Client</th><th>Searched once</th><th style="width:160px"></th><th>Never searched</th><th>Done by</th></tr></thead><tbody>
+    ${shown.map(r => { const pct = r.d / r.t * 100, done = r.left <= 0; return `<tr><td><b>${r.pri ? '★ ' : ''}${esc(r.name)}</b>${r.cant ? `<div class="faint" style="font-size:12px">${r.cant.toLocaleString()} can't be searched</div>` : ''}</td><td class="num">${r.d.toLocaleString()} of ${r.t.toLocaleString()}</td><td><span class="bar${done ? ' okbar' : ''}"><i style="width:${pct}%"></i></span></td><td class="num">${r.left.toLocaleString()}</td><td>${done ? '<span class="tag ok">All searched once</span>' : esc(firstDoneBy(r.need, rate) || 'Turn on Keep searching')}</td></tr>`; }).join('')}
+  </tbody></table></div>
+  ${rows.length > shown.length ? `<button class="btn ghost" style="align-self:flex-start" data-act="firstall">Show all ${rows.length} clients</button>` : ''}`;
+}
+function firstBlock(F, rate) {
+  const pct = F.total ? Math.floor(F.done / F.total * 100) : 100;
+  const by = firstDoneBy(F.never, rate);
+  return `<div class="firstbox" id="firstBox">
+    <div class="row"><h3 style="margin:0">First search for every photo</h3><span class="tag ${F.never ? 'warn' : 'ok'}" style="margin-left:auto">${F.never ? 'In progress' : 'Every photo searched once'}</span></div>
+    <div class="row" style="align-items:baseline;gap:8px"><span class="firstbig num">${F.done.toLocaleString()}</span><span class="muted num">of ${F.total.toLocaleString()} photos searched at least once · ${pct}%</span></div>
+    <span class="bar big"><i style="width:${F.total ? F.done / F.total * 100 : 100}%"></i></span>
+    <div class="grid g4f">
+      <div class="stat"><b>${F.never.toLocaleString()}</b><span>never searched yet</span></div>
+      <div class="stat"><b>${F.week ? '+' : ''}${F.week.toLocaleString()}</b><span>first searches in the last 7 days</span></div>
+      <div class="stat"><b>${esc(by || '—')}</b><span>${by === 'Done' ? 'new photos join by themselves' : by ? 'all done at this pace' : 'turn on Keep searching for a date'}</span></div>
+      <div class="stat"><b>${F.cant.toLocaleString()}</b><span>can't be searched (POOL, TIFF, HEIC, broken)${F.cant ? ' · <a href="#skipped">See them</a>' : ''}</span></div>
+    </div>
+    <span class="faint" style="font-size:12.5px">New photos you add to Google Drive are picked up within the hour and join the never-searched photos by themselves.</span>
+  </div>`;
+}
+
 // ---------------------------------------------------------------- Keep searching and today's 50
 const STATE_TAG = { running: ['Searching', 'ok'], waiting: ['Resting between photos', 'ok'], off: ['Off', 'grey'], paused: ['Paused', 'grey'], hours: ['Outside your hours', 'grey'], fifty: ['Paused while today\'s 50 run', 'warn'],
   offline: ['Google Drive offline', 'bad'], allow: ['Needs one click', 'warn'], busy: ['Computer busy', 'warn'], resting: ['Search sites resting', 'warn'], setup: ['Not set up', 'warn'], idle: ['Nothing due right now', 'ok'], closed: ['Stopped', 'bad'] };
 V.keep = async () => {
   if (routeArg('start50')) { history.replaceState(null, '', '#keep'); setTimeout(() => ACTS.fifty(), 300); }
+  if (routeArg('clients')) { history.replaceState(null, '', '#keep'); setTimeout(() => { const el = document.getElementById('firstClients'); if (el) el.scrollIntoView({ block: 'start' }); }, 200); }
   const [k, st, cov, hw, store] = [await FC.keep(), (await api.storage.local.get('fcStatus')).fcStatus, await FC.coverage(), await ppHardware(), await api.storage.local.get(['fcToday', 'fcRest', 'fcPause', 'fcFifty'])];
   const alive = st && Date.now() - st.beat < 90000;
   const s = !k.on ? 'off' : store.fcPause ? 'paused' : alive ? st.state : st && st.state === 'closed' ? 'closed' : 'waiting';
@@ -465,7 +527,9 @@ V.keep = async () => {
   const pace = ORDER[Math.min(ORDER.indexOf(k.pace), ORDER.indexOf(hw.limits.pace))] || 'Steady';
   const perHour = 60 / FC.PACE[pace];
   const hrs = k.hours === 'all' ? 24 : Math.max(1, k.to - k.from);
-  const G = cov.groups;
+  const G = cov.groups, F = cov.first;
+  const rate = firstPerDay(k, hw, F.week);
+  const share = [2, 3, 4].includes(k.firstShare) ? k.firstShare : 3;
   const bar = (label, [a, b], note) => `<div style="display:flex;flex-direction:column;gap:4px"><div class="row" style="font-size:14px"><b>${label}</b><span class="faint" style="margin-left:auto">${b ? Math.round(a / b * 100) : 100}% up to date · ${a.toLocaleString()} of ${b.toLocaleString()}</span></div><span class="bar"><i style="width:${b ? a / b * 100 : 100}%"></i></span><span class="faint" style="font-size:12.5px">${note}</span></div>`;
   const fifty = !!(store.fcFifty && store.fcFifty.beat && store.fcFifty.running !== false && Date.now() - store.fcFifty.beat < 5 * 60000);
   const hourOpts = Array.from({ length: 24 }, (_, h) => h);
@@ -497,21 +561,34 @@ V.keep = async () => {
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
       <div class="row"><h2>Today's 50</h2>${fifty ? '<span class="tag ok" style="margin-left:auto">Running now</span>' : ''}</div>
       <p class="muted" style="margin:0;font-size:14px">A bigger batch at once, shown right here in PageProof (the search tabs open as small pinned tabs in this browser window). Keep searching pauses while it runs, then carries on. The 50 are the next photos in line.</p>
-      <div class="row"><label class="mini">How many<select data-act="keepnum" data-v="perDay">${[10, 25, 50, 75, 100].map(n => `<option value="${n}" ${k.perDay === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label><button class="btn primary" data-act="fifty"${fifty ? ' disabled' : ''}>Check ${k.perDay} now</button></div>
+      <div class="row"><label class="mini">How many<select data-act="keepnum" data-v="perDay">${[10, 25, 50, 75, 100].map(n => `<option value="${n}" ${k.perDay === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label class="mini">Which photos<select data-act="keepset2" data-v="fiftyWhich"><option value="next" ${k.fiftyWhich !== 'first' ? 'selected' : ''}>Next in line</option><option value="first" ${k.fiftyWhich === 'first' ? 'selected' : ''}>Never searched first</option></select></label><button class="btn primary" data-act="fifty"${fifty ? ' disabled' : ''}>Check ${k.perDay} now</button></div>
       <label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" data-act="keepauto" ${k.fiftyAuto ? 'checked' : ''}> Start by itself every weekday at <input type="time" value="${esc(k.fiftyTime)}" data-act="keeptime" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);padding:2px 6px"></label>
       <p class="faint" style="margin:0;font-size:13px">On this computer 50 photos take ${esc(hw.limits.fifty)}.</p>
     </section>
   </div>
   <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
     <h2>Where the searches go</h2>
-    <p class="muted" style="margin:0;font-size:14px">${cov.total.toLocaleString()} photos are searched for ${plural((await FC.DB.all('clients')).filter(c => c.searching === true).length, 'client')}. With lots of photos, not every photo is searched often: the most important ones are kept up to date first.</p>
+    <p class="muted" style="margin:0;font-size:14px">${cov.total.toLocaleString()} photos are searched for ${plural((await FC.DB.all('clients')).filter(c => c.searching === true).length, 'client')}. Every photo gets searched at least once, and the most important ones are kept up to date more often.</p>
+    ${firstBlock(F, rate)}
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <h3 style="margin:0;font-size:15px">How the searches are shared</h3>
+      ${F.never ? `<div class="sharebar" role="img" aria-label="High priority first, then 1 in ${share} searches for never-searched photos, the rest keep photos up to date"><span class="s1">⚑ High first</span><span class="s2" style="flex:1">1 in ${share}: never searched</span><span class="s3" style="flex:${share - 1}">The rest: keeping photos up to date</span></div>` : '<p class="muted" style="margin:0;font-size:14px">Every photo has had its first search, so all searches go to keeping photos up to date. When new photos arrive, they get their share again.</p>'}
+      <div class="row" style="gap:10px"><span class="faint" style="font-size:13px">Share for never-searched photos</span>
+        <div class="seg" role="radiogroup" aria-label="Share for never-searched photos">${[4, 3, 2].map(n => `<button role="radio" aria-checked="${share === n}" class="${share === n ? 'on' : ''}" data-act="firstshare" data-v="${n}">1 in ${n}</button>`).join('')}</div>
+        <span class="faint" style="font-size:12.5px">⚑ High priority photos always go first.</span></div>
+    </div>
     ${bar('⚑ High priority and ★ priority clients', G.top, 'Searched every 3 to 7 days')}
     ${bar('Newest photos (this and last quarter)', G.recent, 'Searched every month')}
     ${bar('This year', G.year, 'Searched every 6 months')}
     ${bar('Older photos', G.older, 'Searched once a year')}
     <div class="row faint" style="font-size:13px;gap:16px"><span>${cov.quiet.toLocaleString()} quiet photos (nothing found 5 times: searched monthly, 10 times: every 3 months)</span><span>${cov.doubles.toLocaleString()} doubles searched once with their twin</span></div>
     <details><summary class="muted" style="cursor:pointer">Which photos go first?</summary><ol style="margin:8px 0 0;padding-left:20px;font-size:14px;display:flex;flex-direction:column;gap:4px">
-      <li><b>⚑ High priority</b> photos: next in line, then every 3 days.</li><li><b>★ Priority clients</b>: their photos come right after.</li><li><b>Newest photos</b>, by year, quarter and day.</li><li><b>★ Popular</b> photos and photos stolen before: every 7 days.</li><li>Everything else, the longest-waiting first.</li><li>Quiet photos last.</li></ol></details>
+      <li><b>⚑ High priority</b> photos: next in line, then every 3 days.</li><li><b>★ Priority clients</b>: their photos come right after.</li><li><b>Newest photos</b>, by year, quarter and day.</li><li><b>★ Popular</b> photos and photos stolen before: every 7 days.</li><li>Everything else, the longest-waiting first.</li><li>Quiet photos last.</li></ol>
+      <p class="muted" style="margin:8px 0 0;font-size:14px">On top of that, 1 in ${share} searches goes to a photo that was never searched, until there are none left. ★ Priority clients get their first searches first, then the clients take turns, newest photos first.</p></details>
+  </section>
+  <section class="card pad" id="firstClients" style="display:flex;flex-direction:column;gap:12px">
+    <div class="row"><h2>First search, client by client</h2><span class="faint" style="margin-left:auto;font-size:13px">Lowest first</span></div>
+    ${firstClientTable(F, rate, state.firstAll)}
   </section>`;
 };
 V.keep.guard = V.found.guard;
@@ -527,6 +604,10 @@ Object.assign(ACTS, {
   keepshow: async () => { await api.runtime.sendMessage({ type: 'fcKeepWake', show: true }).catch(() => {}); setTimeout(() => render(true), 1500); },
   keepset: async v => { const [f, x] = v.split('|'); await FC.setKeep({ [f]: x }); render(true); },
   keepnum: async (v, el) => { await FC.setKeep({ [v]: +el.value }); render(true); },
+  firstshare: async v => { await FC.setKeep({ firstShare: +v }); toast('1 in ' + v + ' searches now go to photos never searched.'); render(true); },
+  keepset2: async (v, el) => { await FC.setKeep({ [v]: el.value }); render(true); },
+  firstall: () => { state.firstAll = true; render(true); },
+  firstseen: async () => { await api.storage.local.set({ fcFirstSeen: new Date().toISOString() }); const el = document.getElementById('firstDone'); if (el) el.remove(); },
   keepwd: async (v, el) => { await FC.setKeep({ weekdays: el.checked }); },
   keepauto: async (v, el) => { await FC.setKeep({ fiftyAuto: el.checked }); api.runtime.sendMessage({ type: 'fcFiftyAlarm' }).catch(() => {}); toast(el.checked ? 'Today\'s 50 starts by itself on weekdays.' : 'Today\'s 50 only starts when you click.'); },
   keeptime: async (v, el) => { if (/^\d\d:\d\d$/.test(el.value)) { await FC.setKeep({ fiftyTime: el.value }); api.runtime.sendMessage({ type: 'fcFiftyAlarm' }).catch(() => {}); } },
@@ -536,7 +617,7 @@ Object.assign(ACTS, {
     const k = await FC.keep();
     const n = Math.min(k.perDay, 100);
     toast('Getting the next ' + n + ' photos ready…');
-    const ps = await FC.next(n + 10);
+    const ps = await FC.next(n + 10, new Set(), { first: k.fiftyWhich === 'first' });
     const pics = [];
     for (const p of ps) {
       if (pics.length >= n) break;
