@@ -241,14 +241,19 @@
   // are PageProof's (and not tabs you opened). The site keeps trying to put its own icon back.
   const LOGO = 'data:image/png;base64,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';
   const ENGINE_NAME = { google: 'Google Lens', yandex: 'Yandex', bing: 'Bing' };
+  let branded = false;
   function brand() {
+    if (branded) return;
+    branded = true;
     const want = 'PageProof · ' + ENGINE_NAME[engine];
     const fix = () => {
       if (!document.head) return;
-      const links = document.head.querySelectorAll('link[rel~="icon"]');
-      if (links.length !== 1 || links[0].href !== LOGO) {
+      // Every icon the site gives (some put theirs outside the head, or as a "shortcut icon"
+      // or "apple-touch-icon"), not only the ones in the head.
+      const links = document.querySelectorAll('link[rel~="icon"], link[rel="apple-touch-icon"], link[rel="mask-icon"]');
+      if (links.length !== 1 || links[0].href !== LOGO || links[0].parentNode !== document.head) {
         links.forEach(l => l.remove());
-        const l = document.createElement('link'); l.rel = 'icon'; l.href = LOGO; document.head.appendChild(l);
+        const l = document.createElement('link'); l.rel = 'icon'; l.type = 'image/png'; l.href = LOGO; document.head.appendChild(l);
       }
       if (document.title !== want) document.title = want;
     };
@@ -257,9 +262,15 @@
     const opts = { childList: true, subtree: true, characterData: true };
     const mo = new MutationObserver(() => { mo.disconnect(); fix(); mo.observe(document.head, opts); });
     mo.observe(document.head, opts);
+    // Yandex and Bing change the page without reloading it and can put their icon back from
+    // outside the head: a cheap look every 2 seconds catches that too.
+    setInterval(fix, 2000);
   }
 
   async function main() {
+    // The logo goes on straight away when the background says this is one of PageProof's search
+    // tabs (it used to wait for the results page's answer, which could come late or not at all).
+    send({ type: 'rsIsMine' }).then(r => { if (r && r.mine) { if (document.head) brand(); else document.addEventListener('DOMContentLoaded', brand, { once: true }); } }).catch(() => {});
     const hi = await send({ type: 'rsHello', engine, url: location.href });
     if (!hi || !hi.task) return;                       // not one of PageProof's search tabs
     if (document.readyState === 'loading') await new Promise(r => document.addEventListener('DOMContentLoaded', r, { once: true }));
