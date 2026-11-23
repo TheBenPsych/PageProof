@@ -378,8 +378,16 @@ async function runOne(p, engine) {
 // Marks PageProof's own search tabs, so rsearch.js puts the PageProof logo on them straight away
 // (even before this page answers it) and never on tabs you opened yourself.
 // The mark holds the search's id, so a reloaded results page can find and close its own old tabs.
-const tagTab = id => { try { api.storage.session && api.storage.session.set({ ['rsTab:' + id]: job.id }).catch(() => {}); } catch (e) { /* Firefox without session storage */ } };
-const untagTab = id => { try { api.storage.session && api.storage.session.remove('rsTab:' + id).catch(() => {}); } catch (e) { /* ignore */ } };
+// A second mark (rsTabL:) is kept in local storage, which survives an update, so the background
+// can close search tabs left over from before an update (session storage is wiped by one).
+const tagTab = id => {
+  try { api.storage.session && api.storage.session.set({ ['rsTab:' + id]: job.id }).catch(() => {}); } catch (e) { /* Firefox without session storage */ }
+  api.storage.local.set({ ['rsTabL:' + id]: job.id }).catch(() => {});
+};
+const untagTab = id => {
+  try { api.storage.session && api.storage.session.remove('rsTab:' + id).catch(() => {}); } catch (e) { /* ignore */ }
+  api.storage.local.remove('rsTabL:' + id).catch(() => {});
+};
 function finishTask(t, state, why) {
   if (!R.tasks.has(t.tabId)) return;
   R.tasks.delete(t.tabId);

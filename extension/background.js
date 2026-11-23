@@ -676,6 +676,57 @@ async function dotIcon(on) {
   await api.action.setIcon({ imageData });
   dotNow = on;
 }
+// ---------- after an update or a Reload: a fresh Keep searching tab (4.9.4, Ben) ----------
+// An update (or Reload on the extensions page) leaves the old pinned Keep searching tab running
+// old code, or cut off from PageProof altogether, so Keep searching quietly stopped working. So
+// on every update PageProof closes the old Keep searching tab, its search tab and any search site
+// tabs left over from before, then opens a fresh Keep searching tab. The same happens if the
+// background starts and finds it is a new version (in case the update signal was missed).
+const MY_VER = api.runtime.getManifest().version;
+const OWN = api.runtime.getURL('');
+const SEARCH_SITE = /^https?:\/\/([^/]+\.)?(google\.[a-z.]+|yandex\.[a-z.]+|ya\.ru|bing\.com|lens\.google\.com)(\/|$)/i;
+let freshP = null;
+function freshStart() {
+  if (!freshP) freshP = (async () => {
+    await api.storage.local.set({ ppRunVer: MY_VER }).catch(() => {});
+    const all = await api.storage.local.get(null).catch(() => ({}));
+    const st = all.fcStatus || {};
+    const shut = async (id, ok) => {
+      if (!id && id !== 0) return;
+      try { const t = await api.tabs.get(+id); if (ok(t)) await api.tabs.remove(t.id); } catch (e) { /* already closed */ }
+    };
+    // Is it one of PageProof's own pages? (If the browser hides the address, a pinned tab is.)
+    const ownPage = t => t.url ? t.url.startsWith(OWN) : !!t.pinned;
+    await shut(st.tabId, ownPage);     // the old Keep searching tab
+    await shut(st.jobTab, ownPage);    // the photo it was searching
+    // Any other copies of the Keep searching page or a pinned Keep searching photo search.
+    try {
+      for (const t of await api.tabs.query({})) {
+        if (!t.url || !t.url.startsWith(OWN)) continue;
+        if (t.url.startsWith(OWN + 'runner.html') || (t.pinned && t.url.startsWith(OWN + 'revsearch.html'))) await api.tabs.remove(t.id).catch(() => {});
+      }
+    } catch (e) { /* no tab list */ }
+    // Search site tabs from before the update: nothing reports to them any more.
+    const marks = Object.keys(all).filter(k => k.startsWith('rsTabL:'));
+    for (const k of marks) await shut(k.slice(7), t => SEARCH_SITE.test(t.url || t.pendingUrl || ''));
+    if (marks.length) await api.storage.local.remove(marks).catch(() => {});
+    runnerTab = null;
+    await api.storage.local.set({ fcStatus: { ...st, state: 'closed', beat: 0, tabId: null, jobTab: null } }).catch(() => {});
+    if (api.storage.session) await api.storage.session.remove('fcClosed').catch(() => {});
+    await sleep(1500);
+    await keepAlive(false, true);
+  })().catch(e => console.warn('PageProof fresh start', e));
+  return freshP;
+}
+// Tab numbers start again when the browser restarts, so the old marks mean nothing then.
+async function forgetSearchTabs() {
+  try { const all = await api.storage.local.get(null); const marks = Object.keys(all).filter(k => k.startsWith('rsTabL:')); if (marks.length) await api.storage.local.remove(marks); } catch (e) { /* nothing saved */ }
+}
+api.storage.local.get('ppRunVer').then(r => {
+  if (r.ppRunVer === MY_VER) return;
+  if (r.ppRunVer) freshStart(); else api.storage.local.set({ ppRunVer: MY_VER });
+}).catch(() => {});
+
 // ---------- the morning nudge: Google Drive needs one click after the browser restarts ----------
 // The browser forgets PageProof's permission to read the photos folder when it closes. Until
 // someone clicks Allow, nothing can be searched. So when searching is switched on (Keep searching
@@ -750,9 +801,10 @@ api.storage.onChanged.addListener(ch => {
   if (ch.fcChanged || ch.rsHidden || ch.fcHiddenCountries) { clearTimeout(badgeT); badgeT = setTimeout(newBadge, 2000); }
 });
 let badgeT = null;
-api.runtime.onStartup.addListener(() => { fiftySchedule(); keepAlive(false); newBadge(); driveNudge(true); updateCheck(false); });
+api.runtime.onStartup.addListener(() => { forgetSearchTabs(); fiftySchedule(); keepAlive(false); newBadge(); driveNudge(true); updateCheck(false); });
 api.runtime.onInstalled.addListener(d => {
   fiftySchedule(); newBadge();
+  if (d.reason === 'update') freshStart();
   if (d.reason === 'install') api.tabs.create({ url: api.runtime.getURL('app.html#setup') });
   // After an update the saved "version X is ready" note is old news: forget it and ask GitHub again.
   if (d.reason === 'update') api.storage.local.remove('ppUpdate').then(() => updateCheck(true)).catch(() => {});
