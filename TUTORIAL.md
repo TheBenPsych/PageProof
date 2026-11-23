@@ -209,6 +209,8 @@ This does what you'd do in Photoshop: put the copy on top of the original, turn 
    - **＋ Check nearby shots…** (under box 1): if your client took many shots of the same scene, pick them all at once. PageProof lines each one up with the copy, lists them best first, and puts the best one in box 1. If two are within a few points of each other it says *too close to call*: then compare a face on each with Pick a spot.
 5. Save it: **📄 PDF** (both pictures side by side, file details and fingerprints, the green and red changes picture, every spot side by side with its score, the nearby shots checked, the overlay at 0%, 50% and 100%, the difference view and the colour check), **🖼️ Picture** (what you see now), or **🎬 Video** (a 9-second MP4 clip of the copy fading in, sliding aside and back, then the difference view; it plays on Windows, Mac, phones and in PowerPoint).
 
+**Press walls:** if only the logos printed over and over on a sponsor wall line up (a different shot in front of the same wall), Compare says **"Different photo, same backdrop"**, and the photo check in Find copies throws it out as a different photo.
+
 The score is a guide. The overlay pictures are what to show. If the copy's colours were changed, the Difference view shows a faint tint over the photo instead of pure black; edges that line up still disappear.
 
 ## 13. Change file types, join PDFs, make files smaller: Convert files

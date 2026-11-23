@@ -431,6 +431,66 @@ const PP_ALIGN = (() => {
     return { gw, gh, cell: S / f, reg, inside, same, sameShare: inside ? same / inside : 0, changedShare: inside ? 1 - same / inside : 0, untouchedLines: texIn ? matchedIn / texIn : 0 };
   }
 
+  // ---------- 8. repeating backdrops (press walls, "step and repeat") ----------
+  // At press events people stand in front of a wall printed with the same logos over and over.
+  // A different shot in front of the same wall lines up on those logos, and on nothing else.
+  // For each square that lines up, this looks for the same detail somewhere else in the
+  // original. If (nearly) every square that lines up is a logo printed again elsewhere, only
+  // the backdrop matches: backdropOnly. Fine detail only (a blurred copy is subtracted), so
+  // smooth sky or walls count as "plain", neither repeated nor unique.
+  function repeats(Abm, Bbm, T, side = 240, S = 12) {
+    const f = side / Math.max(Abm.width, Abm.height);
+    const a = grayAt(Abm, f), b = render(Bbm, T, a.w, a.h, f), w = a.w, h = a.h;
+    const bl = blur(a, 2), hp = new Float32Array(w * h);
+    for (let i = 0; i < hp.length; i++) hp[i] = a.g[i] - bl.g[i];
+    // integral images of hp and hp*hp, so any square's sum and spread are quick to get
+    const I = new Float64Array((w + 1) * (h + 1)), I2 = new Float64Array((w + 1) * (h + 1));
+    for (let y = 0; y < h; y++) { let r = 0, r2 = 0; for (let x = 0; x < w; x++) { const v = hp[y * w + x]; r += v; r2 += v * v; I[(y + 1) * (w + 1) + x + 1] = I[y * (w + 1) + x + 1] + r; I2[(y + 1) * (w + 1) + x + 1] = I2[y * (w + 1) + x + 1] + r2; } }
+    const box = (A2, x, y) => A2[(y + S) * (w + 1) + x + S] - A2[y * (w + 1) + x + S] - A2[(y + S) * (w + 1) + x] + A2[y * (w + 1) + x];
+    const n = S * S;
+    // the squares that line up (same test as score)
+    const matched = [];
+    for (let ty = 0; ty + S <= h; ty += S) for (let tx = 0; tx + S <= w; tx += S) {
+      let k = 0, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0, out = false;
+      for (let y = ty; y < ty + S && !out; y++) for (let x = tx; x < tx + S; x++) {
+        const i = y * w + x; if (!b.m[i]) { out = true; break; }
+        const p = a.g[i], q = b.g[i]; k++; sa += p; sb += q; saa += p * p; sbb += q * q; sab += p * q;
+      }
+      if (out) continue;
+      const ma = sa / k, mb = sb / k, va = saa / k - ma * ma, vb = sbb / k - mb * mb;
+      if (va < 25 && vb < 25) continue;
+      const r = va > 4 && vb > 4 ? (sab / k - ma * mb) / Math.sqrt(va * vb) : 0;
+      if (r > 0.6) matched.push([tx, ty]);
+    }
+    const res = { checked: 0, repeated: 0, unique: 0, plain: 0, matched: matched.length };
+    const step = Math.max(1, Math.ceil(matched.length / 40));
+    for (let m = 0; m < matched.length; m += step) {
+      const [tx, ty] = matched[m];
+      const s0 = box(I, tx, ty), e0 = box(I2, tx, ty) - s0 * s0 / n;
+      if (e0 / n < 12) { res.plain++; continue; }       // no fine detail to go on
+      res.checked++;
+      const ncc = (x, y) => {
+        const s1 = box(I, x, y), e1 = box(I2, x, y) - s1 * s1 / n; if (e1 / n < 6) return 0;
+        let sab = 0;
+        for (let j = 0; j < S; j++) { const ra = (ty + j) * w + tx, rb = (y + j) * w + x; for (let i = 0; i < S; i++) sab += hp[ra + i] * hp[rb + i]; }
+        return (sab - s0 * s1 / n) / Math.sqrt(e0 * e1);
+      };
+      let best = 0, bx = 0, by = 0;
+      for (let y = 0; y + S <= h; y += 2) for (let x = 0; x + S <= w; x += 2) {
+        if (Math.abs(x - tx) < S * 1.5 && Math.abs(y - ty) < S * 1.5) continue;   // itself
+        const r = ncc(x, y); if (r > best) { best = r; bx = x; by = y; }
+      }
+      if (best > 0.5) for (let y = Math.max(0, by - 1); y <= Math.min(h - S, by + 1); y++) for (let x = Math.max(0, bx - 1); x <= Math.min(w - S, bx + 1); x++) {
+        if (Math.abs(x - tx) < S * 1.5 && Math.abs(y - ty) < S * 1.5) continue;
+        best = Math.max(best, ncc(x, y));
+      }
+      if (best > 0.75) res.repeated++; else res.unique++;
+    }
+    // Only the backdrop lines up: hardly any square that lines up is one of a kind.
+    res.backdropOnly = res.checked >= 6 && res.unique <= Math.max(2, 0.2 * res.checked);
+    return res;
+  }
+
   // ---------- 7. one spot (a face, a logo) compared on its own ----------
   // box = { x, y, w, h } in the original's pixels. The same spot is cut from the lined-up copy,
   // allowing it to have moved a little (AI edits often nudge people), and the two cut-outs are
@@ -606,5 +666,5 @@ const PP_ALIGN = (() => {
     return best();
   }
 
-  return { align, score, changes, spot, grayOf, place, drawCopy, bounds, reshape, sizes, mapPoint };
+  return { align, score, changes, spot, repeats, grayOf, place, drawCopy, bounds, reshape, sizes, mapPoint };
 })();
