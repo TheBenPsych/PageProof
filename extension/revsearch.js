@@ -377,7 +377,8 @@ async function runOne(p, engine) {
 
 // Marks PageProof's own search tabs, so rsearch.js puts the PageProof logo on them straight away
 // (even before this page answers it) and never on tabs you opened yourself.
-const tagTab = id => { try { api.storage.session && api.storage.session.set({ ['rsTab:' + id]: 1 }).catch(() => {}); } catch (e) { /* Firefox without session storage */ } };
+// The mark holds the search's id, so a reloaded results page can find and close its own old tabs.
+const tagTab = id => { try { api.storage.session && api.storage.session.set({ ['rsTab:' + id]: job.id }).catch(() => {}); } catch (e) { /* Firefox without session storage */ } };
 const untagTab = id => { try { api.storage.session && api.storage.session.remove('rsTab:' + id).catch(() => {}); } catch (e) { /* ignore */ } };
 function finishTask(t, state, why) {
   if (!R.tasks.has(t.tabId)) return;
@@ -702,8 +703,10 @@ async function scoreAll() {
   // 6 at a time: downloads overlap well; more than that mostly waits on the computer itself.
   const run = () => Promise.all(Array.from({ length: Math.max(3, POOL_SIZE * 2) }, scoreWorker));
   // Holding a lock while checking tells Chrome and Edge this page is busy, so they don't put it
-  // to sleep when the window is minimized or left in the background.
-  try { await (navigator.locks ? navigator.locks.request('pageproof-photo-checks', run) : run()); } finally { R.scoring = false; }
+  // to sleep when the window is minimized or left in the background. One lock per search: a
+  // single shared lock made every other open search (and Keep searching) wait for this one's
+  // checks to finish, so their photos sat at "Checking matches".
+  try { await (navigator.locks ? navigator.locks.request('pageproof-photo-checks-' + job.id, run) : run()); } finally { R.scoring = false; }
 }
 // Coming back to the window: carry on with anything still waiting, in case the browser paused us.
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && job && R.scoreQ.length) scoreAll(); });
@@ -1091,6 +1094,23 @@ async function savePdf() {
   download(makePdf(await PP_REPORT.pdfPages(pages), { title: 'PageProof reverse image search', subject: plural(job.pics.length, 'picture') + ' searched ' + job.created }), 'PageProof_reverse-search_' + stamp() + '.pdf');
 }
 
+// Closes search tabs left over from an earlier copy of this results page (before a reload).
+async function closeOldTabs() {
+  // Only tabs marked in this browser session (tab numbers start again after a restart, so an old
+  // number could now be one of your own tabs).
+  const ids = new Set();
+  try {
+    if (api.storage.session) {
+      const all = await api.storage.session.get(null);
+      for (const [k, v] of Object.entries(all)) if (k.startsWith('rsTab:') && v === job.id) ids.add(+k.slice(6));
+    }
+  } catch (e) { /* no session storage */ }
+  for (const id of ids) {
+    if (R.tasks.has(id)) continue;
+    untagTab(id);
+    try { const t = await api.tabs.get(id); await api.tabs.remove(id); } catch (e) { /* already closed */ }
+  }
+}
 async function initResults() {
   job = await RS_DB.get('jobs', PARAMS.get('job'));
   if (!job) { $('main').replaceChildren(h('div', { class: 'none', text: 'This search was not found. It may have been deleted.' })); side(); return; }
@@ -1125,7 +1145,11 @@ async function initResults() {
   // A search that was cut off (its page closed, reloaded or put to sleep by the browser) carries
   // on where it stopped: photos that were mid-search are searched again, then the rest.
   const unfinished = mine && !job.auto && job.started && !job.finished;
+  // The search tabs the old page had open are closed first (they no longer report to anyone and
+  // only sat there frozen), so a reload never leaves a pile of pinned tabs or searches twice.
+  if (mine) await closeOldTabs();
   for (const p of job.pics) for (const e of job.engines) if (['go', 'captcha'].includes(p.runs[e].state)) {
+    delete p.runs[e].tabId;
     if (unfinished) { p.runs[e].state = 'wait'; delete p.runs[e].why; }
     else { p.runs[e].state = 'fail'; p.runs[e].why = 'The results window was closed or reloaded during this search.'; }
   }
@@ -1135,7 +1159,7 @@ async function initResults() {
   for (const p of job.pics) maybeIngest(p);
   if (mine && (!job.started || unfinished)) runJob();
   window.addEventListener('beforeunload', e => { if (R.running) { e.preventDefault(); e.returnValue = ''; } });
-  window.addEventListener('pagehide', () => { if (saveTimer) saveJob(true); if (R.running) fiftyBeat(false); });
+  window.addEventListener('pagehide', () => { if (saveTimer) saveJob(true); });
   // Asked by the full PageProof page before it drops an old results frame (it never drops a busy one).
   window.ppBusy = () => R.running || R.scoring || R.tasks.size > 0;
 }
