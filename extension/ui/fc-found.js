@@ -533,7 +533,7 @@ function siteStrip(base, xs) {
     <div class="sbtns"><a class="btn sm" href="${safeUrl('https://' + base)}" target="_blank" rel="noreferrer" data-act="openlink">Home page</a><button class="btn sm" data-act="stripok" data-v="${esc(c.id)}">Approve site</button><button class="btn sm" data-act="hidesite" data-v="${esc(base)}">Hide site</button><button class="btn sm" data-act="gowho" data-v="${esc(c.id)}">Who's behind it</button></div></div>`;
 }
 V.found.guard = async () => ((await FC.drive()).done ? null : 'connect');
-V.found.after = () => { loadOurs(); bindHover(); ppPagePic(); ppKeptLine(); };
+V.found.after = () => { if (typeof FC_PREV !== 'undefined') FC_PREV.start(); loadOurs(); bindHover(); ppPagePic(); ppKeptLine(); };
 
 // Hovering a copy's thumbnail shows it next to your client's photo.
 // Only one card ever exists. It goes away when the mouse leaves the pictures, and also when the
