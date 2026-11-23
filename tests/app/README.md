@@ -16,6 +16,7 @@ pretend Google Drive folder, pretend copies found). No real photos, clients or w
 | `checks-44.js` | Firm rule check before Stolen, their page read (credit, prices, ads), dates and damages hint, Ready for legal, research steps, POOL photos skipped, Save as Breaking News photo with the new-or-recycled check |
 | `checks-47.js` | The calmer details panel (Look at these, tabs, picture views, answers pinned, More menu, Hide site opens the next copy), number tiles, dropdowns, Damages and Client columns, Columns menu, sticky group headings, Hide site in One at a time |
 | `checks-badge.js` | The new-copies number (menu, toolbar dot, side panel) leaves out copies on hidden sites and hidden countries, so it matches Copies found |
+| `checks-49.js` | Websites and Social media tabs: accounts read from links, short links and the post page; Set account; Stolen, Hide and Approve per account (also for /p/ links); The post instead of the live page; Group by account and the Accounts list; new social sites asked once; Settings › Social sites |
 | `speed.js` | Every main page draws quickly with 50,000 photos and 5,000 copies |
 
 To run them yourself (needs Node.js):
