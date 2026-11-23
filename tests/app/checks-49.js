@@ -118,8 +118,27 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const n = await page.evaluate(() => FC.countNew());
   const nVis = await page.evaluate(async () => (await FC.allCopies()).filter(c => c.status === 'new' && !FC.hiddenCopy(c, RS_LISTS.hidden) && !FCD.countries.includes(c.country)).length);
   ok(n === nVis, 'The new-copies number leaves out hidden accounts (' + n + ' = ' + nVis + ')');
-  const choices = await page.evaluate(() => hideChoices(FCD.copies.find(c => c.id === 's5')).map(x => x[1] + (x[3] ? ' [warn]' : '')));
-  ok(choices[0] === 'Hide @quickclips' && /all of tiktok\.com \[warn\]/.test(choices[1]), 'Hide choices: the account first, the whole platform last with a warning (' + choices.join(' | ') + ')');
+  const choices = await page.evaluate(() => hideChoices(FCD.copies.find(c => c.id === 's5')).map(x => x[1]));
+  ok(choices.length === 1 && choices[0] === 'Hide @quickclips', 'Hide choices on a social post: only the account (' + choices.join(' | ') + ')');
+  // 4.9.4: a whole social site can never be hidden; one hidden before shows again with a note.
+  const whole = await page.evaluate(async () => {
+    await RS_LISTS.load();
+    const refused = !(await RS_LISTS.add('hidden', 'tiktok.com')) && !(await RS_LISTS.add('hidden', 'https://www.instagram.com/')) && !RS_LISTS.hidden.includes('tiktok.com');
+    const acctOk = await RS_LISTS.add('hidden', 'tiktok.com/@someoneelse'); await RS_LISTS.remove('hidden', 'tiktok.com/@someoneelse');
+    const webOk = await RS_LISTS.add('hidden', 'example-news.test'); await RS_LISTS.remove('hidden', 'example-news.test');
+    const api = globalThis.browser || chrome;
+    RS_LISTS.hidden.push('x.com'); await RS_LISTS.save();   // as an older version would have saved it
+    await RS_LISTS.load();
+    const un = (await api.storage.local.get('ppSocialUnhid')).ppSocialUnhid || [];
+    return { refused, acctOk, webOk, gone: !RS_LISTS.hidden.includes('x.com'), un };
+  });
+  ok(whole.refused && whole.acctOk && whole.webOk, 'tiktok.com and instagram.com can\'t be hidden; an account or a website still can');
+  ok(whole.gone && whole.un.includes('x.com'), 'x.com hidden before is shown again and noted (' + whole.un.join(', ') + ')');
+  await page.evaluate(() => { FCD = null; return render(true); }); await page.waitForTimeout(700);
+  const note = await page.evaluate(() => [...document.querySelectorAll('.banner')].map(b => b.textContent).join(' | '));
+  ok(/x\.com shows again/.test(note) && /only its accounts/.test(note), 'Copies found says x.com shows again');
+  await page.click('[data-act="unhidok"]'); await page.waitForTimeout(500);
+  ok(!(await page.evaluate(() => [...document.querySelectorAll('.banner')].some(b => /shows again/.test(b.textContent)))), '"Got it" removes the note');
   await page.click('[data-act="undo"]'); await page.waitForTimeout(800);
   ok(await page.evaluate(() => !RS_LISTS.hidden.includes('instagram.com/harbor.light')), 'Undo shows the account again');
 

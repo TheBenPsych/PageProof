@@ -219,12 +219,10 @@ function acctPane(c) {
       <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">${hideChoices(c).map(([v, l, d, warn]) => `<button class="lookup${warn ? ' warnhide' : ''}" style="text-align:left;cursor:pointer" data-act="hidesite" data-v="${esc(v)}"><span style="color:var(--bad);display:inline-flex">${ic('ban', 20)}</span><span><b>${esc(l)}</b><br><span class="${warn ? '' : 'muted'}" style="font-size:12.5px;${warn ? 'color:var(--bad)' : ''}">${esc(d)}</span></span></button>`).join('')}
       <span class="faint" style="font-size:12.5px">Hidden accounts and sites never show again. Bring them back from Settings › Hidden and approved sites.</span></div></details>`;
 }
-// Hide choices on social copies (4.9): the account first; all of the platform last, with a warning.
+// Hide choices on social copies: only the account. A whole social site can never be hidden (4.9.4).
 function socHideChoices(c) {
-  const out = [], base = FC.baseOf(c.site), p = platOf(c);
-  if (c.acct) out.push([c.acct.key, 'Hide ' + c.acct.handle, 'Only this account. Other ' + p.name + ' accounts still show.']);
-  out.push([base, 'Hide all of ' + base, 'Every account on ' + p.name + '. Rarely what you want.', true]);
-  return out;
+  const p = platOf(c);
+  return c.acct ? [[c.acct.key, 'Hide ' + c.acct.handle, 'Only this account. Other ' + p.name + ' accounts still show.']] : [];
 }
 
 // ---------------------------------------------------------------- the Accounts list (Social tab)
@@ -268,6 +266,7 @@ function socAskBanner(copies) {
 
 Object.assign(ACTS, {
   ftab: v => { switchTab(v); render(true); },
+  unhidok: async () => { await (globalThis.browser || chrome).storage.local.remove('ppSocialUnhid'); if (FCD) FCD.unhid = []; render(true); },
   fplat: v => { state.fPlat = state.fPlat === v ? 'Any' : v; state.more = 250; render(true); },
   sview: v => { state.sView = v; render(true); },
   acctonly: v => { state.fAcct = v; state.sView = 'copies'; state.fFilter = 'All'; state.more = 250; render(true); },

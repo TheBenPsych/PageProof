@@ -510,10 +510,11 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Social sites: only accounts can be hidden', 'A whole social site like x.com or instagram.com can no longer be hidden, only the accounts on it. Any social site you hid before shows again, with a note on Copies found.'],
   ['Reloading a big search carries on', 'Reloading the page of a running search (like today\'s 50) no longer leaves its old search tabs frozen in the tab bar and opens new ones on top. The old tabs close, and the search carries on with the photos it had not finished. Photo checks of one search also no longer wait for another open search (or Keep searching) to finish its own checks, so photos move past "Checking matches" sooner.'],
   ['An answer always takes the copy off the list', 'In Copies found, pressing Stolen, Licensed, Remove, Hide site, "All N stolen" or an answer in the details panel now takes the row off the list straight away, every time. Before, a page redraw that was already under way (for example while Keep searching was running) could put the answered row back. Clicking answers quickly on several rows also works now: none is lost. Undo still brings a row back.'],
   ['Websites and Social media tabs', 'Copies found now has two tabs. On Social media each copy leads with the account that posted it, with one chip per platform, Group by account and an Accounts list. Each tab keeps its own filters.'],
-  ['Stolen, Hide and Approve work per account', 'Marking a social post Stolen remembers the account: its next posts say "Marked stolen before" and come first. Hide and Approve on social posts are for that one account. Hiding a whole platform comes with a warning.'],
+  ['Stolen, Hide and Approve work per account', 'Marking a social post Stolen remembers the account: its next posts say "Marked stolen before" and come first. Hide and Approve on social posts are for that one account. A whole social site can never be hidden.'],
   ['The account, even when the link hides it', 'For Instagram /p/ links, TikTok short links and Facebook share links, PageProof follows the link, asks the site\'s public post info and reads the post page. Still missing? "Look in your browser" or paste the profile link.'],
   ['The post instead of the live preview', 'Social sites block the live page preview, so social copies show the caption, date, likes and comments with Open post and Capture buttons.'],
   ['New social sites caught', 'About 80 social sites are known. A new one (links like /@name/1234) is asked about once. Change any site in Settings › Hidden and approved sites › Social sites.'],
@@ -726,6 +727,7 @@ async function act(a, v, el) {
     const kind = state.hidTab;
     const s = RS_SITE.tidy(state.hidQ);
     if (!s) return toast('Type a site like patch.com, x.com/examplenews or .gov');
+    if (kind === 'hidden' && RS_LISTS.wholeSocial(s)) return toast('A whole social site can\'t be hidden. Type an account instead, like ' + s + '/examplenews');
     await RS_LISTS.load(); await RS_LISTS.add(kind, s);
     state.hidQ = '';
     toast(s + (kind === 'hidden' ? ' hidden' : ' approved for every client'), async () => { await RS_LISTS.load(); await RS_LISTS.remove(kind, s); render(true); });
