@@ -847,7 +847,6 @@ dd q{quotes:"“" "”";font-style:italic}
 /* group headings stay at the top while you scroll */
 .found-card{overflow:clip}
 .cbody>.ghead{position:sticky;top:var(--top-h,64px);z-index:4}
-=======
 /* Home: the three start cards and the boxes under them share one 3-column grid, so every edge lines up.
    Narrow windows stack everything in one column. */
 .home3{display:grid;grid-template-columns:minmax(0,1fr);gap:20px}
@@ -942,3 +941,59 @@ table.accts tr.arow:hover{background:var(--sunk)}
 .stag span{color:var(--faint)}
 .sclear{margin-left:auto;border:0;background:none;color:var(--accent);font-weight:700;font-size:13.5px;cursor:pointer;padding:2px 4px;font-family:inherit}
 .sclear:hover{text-decoration:underline}
+
+/* ---------- 4.14: Home "What to do now", status line, library cards, Needs a capture ---------- */
+.jobs{overflow:hidden}
+.jobhead{border-bottom:1px solid var(--line)}
+.job{display:flex;align-items:center;gap:14px;padding:14px 22px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.job:last-child{border-bottom:0}
+.job .jdot{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;flex:none;background:var(--accent-soft);color:var(--accent)}
+.job.lvl-bad .jdot{background:var(--bad-soft);color:var(--bad)}
+.job.lvl-warn .jdot{background:var(--warn-soft);color:var(--warn)}
+.job.lvl-ok .jdot{background:var(--ok-soft);color:var(--ok)}
+.job.lvl-bad{box-shadow:inset 4px 0 0 var(--bad)}
+.job .jt{flex:1 1 280px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.job .jt b{font-size:15.5px;font-weight:600}
+.job .jt span{color:var(--muted);font-size:13.5px}
+.job .jt span a{color:inherit;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+.job .jt span a:hover{color:var(--accent)}
+.job .jb{display:flex;gap:8px;margin-left:auto}
+.job.lvl-ok .jt b{font-weight:500}
+.homemore{align-items:start}
+.home3 .start{min-height:0}
+
+.headact{gap:8px;flex-wrap:wrap;justify-content:flex-end}
+
+.statusline{position:sticky;bottom:0;z-index:15;margin-top:auto;display:flex;flex-wrap:wrap;gap:4px 18px;align-items:center;padding:7px 24px calc(7px + env(safe-area-inset-bottom,0px));background:var(--surface);border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+.statusline.bad{background:var(--bad-soft);border-top-color:color-mix(in srgb,var(--bad) 40%,var(--line))}
+.statusline .si{display:inline-flex;align-items:center;gap:6px;color:inherit;text-decoration:none;white-space:nowrap}
+.statusline a.si:hover{color:var(--ink)}
+.statusline .sdot{width:8px;height:8px;border-radius:50%;background:var(--faint);flex:none}
+.statusline .s-ok .sdot{background:var(--ok)} .statusline .s-run .sdot{background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.statusline .s-warn .sdot{background:var(--warn)} .statusline .s-bad .sdot{background:var(--bad)} .statusline .s-info .sdot{background:var(--accent)}
+.statusline .s-bad{color:var(--bad);font-weight:600}
+.statusline .sfix{margin-left:2px;border:1px solid var(--line);background:var(--surface);color:var(--accent);border-radius:7px;padding:1px 8px;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none}
+.statusline .s-bad .sfix{background:var(--bad);border-color:var(--bad);color:#fff}
+body.framed .statusline{position:static}
+
+.capgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;padding:16px 18px}
+.capcard{display:flex;flex-direction:column;gap:8px;text-align:left;padding:0 0 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);cursor:pointer;overflow:hidden;transition:border-color .15s,transform .15s}
+.capcard:hover{border-color:var(--accent);transform:translateY(-1px)}
+.capcard .capimg{display:grid;place-items:center;aspect-ratio:4/3;max-width:100%;background:var(--sunk);border-bottom:1px solid var(--line);overflow:hidden}
+.capcard .capimg b{font-family:var(--f-display);font-size:34px;color:var(--faint)}
+.capcard .capimg img{width:100%;height:100%;object-fit:cover;object-position:top}
+.capcard .capt{display:flex;flex-direction:column;gap:1px;padding:0 12px;min-width:0;font-size:12.5px}
+.capcard .capt b{font-size:13.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.capcard .capsite{font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.capcard .tag{margin:0 12px;align-self:flex-start}
+
+.caprow{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.caprow:last-child{border-bottom:0}
+.caprow .thumb{width:72px;height:52px;object-fit:cover;border-radius:8px;background:var(--sunk);flex:none}
+.caprow .curl{display:flex;align-items:center;gap:4px;font-size:12.5px;max-width:100%;overflow:hidden}
+.caprow .curl span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.altn{margin-top:3px;align-self:flex-start;font-size:11.5px}
+@media (max-width:640px){.job{padding:12px 16px}.job .jb{margin-left:46px}.statusline{padding-left:16px;padding-right:16px}}
+.toast{bottom:calc(52px + env(safe-area-inset-bottom,0px))}
+.banner.warn{background:var(--warn-soft);color:var(--ink);border:1px solid color-mix(in srgb,var(--warn) 45%,var(--line))}
+a.banner{text-decoration:none}

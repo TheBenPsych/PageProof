@@ -237,3 +237,50 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(async () => {
     if (Date.now() - last > 864e5) { await FC.pruneKept(); await api.storage.local.set({ fcPruned: Date.now() }); }
   } catch (e) { /* next time */ }
 }, 15000));
+
+// ---------------------------------------------------------------- the status line (4.14)
+// One thin line at the bottom of every PageProof page: is the photos folder connected, is Keep
+// searching running, are the search sites working, is an update ready. Anything stopped turns
+// red with a Fix it button, so you never have to go looking for what is wrong.
+let STATUS_T = null, STATUS_HTML = '';
+async function ppStatusLine() {
+  const el = $id('statusLine');
+  if (!el) return;
+  const items = [];
+  try {
+    const d = await FC.drive();
+    const st = await api.storage.local.get(['fcStatus', 'fcPause', 'fcDriveOffline', 'fcToday']);
+    if (!d.done) items.push(['grey', 'Photos not connected', { href: '#connect', label: 'Connect' }]);
+    else {
+      const ds = st.fcDriveOffline ? 'offline' : await RS_LATE(FC.driveStateSoft(false), 2000, 'granted');
+      if (ds === 'offline') items.push(['bad', 'Can\'t reach Google Drive', { href: '#keep', label: 'Fix it' }]);
+      else if (ds === 'prompt') items.push(['warn', 'Drive needs one click', { act: 'driveallow', label: 'Allow' }]);
+      else items.push(['ok', 'Drive connected']);
+      const k = await FC.keep(), s = st.fcStatus;
+      const alive = s && Date.now() - s.beat < 90000;
+      const today = st.fcToday && st.fcToday.day === new Date().toDateString() ? st.fcToday : { searched: 0, found: 0 };
+      if (!k.on) items.push(['grey', 'Keep searching is off', { href: '#keep', label: 'Turn on' }]);
+      else if (st.fcPause) items.push(['warn', 'Searching paused', { href: '#keep', label: 'Open' }]);
+      else if (s && s.state === 'closed') items.push(['bad', 'Keep searching stopped', { act: 'keepshow', label: 'Fix it' }]);
+      else items.push([alive ? 'run' : 'grey', (alive ? 'Searching' : 'Starting') + ` · ${today.searched} today${today.found ? ', ' + today.found + ' new' : ''}`, { href: '#keep' }]);
+      const broken = Object.keys(await FC.brokenEngines());
+      if (broken.length) items.push(['bad', broken.map(e => FC.ENGINE_NAME[e]).join(', ') + ' resting', { href: '#health', label: 'Fix it' }]);
+      else items.push(['ok', 'Search sites working']);
+    }
+    const up = typeof ppUpState === 'function' ? await ppUpState() : null;
+    if (up && up.has) items.push(['info', 'Update ' + up.latest + ' ready', { href: '#health', act: 'upgo', label: 'Update' }]);
+  } catch (e) { return; }
+  const bad = items.some(i => i[0] === 'bad');
+  const html = items.map(([lvl, text, b]) => {
+    const t = `<span class="sdot"></span><span>${esc(text)}</span>`;
+    if (b && b.label) return `<span class="si s-${lvl}">${t}${b.href ? `<a class="sfix" href="${b.href}"${b.act ? ` data-act="${b.act}"` : ''}>${b.label}</a>` : `<button class="sfix" data-act="${b.act}">${b.label}</button>`}</span>`;
+    return b && b.href ? `<a class="si s-${lvl}" href="${b.href}">${t}</a>` : `<span class="si s-${lvl}">${t}</span>`;
+  }).join('');
+  if (html !== STATUS_HTML) { STATUS_HTML = html; el.innerHTML = html; }
+  el.classList.toggle('bad', bad);
+  el.hidden = !items.length;
+}
+function ppStatusSoon() { clearTimeout(STATUS_T); STATUS_T = setTimeout(ppStatusLine, 800); }
+api.storage.onChanged.addListener(ch => { if (ch.fcStatus || ch.fcPause || ch.fcDriveOffline || ch.fcKeep || ch.fcEngines || ch.ppUpdate || ch.fcNeedsAllow || ch.fcDrive || ch.fcToday) ppStatusSoon(); });
+setInterval(ppStatusLine, 30000);
+ppStatusSoon();

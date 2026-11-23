@@ -363,7 +363,7 @@ async function drawer(list) {
   const kind = kinds[FC.baseOf(c.site)] || '';
   const pub = PP_CHECKS.pubDate(p);
   const hits = PP_CHECKS.rules(c, kind, c.pf);
-  const capturedAt = PP_CHECKS.captureOf(logR.log, c.url);
+  const capturedAt = [c.url, ...(c.alts || [])].map(u => PP_CHECKS.captureOf(logR.log, u)).find(Boolean) || c.packAt || null;
   if (!c.pf && !PF_BUSY.has(c.id)) readTheirPage(c).then(() => { if (state.open === c.id) render(true); }).catch(() => {});
   const ck = checksParts(c, reg, kind, hits, pub, capturedAt);
   const sz = c.w && p && p.w ? (Math.abs(c.w / c.h - p.w / p.h) / (p.w / p.h) > 0.06 ? 'cropped' : (c.w * c.h) / (p.w * p.h) > 1.15 ? 'bigger than your client\'s' : (c.w * c.h) / (p.w * p.h) < 0.85 ? 'smaller' : 'same size') : '';
@@ -428,6 +428,7 @@ async function drawer(list) {
     <dl class="facts">
       ${c.title ? `<dt>Title</dt><dd>${esc(c.title)}</dd>` : ''}
       <dt>Page</dt><dd class="mono" style="font-size:12px;overflow-wrap:anywhere"><a href="${safeUrl(c.url)}" target="_blank" rel="noreferrer">${esc(c.url)}</a></dd>
+      ${c.alts && c.alts.length ? `<dt>Same page at</dt><dd class="mono altlist" style="font-size:12px;overflow-wrap:anywhere">${c.alts.map(u => `<a href="${safeUrl(u)}" target="_blank" rel="noreferrer">${esc(u)}</a>`).join('<br>')}<div class="faint" style="font-family:inherit;font-size:12px">Other addresses for this one page (phone version, share links). One answer covers them all.</div></dd>` : ''}
       <dt>Hidden data</dt><dd>${c.credit ? CREDIT[c.credit] : `<button class="btn ghost sm" data-act="checkcredit">Check the hidden data</button>`}</dd>
     </dl>
     ${ck.page}
@@ -500,7 +501,7 @@ function copyRow(c) {
     <div class="cpair" data-hover="${esc(c.id)}"><img class="ours" src="${oursImg(p)}" alt="" loading="lazy"><img class="thumb" src="${theirImg(c)}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>
     <div class="cinfo">
       ${isSoc(c) ? socLine(c) : `<div class="l1"><b>${esc(c.site)}</b>${done ? tagFor(c) : ''}${embedTag(c)}${sigIcons(c)}</div>`}
-      <a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink" title="Open this page in a new tab"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>
+      <a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink" title="Open this page in a new tab"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>${c.alts && c.alts.length ? `<span class="tag grey altn" title="${esc(c.alts.join('\n'))}" data-gloss="Same page">+${c.alts.length} ${c.alts.length === 1 ? 'address' : 'addresses'}</span>` : ''}
       <div class="l3">${esc(c.photoName)}<span class="l3x">${isSoc(c) && c.acct ? ' · ' + esc(c.site) : ''}${c.pct >= 0 && c.pct != null ? ` · <b class="num" data-gloss="Lines up">${c.pct}%</b> lines up` : ''} · ${esc(FC.USE[c.use][0])}${c.country ? ' · ' + esc(c.country) : ''} · found ${shortDate(c.firstSeen).toLowerCase()}</span></div>
     </div>
     <div class="ccols">${cell('pct', 'Lines up', luBar(c.pct))}${cell('client', 'Client', c.clientName ? `<span title="${esc(c.clientName)}">${esc(c.clientName)}</span>` : '<span style="color:var(--warn);font-weight:600">Unknown</span>')}${K.dmg ? (dmgCell(c) ? `<span class="cc-dmg"><i>Damages</i>${dmgCell(c)}</span>` : '<span class="cc-dmg" aria-hidden="true"></span>') : ''}${cell('use', 'Use', `<span title="${esc(FC.USE[c.use][0])}">${esc(FC.USE[c.use][0])}</span>`)}${cell('country', 'Country', `<span>${esc(c.country || 'Not known')}</span>`)}${cell('found', 'Found', `<span>${esc(shortDate(c.firstSeen))}</span>`)}</div>
@@ -1201,7 +1202,7 @@ async function takeReportReq() {
     await api.storage.local.remove('fcReportReq');
     await loadFC();
     const c = FCD.copies.find(x => x.id === q.id);
-    if (c) await matchReport(c, q.caseNo || '');
+    if (c) { await FC.markCaptured(c.id).catch(() => {}); await matchReport(c, q.caseNo || ''); }
   };
   if (navigator.locks) await navigator.locks.request('pp-report-req', run); else await run();
 }
