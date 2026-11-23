@@ -145,7 +145,7 @@ function acctBadges(c) {
   const i = infoOf(c);
   if (!i || !i.ok) return '';
   const v = { blue: '<span class="vchk" title="Verified">✓ Verified</span>', gold: '<span class="vchk gold" title="Verified organisation">✓ Organisation</span>', grey: '<span class="vchk grey" title="Verified government account">✓ Government</span>' }[i.verified] || '';
-  const t = i.type ? `<span class="atype${i.type === 'Business' || i.type === 'Organisation' ? ' biz' : ''}${i.typeSure === 'guess' ? ' guess' : ''}" title="${esc(i.typeSure === 'guess' ? 'A guess from: ' + (i.signs || []).join(', ') : 'Read from the profile' + (i.category ? ': ' + i.category : ''))}">${esc(i.type)}${i.typeSure === 'guess' ? ' (guess)' : ''}</span>` : '';
+  const t = i.type && !(i.type === 'Organisation' && (i.verified === 'gold' || i.verified === 'grey')) ? `<span class="atype${i.type === 'Business' || i.type === 'Organisation' ? ' biz' : ''}${i.typeSure === 'guess' ? ' guess' : ''}" title="${esc(i.typeSure === 'guess' ? 'A guess from: ' + (i.signs || []).join(', ') : 'Read from the profile' + (i.category ? ': ' + i.category : ''))}">${esc(i.type)}${i.typeSure === 'guess' ? ' (guess)' : ''}</span>` : '';
   const f = i.followers != null ? `<span class="afol num" title="${esc(i.followers.toLocaleString() + ' ' + i.fw + ' on ' + shortDate(i.at))}">${PP_SOCIAL.shortNum(i.followers)} ${esc(i.fw)}</span>` : '';
   const co = i.company ? `<span class="aco" title="Company named on the account">${esc(i.company)}</span>` : '';
   return v + t + f + co;
