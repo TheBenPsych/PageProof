@@ -28,7 +28,7 @@ async function undoAt(i) {
   if (!h) return;
   HIST.splice(i, 1);
   await h.undo();
-  FCD = null;
+  if (typeof dropFC === 'function') dropFC();
   toast('Undone: ' + h.label + '.');
   render(true);
 }

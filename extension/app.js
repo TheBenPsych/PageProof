@@ -39,13 +39,21 @@ function showLive(id) {
   box.style.display = id ? '' : 'none'; view.style.display = id ? 'none' : '';
 }
 
-async function render(keep) {
+// Only the newest redraw is put on screen. Drawing a page can take a moment (reading thousands of
+// copies), so a redraw that started earlier, for example one from Keep searching, could finish
+// after the one that follows a click and put old rows back (4.8.5). An older one now waits for the
+// newest instead.
+let RENDER_N = 0, RENDER_P = null;
+function render(keep) { const me = ++RENDER_N; const p = render1(keep, me); RENDER_P = p; return p; }
+async function render1(keep, me) {
+  const old = () => me !== RENDER_N;
   let r = route();
   if (!V[r] && !FRAMES[r]) r = 'home';
   ppRenderSide(r);
   document.getElementById('crumb').innerHTML = `<b>PageProof</b> › ${PP_CRUMBS[r] || ''}`;
   document.body.classList.toggle('framed', !!FRAMES[r]);
   if (V[r] && V[r].guard) { const g = await V[r].guard(); if (g) r = g; }
+  if (old()) return RENDER_P;
   state.shown = r; // the page really on screen (a guard can show setup under another page's address)
   if (r === 'results') {
     const id = routeArg('job') || state.liveJob;
@@ -67,6 +75,7 @@ async function render(keep) {
     const sy = window.scrollY, main = document.querySelector('.main'), my = main ? main.scrollTop : 0;
     const inner = keep ? [...view.querySelectorAll(SCROLLERS)].map(e => [e.scrollTop, e.scrollLeft]) : [];
     const html = await V[r]();
+    if (old()) return RENDER_P;
     view.innerHTML = html;
     if (typeof ppLoadPics === 'function') ppLoadPics(view);
     if (keep) {

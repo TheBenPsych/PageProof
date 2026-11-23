@@ -32,9 +32,26 @@ function regSync(p, regs) {
   while (rel && !(va && app)) { const r = regs[rel]; if (r) { va = va || r.va; app = app || r.app; } rel = rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : ''; }
   return va || app ? { va, app } : null;
 }
-async function loadFC() {
-  if (FCD && !FCD_STALE) return FCD;
-  FCD_STALE = false;
+// Reading the copies can take seconds in a big library. Only one read runs at a time, and a read
+// that started before an answer or a hide on this page is thrown away and done again, so it can
+// never put an answered row back on the list (4.8.5). Until then FCD keeps the last copies, so a
+// click in between still finds its copy.
+let FCD_GEN = 0, FCD_P = null;
+function dropFC() { FCD_GEN++; FCD_STALE = true; }
+function loadFC() {
+  if (FCD && !FCD_STALE) return Promise.resolve(FCD);
+  if (!FCD_P) FCD_P = (async () => {
+    try {
+      for (;;) {
+        const gen = FCD_GEN; FCD_STALE = false;
+        const d = await readFC();
+        if (gen === FCD_GEN) { FCD = d; return d; }
+      }
+    } finally { FCD_P = null; }
+  })();
+  return FCD_P;
+}
+async function readFC() {
   const [copies, clients, countries, sites] = [await FC.allCopies(), await FC.DB.all('clients'), await FC.hiddenCountries(), await FC.DB.all('sites')];
   const ids = new Set(copies.map(c => c.photo));
   const photos = new Map();
@@ -43,6 +60,7 @@ async function loadFC() {
   const facts = new Map(sites.map(f => [f.site, f]));
   const regs = (await FC.meta.get('regs')) || {};
   for (const c of copies) {
+    if (PEND.has(c.id)) c.status = PEND.get(c.id);   // answered a moment ago, still being saved
     if (!STATUS[c.status]) c.status = 'new';     // a line edited by hand in found-copies.txt
     c.risk = FC.riskOf(c, facts.get(c.site));
     c.use = c.use || FC.useOf(c);
@@ -70,10 +88,9 @@ async function loadFC() {
     c.repeat = Math.max(bySite, byOwner, 0);
     c.repeatWho = byOwner > bySite ? o.name : c.site;
   }
-  FCD = { copies, photos, clients: new Map(clients.map(c => [c.name, c])), countries, facts, owners: ownerList, ownerOf };
-  return FCD;
+  return { copies, photos, clients: new Map(clients.map(c => [c.name, c])), countries, facts, owners: ownerList, ownerOf };
 }
-const siteHidden = c => RS_LISTS.isHidden(c.site, c.url);
+const siteHidden = c => RS_LISTS.isHidden(c.site, c.url) || (PEND_ARR.length > 0 && !!RS_SITE.entryFor(c.site, c.url, PEND_ARR));
 const repeatTag = c => c.repeat && c.status === 'new' ? `<span class="tag bad" style="font-size:11.5px" title="You already marked ${c.repeat} ${c.repeat === 1 ? 'copy' : 'copies'} on ${esc(c.repeatWho)} as Stolen">${c.repeat} stolen before</span>` : '';
 const actScore = c => (c.status === 'new' || c.status === 'stolen' ? 40 : 0) + (c.repeat && c.status === 'new' ? 30 : 0) + (c.online === 'back' ? 45 : c.online === 'up' ? 20 : 0) + (c.use === 'shop' ? 20 : 0) + (c.credit === 'removed' ? 12 : 0) + (c.risk.level === 'sus' ? -6 : 0) + (c.pct || 0) / 10;
 const onlineText = c => c.online === 'back' ? 'Back online' + (c.backAt ? ' ' + shortDate(c.backAt) : '') : c.online === 'gone' ? 'Gone' + (c.goneAt ? ' since ' + shortDate(c.goneAt) : '') : 'Still up';
@@ -208,7 +225,7 @@ async function readTheirPage(c, again) {
     const pf = await PP_CHECKS.readPage(c);
     const cc = await FC.DB.get('copies', c.id);
     if (cc) { cc.pf = pf; await FC.DB.put('copies', cc); }
-    c.pf = pf; FCD = null;
+    c.pf = pf; dropFC();
     return pf;
   } finally { PF_BUSY.delete(c.id); }
 }
@@ -474,6 +491,7 @@ function copyRow(c) {
       <button class="btn sm icon" data-act="rowmenu" data-v="${esc(c.id)}" aria-label="More choices for ${esc(c.site)}">${ic('dots', 18)}</button></div></div>`;
 }
 V.found = async () => {
+  const me = RENDER_N;      // a newer redraw started meanwhile: this one is thrown away, so it must not change LIST
   await loadFC();
   if (!state.fCols || !state.dView) {
     const pr = await api.storage.local.get(['fcCols', 'fcDView']).catch(() => ({}));
@@ -517,7 +535,7 @@ V.found = async () => {
         : `<span class="oav grey">?</span><div style="min-width:0"><b class="gname">Other sites</b><div class="faint">${plural(sites.size, 'site')} with no shared owner found</div></div>`, xs, true]);
     }
   } else groups.push(['', '', rows, false]);
-  LIST = [];
+  const list = [];
   let shown = 0, body = '';
   const foldSites = state.fView !== 'site' && state.fView !== 'owner';
   for (const [k, html, xs, fold] of groups) {
@@ -536,7 +554,7 @@ V.found = async () => {
     for (const [b, cs] of clusters) {
       if (shown >= state.more) break;
       const mk = 'm:' + k + '|' + b, wide = cs.length < 2 || state.exp.includes(mk) || cs.some(x => x.id === state.open);
-      for (const c of (wide ? cs : cs.slice(0, 1))) { if (shown >= state.more) break; body += copyRow(c); LIST.push(c.id); shown++; }
+      for (const c of (wide ? cs : cs.slice(0, 1))) { if (shown >= state.more) break; body += copyRow(c); list.push(c.id); shown++; }
       if (cs.length > 1) {
         const fresh = cs.filter(x => x.status === 'new').map(x => x.id);
         if (!wide) shown += cs.length - 1;
@@ -632,7 +650,7 @@ V.found = async () => {
   </section>
   ${state.sis ? `<div class="bulk sis"><div style="flex:1 1 300px;min-width:0"><b>Same ${state.sis.same ? 'photo' : 'article'} on ${plural(state.sis.sites.length, 'sister site')} of ${esc(state.sis.owner)}</b><div style="font-size:13px;opacity:.85;overflow-wrap:anywhere">${esc(state.sis.sites.slice(0, 5).join(', '))}${state.sis.sites.length > 5 ? '…' : ''}</div></div><button class="btn" data-act="sisall">Mark ${state.sis.ids.length === 1 ? 'it' : 'all ' + state.sis.ids.length} stolen too</button><button class="btn" data-act="sisno">Not now</button></div>` : ''}
   ${state.picked.length ? `<div class="bulk"><b>${state.picked.length} picked</b><button class="btn" style="margin-left:auto" data-act="bulkhide">Hide these sites</button><button class="btn" data-act="bulk" data-v="removed">Remove</button><button class="btn" data-act="bulk" data-v="licensed">Mark licensed</button><button class="btn" data-act="bulk" data-v="stolen">Mark stolen</button><button class="btn" data-act="clearpick">Clear</button></div>` : ''}
-  ${await drawer(LIST)}`;
+  ${await drawer(me === RENDER_N ? (LIST = list) : list)}`;
 };
 // Grouped by site, each site gets one strip: where it is, what PageProof knows, and buttons
 // that act on the whole site.
@@ -681,8 +699,41 @@ function bindHover() {
 
 // ---------------------------------------------------------------- answers, with undo
 const VERB = { stolen: 'marked stolen', licensed: 'marked licensed', removed: 'removed', skip: 'skipped', new: 'put back as new' };
+// 4.8.5: an answer or a hide takes the row off the list the moment it's clicked. Saving it can
+// take a second or two in a big library, so until it's saved these remember it, and every redraw
+// in between already leaves the row out.
+const PEND = new Map();          // copy id -> its new answer
+const PEND_HIDE = new Set();     // hidden-site entries
+let PEND_ARR = [];               // the same, as a list for RS_SITE.entryFor (a new list each change)
+const pendHide = (entries, on) => { for (const e of entries) on ? PEND_HIDE.add(e) : PEND_HIDE.delete(e); PEND_ARR = [...PEND_HIDE]; };
+// Answers and hides are saved one after the other, in the order they were clicked. None is
+// dropped, and two never write the hidden-sites list at the same time.
+let ANS_Q = Promise.resolve();
+function inTurn(fn) {
+  ANS_Q = ANS_Q.then(fn).catch(e => { console.error(e); toast('That could not be saved: ' + ((e && e.message) || e) + '. Try again.'); });
+  return ANS_Q;
+}
+// Rows that no longer belong in the list on screen leave it now (the next redraw agrees).
+function dropRows(ids) {
+  if (!FCD || state.shown !== 'found') return;
+  const byId = new Map(FCD.copies.map(c => [c.id, c]));
+  for (const r of view.querySelectorAll('.frow[data-act="openrow"]')) {
+    const c = byId.get(r.dataset.v);
+    if (c && (!ids || ids.has(c.id)) && !(visible(c) && passMain(c) && passStatus(c))) r.remove();
+  }
+}
+function markNow(ids, status) {
+  if (status === 'skip') return;
+  const set = new Set(ids);
+  for (const id of ids) PEND.set(id, status);
+  if (FCD) for (const c of FCD.copies) if (set.has(c.id)) c.status = status;
+  dropRows(set);
+}
 async function answerCopies(ids, status, label) {
-  const undo = await FC.answer(ids, status === 'new' ? 'new' : status);
+  markNow(ids, status);
+  let undo;
+  try { undo = await FC.answer(ids, status === 'new' ? 'new' : status); }
+  finally { for (const id of ids) if (PEND.get(id) === status) PEND.delete(id); dropFC(); }
   // Licensed: this site may use this client's photos, so later copies there are licensed too.
   let undoLic = null;
   if (status === 'licensed') {
@@ -696,7 +747,6 @@ async function answerCopies(ids, status, label) {
   }
   const h = { label, undo: async () => { await undo(); if (undoLic) await undoLic(); }, open: ids.length === 1 ? ids[0] : '' };
   HIST.push(h);
-  FCD = null;
   return h;
 }
 // "Remove" teaches the photo check quietly: the numbers are kept to tune it later.
@@ -710,8 +760,8 @@ async function learn(c) {
 async function undoLast() {
   const h = HIST.pop();
   if (!h) return toast('Nothing to undo.');
-  await h.undo();
-  FCD = null;
+  await inTurn(() => h.undo());
+  dropFC();
   if (h.open) state.open = h.open;
   toast('Undone: ' + h.label + '. It\'s back the way it was.');
   render(true);
@@ -719,35 +769,44 @@ async function undoLast() {
 function toastUndo(msg) { toast(msg, undoLast); }
 
 // In the details panel: answer, then open the next copy in the same list.
-let answering = false;    // a second key press while the first answer is still being saved is ignored
+let answering = false;    // One at a time: a second key press while the first answer is still being saved is ignored
+const DRAWER_BUSY = new Set();   // the open copy is being answered: a second key press for it is ignored
 async function drawerVerdict(status) {
   const id = state.open;
   const c = FCD && FCD.copies.find(x => x.id === id);
-  if (!c || answering) return;
-  answering = true;
-  try { await drawerVerdict2(status, id, c); } finally { answering = false; }
+  if (!c || DRAWER_BUSY.has(id)) return;
+  DRAWER_BUSY.add(id);
+  try { await drawerVerdict2(status, id, c); } finally { DRAWER_BUSY.delete(id); }
 }
 async function drawerVerdict2(status, id, c) {
   if (status === 'stolen') { status = await ruleGate(c); if (!status) return; }
-  const i = LIST.indexOf(id);
-  const nextId = LIST.slice(i + 1).find(x => x !== id) || LIST.slice(0, Math.max(0, i)).reverse().find(x => x !== id) || '';
+  const i = LIST.indexOf(id), free = x => x !== id && !PEND.has(x);
+  const nextId = LIST.slice(i + 1).find(free) || LIST.slice(0, Math.max(0, i)).reverse().find(free) || '';
   const sis = status === 'stolen' ? sistersOf(c) : null;
-  await answerCopies([id], status, c.site + ' ' + VERB[status]);
-  state.sis = sis;
-  state.open = nextId;
-  toastUndo(c.site + ' ' + VERB[status] + (status === 'stolen' ? '. Save its Evidence report when you\'re ready.' : '.') + (nextId ? ' Next copy opened.' : ''));
+  markNow([id], status);
+  await inTurn(async () => {
+    await answerCopies([id], status, c.site + ' ' + VERB[status]);
+    state.sis = sis;
+    if (state.open === id) state.open = nextId;
+    toastUndo(c.site + ' ' + VERB[status] + (status === 'stolen' ? '. Save its Evidence report when you\'re ready.' : '.') + (nextId ? ' Next copy opened.' : ''));
+  });
   await render(true);
 }
 
 async function hideSite(entry, label) {
   const was = state.open, cs = FCD ? FCD.copies : [];
-  await RS_LISTS.load(); await RS_LISTS.add('hidden', entry);
-  if (!state.recentHides.includes(entry)) state.recentHides.push(entry);
+  const e = RS_SITE.tidy(entry) || entry;
+  pendHide([e], true);
+  dropRows(null);
   // 4.7: if the open copy is now hidden, the next copy in the list opens (like Stolen or Remove).
-  const gone = id => { const x = cs.find(y => y.id === id); return !x || RS_LISTS.isHidden(x.site, x.url); };
+  const gone = id => { const x = cs.find(y => y.id === id); return !x || siteHidden(x) || PEND.has(id); };
   if (was && gone(was)) { const i = LIST.indexOf(was); state.open = LIST.slice(i + 1).find(id => !gone(id)) || LIST.slice(0, Math.max(0, i)).reverse().find(id => !gone(id)) || ''; }
-  FCD = null;
-  HIST.push({ label: (label || entry) + ' hidden', undo: async () => { await RS_LISTS.load(); await RS_LISTS.remove('hidden', entry); }, open: was || undefined });
+  await inTurn(async () => {
+    try { await RS_LISTS.load(); await RS_LISTS.add('hidden', entry); } finally { pendHide([e], false); dropFC(); }
+  });
+  if (!RS_LISTS.hidden.includes(e)) return;           // not saved (the message says why)
+  if (!state.recentHides.includes(e)) state.recentHides.push(e);
+  HIST.push({ label: (label || entry) + ' hidden', undo: async () => { await RS_LISTS.load(); await RS_LISTS.remove('hidden', e); }, open: was || undefined });
   toastUndo(entry + ' hidden. It never shows again in any search.');
 }
 
@@ -790,19 +849,28 @@ Object.assign(ACTS, {
   clearpick: () => { state.picked = []; render(true); },
   bulk: async v => {
     const ids = state.picked.slice();
-    await answerCopies(ids, v, plural(ids.length, 'copy', 'copies') + ' ' + VERB[v]);
+    if (!ids.length) return;
     state.picked = [];
-    toastUndo(plural(ids.length, 'copy', 'copies') + ' ' + VERB[v] + '.');
+    markNow(ids, v);
+    await inTurn(async () => {
+      await answerCopies(ids, v, plural(ids.length, 'copy', 'copies') + ' ' + VERB[v]);
+      toastUndo(plural(ids.length, 'copy', 'copies') + ' ' + VERB[v] + '.');
+    });
     render(true);
   },
   bulkhide: async () => {
-    await loadFC();
+    if (!FCD) await loadFC();
     const sites = [...new Set(state.picked.map(id => (FCD.copies.find(c => c.id === id) || {}).site).filter(Boolean))];
-    await RS_LISTS.load();
-    for (const s of sites) { await RS_LISTS.add('hidden', s); if (!state.recentHides.includes(s)) state.recentHides.push(s); }
-    HIST.push({ label: plural(sites.length, 'site') + ' hidden', undo: async () => { await RS_LISTS.load(); for (const s of sites) await RS_LISTS.remove('hidden', s); } });
-    state.picked = []; FCD = null;
-    toastUndo(plural(sites.length, 'site') + ' hidden.');
+    state.picked = [];
+    pendHide(sites, true); dropRows(null);
+    await inTurn(async () => {
+      try {
+        await RS_LISTS.load();
+        for (const s of sites) { await RS_LISTS.add('hidden', s); if (!state.recentHides.includes(s)) state.recentHides.push(s); }
+      } finally { pendHide(sites, false); dropFC(); }
+      HIST.push({ label: plural(sites.length, 'site') + ' hidden', undo: async () => { await RS_LISTS.load(); for (const s of sites) await RS_LISTS.remove('hidden', s); } });
+      toastUndo(plural(sites.length, 'site') + ' hidden.');
+    });
     render(true);
   },
   gtoggle: v => { const i = state.exp.indexOf(v); if (i >= 0) state.exp.splice(i, 1); else state.exp.push(v); render(true); },
@@ -833,33 +901,42 @@ Object.assign(ACTS, {
   },
   openlink: () => {},                       // a plain link inside a row: just let it open
   // An answer straight from the row.
+  // 4.8.5: the row leaves at once; the answer is saved in turn (a quick click on the next row is never lost).
   rowans: async v => {
     const i = v.indexOf('|'), id = v.slice(i + 1);
     let status = v.slice(0, i);
     if (state.open === id && status !== 'new') return drawerVerdict(status);
     const c = FCD && FCD.copies.find(x => x.id === id);
-    if (!c || answering) return;
-    answering = true;
-    try {
-      if (status === 'stolen') { status = await ruleGate(c); if (!status) return; }
-      const sis = status === 'stolen' ? sistersOf(c) : null;
+    if (!c || PEND.has(id)) return;
+    if (status === 'stolen') { status = await ruleGate(c); if (!status) return; }
+    const sis = status === 'stolen' ? sistersOf(c) : null;
+    markNow([id], status);
+    await inTurn(async () => {
       await answerCopies([id], status, c.site + ' ' + VERB[status]);
       state.sis = sis;
       toastUndo(c.site + ' ' + VERB[status] + '.');
-      await render(true);
-    } finally { answering = false; }
+    });
+    await render(true);
   },
   // Every new copy from one site, in one go.
   siteall: async v => {
     const [status, ...ids] = v.split('\n');
-    await answerCopies(ids, status, plural(ids.length, 'copy', 'copies') + ' ' + VERB[status]);
-    toastUndo(plural(ids.length, 'copy', 'copies') + ' ' + VERB[status] + '.'); render(true);
+    markNow(ids, status);
+    await inTurn(async () => {
+      await answerCopies(ids, status, plural(ids.length, 'copy', 'copies') + ' ' + VERB[status]);
+      toastUndo(plural(ids.length, 'copy', 'copies') + ' ' + VERB[status] + '.');
+    });
+    render(true);
   },
   sisall: async () => {
     const s = state.sis; state.sis = null;
     if (!s) return;
-    await answerCopies(s.ids, 'stolen', plural(s.ids.length, 'sister-site copy', 'sister-site copies') + ' marked stolen');
-    toastUndo(plural(s.ids.length, 'copy', 'copies') + ' on ' + s.owner + '\'s other sites marked stolen.'); render(true);
+    markNow(s.ids, 'stolen');
+    await inTurn(async () => {
+      await answerCopies(s.ids, 'stolen', plural(s.ids.length, 'sister-site copy', 'sister-site copies') + ' marked stolen');
+      toastUndo(plural(s.ids.length, 'copy', 'copies') + ' on ' + s.owner + '\'s other sites marked stolen.');
+    });
+    render(true);
   },
   sisno: () => { state.sis = null; render(true); },
   // The ⋯ menu on a row, and in the details panel.
@@ -914,13 +991,13 @@ Object.assign(ACTS, {
     const i = LIST.indexOf(c.id);
     const nextId = LIST.slice(i + 1).find(id => { const x = FCD.copies.find(y => y.id === id); return x && FC.baseOf(x.site) !== base; }) || '';
     HIST.push({ label: base + ' approved' + (who ? ' for ' + who : ' for every client'), undo, open: c.id });
-    FCD = null; state.open = nextId;
+    dropFC(); state.open = nextId;
     toastUndo(base + ' is approved' + (who ? ' for ' + who : ' for every client') + '. Its copies are marked Licensed.');
     render(true);
   },
   openhide: () => { ACTS.dtab('site'); const d = document.getElementById('hidebox'); if (d) { d.open = true; d.scrollIntoView({ block: 'center', behavior: 'smooth' }); } },
   showsite: async v => {
-    await RS_LISTS.load(); await RS_LISTS.remove('hidden', v); FCD = null;
+    await RS_LISTS.load(); await RS_LISTS.remove('hidden', v); dropFC();
     HIST.push({ label: v + ' shown again', undo: async () => { await RS_LISTS.load(); await RS_LISTS.add('hidden', v); } });
     toastUndo(v + ' shows again.'); render(true);
   },
@@ -928,12 +1005,12 @@ Object.assign(ACTS, {
     const list = await FC.hiddenCountries();
     if (!list.includes(v)) { await FC.setHiddenCountries([...list, v]); }
     HIST.push({ label: v + ' hidden', undo: async () => FC.setHiddenCountries((await FC.hiddenCountries()).filter(x => x !== v)) });
-    FCD = null; state.open = ''; toastUndo('Copies on sites from ' + v + ' are hidden.'); render(true);
+    dropFC(); state.open = ''; toastUndo('Copies on sites from ' + v + ' are hidden.'); render(true);
   },
   showcountry: async v => {
     await FC.setHiddenCountries((await FC.hiddenCountries()).filter(x => x !== v));
     HIST.push({ label: v + ' shown again', undo: async () => FC.setHiddenCountries([...(await FC.hiddenCountries()), v]) });
-    FCD = null; toastUndo(v + ' shows again.'); render(true);
+    dropFC(); toastUndo(v + ' shows again.'); render(true);
   },
   putback: async () => { const c = FCD.copies.find(x => x.id === state.open); await answerCopies([state.open], 'new', (c ? c.site : 'Copy') + ' put back'); toastUndo('Put back as new.'); render(true); },
   changeans: async () => { const c = FCD.copies.find(x => x.id === state.open); await answerCopies([state.open], 'new', (c ? c.site : 'Copy') + ' answer cleared'); toastUndo('Answer cleared. Choose a new one.'); render(true); },
@@ -948,7 +1025,7 @@ Object.assign(ACTS, {
     if (!c) return;
     toast('Checking ' + c.site + '…');
     const r = await FC.checkOnline(c);
-    FCD = null; toast(r.online === 'gone' ? 'Gone: ' + (r.onlineWhy || 'the photo is not on the page') : r.online === 'back' ? 'Back online!' : 'Still online.'); render(true);
+    dropFC(); toast(r.online === 'gone' ? 'Gone: ' + (r.onlineWhy || 'the photo is not on the page') : r.online === 'back' ? 'Back online!' : 'Still online.'); render(true);
   },
   checkcredit: async () => {
     const c = await FC.DB.get('copies', state.open);
@@ -962,7 +1039,7 @@ Object.assign(ACTS, {
       const res = PP_EVIDENCE.credit(om, theirs && theirs.meta && theirs.meta.summary);
       if (theirs && theirs.bmp.close) theirs.bmp.close();
       if (!res) { toast(om && (om.copyright || om.creator) ? 'Their copy could not be downloaded.' : 'Your client\'s photo has no copyright line in its hidden data, so there is nothing to compare.'); return; }
-      c.credit = res; await FC.DB.put('copies', c); FCD = null;
+      c.credit = res; await FC.DB.put('copies', c); dropFC();
       toast(res === 'removed' ? 'Credit removed: their copy has no copyright line.' : 'Their copy still credits your client.'); render(true);
     } catch (e) { toast(String(e.message || e)); }
   },
@@ -993,7 +1070,7 @@ Object.assign(ACTS, {
     const c = FCD.copies.find(x => x.id === state.open);
     const undo = await FC.setClientOf(c.photo, name);
     HIST.push({ label: 'client set to ' + name, undo, open: c.id });
-    FCD = null; toastUndo('Client set to ' + name + ' for this photo.'); render(true);
+    dropFC(); toastUndo('Client set to ' + name + ' for this photo.'); render(true);
   },
   compare: async () => {
     const c = FCD.copies.find(x => x.id === state.open);
