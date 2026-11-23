@@ -511,7 +511,7 @@ function firstBlock(F, rate) {
 }
 
 // ---------------------------------------------------------------- Keep searching and today's 50
-const STATE_TAG = { running: ['Searching', 'ok'], waiting: ['Resting between photos', 'ok'], off: ['Off', 'grey'], paused: ['Paused', 'grey'], hours: ['Outside your hours', 'grey'], fifty: ['Paused while today\'s 50 run', 'warn'],
+const STATE_TAG = { running: ['Searching', 'ok'], waiting: ['Resting between photos', 'ok'], off: ['Off', 'grey'], paused: ['Paused', 'grey'], hours: ['Outside your hours', 'grey'], fifty: ['Paused while a big search runs', 'warn'],
   offline: ['Google Drive offline', 'bad'], allow: ['Needs one click', 'warn'], busy: ['Computer busy', 'warn'], resting: ['Search sites resting', 'warn'], setup: ['Not set up', 'warn'], idle: ['Nothing due right now', 'ok'], closed: ['Stopped', 'bad'] };
 V.keep = async () => {
   if (routeArg('start50')) { history.replaceState(null, '', '#keep'); setTimeout(() => ACTS.fifty(), 300); }
@@ -560,7 +560,7 @@ V.keep = async () => {
     </section>
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
       <div class="row"><h2>Today's 50</h2>${fifty ? '<span class="tag ok" style="margin-left:auto">Running now</span>' : ''}</div>
-      <p class="muted" style="margin:0;font-size:14px">A bigger batch at once, shown right here in PageProof (the search tabs open as small pinned tabs in this browser window). Keep searching pauses while it runs, then carries on. The 50 are the next photos in line.</p>
+      <p class="muted" style="margin:0;font-size:14px">A bigger batch at once. It runs quietly in the small pinned PageProof tab, so you can keep working and close this page (see how far it is in All searches). Keep searching pauses while it runs, then carries on. The 50 are the next photos in line.</p>
       <div class="row"><label class="mini">How many<select data-act="keepnum" data-v="perDay">${[10, 25, 50, 75, 100].map(n => `<option value="${n}" ${k.perDay === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label class="mini">Which photos<select data-act="keepset2" data-v="fiftyWhich"><option value="next" ${k.fiftyWhich !== 'first' ? 'selected' : ''}>Next in line</option><option value="first" ${k.fiftyWhich === 'first' ? 'selected' : ''}>Never searched first</option></select></label><button class="btn primary" data-act="fifty"${fifty ? ' disabled' : ''}>Check ${k.perDay} now</button></div>
       <label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" data-act="keepauto" ${k.fiftyAuto ? 'checked' : ''}> Start by itself every weekday at <input type="time" value="${esc(k.fiftyTime)}" data-act="keeptime" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);padding:2px 6px"></label>
       <p class="faint" style="margin:0;font-size:13px">On this computer 50 photos take ${esc(hw.limits.fifty)}.</p>

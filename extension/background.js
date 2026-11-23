@@ -589,8 +589,10 @@ async function captureUrl(url, near) {
 // while Keep searching is on, the tab is opened again. If you close it yourself, it stays closed
 // (PageProof shows a "Start it again" button) until the browser is opened again.
 async function keepAlive(show, force) {
-  const st = await api.storage.local.get(['fcKeep', 'fcStatus', 'fcDrive']);
-  if (!st.fcKeep || !st.fcKeep.on || !st.fcDrive || !st.fcDrive.done) return;
+  const st = await api.storage.local.get(['fcKeep', 'fcStatus', 'fcDrive', 'fcBgJobs', 'fcFiftyWant']);
+  // Also open for a big search you started (they run in this tab since 4.11), or today's 50.
+  const big = (st.fcBgJobs || []).length > 0 || !!st.fcFiftyWant;
+  if (!big && (!st.fcKeep || !st.fcKeep.on || !st.fcDrive || !st.fcDrive.done)) return;
   const ss = api.storage.session ? await api.storage.session.get('fcClosed').catch(() => ({})) : {};
   if (ss.fcClosed && !force) return;
   // Never open it when every browser window is closed (the browser can keep running in the background).
@@ -791,7 +793,9 @@ if (api.alarms) {
     if (a.name === 'fcFifty') {
       const d = new Date().getDay();
       if (d === 0 || d === 6) return;
-      api.tabs.create({ url: api.runtime.getURL('app.html#keep?start50=1') });
+      // The pinned Keep searching tab gets the photos ready and runs them (4.11): no page opens.
+      await api.storage.local.set({ fcFiftyWant: Date.now() });
+      keepAlive(false, true);
     }
   });
 }
@@ -826,6 +830,7 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const jobs = {
     captureUrl: () => captureUrl(msg.url, sender.tab),
     fcKeepWake: async () => { await keepAlive(!!msg.show, true); return { ok: true }; },
+    fcBgStart: async () => { await keepAlive(false, true); return { ok: true }; },
     fcKeepStop: async () => ({ ok: true }),   // the window closes itself when Keep searching is turned off
     fcFiftyAlarm: async () => { await fiftySchedule(); return { ok: true }; },
   };
@@ -837,6 +842,8 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 if (api.notifications) {
   api.notifications.onClicked.addListener(id => {
     api.notifications.clear(id);
+    // A search site wants a quick check in a big search: show that tab.
+    if (id.startsWith('rsCaptcha:')) api.tabs.update(+id.slice(10), { active: true }).then(t => api.windows.update(t.windowId, { focused: true })).catch(() => {});
     if (id === 'fcAllow' || id === 'fcDrive') api.tabs.create({ url: api.runtime.getURL('app.html#keep') });
     if (id === 'ppUpdate' || id.startsWith('fcEngine:')) api.tabs.create({ url: api.runtime.getURL('app.html#health') });
   });

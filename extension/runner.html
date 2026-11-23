@@ -17,7 +17,8 @@
   <div class="row" style="gap:10px;flex-wrap:nowrap"><img src="icons/icon48.png" width="28" height="28" alt=""><h1 style="font-size:22px">Keep searching</h1><span class="tag grey" id="state" style="margin-left:auto">Starting</span></div>
   <p class="muted" id="text" style="margin:0">Getting ready…</p>
   <div class="row" id="now" hidden style="gap:10px;flex-wrap:nowrap"><img class="thumb" id="nowImg" width="64" height="44" alt=""><div style="min-width:0"><b id="nowName" style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></b><span class="muted" id="nowSub" style="font-size:13px"></span></div></div>
-  <div class="banner info" style="padding:10px 12px;font-size:14px"><span>This pinned tab does the searching, so you can leave it and carry on working. If you close it, Keep searching stops, and PageProof shows a button to start it again.</span></div>
+  <div id="big" hidden><b style="display:block;font-size:14px">Big search</b><span class="muted" id="bigText" style="display:block;font-size:13.5px;margin:4px 0 8px"></span><div style="height:6px;border-radius:3px;background:var(--sunk,#e4e8ee);overflow:hidden"><i id="bigBar" style="display:block;height:100%;width:0;background:var(--accent,#0077C2)"></i></div></div>
+  <div class="banner info" style="padding:10px 12px;font-size:14px"><span>This pinned tab does the searching (Keep searching and the big searches you start), so you can leave it and carry on working. If you close it, the searching stops, and PageProof shows a button to start it again.</span></div>
   <div class="row" style="gap:8px"><button class="btn" id="pause">Pause</button><a class="btn" id="open" href="app.html#keep" target="_blank">Open Keep searching settings</a></div>
 </section>
 <script src="db.js"></script>
