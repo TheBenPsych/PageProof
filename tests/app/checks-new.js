@@ -148,14 +148,10 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   console.log(JSON.stringify(dot));
   ok(dot.n === 1 && dot.again === 0 && dot.a === 'removed' && dot.b === 'new' && dot.c === 'new' && dot.s === 'stolen', 'Photo check: wrong "dot" matches already found go to Removed once; answered and hand-added copies stay');
 
-  // ---- update: PageProof only reads a version number; it never writes its own files
-  await ctx.route('**/raw.githubusercontent.com/**', r => r.fulfill({ status: 200, contentType: 'text/plain', body: JSON.stringify({ version: '99.0.0' }) }));
-  const chk = await page.evaluate(async () => ({ st: await ppUpCheck(), newer: [ppNewer('4.1.1', '4.1.0'), ppNewer('4.1.0', '4.1.0'), ppNewer('4.0.15', '4.1.0'), ppNewer('4.10.0', '4.9.9')], gone: typeof PP_UPDATE }));
-  console.log(JSON.stringify(chk));
-  ok(chk.st.has && chk.st.latest === '99.0.0' && chk.newer.join() === 'true,false,false,true', 'Update: a newer version on GitHub is noticed; version compare is right');
-  ok(chk.gone === 'undefined' && !require('fs').existsSync(require('path').resolve(__dirname, '../../extension/updater.js')), 'Update: the self-updater is gone (PageProof never rewrites its own files)');
+  // ---- 4.13.1: no update check at all (Ben hands out new versions himself)
+  ok(await page.evaluate(() => typeof ppUpCheck === 'undefined' && typeof PP_UPDATE === 'undefined'), 'Update: PageProof has no update check');
   await page.goto(url('app.html#health')); await page.waitForTimeout(900);
-  ok(await page.evaluate(() => !!document.querySelector('[data-act="upzip"]') && !document.querySelector('[data-act="upnow"],[data-act="uppick"]')), 'Update: the page offers the zip download and the steps');
+  ok(await page.evaluate(() => !document.querySelector('#updates,[data-act="upzip"],[data-act="upcheck"],[data-act="upgo"]')), 'Update: Is everything working? has no Updates card or Update button');
   // every page still draws
   for (const r of ['home', 'found', 'review', 'clients', 'photos', 'keep', 'owners', 'weekly', 'hidden', 'library', 'settings', 'health', 'skipped', 'whatsnew']) {
     await page.goto(url('app.html#' + r)); await page.waitForTimeout(700);
@@ -167,14 +163,10 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.evaluate(() => chrome.storage.local.set({ fcNeedsAllow: Date.now() }));
   await pop.goto(url('popup.html')); await pop.waitForTimeout(1200);
   ok(await pop.evaluate(() => !!document.getElementById('allow')), 'Toolbar menu shows the Allow button when Drive needs its click');
-  // 4.3.3: an old "newer version" note must not offer the version already installed
-  const mine = await pop.evaluate(() => chrome.runtime.getManifest().version);
-  await page.evaluate(v => chrome.storage.local.set({ ppUpdate: { at: Date.now(), latest: v, has: true, error: '' } }), mine);
-  await pop.reload(); await pop.waitForTimeout(1200);
-  ok(await pop.evaluate(() => !/is ready/.test(document.body.innerText)), 'Toolbar menu does not offer the version already installed');
+  // 4.13.1: an old saved "newer version" note shows nothing
   await page.evaluate(() => chrome.storage.local.set({ ppUpdate: { at: Date.now(), latest: '99.0.0', has: true, error: '' } }));
   await pop.reload(); await pop.waitForTimeout(1200);
-  ok(await pop.evaluate(() => /99\.0\.0 is ready/.test(document.body.innerText)), 'Toolbar menu still offers a really newer version');
+  ok(await pop.evaluate(() => !/is ready|Update/.test(document.body.innerText)), 'Toolbar menu never offers an update');
   // 4.3.3: a folder question the browser never answers must not leave the main page blank
   await page.evaluate(async () => {
     const root = await navigator.storage.getDirectory();

@@ -105,7 +105,7 @@ let redrawT = null;
 // Keep searching writes a heartbeat every 30 seconds. Only what you can see counts as a change.
 const statusLook = s => (s ? [s.state, s.text, s.current && s.current.id].join('|') : '');
 api.storage.onChanged.addListener(ch => {
-  if ((ch.fcEngines || ch.ppUpdate) && ['home', 'health'].includes(state.shown) && !state.upBusy) { clearTimeout(redrawT); redrawT = setTimeout(() => render(true), 600); return; }
+  if (ch.fcEngines && ['home', 'health'].includes(state.shown)) { clearTimeout(redrawT); redrawT = setTimeout(() => render(true), 600); return; }
   if (!ch.fcChanged && !ch.fcStatus) return;
   if (!ch.fcChanged && statusLook(ch.fcStatus.oldValue) === statusLook(ch.fcStatus.newValue)) return;
   if (ch.fcStatus && !['keep', 'home'].includes(state.shown)) return;
@@ -214,8 +214,6 @@ async function homeFinds() {
   // A client reached 100%: every one of its photos searched at least once (4.10).
   const fin = (await FC.firstNotes()).filter(n => n.at > (store.fcFirstSeen || '') && Date.now() - Date.parse(n.at) < 14 * 86400000);
   if (fin.length) alerts += `<div class="banner info" role="status" id="firstDone"><div style="flex:1 1 260px"><b>${fin.length === 1 ? esc(fin[0].name) + ': every photo searched at least once' : fin.length + ' clients now have every photo searched at least once'}</b><div style="font-size:13.5px">${esc(fin.map(n => n.name + ' (' + n.n.toLocaleString() + ' photos)').slice(0, 4).join(', '))}${fin.length > 4 ? ' and more' : ''}. New photos still get their first search when they arrive.</div></div><a class="btn" href="#keep">See progress</a><button class="btn ghost" data-act="firstseen">OK</button></div>`;
-  const upd = await ppUpState();
-  if (upd && upd.has) alerts += `<div class="banner info" role="status"><div style="flex:1 1 260px"><b>PageProof ${esc(upd.latest)} is ready</b><div style="font-size:13.5px">You have ${VERSION}. Updating keeps everything you have.</div></div><a class="btn primary" href="#health" data-act="upgo">Update</a></div>`;
   for (const [e, until] of Object.entries(await FC.brokenEngines())) alerts += `<div class="banner bad" role="alert">${ic('help', 22)}<div style="flex:1 1 260px"><b>${FC.ENGINE_NAME[e]} may have stopped working</b><div style="font-size:13.5px;color:var(--ink)">It gave nothing for many photos in a row, so PageProof is resting it until ${new Date(until).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}. Those empty results are not counted against your photos. The other search sites carry on.</div></div><a class="btn" href="#health">See details</a></div>`;
   if (back.length) alerts += `<div class="banner bad" role="alert"><div style="flex:1 1 260px"><b>${back.length} ${back.length === 1 ? 'copy is' : 'copies are'} back online</b><div style="font-size:13.5px;color:var(--ink)">They had gone, and came back: ${esc([...new Set(back.map(c => c.site))].slice(0, 3).join(', '))}</div></div><a class="btn primary" href="#found?filter=Back%20online">See them</a></div>`;
   const main = `<section class="card pad" style="display:flex;flex-direction:column;gap:12px">
@@ -395,15 +393,14 @@ ACTS.textsize = async v => {
 V.settings = async () => {
   const [name, hw, docs] = [await getName(), await ppHardware(), await RS_DOCS.state()];
   await RS_LISTS.load();
-  const upd = await ppUpState();
   const zoomKey = await ppZoomKey();
   return `${head('Settings', 'Settings', 'These apply to everything in PageProof and are saved on this computer.')}
   <div class="grid g2">
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>You</h2>
       <label class="field" for="sName">Your name on every pack and report<input id="sName" value="${esc(name)}" placeholder="For example, Ben"></label>
       <div class="dsh" style="margin-top:6px">Version</div>
-      <p class="muted" style="margin:0;font-size:14px">PageProof ${VERSION}${upd && upd.has ? ` · <b style="color:var(--warn)">version ${esc(upd.latest)} is ready</b>` : ''}</p>
-      <div class="row" style="gap:8px"><a class="btn${upd && upd.has ? ' primary' : ''}" href="#health" data-act="upgo">${upd && upd.has ? 'Get the update' : 'Updates'}</a><a class="btn" href="#whatsnew">What's new</a><button class="btn" data-act="tour">Take the tour again</button></div></section>
+      <p class="muted" style="margin:0;font-size:14px">PageProof ${VERSION}</p>
+      <div class="row" style="gap:8px"><a class="btn" href="#whatsnew">What's new</a><button class="btn" data-act="tour">Take the tour again</button></div></section>
     <section class="card pad" id="textsize" style="display:flex;flex-direction:column;gap:12px"><h2>Text size</h2>
       <p class="muted" style="margin:0;font-size:14px">Makes everything in PageProof bigger: words, buttons and pictures. Saved on this computer only.</p>
       <div class="seg" role="group" aria-label="Text size">${TEXT_SIZES.map(([k, l, z]) => `<button class="${zoomKey === k ? 'on' : ''}" aria-pressed="${zoomKey === k}" data-act="textsize" data-v="${k}"><span style="font-size:${Math.round(14 * z)}px">${l}</span></button>`).join('')}</div>
@@ -539,6 +536,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['No more update notices', 'PageProof no longer checks GitHub for new versions or shows an Update button. New versions now come straight from your team lead.'],
   ['Big searches run quietly in the pinned tab', 'A search you start (New search, Today\'s 50, or photos picked in Your photos) now runs in the small pinned PageProof tab, the same one Keep searching uses. No new tab opens in front of you, and you can close the PageProof page while it works. To see how far it is, open All searches (or the search itself). If a search site wants a quick "are you a robot" check, a small notice pops up instead of jumping to that tab. Today\'s 50 at its set time no longer opens a PageProof page either.'],
   ['Followers, verified and account type on social copies', 'PageProof reads each account\'s profile by itself (in a background tab of your browser, one account at a time, once a month): followers, the check mark, and what kind of account it is. The Social media tab gets Verified, Followers, Account type and Country filters, Sort by Most followers, and the Accounts list shows and sorts by them.'],
   ['Spots business accounts by itself', 'When a site doesn\'t say what kind of account it is, PageProof adds up the signs: a shop or company word, a Shop now or Contact button, an email or phone number, its own website and whether that site sells things. Two or more signs = Business (guess). A company named on Facebook\'s Page transparency, or the country in Instagram\'s and X\'s About this account, shows on the account, with ready-made business register and trademark searches.'],
@@ -598,7 +596,6 @@ const NEWS = [
   ['Keyboard help and bigger text', 'Press ? for every key. New keys in Copies found: up and down arrows move between copies, Enter opens one, / jumps to the search box. Settings › Text size makes everything bigger.'],
   ['Every page double-checked', 'The older tools (Inspect, Compare, Markup, Convert, Verify, New search) now match the new look, in light and dark. PageProof no longer squashes into a thin strip in a narrow window. One blue to match the shield, and old menu names are gone from page titles.'],
   ['No more false "100% lines up"', 'The photo check could shrink a found picture to a dot and call two different photos a 100% match. It now needs a real shared area. Wrong matches it had let in, that you had not answered yet, were moved to Removed.'],
-  ['Updating is a plain download now', 'PageProof no longer changes its own files (Windows security did not like that). When a new version is out, Settings › Is everything working? gives you the download and three steps.'],
   ['A new look', 'A shorter menu, a search box and Undo at the top, a Tools page for everything else, and a new shield logo. Nothing was taken away: Tools has every older page.'],
   ['Answer right on the row', 'Copies found has Stolen, Licensed and Remove on every row, with the page link in view. The ⋯ menu has Approve site, Hide site, Compare, Evidence report and Capture.'],
   ['Quick filters', 'One-click chips (Back online, Repeat offenders, Suspicious sites and more), plus Found (today, this week, this month), Match (exact, strong, loose) and the photo\'s year and quarter.'],
