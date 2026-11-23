@@ -292,30 +292,58 @@ const FC = (() => {
     const h = await rootHandle();
     if (!h) return 'none';
     let p;
-    try { p = await RS_LATE(h.queryPermission({ mode: 'read' }), 4000, 'offline'); } catch (e) { return 'none'; }
-    if (p === 'offline') return 'offline';
+    const t00 = Date.now();
+    try { p = await RS_LATE(h.queryPermission({ mode: 'read' }), check ? 20000 : 4000, 'slow'); } catch (e) { return 'none'; }
+    if (p === 'slow') { if (check) driveWhy('The browser gave no answer when asked if PageProof may still read the folder "' + h.name + '" (waited 20 s).'); return 'offline'; }
     if (p !== 'granted') return 'prompt';
     if (check) {
       const t0 = Date.now();
-      // Drive for desktop can stop answering without saying no. Wait at most 8 seconds, then count it
-      // as offline, so pages never hang waiting for it (4.3.3: every Find copies page stayed blank).
+      // Ask Drive for ONE folder you ticked, not for the whole top folder: listing every shared
+      // drive can take a minute, which made pages slow (4.3.3) or wrongly "not answering" (4.3.4).
+      // A missing folder answers at once (NotFoundError) when Drive is up, so that still counts as up.
+      let first = '';
+      try { const pk = await picked(); first = pk && pk.length ? String(pk[0]).split('/')[0] : ''; } catch (e) { /* none */ }
+      const what = first ? 'the folder "' + first + '"' : 'the list of folders';
+      const probe = first
+        ? h.getDirectoryHandle(first).then(() => true, e => e && e.name === 'NotFoundError' ? true : Promise.reject(e))
+        : h.entries().next().then(() => true);
       try {
-        const it = h.entries();
-        const ok = await Promise.race([it.next().then(() => true), new Promise(r => setTimeout(() => r(false), 8000))]);
-        if (!ok) return 'offline';
-      } catch (e) { return 'offline'; }
+        const ok = await RS_LATE(probe, 45000, false);
+        if (!ok) { driveWhy('Asked Drive for ' + what + ' in "' + h.name + '": no answer in 45 s.'); return 'offline'; }
+      } catch (e) { driveWhy('Asked Drive for ' + what + ' in "' + h.name + '": ' + ((e && e.name) || 'Error') + ': ' + ((e && e.message) || String(e)) + ' (after ' + Math.round((Date.now() - t00) / 1000) + ' s)'); return 'offline'; }
       perf('driveAnswer', Date.now() - t0);
+      driveWhy('');
     }
     return 'granted';
   }
-  // The same check, remembered for a minute: asking Google Drive for a folder can be slow, and
-  // the pages ask every time they are drawn.
-  let driveSeen = null;
+  // Why the last Drive check failed, in plain words, for the red bar and Copy details for support.
+  function driveWhy(why) { api.storage.local.set({ fcDriveWhy: why ? { why, at: Date.now() } : null }).catch(() => {}); }
+  // Pages never wait for Google Drive. They show the last answer at once; a fresh check runs in
+  // the background (one at a time) and the page is redrawn if the answer changed.
+  // fresh = "Try again": wait for a new answer.
+  let driveSeen = null, driveAsk = null;
+  function driveAskNow() {
+    if (!driveAsk) driveAsk = driveState(true).then(st => {
+      const was = driveSeen && driveSeen.st;
+      driveSeen = { at: Date.now(), st };
+      if (st !== (was || 'granted')) touch('drive');
+      return st;
+    }).finally(() => { driveAsk = null; });
+    return driveAsk;
+  }
   async function driveStateSoft(fresh) {
-    if (!fresh && driveSeen && Date.now() - driveSeen.at < 60000) return driveSeen.st;
-    const st = await driveState(true);
-    driveSeen = { at: Date.now(), st };
-    return st;
+    if (fresh) return driveAskNow();
+    if (!driveSeen || Date.now() - driveSeen.at > 60000) {
+      const ask = driveAskNow();
+      if (!driveSeen) {
+        // First look on this page: wait a moment for a quick answer, else assume it's fine for now.
+        const quick = await RS_LATE(ask, 1500, null);
+        if (quick) return quick;
+        const p = await driveState(false);
+        return p === 'granted' ? 'granted' : p;
+      }
+    }
+    return driveSeen.st;
   }
   // Must be called from a click.
   async function allowDrive() {

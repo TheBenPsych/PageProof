@@ -201,7 +201,40 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     const t = r === 'searches' && fr ? await fr.evaluate(() => document.body.innerText.length) : await stuck.evaluate(() => document.getElementById('view').textContent.length);
     ok(t > 100, 'Page ' + r + ' opens even when Google Drive never answers');
   }
+  // 4.3.7: after an update, the folders are checked first
+  await page.evaluate(() => chrome.storage.local.set({ ppReconnectVer: '0.0.1' }));
+  const rc = await ctx.newPage();
+  await rc.goto(url('app.html#found')); await rc.waitForTimeout(4000);
+  ok(await rc.evaluate(() => location.hash === '#reconnect' && /Reconnect your folders/.test(document.body.textContent) && /Connected/.test(document.getElementById('view').textContent)), 'After an update PageProof opens Reconnect your folders and shows Drive connected');
+  await rc.evaluate(() => document.querySelector('[data-act="rcdone"]').click()); await rc.waitForTimeout(1500);
+  ok(await rc.evaluate(async () => location.hash === '#home' && (await chrome.storage.local.get('ppReconnectVer')).ppReconnectVer === chrome.runtime.getManifest().version), 'Continue goes Home and is not asked again for this version');
+  await rc.close();
+  // 4.3.6: when Drive answers with an error, the red bar says what it was
+  const bad = await ctx.newPage();
+  await bad.addInitScript(() => {
+    const D = FileSystemDirectoryHandle.prototype;
+    const boom = () => Promise.reject(new DOMException('The drive is not ready (test)', 'NotReadableError'));
+    D.getDirectoryHandle = boom; D.entries = function () { return { next: boom, [Symbol.asyncIterator]() { return this; } }; };
+  });
+  await bad.goto(url('app.html#found')); await bad.waitForTimeout(1500);
+  await bad.evaluate(() => ACTS.driveretry()); await bad.waitForTimeout(1500);
+  ok(await bad.evaluate(() => /What happened:.*NotReadableError/.test(document.getElementById('view').textContent) && !!document.querySelector('[data-act="drivepick"]')), 'Red bar shows what Drive answered and offers Pick the photos folder again');
+  await bad.close();
   await stuck.close();
+  // 4.3.5: Drive is up but listing the top folder is slow (a minute on a big shared drive): pages draw at once, no red bar
+  const slow = await ctx.newPage();
+  await slow.addInitScript(() => {
+    const D = FileSystemDirectoryHandle.prototype, orig = D.entries;
+    D.entries = function () { const it = orig.call(this); return { next: () => new Promise(r => setTimeout(() => r(it.next()), 20000)), [Symbol.asyncIterator]() { return this; } }; };
+  });
+  for (const r of ['found', 'clients', 'keep']) {
+    const t0 = Date.now();
+    await slow.goto(url('app.html#' + r));
+    await slow.waitForFunction(() => document.getElementById('view').textContent.length > 100, null, { timeout: 15000 }).catch(() => {});
+    const ms = Date.now() - t0, txt = await slow.evaluate(() => document.getElementById('view').textContent);
+    ok(ms < 6000 && !/isn't answering/.test(txt), 'Page ' + r + ' opens quickly with no red bar when Drive is only slow (' + ms + ' ms)');
+  }
+  await slow.close();
   await page.evaluate(async () => { await RS_DB.del('handles', 'docs'); await RS_DB.del('handles', 'fcExtra:Hang test'); });
   console.log(fails ? fails + ' FAILED' : 'ALL PASSED');
   await ctx.close(); process.exit(fails ? 1 : 0);

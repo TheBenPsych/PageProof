@@ -1028,7 +1028,10 @@ document.addEventListener('keydown', e => {
 async function driveBanner() {
   const st = await FC.driveStateSoft();
   if (st === 'prompt') return `<div class="banner warn" role="alert">${ic('help', 22)}<div style="flex:1 1 260px;min-width:0"><b>One click needed: let PageProof read your photos again</b><div style="font-size:13.5px">Your browser asks once after it restarts. Searching waits until you press Allow. If the browser offers "Allow on every visit", pick that and it stops asking.</div></div><button class="btn primary" data-act="driveallow">Allow</button></div>`;
-  if (st === 'offline') return `<div class="banner bad" role="alert">${ic('help', 22)}<div style="flex:1 1 260px;min-width:0"><b>Google Drive isn't answering. Searching is paused.</b><div style="font-size:13.5px;color:var(--ink)">Drive for desktop is signed out, not running, or stuck. If it stays like this, quit Google Drive from the icon near the clock and open it again. Nothing is lost: searching picks up where it left off.</div></div><button class="btn primary" data-act="driveretry">Try again</button></div>`;
+  if (st === 'offline') {
+    const w = (await api.storage.local.get('fcDriveWhy')).fcDriveWhy;
+    return `<div class="banner bad" role="alert">${ic('help', 22)}<div style="flex:1 1 260px;min-width:0"><b>Google Drive isn't answering. Searching is paused.</b><div style="font-size:13.5px;color:var(--ink)">Drive for desktop is signed out, not running, or stuck. If it stays like this, quit Google Drive from the icon near the clock and open it again, or pick the photos folder again. Nothing is lost: searching picks up where it left off.</div>${w && w.why ? `<div class="mono" style="font-size:12.5px;margin-top:6px;color:var(--muted)">What happened: ${esc(w.why)}</div>` : ''}</div><button class="btn primary" data-act="driveretry">Try again</button><button class="btn" data-act="drivepick">Pick the photos folder again</button></div>`;
+  }
   return '';
 }
 Object.assign(ACTS, {
@@ -1038,6 +1041,14 @@ Object.assign(ACTS, {
     await render(true);
     // Today's batch was waiting for this click.
     if (ok && state.wantFifty) { state.wantFifty = false; ACTS.fifty(); }
+  },
+  drivepick: async () => {
+    // Same top folder as before (for example H:\\Shared drives): your ticked folders and photos stay.
+    try { await FC.pickRoot(); } catch (e) { if (e.name !== 'AbortError') toast('That folder could not be opened.'); return; }
+    try { await api.storage.local.remove('fcTreeCache'); } catch (e) { /* none */ }
+    const st = await FC.driveStateSoft(true);
+    toast(st === 'granted' ? 'Google Drive is back. Searching carries on.' : 'Still can\'t reach Google Drive. The red bar says what happened.');
+    render(true);
   },
   driveretry: async () => { const st = await FC.driveStateSoft(true); toast(st === 'granted' ? 'Google Drive is back. Searching carries on.' : 'Still can\'t reach Google Drive.'); render(true); },
 });
