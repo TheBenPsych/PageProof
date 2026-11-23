@@ -390,6 +390,95 @@ const PP_ALIGN = (() => {
     return { ...t, overlap: inside / Math.max(1, bw * bh * f * f), overlapA: inside / (a.w * a.h), lines: grade(t), strength: t.matched ? t.sumR / t.matched : 0 };
   }
 
+  // ---------- 6. which parts are the same photo, and which were added or redrawn ----------
+  // The shared area is split into small squares (as in score). A square counts towards "same photo"
+  // when most squares around it (5 x 5) line up; that way a redrawn face, an added object or a
+  // headline band shows as one red area, and the untouched photo as one green area around it.
+  // Two different photos score (almost) no green: their few chance matches are scattered.
+  // reg: one value per square, 0 = outside the shared area, 1 = same photo, 2 = added or changed.
+  function changes(Abm, Bbm, T, side = 480, S = 12) {
+    const f = side / Math.max(Abm.width, Abm.height);
+    const a = grayAt(Abm, f), b = render(Bbm, T, a.w, a.h, f);
+    const gw = Math.floor(a.w / S), gh = Math.floor(a.h / S), st = new Uint8Array(gw * gh); // 0 out, 1 match, 2 miss, 3 flat same, 4 flat different
+    for (let ty = 0; ty < gh; ty++) for (let tx = 0; tx < gw; tx++) {
+      let n = 0, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0, out = false;
+      for (let y = ty * S; y < ty * S + S && !out; y++) for (let x = tx * S; x < tx * S + S; x++) {
+        const i = y * a.w + x;
+        if (!b.m[i]) { out = true; break; }
+        const p = a.g[i], q = b.g[i]; n++; sa += p; sb += q; saa += p * p; sbb += q * q; sab += p * q;
+      }
+      const k = ty * gw + tx;
+      if (out) continue;
+      const ma = sa / n, mb = sb / n, va = saa / n - ma * ma, vb = sbb / n - mb * mb;
+      if (va < 25 && vb < 25) { st[k] = Math.abs(ma - mb) < 25 ? 3 : 4; continue; }
+      const r = va > 4 && vb > 4 ? (sab / n - ma * mb) / Math.sqrt(va * vb) : 0;
+      st[k] = r > 0.6 ? 1 : 2;
+    }
+    const reg = new Uint8Array(gw * gh);
+    let inside = 0, same = 0, matchedIn = 0, texIn = 0;
+    for (let ty = 0; ty < gh; ty++) for (let tx = 0; tx < gw; tx++) {
+      const k = ty * gw + tx; if (!st[k]) continue;
+      let m = 0, t = 0;
+      for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) {
+        const x = tx + i, y = ty + j; if (x < 0 || y < 0 || x >= gw || y >= gh) continue;
+        const v = st[y * gw + x];
+        if (v === 1) { m++; t++; } else if (v === 2) t++; else if (v === 3) { m += 0.5; t += 0.5; } else if (v === 4) t += 0.5;
+      }
+      reg[k] = t && m / t >= 0.35 ? 1 : 2;
+      inside++;
+      if (reg[k] === 1) { same++; if (st[k] === 1) { matchedIn++; texIn++; } else if (st[k] === 2) texIn++; }
+    }
+    return { gw, gh, cell: S / f, reg, inside, same, sameShare: inside ? same / inside : 0, changedShare: inside ? 1 - same / inside : 0, untouchedLines: texIn ? matchedIn / texIn : 0 };
+  }
+
+  // ---------- 7. one spot (a face, a logo) compared on its own ----------
+  // box = { x, y, w, h } in the original's pixels. The same spot is cut from the lined-up copy,
+  // allowing it to have moved a little (AI edits often nudge people), and the two cut-outs are
+  // compared. r: 1 = identical. dx, dy: how far it moved in the copy, in the original's pixels.
+  function spot(Abm, Bbm, T, box) {
+    const m = Math.round(0.04 * Math.max(Abm.width, Abm.height));
+    const f = Math.min(1, 96 / Math.max(box.w, box.h));
+    const rx = box.x - m, ry = box.y - m, W = Math.max(1, Math.round((box.w + 2 * m) * f)), H = Math.max(1, Math.round((box.h + 2 * m) * f));
+    const grab = drawIt => {
+      const ctx = surface(W, H); ctx.imageSmoothingQuality = 'high'; drawIt(ctx);
+      const d = ctx.getImageData(0, 0, W, H).data, g = new Float32Array(W * H), a = new Uint8Array(W * H);
+      for (let i = 0, j = 0; j < g.length; i += 4, j++) { g[j] = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; a[j] = d[i + 3] > 250 ? 1 : 0; }
+      return { w: W, h: H, g, a };
+    };
+    const A0 = grab(ctx => ctx.drawImage(Abm, -rx * f, -ry * f, Abm.width * f, Abm.height * f));
+    const B0 = grab(ctx => drawCopy(ctx, Bbm, T, f, -rx, -ry));
+    const a = blur(A0, 1).g, b = blur(B0, 1).g;
+    const M = Math.round(m * f), bw = Math.round(box.w * f), bh = Math.round(box.h * f);
+    let n0 = 0, s0 = 0, ss0 = 0;
+    for (let y = M; y < M + bh; y++) for (let x = M; x < M + bw; x++) { const p = a[y * W + x]; n0++; s0 += p; ss0 += p * p; }
+    const ma = s0 / n0, va = ss0 / n0 - ma * ma;
+    if (va < 30) return { flat: true };
+    let best = { r: -2, dx: 0, dy: 0, v: -9 }, covered = false;
+    const at = (dx, dy) => {
+      let n = 0, sb = 0, sbb = 0, sab = 0, out = 0;
+      for (let y = M; y < M + bh; y++) {
+        const ra = y * W, rb = (y + dy) * W + dx;
+        for (let x = M; x < M + bw; x++) {
+          if (!B0.a[rb + x]) { out++; continue; }
+          const p = a[ra + x], q = b[rb + x]; n++; sb += q; sbb += q * q; sab += p * q;
+        }
+      }
+      if (out > n0 * 0.05 || n < 16) return;
+      covered = true;
+      const mb = sb / n, vb = sbb / n - mb * mb; if (vb < 4) return;
+      const r = (sab / n - ma * mb) / Math.sqrt(va * vb);
+      // a small bonus for staying put, so a plain area doesn't wander off to a chance match
+      const v = r - Math.hypot(dx, dy) / (M + 1) * 0.02;
+      if (v > best.v) best = { r, dx, dy, v };
+    };
+    // every 2nd position first, then every position around the best one
+    for (let dy = -M; dy <= M; dy += 2) for (let dx = -M; dx <= M; dx += 2) at(dx, dy);
+    const cx = best.dx, cy = best.dy;
+    for (let dy = Math.max(-M, cy - 2); dy <= Math.min(M, cy + 2); dy++) for (let dx = Math.max(-M, cx - 2); dx <= Math.min(M, cx + 2); dx++) at(dx, dy);
+    if (!covered) return { outside: true };
+    return { r: Math.max(0, Math.min(1, best.r)), dx: best.dx / f, dy: best.dy / f };
+  }
+
   // Nudge the position, size, stretch and turn a little at a time, keeping whatever lines up best.
   async function refine(Abm, Bbm, T0) {
     const side = Math.min(720, Math.max(Abm.width, Abm.height)), f = side / Math.max(Abm.width, Abm.height);
@@ -517,5 +606,5 @@ const PP_ALIGN = (() => {
     return best();
   }
 
-  return { align, score, grayOf, place, drawCopy, bounds, reshape, sizes, mapPoint };
+  return { align, score, changes, spot, grayOf, place, drawCopy, bounds, reshape, sizes, mapPoint };
 })();
