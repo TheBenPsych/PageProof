@@ -201,6 +201,17 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     const t = r === 'searches' && fr ? await fr.evaluate(() => document.body.innerText.length) : await stuck.evaluate(() => document.getElementById('view').textContent.length);
     ok(t > 100, 'Page ' + r + ' opens even when Google Drive never answers');
   }
+  // 4.3.6: when Drive answers with an error, the red bar says what it was
+  const bad = await ctx.newPage();
+  await bad.addInitScript(() => {
+    const D = FileSystemDirectoryHandle.prototype;
+    const boom = () => Promise.reject(new DOMException('The drive is not ready (test)', 'NotReadableError'));
+    D.getDirectoryHandle = boom; D.entries = function () { return { next: boom, [Symbol.asyncIterator]() { return this; } }; };
+  });
+  await bad.goto(url('app.html#found')); await bad.waitForTimeout(1500);
+  await bad.evaluate(() => ACTS.driveretry()); await bad.waitForTimeout(1500);
+  ok(await bad.evaluate(() => /What happened:.*NotReadableError/.test(document.getElementById('view').textContent) && !!document.querySelector('[data-act="drivepick"]')), 'Red bar shows what Drive answered and offers Pick the photos folder again');
+  await bad.close();
   await stuck.close();
   // 4.3.5: Drive is up but listing the top folder is slow (a minute on a big shared drive): pages draw at once, no red bar
   const slow = await ctx.newPage();

@@ -292,8 +292,9 @@ const FC = (() => {
     const h = await rootHandle();
     if (!h) return 'none';
     let p;
-    try { p = await RS_LATE(h.queryPermission({ mode: 'read' }), 4000, 'slow'); } catch (e) { return 'none'; }
-    if (p === 'slow') return 'offline';
+    const t00 = Date.now();
+    try { p = await RS_LATE(h.queryPermission({ mode: 'read' }), check ? 20000 : 4000, 'slow'); } catch (e) { return 'none'; }
+    if (p === 'slow') { if (check) driveWhy('The browser gave no answer when asked if PageProof may still read the folder "' + h.name + '" (waited 20 s).'); return 'offline'; }
     if (p !== 'granted') return 'prompt';
     if (check) {
       const t0 = Date.now();
@@ -302,17 +303,21 @@ const FC = (() => {
       // A missing folder answers at once (NotFoundError) when Drive is up, so that still counts as up.
       let first = '';
       try { const pk = await picked(); first = pk && pk.length ? String(pk[0]).split('/')[0] : ''; } catch (e) { /* none */ }
+      const what = first ? 'the folder "' + first + '"' : 'the list of folders';
       const probe = first
         ? h.getDirectoryHandle(first).then(() => true, e => e && e.name === 'NotFoundError' ? true : Promise.reject(e))
         : h.entries().next().then(() => true);
       try {
         const ok = await RS_LATE(probe, 45000, false);
-        if (!ok) return 'offline';
-      } catch (e) { return 'offline'; }
+        if (!ok) { driveWhy('Asked Drive for ' + what + ' in "' + h.name + '": no answer in 45 s.'); return 'offline'; }
+      } catch (e) { driveWhy('Asked Drive for ' + what + ' in "' + h.name + '": ' + ((e && e.name) || 'Error') + ': ' + ((e && e.message) || String(e)) + ' (after ' + Math.round((Date.now() - t00) / 1000) + ' s)'); return 'offline'; }
       perf('driveAnswer', Date.now() - t0);
+      driveWhy('');
     }
     return 'granted';
   }
+  // Why the last Drive check failed, in plain words, for the red bar and Copy details for support.
+  function driveWhy(why) { api.storage.local.set({ fcDriveWhy: why ? { why, at: Date.now() } : null }).catch(() => {}); }
   // Pages never wait for Google Drive. They show the last answer at once; a fresh check runs in
   // the background (one at a time) and the page is redrawn if the answer changed.
   // fresh = "Try again": wait for a new answer.
