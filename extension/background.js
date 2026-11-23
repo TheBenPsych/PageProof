@@ -1,5 +1,7 @@
 // PageProof background script: runs the capture when you click the toolbar icon.
 if (typeof PP_DB === 'undefined' && typeof importScripts === 'function') importScripts('db.js');
+// 4.8.2: the copy store, so the toolbar dot counts new copies the same way Copies found does.
+if (typeof FC === 'undefined' && typeof importScripts === 'function') { try { importScripts('rs-store.js', 'fc-store.js'); } catch (e) { /* old count below */ } }
 
 const api = globalThis.browser || globalThis.chrome;
 const MAX_PAGE_SHOTS = 60;     // stop after this many screens on very long pages
@@ -635,7 +637,7 @@ async function fiftySchedule() {
 async function newBadge() {
   if (busy) return;
   try {
-    const n = await new Promise((res, rej) => {
+    const n = typeof FC !== 'undefined' ? await FC.countNew() : await new Promise((res, rej) => {
       const r = indexedDB.open('pageproof-fc');
       r.onerror = () => rej(r.error);
       r.onupgradeneeded = () => { r.transaction.abort(); rej(new Error('none')); };
@@ -745,7 +747,7 @@ if (api.alarms) {
 api.storage.onChanged.addListener(ch => {
   if (ch.fcKeep) { fiftySchedule(); driveNudge(false); }
   if (ch.fcNeedsAllow) newBadge();
-  if (ch.fcChanged) { clearTimeout(badgeT); badgeT = setTimeout(newBadge, 2000); }
+  if (ch.fcChanged || ch.rsHidden || ch.fcHiddenCountries) { clearTimeout(badgeT); badgeT = setTimeout(newBadge, 2000); }
 });
 let badgeT = null;
 api.runtime.onStartup.addListener(() => { fiftySchedule(); keepAlive(false); newBadge(); driveNudge(true); updateCheck(false); });

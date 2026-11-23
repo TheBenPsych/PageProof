@@ -1025,7 +1025,16 @@ const FC = (() => {
     perf('readCopies', Date.now() - t0, list.length);
     return list;
   }
-  const countNew = () => DB.countBy('copies', 'status', 'new');
+  // 4.8.2: the "new copies" number (menu, toolbar dot, side panel) counts only the new copies
+  // Copies found shows: copies on hidden sites or from hidden countries stay out of it. Before,
+  // it counted every new copy in the store, so hidden ones kept the number up after "All caught up".
+  async function countNew() {
+    const st = await api.storage.local.get(['rsHidden', 'fcHiddenCountries']);
+    const hidden = st.rsHidden || [], countries = st.fcHiddenCountries || [];
+    const fresh = (await allCopies()).filter(c => c.status === 'new');
+    if (!hidden.length && !countries.length) return fresh.length;
+    return fresh.filter(c => !(typeof RS_SITE !== 'undefined' && RS_SITE.entryFor(c.site, c.url, hidden)) && !countries.includes(c.country || countryOf(c.site))).length;
+  }
   // Is this website in your finds? Read from a small list (site -> how many copies), so the
   // toolbar menu and side panel never have to read every copy.
   async function siteFinds(site) {
