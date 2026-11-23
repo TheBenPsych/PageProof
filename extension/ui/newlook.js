@@ -94,6 +94,7 @@ V.tools = async () => {
       ['search', 'find', 'New search', 'Search a few photos right now.'],
       ['searches', 'loop', 'All searches', 'Every search you have run.'],
       ['skipped', 'flag', 'Skipped photos', 'Photos the search could not use, and why.'],
+      ['bnsave', 'down', 'Save a Breaking News photo', 'Name it the firm\'s way and check if it is new or recycled.'],
       ['owners', 'owner', 'Site owners', 'Sites that belong to one company.'],
       ['hidden', 'ban', 'Hidden and approved sites', 'Sites you never want, and sites that are allowed.'],
       ['health', 'check', 'Is everything working?', 'Lights for each part, and updates.'],

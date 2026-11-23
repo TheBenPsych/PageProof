@@ -21,7 +21,7 @@ const PP_ROUTES = {
   clients: ['clients', 'clients'], photos: ['clients', 'clients'], owners: ['clients', 'owners'], who: ['clients', 'owners'], keep: ['keep'], connect: ['find', 'found'], weekly: ['library', 'weekly'],
   inspect: ['tools'], compare: ['tools'], markup: ['tools'], files: ['tools'], openfiles: ['tools'],
   library: ['library', 'library'], verify: ['tools'], browser: ['browser'], settings: ['settings'], hidden: ['settings'], computer: ['settings'],
-  whatsnew: ['settings'], health: ['settings'], skipped: ['clients', 'skipped'], setup: ['browser'], help: ['help']
+  whatsnew: ['settings'], health: ['settings'], skipped: ['clients', 'skipped'], bnsave: ['tools'], setup: ['browser'], help: ['help']
 };
 const PP_CRUMBS = {
   results: 'Search results',
@@ -30,7 +30,7 @@ const PP_CRUMBS = {
   who: 'Who\'s behind this site', keep: 'Keep searching', connect: 'Connect your photos', weekly: 'Evidence library › Weekly summary',
   inspect: 'Photo tools › Inspect a photo', compare: 'Photo tools › Compare two photos', markup: 'Photo tools › Mark up a copy', files: 'Open files › Convert files',
   openfiles: 'Open files › Open odd files', library: 'Evidence library › All evidence', verify: 'Verify a pack', browser: 'Toolbar and side panel', settings: 'Settings',
-  hidden: 'Settings › Hidden and approved sites', computer: 'Settings › Your computer', whatsnew: 'Settings › What\'s new', health: 'Settings › Is everything working?', skipped: 'Skipped photos', setup: 'First-time setup', help: 'Help and tutorial'
+  hidden: 'Settings › Hidden and approved sites', computer: 'Settings › Your computer', whatsnew: 'Settings › What\'s new', health: 'Settings › Is everything working?', skipped: 'Skipped photos', bnsave: 'Save a Breaking News photo', setup: 'First-time setup', help: 'Help and tutorial'
 };
 const PP_BADGES = {};
 

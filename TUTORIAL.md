@@ -363,6 +363,31 @@ PageProof never changes its own files. You always do the update yourself with th
 
 **The red "!" on the PageProof icon** means Google Drive is waiting for its one click on **Allow** after the browser restarted. Click the icon and press **Allow**.
 
+## 19. Before you mark Stolen: rules, their page and Ready for legal
+
+Open a copy in **Copies found**. The details panel now has four extra boxes:
+
+- **Firm rules.** Pick what kind of site it is (PageProof guesses: a company, a nonprofit, a public university, a government site, a church, a person who isn't famous, a celebrity, a law firm, or a user-posted article). Red **Stop** lines are uses that usually can't be pursued, such as a YouTube embed or an embed from outside the U.S. Yellow **Warn** lines need a closer look. When you press **Stolen** on one of these, PageProof asks first. You can **Mark Stolen anyway**, or **Remove instead**.
+- **Their page.** PageProof reads their page once (nothing on it runs) and shows the **photo credit** next to the picture, **signs it was on purpose** (a price, an Add to cart button, ads), and whether the photo is in an embedded post. Press **Read again** if the page changed.
+- **Dates and damages.** The date first published comes from the photo's file name (like `10.29.26_Subject_Name.jpg`) or its folder. With the registration number, PageProof gives a hint: registered in time for **statutory damages**, still time to **register by** a date, or **likely actual damages only**. Always check the date on the certificate.
+- **Ready for legal?** (Stolen copies only.) Five ticks: page captured, registration number, kind of site, no Stop rules, and their page read. Buttons next to each missing tick fix it.
+
+The **Evidence report** PDF gets an **About this use** box with the same facts.
+
+**Who's behind this site** now has **Research steps**: 12 lookups with tick boxes, kept for each site.
+
+## 20. Save a Breaking News photo
+
+On a newspaper's page, right-click the photo and choose **PageProof › Save as Breaking News photo…**. A page opens with:
+
+1. The **photographer** (guessed from the credit line), the **date** (from the article), the **last name**, and a **Subject** box.
+2. Tick **POOL photo** for pool photos.
+3. The file name, made the firm's way: `11.23.26_Subject_Lastname.jpg` (no leading zeros) or `11.23.26_POOL_Subject_Lastname.jpg`.
+4. **New or recycled?** PageProof compares the photo with every photo of that photographer on Drive. **Recycled** shows the earlier file name. The first check reads photos it has never opened, so it can take a while; later checks are fast. PageProof only reads Drive, it never writes to it.
+5. Press **Save as …** and pick the folder in the Save As window.
+
+Photos with `_POOL_` in their name are never searched by Keep searching.
+
 ## Quick troubleshooting
 
 | Problem | What to do |
