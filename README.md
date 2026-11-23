@@ -57,16 +57,18 @@ For a step-by-step guide to using PageProof day to day, see **[TUTORIAL.md](TUTO
 
 1. Open the [Latest build](https://github.com/TheBenPsych/PageProof/releases/tag/latest) page.
 2. Click **PageProof.zip** to download it.
-3. Unzip it: on Windows, right-click the file and choose **Extract All**. On a Mac, double-click it. You now have a folder called **PageProof**. Put it somewhere you won't delete it, like your Documents folder.
+3. Unzip it into **Documents › PageProof › Install**: on Windows, right-click the file, choose **Extract All**, press **Browse**, go to Documents, make a folder called **PageProof** (if it isn't there yet), open it, make a folder called **Install** inside it, pick that, and press **Extract**. On a Mac, double-click it and move the folder to the same place.
+
+One folder holds everything: **Documents › PageProof** keeps your saved work (copies found, settings, site lists), and the **Install** folder inside it holds the program. PageProof never writes anything inside **Install**, so updates and virus checkers leave your work alone.
 
 ### Step 2a: Chrome (also works for Edge and Brave)
 
 1. Type `chrome://extensions` in the address bar and press Enter.
 2. Turn on **Developer mode** (the switch in the top-right corner).
-3. Click **Load unpacked** and choose the unzipped **PageProof** folder.
+3. Click **Load unpacked** and choose **Documents › PageProof › Install** (the folder with `manifest.json` in it).
 4. Click the puzzle-piece icon in the toolbar, then the pin next to PageProof so its icon is always visible.
 
-Chrome keeps it installed after a restart. To update later, download the new zip, replace the folder, and click the circular arrow on PageProof's card in `chrome://extensions`.
+Chrome keeps it installed after a restart. To update later, download the new zip, unzip it into the same **Install** folder (say yes to replacing the files), and click the circular arrow on PageProof's card in `chrome://extensions`.
 
 ### Step 2b: Firefox
 
@@ -80,6 +82,8 @@ Firefox needs its own download: **PageProof-Firefox.zip** from the [Latest build
 Firefox removes "temporary" add-ons when it closes, so you'd repeat these steps after a restart. To install it permanently, it has to be signed by Mozilla (free). That's a planned next step.
 
 ## Good to know
+
+- PageProof keeps the same extension ID wherever its folder is (it is fixed in `manifest.json`), so moving the **Install** folder and loading it again does not lose what PageProof stored in the browser. To move it, don't press Remove (that deletes its stored data): move the folder, then **Load unpacked** the new spot and it takes the old one's place.
 
 - Browser pages like the new tab page, settings, and the add-on stores can't be captured. Browsers block that for safety.
 - Sites that scroll inside a big box instead of the whole window (many web apps) are captured as one normal page, not as a separate section.
