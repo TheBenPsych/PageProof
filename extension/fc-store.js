@@ -267,7 +267,7 @@ const FC = (() => {
   const touch = what => api.storage.local.set({ fcChanged: { what, at: Date.now() } }).catch(() => {});
 
   // ---------------------------------------------------------------- settings
-  const KEEP_DEFAULT = { on: false, pace: 'Steady', hours: 'work', from: 8, to: 18, weekdays: true, fiftyTime: '09:00', fiftyAuto: false, perDay: 50 };
+  const KEEP_DEFAULT = { on: false, pace: 'Steady', hours: 'work', from: 8, to: 18, weekdays: true, fiftyTime: '09:00', fiftyAuto: false, perDay: 50, firstShare: 3, fiftyWhich: 'next' };
   const PACE = { Gentle: 10, Steady: 5, Faster: 2 };      // minutes between photos
   async function keep() { return { ...KEEP_DEFAULT, ...((await api.storage.local.get('fcKeep')).fcKeep || {}) }; }
   async function setKeep(ch) { const k = { ...(await keep()), ...ch }; await api.storage.local.set({ fcKeep: k }); backupSoon(); return k; }
@@ -770,20 +770,26 @@ const FC = (() => {
     if (client && client.priority) return { tier: 1, due: due || (since > 7 && age <= 3) };
     return { tier: age <= 3 ? 2 : 4, due };
   }
-  let QUEUE = null, QUEUE_AT = 0;
+  let QUEUE = null, QUEUE_AT = 0, FIRST = [];
   // quiet = only this page's list (a photo was just searched: the Keep searching window skips it
   // anyway). Otherwise every page rebuilds its list (flags, clients or folders changed).
   function queueDirty(quiet) { QUEUE = null; if (!quiet) api.storage.local.set({ fcQueueDirty: Date.now() }).catch(() => {}); }
   function resetQueue() { QUEUE = null; }
+  // Searched at least once (a photo that could not be opened does not count).
+  const searchedOnce = p => (p.searches || 0) > 0 || (!!p.lastSearched && !p.unreadable);
+  // Can never be searched as it is: POOL photos, and files that would not open.
+  const cantSearch = p => isPool(p.name) || !!p.unreadable;
   async function buildQueue() {
     const t0 = Date.now();
     const clients = new Map((await DB.all('clients')).map(c => [c.name, c]));
     const photos = await DB.all('photos');
-    const out = [];
+    const out = [], fresh = new Map();
     for (const p of photos) {
       if (p.gone || p.doubleOf) continue;
       const c = clients.get(p.client);
       if (!c || c.searching !== true) continue;
+      // Never searched yet: the "every photo once" line (4.10, Ben).
+      if (!searchedOnce(p) && !cantSearch(p)) { if (!fresh.has(p.client)) fresh.set(p.client, []); fresh.get(p.client).push(p); }
       const pl = plan(p, c);
       // Only photos that are due. (Photos that are not due used to sit at the end of the line,
       // so once everything due was done, quiet photos, photos searched last week and TIFF/HEIC
@@ -794,14 +800,51 @@ const FC = (() => {
     // Inside each tier: never searched first, then newest folders, then searched longest ago.
     out.sort((a, b) => a.tier - b.tier || (!!a.last - !!b.last) || b.order - a.order || a.last.localeCompare(b.last));
     QUEUE = out; QUEUE_AT = Date.now();
+    FIRST = firstLine(fresh, clients);
     perf('searchLine', Date.now() - t0, photos.length);
     return out;
   }
+  // The never-searched line: ★ priority clients first, then the clients take turns (one photo
+  // each, round and round) so no client stays at 0% while another finishes. Newest photos first
+  // inside each client.
+  function firstLine(fresh, clients) {
+    const turns = names => {
+      const lists = names.map(n => fresh.get(n).sort((a, b) => (b.order || 0) - (a.order || 0)));
+      const ids = [];
+      for (let i = 0, any = true; any; i++) { any = false; for (const l of lists) if (i < l.length) { ids.push(l[i].id); any = true; } }
+      return ids;
+    };
+    const names = [...fresh.keys()].sort();
+    const pri = names.filter(n => clients.get(n) && clients.get(n).priority);
+    return turns(pri).concat(turns(names.filter(n => !pri.includes(n))));
+  }
   // The next n photos to search (skipping ids in "skip": already running or just done).
-  async function next(n = 1, skip = new Set()) {
+  // Every share-th search (1 in 3 unless changed) is a photo never searched before, until there
+  // are none left. ⚑ High priority photos (and "Try again") always go first.
+  // first = true (Today's 50 set to "Never searched first"): never-searched photos first, then
+  // the normal line.
+  async function next(n = 1, skip = new Set(), opts = {}) {
     if (!QUEUE || Date.now() - QUEUE_AT > 3600000) await buildQueue();
+    const k = await keep();
+    const share = [2, 3, 4].includes(k.firstShare) ? k.firstShare : 3;
+    // Keep searching (one photo at a time) remembers whose turn it is between photos.
+    const solo = n === 1 && !opts.first;
+    let turn = solo ? ((await api.storage.local.get('fcFirstTurn')).fcFirstTurn || 0) : 0;
+    const used = new Set(skip);
+    let qi = 0, fi = 0;
+    const nq = () => { while (qi < QUEUE.length && used.has(QUEUE[qi].id)) qi++; return QUEUE[qi]; };
+    const nf = () => { while (fi < FIRST.length && used.has(FIRST[fi])) fi++; return FIRST[fi]; };
     const ids = [];
-    for (const q of QUEUE) { if (ids.length >= n) break; if (!skip.has(q.id)) ids.push(q.id); }
+    while (ids.length < n) {
+      const q = nq(), f = nf();
+      if (!q && !f) break;
+      let id;
+      if (q && q.tier === 0) id = q.id;
+      else if (f && (opts.first || !q || turn % share === share - 1)) { id = f; turn++; }
+      else { id = q.id; turn++; }
+      used.add(id); ids.push(id);
+    }
+    if (solo && ids.length) api.storage.local.set({ fcFirstTurn: turn % 1200 }).catch(() => {});
     const got = [];
     for (const id of ids) { const p = await DB.get('photos', id); if (p) got.push(p); }
     return got;
@@ -812,21 +855,47 @@ const FC = (() => {
     const clients = new Map((await DB.all('clients')).map(c => [c.name, c]));
     const g = { top: [0, 0], recent: [0, 0], year: [0, 0], older: [0, 0] };
     let quiet = 0, doubles = 0, total = 0;
+    // Every photo searched at least once (4.10): per client [searched once, can be searched, can't].
+    const first = { done: 0, total: 0, cant: 0, pool: 0, broken: 0, week: 0, clients: {} };
+    const weekAgo = new Date(Date.now() - 7 * DAY).toISOString();
     for (const p of await DB.all('photos')) {
       if (p.gone) continue;
       if (p.doubleOf) { doubles++; continue; }
       const c = clients.get(p.client);
       if (!c || c.searching !== true) continue;
       total++;
+      const fc = first.clients[p.client] = first.clients[p.client] || [0, 0, 0];
+      if (cantSearch(p)) { first.cant++; fc[2]++; if (isPool(p.name)) first.pool++; else first.broken++; }
+      else { first.total++; fc[1]++; if (searchedOnce(p)) { first.done++; fc[0]++; } }
+      if (p.firstAt && p.firstAt > weekAgo) first.week++;
       const since = ageDays(p.lastSearched), age = monthsOld(p);
       const k = p.flag === 'hi' || (c && c.priority) ? 'top' : age <= 3 ? 'recent' : age <= 12 ? 'year' : 'older';
       const ok = k === 'top' ? since <= 7 : k === 'recent' ? since <= 30 : k === 'year' ? since <= 183 : since <= 365;
       g[k][1]++; if (ok) g[k][0]++;
       if (p.empty >= 5) quiet++;
     }
-    COVER = { at: Date.now(), v: { groups: g, total, quiet, doubles } };
+    first.never = first.total - first.done;
+    first.pri = [...clients.values()].filter(c => c.priority).map(c => c.name);
+    await firstFinished(first.clients).catch(() => {});
+    COVER = { at: Date.now(), v: { groups: g, total, quiet, doubles, first } };
+    // A small copy for Home, so Home never has to read every photo.
+    api.storage.local.set({ fcFirst: { at: Date.now(), done: first.done, total: first.total, never: first.never, cant: first.cant, week: first.week, pri: first.pri, clients: first.clients } }).catch(() => {});
     return COVER.v;
   }
+  // A client just reached 100% (every photo searched at least once): a note for Home and the
+  // weekly summary. New photos can take a client below 100% again; it gets a new note when it
+  // gets back to 100%. The first time this runs, it only remembers where everyone is.
+  async function firstFinished(per) {
+    const was = (await meta.get('firstState')) || null, now = {}, notes = (await meta.get('firstNotes')) || [];
+    let added = false;
+    for (const [name, [d, t]] of Object.entries(per)) {
+      now[name] = t > 0 && d >= t;
+      if (was && now[name] && was[name] === false) { notes.unshift({ name, n: t, at: new Date().toISOString() }); added = true; }
+    }
+    await meta.set('firstState', now);
+    if (added) { await meta.set('firstNotes', notes.slice(0, 50)); touch('firstNotes'); }
+  }
+  async function firstNotes() { return (await meta.get('firstNotes')) || []; }
 
   // ---------------------------------------------------------------- photos that could not be searched
   // Kept as a short list (newest first) so the Skipped photos page never has to read every photo.
@@ -1163,6 +1232,8 @@ const FC = (() => {
     // Their copy of the photo is kept the moment it is found (not for sites already approved).
     keepSoon(out.filter(c => c.times === 1 && c.status === 'new'));
     const all = await copiesOf(p.id);
+    const firstTime = !searchedOnce(p);
+    if (firstTime) p.firstAt = now;            // its first search ever (the "every photo once" count)
     p.searches = (p.searches || 0) + 1;
     p.lastSearched = now;
     delete p.retry;
@@ -1178,7 +1249,7 @@ const FC = (() => {
     const today = t.day === day ? t : { day, searched: 0, found: 0 };
     today.searched++; today.found += fresh;
     await api.storage.local.set({ fcToday: today, fcLastSearch: Date.now() });
-    await logWeek({ searched: 1, found: fresh, client: p.client || '' });
+    await logWeek({ searched: 1, found: fresh, first: firstTime ? 1 : 0, client: p.client || '' });
     queueDirty(true); backupCopiesSoon(); touch('copies');
     return { photo: p, fresh };
   }
@@ -1368,7 +1439,7 @@ const FC = (() => {
   async function logWeek(add) {
     const k = 'week:' + weekKey();
     const w = (await meta.get(k)) || { searched: 0, found: 0, stolen: 0, licensed: 0, removed: 0, wentOffline: 0, backOnline: 0, clients: {}, offline: [], back: [] };
-    for (const f of ['searched', 'found', 'stolen', 'licensed', 'removed', 'wentOffline', 'backOnline']) if (add[f]) w[f] = Math.max(0, (w[f] || 0) + add[f]);
+    for (const f of ['searched', 'found', 'first', 'stolen', 'licensed', 'removed', 'wentOffline', 'backOnline']) if (add[f]) w[f] = Math.max(0, (w[f] || 0) + add[f]);
     if (add.client !== undefined) {
       const c = w.clients[add.client || 'Client unknown'] = w.clients[add.client || 'Client unknown'] || { searched: 0, found: 0, stolen: 0 };
       if (add.searched) c.searched += add.searched; if (add.found) c.found += add.found; if (add.stolen) c.stolen = Math.max(0, c.stolen + add.stolen);
@@ -1664,7 +1735,8 @@ const FC = (() => {
     if (j.keep && typeof j.keep === 'object') {
       const k = j.keep, hr = v => (Number.isInteger(v) && v >= 0 && v <= 23 ? v : null);
       set.fcKeep = { ...KEEP_DEFAULT, on: false, pace: PACE[k.pace] ? k.pace : KEEP_DEFAULT.pace, hours: k.hours === 'all' ? 'all' : 'work', from: hr(k.from) ?? KEEP_DEFAULT.from, to: hr(k.to) ?? KEEP_DEFAULT.to,
-        weekdays: k.weekdays !== false, fiftyTime: /^\d\d:\d\d$/.test(k.fiftyTime || '') ? k.fiftyTime : KEEP_DEFAULT.fiftyTime, fiftyAuto: k.fiftyAuto === true, perDay: [10, 25, 50, 75, 100].includes(k.perDay) ? k.perDay : 50 };
+        weekdays: k.weekdays !== false, fiftyTime: /^\d\d:\d\d$/.test(k.fiftyTime || '') ? k.fiftyTime : KEEP_DEFAULT.fiftyTime, fiftyAuto: k.fiftyAuto === true, perDay: [10, 25, 50, 75, 100].includes(k.perDay) ? k.perDay : 50,
+        firstShare: [2, 3, 4].includes(k.firstShare) ? k.firstShare : 3, fiftyWhich: k.fiftyWhich === 'first' ? 'first' : 'next' };
     }
     if (j.drive && typeof j.drive === 'object') set.fcDrive = { label: str(j.drive.label) || 'G:\\Shared drives\\Photos', done: false };
     if (Array.isArray(j.hiddenCountries)) set.fcHiddenCountries = j.hiddenCountries.map(str).filter(Boolean);
@@ -1691,7 +1763,7 @@ const FC = (() => {
 
   return { DB, meta, open, touch, pics, dropDotMatches, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, setPicked, pickInside, SCAN, applyPendingFlags, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
-    photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setClients, checkOnline, logWeek, week, weekKey,
+    photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setClients, checkOnline, logWeek, week, weekKey, firstNotes, searchedOnce,
     isPool, hiddenCountries, setHiddenCountries, ownerFor, pathOf, logReport, USE, useOf, riskOf, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
     backupSoon, backupCopiesSoon, writeSettings, writeCopies, readBackup, restore, restoreCopies, settingsSnapshot, monthsOld, newness, yearOf, quarterOf, dayOf };
 })();

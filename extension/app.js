@@ -193,7 +193,8 @@ V.home = async () => {
 async function homeFinds() {
   const d = await FC.drive();
   if (!d.done) return { alerts: '', side: '', main: `<section class="card pad row" style="gap:14px"><span class="ic" style="color:var(--accent)">${ic('find', 26)}</span><div style="flex:1 1 260px"><h2>Search all your clients' photos, all day</h2><span class="muted" style="font-size:14px">Connect the shared Google Drive once and PageProof keeps looking for copies by itself.</span></div><a class="btn primary" href="#connect">Connect your photos</a></section>` };
-  const [copies, st, k, store] = [await FC.allCopies(), (await api.storage.local.get('fcStatus')).fcStatus, await FC.keep(), await api.storage.local.get(['fcToday', 'fcDriveBack', 'fcDriveOffline', 'fcPause'])];
+  const [copies, st, k, store] = [await FC.allCopies(), (await api.storage.local.get('fcStatus')).fcStatus, await FC.keep(), await api.storage.local.get(['fcToday', 'fcDriveBack', 'fcDriveOffline', 'fcPause', 'fcFirst', 'fcFirstSeen'])];
+  const hw = await ppHardware();
   const vis = copies.filter(c => !FC.hiddenCopy(c, RS_LISTS.hidden));
   const nNew = vis.filter(c => c.status === 'new').length;
   const back = vis.filter(c => c.status !== 'removed' && c.online === 'back');
@@ -210,6 +211,9 @@ async function homeFinds() {
   if (k.on && !store.fcPause && st && st.state === 'closed' && typeof keepClosedBanner === 'function') alerts += keepClosedBanner();
   if (store.fcDriveOffline) alerts += `<div class="banner bad" role="alert">${ic('help', 22)}<div style="flex:1 1 260px"><b>Can't reach Google Drive. Searching is paused.</b><div style="font-size:13.5px;color:var(--ink)">Drive for desktop is signed out or not running. It picks up where it left off.</div></div><a class="btn" href="#keep">Keep searching</a></div>`;
   else if (ds === 'prompt') alerts += `<div class="banner warn" role="alert">${ic('help', 22)}<div style="flex:1 1 260px"><b>One click needed: let PageProof read your photos again</b></div><button class="btn primary" data-act="driveallow">Allow</button></div>`;
+  // A client reached 100%: every one of its photos searched at least once (4.10).
+  const fin = (await FC.firstNotes()).filter(n => n.at > (store.fcFirstSeen || '') && Date.now() - Date.parse(n.at) < 14 * 86400000);
+  if (fin.length) alerts += `<div class="banner info" role="status" id="firstDone"><div style="flex:1 1 260px"><b>${fin.length === 1 ? esc(fin[0].name) + ': every photo searched at least once' : fin.length + ' clients now have every photo searched at least once'}</b><div style="font-size:13.5px">${esc(fin.map(n => n.name + ' (' + n.n.toLocaleString() + ' photos)').slice(0, 4).join(', '))}${fin.length > 4 ? ' and more' : ''}. New photos still get their first search when they arrive.</div></div><a class="btn" href="#keep">See progress</a><button class="btn ghost" data-act="firstseen">OK</button></div>`;
   const upd = await ppUpState();
   if (upd && upd.has) alerts += `<div class="banner info" role="status"><div style="flex:1 1 260px"><b>PageProof ${esc(upd.latest)} is ready</b><div style="font-size:13.5px">You have ${VERSION}. Updating keeps everything you have.</div></div><a class="btn primary" href="#health" data-act="upgo">Update</a></div>`;
   for (const [e, until] of Object.entries(await FC.brokenEngines())) alerts += `<div class="banner bad" role="alert">${ic('help', 22)}<div style="flex:1 1 260px"><b>${FC.ENGINE_NAME[e]} may have stopped working</b><div style="font-size:13.5px;color:var(--ink)">It gave nothing for many photos in a row, so PageProof is resting it until ${new Date(until).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}. Those empty results are not counted against your photos. The other search sites carry on.</div></div><a class="btn" href="#health">See details</a></div>`;
@@ -223,6 +227,7 @@ async function homeFinds() {
     <span class="muted" style="font-size:14px">${k.on && alive ? esc(st.text) : k.on && st && st.state === 'closed' ? 'Stopped: its pinned tab was closed.' : k.on ? 'The search tab is starting.' : 'Turn it on to search all day.'}</span>
     <span class="faint" style="font-size:13px">Today: ${today.searched} ${today.searched === 1 ? 'photo' : 'photos'} searched, ${today.found} new ${today.found === 1 ? 'copy' : 'copies'}</span>
     <a class="btn" href="#keep">Open Keep searching</a></section>
+    ${homeFirst(store.fcFirst, k, hw)}
     <section class="card pad" style="display:flex;flex-direction:column;gap:8px"><h2>Still online?</h2>
     <span class="muted" style="font-size:14px">${stolen.length ? `${up} of ${stolen.length} copies you marked stolen are still up. They're checked every week.` : 'Copies you mark stolen are checked every week.'}</span>
     <div class="row"><a class="btn" href="#found?filter=Stolen">Stolen copies</a><a class="btn ghost" href="#weekly">Weekly summary</a></div></section>`;
@@ -242,7 +247,28 @@ async function homeFinds() {
   const hero = nNew ? `<a class="homehero" href="#found"><div class="n">${nNew}</div><div style="flex:1;min-width:200px"><h2>new ${nNew === 1 ? 'copy' : 'copies'} to look at</h2><p>${top.length === 1 ? 'One client has' : top.length + ' clients have'} photos found on other sites.</p></div><span class="btn">Review them ›</span></a>` : '';
   return { alerts, main: hero + main + mostHtml, side };
 }
+// Home card: every photo searched once. Uses the small copy saved by the last count, so Home
+// never reads every photo; a count older than an hour is redone after Home has drawn.
+function homeFirst(F, k, hw) {
+  if (!F || !F.total) return `<section class="card pad firsthome" id="homeFirst" style="display:flex;flex-direction:column;gap:8px"><h2>Every photo searched once</h2><span class="muted" style="font-size:14px">Counting your photos…</span></section>`;
+  const pct = Math.floor(F.done / F.total * 100);
+  let by = '';
+  try { by = firstDoneBy(F.never, firstPerDay(k, hw, F.week)) || ''; } catch (e) { /* no date */ }
+  return `<section class="card pad firsthome" id="homeFirst" style="display:flex;flex-direction:column;gap:8px">
+    <div class="row"><h2>Every photo searched once</h2><span class="faint num" style="margin-left:auto;font-size:13px">${pct}%</span></div>
+    <span class="bar${F.never ? '' : ' okbar'}"><i style="width:${F.done / F.total * 100}%"></i></span>
+    <span class="muted num" style="font-size:13.5px">${F.done.toLocaleString()} of ${F.total.toLocaleString()} · ${F.never ? F.never.toLocaleString() + ' to go' + (by && by !== 'Done' ? ' · done ' + esc(by) : '') : 'all done, new photos join by themselves'}</span>
+    <a class="btn" href="#keep?clients=1">See by client</a></section>`;
+}
 V.home.after = async () => {
+  try {
+    const F = (await api.storage.local.get('fcFirst')).fcFirst;
+    if ((await FC.drive()).done && (!F || Date.now() - F.at > 3600000)) {
+      await FC.coverage();
+      const n = (await api.storage.local.get('fcFirst')).fcFirst, el = document.getElementById('homeFirst');
+      if (el && n && state.shown === 'home') el.outerHTML = homeFirst(n, await FC.keep(), await ppHardware());
+    }
+  } catch (e) { /* counted next time */ }
   try { const c = (await api.commands.getAll()).find(x => x.name === 'capture-page'); if (c && c.shortcut) document.getElementById('shortcut').textContent = c.shortcut; } catch (e) { /* none */ }
 };
 
@@ -510,6 +536,9 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Every photo gets searched at least once', 'Before, older photos that were never searched could wait forever behind newer and priority photos. Now 1 in 3 searches (you can pick 1 in 4 or 1 in 2 on Keep searching) goes to a photo that was never searched, until there are none left. ⚑ High priority photos still go first. ★ Priority clients get their first searches first, then the clients take turns, newest photos first. New photos you add to Drive join by themselves.'],
+  ['See what has been searched', 'Keep searching shows how many photos were searched at least once (for example 12,400 of 18,000), how many are left, the first searches this week and a "done by" date at your pace, plus a table client by client, lowest first. Photos that can\'t be searched (POOL, TIFF, HEIC, broken) are counted apart. Home has the same bar, and a note when a client reaches 100%. The weekly summary says how many photos had their first search.'],
+  ['Today\'s 50 can pick never-searched photos', 'On Keep searching › Today\'s 50, choose "Never searched first" to spend the whole batch on photos that have never been searched.'],
   ['Social sites: only accounts can be hidden', 'A whole social site like x.com or instagram.com can no longer be hidden, only the accounts on it. Any social site you hid before shows again, with a note on Copies found.'],
   ['Keep searching starts fresh after every update', 'After an update (or Reload), the old pinned Keep searching tab could keep running old code and quietly stop searching. Now PageProof closes the old Keep searching tab and any search tabs left over from before, and opens a fresh Keep searching tab by itself. If an old tab is still around, it notices it is out of date and loads itself again.'],
   ['Reloading a big search carries on', 'Reloading the page of a running search (like today\'s 50) no longer leaves its old search tabs frozen in the tab bar and opens new ones on top. The old tabs close, and the search carries on with the photos it had not finished. Photo checks of one search also no longer wait for another open search (or Keep searching) to finish its own checks, so photos move past "Checking matches" sooner.'],
