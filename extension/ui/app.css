@@ -360,7 +360,7 @@ th.hashelp,.tabs button.hashelp{text-decoration:underline dotted var(--faint);te
 .hwlim div{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column}
 .hwlim b{font-family:var(--f-display);font-size:22px;color:var(--accent)}.hwlim span{font-size:13px;color:var(--muted)}
 .hwlist{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;font-size:14px}
-.start.hero{--hero:linear-gradient(110deg,#8F5FE8 0%,#D6406E 100%)}
+.start.hero{--hero:linear-gradient(110deg,var(--hero-a) 0%,var(--hero-b) 100%)}
 .start.hero{background:var(--hero);border-color:transparent;color:#fff}.start.hero span{color:rgba(255,255,255,.88)}.start.hero .ic{background:rgba(255,255,255,.18);color:#fff}
 :root[data-theme="dark"] .start.hero{background:var(--hero);border-color:transparent;color:#FFFFFF}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .start.hero{background:var(--hero);border-color:transparent;color:#FFFFFF}}
@@ -416,7 +416,7 @@ dialog.pp-ask::backdrop{background:rgba(8,12,20,.5)}
 @font-face{font-family:"Plus Jakarta Sans";font-style:normal;font-weight:400 800;font-display:swap;src:url(fonts/plus-jakarta-sans.woff2) format("woff2")}
 :root{
   --bg:#EEF0F4; --surface:#FFFFFF; --sunk:#F3F4F8; --ink:#1D212B; --line:#E1E4EC; --faint:#6A7089;
-  --hero-a:#8F5FE8; --hero-b:#D6406E; --go:#15803D;
+  --hero-a:#2563EB; --hero-b:#0284C7; --go:#15803D;
   --shadow:0 1px 2px rgba(20,26,45,.05),0 6px 20px rgba(20,26,45,.06); --pop:0 10px 40px rgba(20,26,45,.18);
   --f-display:"Plus Jakarta Sans","Segoe UI Variable Display","Segoe UI",system-ui,-apple-system,sans-serif;
 }
@@ -602,7 +602,7 @@ input.cpick{width:16px;height:16px;opacity:.35}
 .homehero .n{font:800 54px/1 var(--f-display);letter-spacing:-.03em;font-variant-numeric:tabular-nums}
 .homehero h2{font-size:20px;color:#fff}
 .homehero p{margin:3px 0 0;opacity:.92}
-.homehero .btn{background:#fff;color:#3A1D6E;border-color:#fff;min-height:44px;padding:0 18px}
+.homehero .btn{background:#fff;color:#1E3A8A;border-color:#fff;min-height:44px;padding:0 18px}
 .toprow{display:grid;grid-template-columns:auto minmax(0,1fr) 90px 30px;gap:12px;align-items:center;padding:8px 0;border-top:1px solid var(--line);color:inherit;text-decoration:none;font-size:14px}
 .toprow:first-of-type{border-top:0}
 .toprow img{width:52px;height:38px;object-fit:cover;border-radius:6px;background:var(--line)}
@@ -810,7 +810,7 @@ dd q{quotes:"“" "”";font-style:italic}
 .ftile i{position:absolute;top:12px;right:12px;width:9px;height:9px;border-radius:50%}
 .ftile:hover{border-color:var(--faint)}
 .ftile.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
-.ftile.hero{background:linear-gradient(120deg,#8F5FE8,#D6406E);border-color:transparent;color:#fff}
+.ftile.hero{background:linear-gradient(120deg,var(--hero-a),var(--hero-b));border-color:transparent;color:#fff}
 .ftile.hero span{color:rgba(255,255,255,.9)}
 .ftile.hero.on{box-shadow:0 0 0 3px var(--accent-soft)}
 /* list: one tidy filter line */

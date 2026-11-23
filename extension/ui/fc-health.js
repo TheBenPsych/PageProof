@@ -126,7 +126,7 @@ async function supportDetails() {
 // ---------------------------------------------------------------- how much room PageProof takes
 // Measured only when this page is open (it reads every stored picture's size, which takes a
 // moment on a big list). Copies marked Stolen are never offered for clearing.
-const STORE_PARTS = [['kept', 'Kept copies of their pictures', '#2563EB'], ['pages', 'Pictures of their pages', '#0EA5E9'], ['prev', 'Preview pictures', '#8B5CF6'], ['caps', 'Captures waiting in the browser', '#15803D'], ['rest', 'Lists and settings', '#94A3B8']];
+const STORE_PARTS = [['kept', 'Kept copies of their pictures', '#2563EB'], ['pages', 'Pictures of their pages', '#0EA5E9'], ['prev', 'Preview pictures', '#93C5FD'], ['caps', 'Captures waiting in the browser', '#15803D'], ['rest', 'Lists and settings', '#94A3B8']];
 const sizeText = n => n >= 1073741824 ? (n / 1073741824).toFixed(1) + ' GB' : n >= 1048576 ? (n / 1048576).toFixed(n >= 104857600 ? 0 : 1) + ' MB' : n >= 1024 ? Math.round(n / 1024) + ' KB' : n ? '1 KB' : '0 KB';
 async function ppStorage() {
   const [kept, pages, prev, est, capKeys] = await Promise.all([FC.kept.stats(), FC.pages.stats(), FC.pics.stats(), navigator.storage && navigator.storage.estimate ? navigator.storage.estimate().catch(() => ({})) : {}, PP_DB.keys().catch(() => [])]);

@@ -129,6 +129,10 @@ body.with-side #preview>canvas,body.with-side #preview>img{display:block;max-wid
 :root[data-theme="dark"] #empty .alt{color:var(--t-muted)}
 :root[data-theme="dark"] #view{background-color:var(--t-surface)}
 :root[data-theme="dark"] #hint{color:var(--t-muted)}
+:root[data-theme="dark"] #spotBtn.on{outline-color:var(--t-warn)}
+:root[data-theme="dark"] .spot .ok{color:var(--t-ok)}
+:root[data-theme="dark"] .spot .mid{color:var(--t-warn)}
+:root[data-theme="dark"] #nearby .nr.win span{color:var(--t-ok)}
 /* markup.css */
 :root[data-theme="dark"] #board{background-color:var(--t-surface)}
 /* convert.css */
