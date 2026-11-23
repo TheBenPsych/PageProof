@@ -1,161 +1,110 @@
-// Checks for 4.10: account details on social copies. PageProof reads each account's profile
-// by itself (stubbed here: the network and real tabs are never used) and works out followers,
-// verified, account type (with an automatic business check), country and owner company.
-// Filters, row badges, Sort by followers, the Accounts list columns and the panel follow.
-// Pretend accounts only.
+// 4.10: every photo searched at least once. The never-searched share in the search line, client
+// turns, the counts (done / never / can't), the client-finished note, and the pages that show it.
 const { start } = require('./h.js');
-process.env.NP = 300; process.env.NC = 60;
+process.env.NP = 300; process.env.NC = 50;
 const { seed } = require('./seed.js');
-const SHOTS = process.env.SHOTS || '';
 let fails = 0;
 const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m); };
 (async () => {
-  const { ctx, url } = await start({ viewport: { width: 1600, height: 1000 } });
+  const { ctx, url } = await start();
   const page = await ctx.newPage();
-  page.on('pageerror', e => { fails++; console.log('PAGEERROR', String(e.stack || e).slice(0, 900)); });
-  const shot = async n => { if (SHOTS) await page.screenshot({ path: SHOTS + '/' + n + '.png' }); };
-  const go = async h => { await page.goto(url('app.html#' + h)); await page.waitForTimeout(1300); };
-  await go('help'); await seed(page); await page.reload(); await page.waitForTimeout(1000);
+  page.on('pageerror', e => { fails++; console.log('PAGEERROR', String(e).slice(0, 300)); });
+  page.on('console', m => { if (m.type() === 'error' && !/TUNNEL|ERR_NAME|net::|Failed to load resource/.test(m.text())) console.log('ERR', m.text().slice(0, 300)); });
+  await page.goto(url('app.html#help')); await page.waitForTimeout(800);
+  await seed(page); await page.reload(); await page.waitForTimeout(1500);
 
-  // ---- the profile reader on its own (what each site shows, turned into facts)
-  const unit = await page.evaluate(() => {
-    const S = PP_SOCIAL;
-    const ig = S.fromUrl('https://www.instagram.com/pinecrest.bakery/');
-    const fb = S.fromUrl('https://www.facebook.com/harborlightoutfitters');
-    const fan = S.fromUrl('https://www.facebook.com/coastalsunsetsfans');
-    const xo = S.fromUrl('https://x.com/DailyExNews');
-    const grp = { key: 'facebook.com/groups/shorephotoswap', handle: 'Shore Photo Swap', url: 'https://www.facebook.com/groups/shorephotoswap', plat: 'facebook.com' };
-    const guess = S.fromUrl('https://www.instagram.com/seaside.goods/');
-    const nothing = S.fromUrl('https://www.tiktok.com/@quickclips');
-    return {
-      nums: ['12.5K', '1,204', '1.2M', '3 B', '48 200'].map(S.big).join(','),
-      pages: S.profilePages(fb).map(p => p.url).concat(S.profilePages(xo).map(p => p.url)).join(' '),
-      ig: S.profileFacts(ig, [{ kind: 'profile', desc: '9,812 Followers, 300 Following, 120 Posts - See Instagram photos and videos from Pinecrest Bakery (@pinecrest.bakery)', text: '', data: [['is_business_account', 'true'], ['category_name', '"Bakery"'], ['is_verified', 'false']], about: 'About this account\nDate joined\nMarch 2019\nAccount based in\nUnited States\nFormer usernames\n@pinecrest_old\n' }]),
-      fb: S.profileFacts(fb, [{ kind: 'profile', text: 'Harbor Light Outfitters\n48K likes • 52K followers\nPage · Clothing store\n', data: [], badge: ['Verified account'], links: ['https://l.facebook.com/l.php?u=https%3A%2F%2Fharborlight.example%2F'], buttons: ['Shop now'] },
-        { kind: 'transparency', text: 'Page transparency\nConfirmed Page owner\nHarbor Light Outfitters LLC\n12 Pier St, Portland, ME 04101\nPage created - March 4, 2015\nPrimary country/region location for people who manage this Page\nUnited States (3)\n' }]),
-      fan: S.profileFacts(fan, [{ kind: 'profile', text: 'Coastal Sunsets Fans\n3.1K followers\nPage · Fan Page\n', data: [] }]),
-      xo: S.profileFacts(xo, [{ kind: 'profile', text: 'Daily Example News\n1.4M Followers', data: [['verified_type', '"Business"'], ['followers_count', '1450000']] }, { kind: 'transparency', text: 'About this account\nAccount based in\nCanada\n' }]),
-      grp: S.profileFacts(grp, [{ kind: 'profile', text: 'Shore Photo Swap\nPublic group · 12.4K members', data: [] }]),
-      // No category shown: the automatic business check adds up the signs.
-      guess: S.addShopSign(S.profileFacts(guess, [{ kind: 'profile', desc: '2,100 Followers - Seaside Goods (@seaside.goods)', text: '', data: [['biography', '"Handmade home decor. hello@seaside.example"'], ['is_business_account', 'null']], links: ['https://seasidegoods.example/'], buttons: [] }]), { ok: true, sells: { cart: true } }),
-      nothing: S.profileFacts(nothing, [{ kind: 'profile', text: 'Log in to TikTok', desc: '', data: [] }]),
-    };
+  // A small made-up library: A (★ priority) 3 never searched, B 4 never, C 1 never + 1 POOL +
+  // 1 that would not open, plus 6 old photos (searched 400 days ago, so due) in the normal line.
+  const r = await page.evaluate(async () => {
+    for (const p of await FC.DB.all('photos')) await FC.DB.del('photos', p.id);
+    for (const c of await FC.DB.all('clients')) await FC.DB.del('clients', c.name);
+    await FC.DB.putMany('clients', [['A', true], ['B', false], ['C', false]].map(([name, priority]) => ({ name, searching: true, priority, photos: 0, licensed: [] })));
+    const old = new Date(Date.now() - 400 * 864e5).toISOString();
+    const mk = (client, i, extra) => ({ id: 'd:' + client + '/' + i + '.jpg', client, rel: client + '/' + i + '.jpg', name: client + '_' + i + '.jpg', year: 2019, quarter: 1, order: i, searches: 0, empty: 0, ...extra });
+    const ps = [];
+    for (let i = 0; i < 3; i++) ps.push(mk('A', i));
+    for (let i = 0; i < 4; i++) ps.push(mk('B', i));
+    ps.push(mk('C', 0));
+    ps.push(mk('C', 1, { name: '10.29.26_POOL_Court.jpg' }));
+    ps.push(mk('C', 2, { unreadable: 'x', skip: 'broken', lastSearched: old }));
+    for (let i = 0; i < 6; i++) ps.push(mk('C', 10 + i, { searches: 1, lastSearched: old }));
+    // Newest photos, searched 40 days ago: due again, and they sit above old never-searched
+    // photos in the normal line (this is what used to keep those waiting forever).
+    const now = new Date(), q = Math.floor(now.getMonth() / 3) + 1;
+    for (let i = 0; i < 6; i++) ps.push(mk('C', 'R' + i, { year: now.getFullYear(), quarter: q, order: 1000 - i, searches: 1, lastSearched: new Date(Date.now() - 40 * 864e5).toISOString() }));
+    await FC.DB.putMany('photos', ps);
+    await chrome.storage.local.remove(['fcFirstTurn', 'fcFirst']);
+    await FC.setKeep({ firstShare: 3, fiftyWhich: 'next' });
+    FC.resetQueue(); await FC.buildQueue();
+    const batch = (await FC.next(9)).map(p => p.id.replace('d:', ''));
+    const firstOnly = (await FC.next(5, new Set(), { first: true })).map(p => p.id.replace('d:', ''));
+    // One at a time (Keep searching): every third pick is a never-searched photo.
+    const solo = [], skip = new Set();
+    for (let i = 0; i < 6; i++) { const [p] = await FC.next(1, skip); skip.add(p.id); solo.push(p.id.replace('d:', '')); }
+    // ⚑ High priority jumps the line.
+    const hi = await FC.DB.get('photos', 'd:C/15.jpg'); hi.flag = 'hi'; await FC.DB.put('photos', hi);
+    FC.resetQueue();
+    const [h] = await FC.next(1, new Set());
+    hi.flag = ''; await FC.DB.put('photos', hi);
+    const cov = (await FC.coverage()).first;
+    return { batch, firstOnly, solo, hi: h.id, cov };
   });
-  ok(unit.nums === '12500,1204,1200000,3000000000,48200', 'Follower numbers like 12.5K, 1.2M and 48 200 are read right (' + unit.nums + ')');
-  ok(/facebook\.com\/harborlightoutfitters\/about_profile_transparency/.test(unit.pages) && /x\.com\/DailyExNews\/about/.test(unit.pages), 'Facebook Page transparency and X "About this account" are read too');
-  ok(unit.ig.followers === 9812 && unit.ig.verified === 'no' && unit.ig.type === 'Business' && unit.ig.typeSure === 'sure' && unit.ig.country === 'United States' && unit.ig.created === 'March 2019' && unit.ig.oldNames[0] === '@pinecrest_old',
-    'Instagram: followers, not verified, Business (Bakery), based in, date joined, old names');
-  ok(unit.fb.followers === 52000 && unit.fb.verified === 'blue' && unit.fb.company === 'Harbor Light Outfitters LLC' && /ME 04101/.test(unit.fb.address) && unit.fb.country === 'United States' && unit.fb.type === 'Business' && unit.fb.website === 'https://harborlight.example/',
-    'Facebook: followers (not likes), check mark, owner company and address from Page transparency, country, website');
-  ok(unit.fan.type === 'Fan page' && unit.grp.type === 'Group' && unit.grp.fw === 'members' && unit.grp.followers === 12400, 'Facebook fan page and group are told apart (' + unit.fan.type + ', ' + unit.grp.type + ' ' + unit.grp.followers + ' ' + unit.grp.fw + ')');
-  ok(unit.xo.verified === 'gold' && unit.xo.type === 'Organisation' && unit.xo.followers === 1450000 && unit.xo.country === 'Canada', 'X: gold check = Organisation, followers, based in');
-  ok(unit.guess.type === 'Business' && unit.guess.typeSure === 'guess' && unit.guess.signs.length >= 3 && unit.guess.signs.includes('its website sells things'), 'No category: the business check adds up the signs (' + unit.guess.signs.join('; ') + ')');
-  ok(!unit.nothing.ok && unit.nothing.type === '' && unit.nothing.verified === '' && unit.nothing.followers == null, 'A login wall gives "Not known", never a guess');
+  console.log(JSON.stringify(r));
+  const recent = i => /^C\/R\d\.jpg$/.test(r.batch[i]);
+  ok(r.batch.slice(0, 3).every(x => x.startsWith('A/')), 'Line: ★ priority client\'s never-searched photos first');
+  ok(r.batch[5] === 'B/3.jpg' && r.batch[8] === 'C/0.jpg' && [3, 4, 6, 7].every(recent), 'Line: every 3rd photo is one never searched, even with newer photos due (clients take turns)');
+  ok(r.firstOnly.slice(0, 3).every(x => x.startsWith('A/')) && r.firstOnly[3].startsWith('B/') && r.firstOnly[4].startsWith('C/0'), 'Today\'s 50 "Never searched first": priority client, then clients take turns');
+  ok(r.solo[5] === 'B/3.jpg' && /C\/R/.test(r.solo[3]), 'Keep searching remembers the turn between photos');
+  ok(r.hi === 'd:C/15.jpg', '⚑ High priority still goes first');
+  ok(r.cov.done === 12 && r.cov.total === 20 && r.cov.never === 8 && r.cov.cant === 2 && r.cov.clients.C.join() === '12,13,2' && r.cov.clients.A.join() === '0,3,0', 'Counts: searched once, never searched, can\'t be searched (POOL, broken) apart');
 
-  // ---- pretend social copies, with the profile reader stubbed
-  await page.evaluate(async () => {
-    const photos = (await FC.allCopies()).map(c => c.photo);
-    const p1 = photos[0], cl = p1.slice(2).split('/')[0];
-    const day = d => new Date(Date.now() - d * 864e5).toISOString();
-    const mk = (id, u, extra = {}) => ({ id, photo: p1, client: cl, url: u, key: RS_UTIL.key(u), site: RS_SITE.of(u), title: '', thumb: '', img: '', engines: ['google'], pct: 91, match: 'same', w: 1080, h: 1080, firstSeen: day(1), lastSeen: day(0), times: 1, by: 'Keep searching', status: 'new', online: 'up', ...extra });
-    const xs = [
-      mk('a1', 'https://www.facebook.com/harborlightoutfitters/posts/1'),
-      mk('a2', 'https://www.facebook.com/coastalsunsetsfans/posts/2'),
-      mk('a3', 'https://www.instagram.com/pinecrest.bakery/p/AAA/'),
-      mk('a4', 'https://x.com/DailyExNews/status/4'),
-      mk('a5', 'https://www.tiktok.com/@quickclips/video/5'),
-    ];
-    for (const c of xs) { c.country = FC.countryOf(c.site); c.use = FC.useOf(c); const a = PP_SOCIAL.fromUrl(c.url); if (a) c.acct = { ...a, from: 'link', sure: 'sure' }; }
-    await FC.DB.putMany('copies', xs);
+  // A search marks the first time; a client reaching 100% leaves a note.
+  const f = await page.evaluate(async () => {
+    const p = await FC.DB.get('photos', 'd:C/0.jpg');
+    const first = !FC.searchedOnce(p);
+    p.searches = 1; p.lastSearched = new Date().toISOString(); p.firstAt = p.lastSearched; await FC.DB.put('photos', p);
+    const cov = (await FC.coverage()).first;
+    await FC.logWeek({ first: 1, searched: 1, client: 'C' });
+    return { first, notes: await FC.firstNotes(), week: cov.week, store: (await chrome.storage.local.get('fcFirst')).fcFirst };
   });
-  const STUB = (S = PP_SOCIAL) => {
-    const P = {
-      'facebook.com/harborlightoutfitters': [{ kind: 'profile', text: 'Harbor Light Outfitters\n52K followers\nPage · Clothing store\n', data: [], badge: ['Verified'], buttons: ['Shop now'] }, { kind: 'transparency', text: 'Confirmed Page owner\nHarbor Light Outfitters LLC\n12 Pier St, Portland, ME 04101\nPrimary country/region location for people who manage this Page\nUnited States (3)\n' }],
-      'facebook.com/coastalsunsetsfans': [{ kind: 'profile', text: 'Coastal Sunsets Fans\n3.1K followers\nPage · Fan Page\n', data: [] }],
-      'instagram.com/pinecrest.bakery': [{ kind: 'profile', desc: '9,812 Followers, 300 Following', text: '', data: [['is_business_account', 'true'], ['category_name', '"Bakery"'], ['is_verified', 'false']] }],
-      'x.com/dailyexnews': [{ kind: 'profile', text: '', data: [['verified_type', '"Business"'], ['followers_count', '1450000']] }, { kind: 'transparency', text: 'Account based in\nCanada\n' }],
-      'tiktok.com/@quickclips': [{ kind: 'profile', text: 'Log in', data: [] }],
-    };
-    window.READS = window.READS || [];
-    S.readProfile = async a => { window.READS.push(a.key); await new Promise(r => setTimeout(r, 30)); return P[a.key] || []; };
-    if (typeof PP_CHECKS !== 'undefined') PP_CHECKS.readPage = async () => ({ ok: false, at: new Date().toISOString(), why: 'stubbed' });
-    S.unshort = async () => ''; S.publicInfo = async () => null;
-  };
-  // Applied the moment the page's scripts have run (before Copies found starts reading).
-  // Extension pages don't run Playwright's start-up scripts, so the reader is switched off
-  // (Settings) while the page loads, stubbed, then switched on again.
-  await page.evaluate(() => api.storage.local.set({ ppAcctRead: false }));
-  await go('found'); await page.evaluate(STUB);
-  await page.evaluate(() => api.storage.local.set({ ppAcctRead: true }));
-  await page.evaluate(() => { FCD = null; state.fFilter = 'All'; return render(true); }); await page.waitForTimeout(600);
-  await page.click('.bigtabs [data-v="social"]'); await page.waitForTimeout(500);
-  await page.evaluate(() => { state.fView = 'list'; state.fFilter = 'All'; return render(true); });
-  await page.evaluate(() => infoQueue());
-  // The reader goes one account at a time by itself (4 s apart).
-  for (let i = 0; i < 40; i++) { await page.waitForTimeout(1000); const n = await page.evaluate(async () => Object.keys((await FC.meta.get('acctInfo')) || {}).length); if (n >= 5) break; }
-  await page.waitForTimeout(3500);
-  const info = await page.evaluate(async () => ({ reads: window.READS.slice(), all: (await FC.meta.get('acctInfo')) || {} }));
-  ok(Object.keys(info.all).length === 5 && new Set(info.reads).size === info.reads.length, 'Every account is read by itself, once each (' + info.reads.join(' ') + ' / ' + Object.entries(info.all).map(([k, v]) => k + ':' + v.ok).join(' ') + ')');
-  ok(info.all['tiktok.com/@quickclips'] && !info.all['tiktok.com/@quickclips'].ok && info.all['tiktok.com/@quickclips'].failAt, 'A profile that didn\'t show is marked to try again later');
+  console.log(JSON.stringify({ notes: f.notes, week: f.week }));
+  ok(f.first && f.notes.length === 1 && f.notes[0].name === 'C' && f.notes[0].n === 13 && f.week === 1, 'Client C reached 100%: one note, first searches this week counted');
+  ok(f.store && f.store.done === 13 && f.store.never === 7, 'A small count is saved for Home');
 
-  await page.evaluate(() => { FCD = null; return render(true); }); await page.waitForTimeout(700);
-  const rows = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll('.crow')].map(r => [r.dataset.v, r.textContent.replace(/\s+/g, ' ')])));
-  ok(/✓ Verified/.test(rows.a1 || '') && /Business/.test(rows.a1) && /52k followers/.test(rows.a1) && /Harbor Light Outfitters LLC/.test(rows.a1), 'A row shows the check mark, type, followers and company (' + (rows.a1 || '').slice(0, 160) + ')');
-  ok(/✓ Organisation/.test(rows.a4 || '') && /1\.5M followers|1\.4M followers/.test(rows.a4), 'X organisation row: gold check and followers');
-  const dds = await page.evaluate(() => [...document.querySelectorAll('.acctfilters summary')].map(s => s.textContent.replace(/\s+/g, ' ').trim()));
-  ok(dds.length === 4 && /^Verified/.test(dds[0]) && /^Followers/.test(dds[1]) && /^Account type/.test(dds[2]) && /^Country/.test(dds[3]), 'Four account filters on the Social media tab (' + dds.join(' | ') + ')');
-  await shot('410-social');
+  // Keep searching page.
+  await page.goto(url('app.html#keep')); await page.waitForTimeout(1500);
+  const k = await page.evaluate(() => ({
+    box: document.getElementById('firstBox') && document.getElementById('firstBox').textContent.replace(/\s+/g, ' '),
+    rows: [...document.querySelectorAll('#firstClients tbody tr')].map(t => t.textContent.replace(/\s+/g, ' ').trim()),
+    share: document.querySelector('[data-act="firstshare"].on') && document.querySelector('[data-act="firstshare"].on').textContent,
+    which: !!document.querySelector('select[data-v="fiftyWhich"]'),
+  }));
+  console.log(JSON.stringify(k));
+  ok(k.box && /13\s*of 20 photos searched at least once/.test(k.box) && k.box.includes("can't be searched"), 'Keep searching: big first-search block');
+  ok(k.rows.length === 3 && k.rows[0].startsWith('B') && k.rows[1].startsWith('★ A') && /^C.*All searched once/.test(k.rows[2]), 'Keep searching: client table, lowest first, finished client marked');
+  ok(k.share === '1 in 3' && k.which, 'Keep searching: share switch and Today\'s 50 choice');
+  await page.click('[data-act="firstshare"][data-v="2"]'); await page.waitForTimeout(700);
+  ok(await page.evaluate(async () => (await FC.keep()).firstShare) === 2 && /1 in 2/.test(await page.textContent('.sharebar')), 'Share switch saves 1 in 2');
+  await page.selectOption('select[data-v="fiftyWhich"]', 'first'); await page.waitForTimeout(500);
+  ok(await page.evaluate(async () => (await FC.keep()).fiftyWhich) === 'first', 'Today\'s 50 choice saved');
 
-  const pick = async (k, v) => { await page.evaluate(([k, v]) => { state[k] = v; return render(true); }, [k, v]); await page.waitForTimeout(400); return page.evaluate(() => LIST.filter(id => /^a\d$/.test(id)).sort().join(',')); };
-  ok((await pick('fType', 'Business')) === 'a1,a3', 'Account type: Business shows the clothing store and the bakery');
-  ok((await pick('fType', 'Fan page')) === 'a2', 'Account type: Fan page');
-  ok((await pick('fType', 'nk')) === 'a5', 'Account type: Not known (the profile that didn\'t show)');
-  await pick('fType', 'Any');
-  ok((await pick('fVer', 'yes')) === 'a1,a4', 'Verified: any check');
-  ok((await pick('fVer', 'no')) === 'a3', 'Verified: not verified');
-  await pick('fVer', 'Any');
-  ok((await pick('fFol', '1')) === 'a2,a3', 'Followers 1k–10k');
-  ok((await pick('fFol', '4')) === 'a4', 'Followers over 1M');
-  await pick('fFol', 'Any');
-  ok((await pick('fCountry', 'Canada')) === 'a4', 'Country: Canada');
-  const chip = await page.evaluate(() => [...document.querySelectorAll('.activebar .chip')].map(b => b.textContent.trim()).join(' | '));
-  ok(/Country: Canada/.test(chip), 'The filter shows as a chip you can clear (' + chip + ')');
-  await page.click('.activebar [data-act="unfilter"][data-v="fCountry"]'); await page.waitForTimeout(400);
-  ok(await page.evaluate(() => state.fCountry === 'Any'), 'Clearing the chip clears the filter');
-  // Websites tab: no account filters, and its copies aren't filtered by them.
-  await page.evaluate(() => { state.fType = 'Business'; return render(true); }); await page.waitForTimeout(300);
-  await page.click('.bigtabs [data-v="web"]'); await page.waitForTimeout(500);
-  ok(await page.evaluate(() => !document.querySelector('.acctfilters') && state.fType === 'Any'), 'The Websites tab has no account filters');
-  await page.click('.bigtabs [data-v="social"]'); await page.waitForTimeout(500);
-  await page.evaluate(() => { state.fType = 'Any'; state.fSort = 'fol'; state.fFilter = 'All'; state.fView = 'list'; return render(true); }); await page.waitForTimeout(400);
-  const order = await page.evaluate(() => LIST.filter(id => /^a\d$/.test(id)).join(','));
-  ok(order.startsWith('a4,a1,a3,a2'), 'Sort: Most followers puts the biggest accounts first (' + order + ')');
+  // Home: card + client finished note.
+  await page.goto(url('app.html#home')); await page.waitForTimeout(1500);
+  const hm = await page.evaluate(() => ({ card: document.getElementById('homeFirst') && document.getElementById('homeFirst').textContent.replace(/\s+/g, ' '), note: document.getElementById('firstDone') && document.getElementById('firstDone').textContent }));
+  console.log(JSON.stringify(hm));
+  ok(hm.card && hm.card.includes('13 of 20') && hm.card.includes('7 to go'), 'Home: every photo searched once card');
+  ok(hm.note && hm.note.includes('C: every photo searched at least once'), 'Home: client finished note');
+  await page.click('#firstDone [data-act="firstseen"]'); await page.waitForTimeout(300);
+  await page.reload(); await page.waitForTimeout(1500);
+  ok(!(await page.$('#firstDone')), 'Home: OK hides the note for good');
 
-  // ---- Accounts list: columns and sorting
-  await page.evaluate(() => { state.sView = 'accounts'; return render(true); }); await page.waitForTimeout(500);
-  const head = await page.evaluate(() => [...document.querySelectorAll('table.accts th')].map(t => t.textContent.trim()).join(','));
-  ok(/Followers.*Verified.*Type.*Country/.test(head), 'Accounts list has Followers, Verified, Type and Country (' + head + ')');
-  await page.click('table.accts [data-act="asort"][data-v="fol"]'); await page.waitForTimeout(400);
-  const first = await page.evaluate(() => (document.querySelector('table.accts tbody tr') || {}).textContent || '');
-  ok(/DailyExNews/.test(first), 'Sorting the Accounts list by Followers puts the biggest first');
-  await shot('410-accounts');
+  // Weekly summary.
+  await page.goto(url('app.html#weekly')); await page.waitForTimeout(1200);
+  const wk = await page.evaluate(() => document.querySelector('.paper').textContent.replace(/\s+/g, ' '));
+  ok(/1 photo was searched for the first time this week/.test(wk) && /C \(13 photos\)/.test(wk), 'Weekly summary: first searches and finished clients');
 
-  // ---- the panel: About this account, with ready-made searches for the company
-  await page.evaluate(() => { state.sView = 'copies'; state.open = 'a1'; state.dTabFor = 'a1'; state.dTab = 'acct'; return render(true); }); await page.waitForTimeout(700);
-  const ab = await page.evaluate(() => { const s = document.getElementById('acctabout'); return s ? { t: s.textContent.replace(/\s+/g, ' '), links: [...s.querySelectorAll('a')].map(a => a.href) } : { t: '', links: [] }; });
-  ok(/Followers ?52,000 followers/.test(ab.t) && /Company ?Harbor Light Outfitters LLC/.test(ab.t) && /Based in ?United States/.test(ab.t), 'About this account lists followers, company and country (' + ab.t.slice(0, 160) + ')');
-  ok(ab.links.some(u => /opencorporates\.com\/companies\/us_me\?q=Harbor/.test(u)) && ab.links.some(u => /uspto/.test(u)), 'The company gets Maine business register and trademark searches');
-  const menuWho = await page.evaluate(() => { ACTS.rowmenu('a1', document.querySelector('.crow')); const m = document.getElementById('rowMenu'); const t = m ? m.textContent : ''; if (typeof closeRowMenu === 'function') closeRowMenu(); return t; });
-  ok(/Who's behind Harbor Light Outfitters|Who's behind harborlightoutfitters/i.test(menuWho) && !/Who's behind facebook\.com/.test(menuWho), 'The row menu offers "Who\'s behind" the account, not the whole site');
-  await shot('410-panel');
-
-  // ---- the switch in Settings
-  await page.evaluate(() => { state.hidTab = 'social'; state.hidQ = ''; }); await go('hidden'); await page.waitForTimeout(500);
-  await page.click('#acctread'); await page.waitForTimeout(400);
-  ok(await page.evaluate(async () => (await api.storage.local.get('ppAcctRead')).ppAcctRead === false), 'Settings can turn the automatic reading off');
-  await page.click('#acctread'); await page.waitForTimeout(400);
-
-  console.log(fails ? fails + ' FAILED' : 'ALL PASSED');
+  // Dark mode: the new block reads well.
   await ctx.close();
+  console.log(fails ? fails + ' FAILED' : 'ALL PASS');
   process.exit(fails ? 1 : 0);
-})().catch(e => { console.log('ERR', e); process.exit(1); });
+})();

@@ -609,6 +609,7 @@ V.found = async () => {
   if (state.fq) active.push(['fq', 'Search: ' + state.fq]);
   if (social) for (const [k, l] of [['fVer', 'Verified'], ['fFol', 'Followers'], ['fType', 'Type'], ['fCountry', 'Country']]) if (state[k] !== 'Any') active.push([k, l + ': ' + (k === 'fFol' ? (state[k] === 'nk' ? 'Not known' : PP_SOCIAL.FOL_BANDS[+state[k]][2]) : k === 'fVer' ? { yes: 'Yes', blue: 'Blue check', gold: 'Organisation', grey: 'Government', no: 'No', nk: 'Not known' }[state[k]] : state[k] === 'nk' ? 'Not known' : state[k])]);
   if (state.fAcct) { const e = FCD.accts.get(state.fAcct); active.push(['fAcct', state.fAcct === '~' ? 'Account not found yet' : 'Account: ' + (e ? e.acct.handle : state.fAcct)]); }
+  const shownOn = [...(state.fWhen !== 'any' ? [['fWhen', 'Found ' + WHEN[state.fWhen][0].toLowerCase()]] : []), ...(state.fMatch !== 'any' ? [['fMatch', state.fMatch[0].toUpperCase() + state.fMatch.slice(1) + ' match']] : []), ...(state.fFresh ? [['fFresh', 'Published in the last 3 months']] : []), ...active];
   const sel = (id, label, opts, cur) => `<label>${label}<select data-act="fsel" data-v="${id}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(cur) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`;
   const live = all.filter(c => c.status !== 'removed');
   const countryList = [...new Set([...everything.map(c => c.country).filter(Boolean), 'Russia', 'China', 'Vietnam', 'India', 'Indonesia', 'Turkey', 'Brazil'])].filter(c => !FCD.countries.includes(c)).sort();
@@ -630,33 +631,34 @@ V.found = async () => {
   const chip = (label, n, on, act, v, col) => n || on ? `<button class="qchip${on ? ' on' : ''}" data-act="${act}" data-v="${v}" aria-pressed="${on}">${col ? `<i style="background:var(--${col})"></i>` : ''}${label} <span class="num">${n}</span></button>` : '';
   const years = [...new Set(everything.map(c => (FCD.photos.get(c.photo) || {}).year).filter(Boolean))].sort((a, b) => b - a);
   // 4.7: one tidy line. Each switch is a small dropdown.
-  const dd = (id, label, opts, cur, right) => `<details class="ddw${right ? ' right' : ''}" data-dd="${id}"><summary class="ddb">${label}${cur != null ? ` <b>${esc((opts.find(o => o[0] === cur) || opts[0])[1])}</b>` : ''} <span class="caret" aria-hidden="true">▾</span></summary><div class="ddm" role="menu">${opts.map(([k, l, s]) => `<button role="menuitemradio" aria-checked="${cur === k}" class="${cur === k ? 'on' : ''}" data-act="fset" data-v="${id}|${k}">${esc(l)}${s ? `<span class="sub">${esc(s)}</span>` : ''}</button>`).join('')}</div></details>`;
+  // 4.11: a dropdown set away from its normal choice (def) turns blue, with an ✕ that puts it back.
+  const dd = (id, label, opts, cur, right, def) => { const chosen = def != null && cur !== def; return `<details class="ddw${right ? ' right' : ''}" data-dd="${id}"><summary class="ddb${chosen ? ' chosen' : ''}">${label}${cur != null ? ` <b>${esc((opts.find(o => o[0] === cur) || opts[0])[1])}</b>` : ''} ${chosen ? `<span class="ddx" role="button" tabindex="0" data-act="fset" data-v="${id}|${def}" title="Back to ${esc((opts.find(o => o[0] === def) || opts[0])[1])}" aria-label="Clear ${label}">✕</span>` : '<span class="caret" aria-hidden="true">▾</span>'}</summary><div class="ddm" role="menu">${opts.map(([k, l, s]) => `<button role="menuitemradio" aria-checked="${cur === k}" class="${cur === k ? 'on' : ''}" data-act="fset" data-v="${id}|${k}">${esc(l)}${s ? `<span class="sub">${esc(s)}</span>` : ''}</button>`).join('')}</div></details>`; };
   const newL = live.filter(c => c.status === 'new');
-  const tile = (label, n, on, act, v, col, hero) => `<button class="ftile${hero ? ' hero' : ''}${on ? ' on' : ''}" data-act="${act}" data-v="${v}" aria-pressed="${on}"><b class="num">${n}</b><span>${label}</span>${col ? `<i style="background:var(--${col})"></i>` : ''}</button>`;
+  // 4.11: the old big number cards are now small Quick filter buttons. Solid blue with a tick = on.
+  const qf = (label, n, on, act, v, col) => `<button class="qf${on ? ' on' : ''}" data-act="${act}" data-v="${v}" aria-pressed="${on}">${on ? '<span class="tick" aria-hidden="true">✓</span>' : col ? `<i style="background:var(--${col})"></i>` : ''}${label} <span class="num">${n}</span></button>`;
   const fresh = c => c.dmg && c.dmg.end && Date.now() <= c.dmg.end.getTime();
   return `${head('', 'Copies found', 'Answer right on the row, or click a row to see more.', `<button class="btn" data-act="fcsv">${ic('down', 16)} Download</button>${nNew ? `<a class="btn primary" href="#review">One at a time (${nNew})</a>` : ''}`)}
   ${await driveBanner()}
   ${bigTabs}
   ${socAskBanner(everyTab.filter(visible))}
   ${FCD.unhid && FCD.unhid.length ? `<div class="banner info" role="status"><div style="flex:1 1 260px;min-width:0"><b>${esc(FCD.unhid.join(', '))} ${FCD.unhid.length === 1 ? 'shows' : 'show'} again</b><div style="font-size:13px">A whole social site can no longer be hidden, only its accounts. Its posts are back on the Social media tab. Hide the accounts you don't want from there.</div></div><button class="btn sm" data-act="unhidok">Got it</button></div>` : ''}
-  <div class="ftiles" aria-label="Quick counts">
-    ${tile('New, waiting for you', nNew, state.fFilter === 'New' && state.fWhen === 'any' && state.fRisk === 'Any' && !state.fFresh, 'ffilter', 'New', '', true)}
-    ${tile('Found today', newL.filter(c => new Date(c.firstSeen).toDateString() === new Date().toDateString()).length, state.fWhen === 'today', 'ftoday', '1', 'accent')}
-    ${social ? tile('Known stolen accounts', newL.filter(c => c.repeat > 0).length, state.fRepeat, 'qtoggle', 'repeat', 'bad') : tile('Suspicious sites', newL.filter(c => c.risk.level === 'sus').length, state.fRisk === 'sus', 'qtoggle', 'sus', 'bad')}
-    ${tile('Back online', live.filter(c => c.online === 'back').length, state.fFilter === 'Back online', 'qtoggle', 'back', 'copy')}
-    ${tile('Published in the last 3 months', newL.filter(fresh).length, state.fFresh, 'qtoggle', 'fresh', 'ok')}
-  </div>
   <section class="card found-card">
     <div class="toolbar tidy">
-      <div class="tabs" role="tablist" aria-label="Status">${['New', 'Stolen', 'Licensed', 'Removed', 'All'].map(f => `<button role="tab" aria-selected="${state.fFilter === f}" class="${state.fFilter === f ? 'on' : ''}" data-act="ffilter" data-v="${f}"${f === 'All' ? ' title="Every copy except the removed ones"' : ''}>${f} <span>${cnt(f)}</span></button>`).join('')}${['Still online', 'Back online', 'Gone'].includes(state.fFilter) ? `<button role="tab" aria-selected="true" class="on" data-act="ffilter" data-v="${state.fFilter}">${state.fFilter} <span>${cnt(state.fFilter)}</span></button>` : ''}</div>
+      <div class="tabs" role="tablist" aria-label="Status">${['New', 'Stolen', 'Licensed', 'Removed', 'All'].map(f => `<button role="tab" aria-selected="${state.fFilter === f}" class="${state.fFilter === f ? 'on' : ''}" data-act="ffilter" data-v="${f}"${f === 'All' ? ' title="Every copy except the removed ones"' : ''}>${state.fFilter === f ? '<i class="tick" aria-hidden="true">✓</i>' : ''}${f} <span>${cnt(f)}</span></button>`).join('')}${['Still online', 'Back online', 'Gone'].includes(state.fFilter) ? `<button role="tab" aria-selected="true" class="on" data-act="ffilter" data-v="${state.fFilter}"><i class="tick" aria-hidden="true">✓</i>${state.fFilter} <span>${cnt(state.fFilter)}</span></button>` : ''}</div>
       ${social ? `<div class="seg sm" role="radiogroup" aria-label="Show">${[['copies', 'Copies'], ['accounts', 'Accounts']].map(([k, l]) => `<button role="radio" aria-checked="${state.sView === k}" class="${state.sView === k ? 'on' : ''}" data-act="sview" data-v="${k}">${l}</button>`).join('')}</div>` : ''}
       ${dd('fView', 'Group', social ? [['account', 'Account'], ['client', 'Client'], ['photo', 'Photo'], ['site', 'Platform'], ['list', 'None']] : [['client', 'Client'], ['photo', 'Photo'], ['site', 'Site'], ['owner', 'Site owner'], ['list', 'None']], state.fView)}
-      ${dd('fWhen', 'Found', Object.entries(WHEN).map(([k, v]) => [k, v[0]]), state.fWhen)}
-      ${dd('fMatch', 'Match', [['any', 'All'], ['exact', 'Exact', 'The same photo, 95% or more lines up'], ['strong', 'Strong', '80% or more lines up'], ['loose', 'Loose', 'Less, or only a few details match']], state.fMatch)}
-      <button class="ddb${state.showFilters ? ' on' : ''}" data-act="togglefilters" aria-expanded="${state.showFilters}">＋ Filters${active.length ? ` <span class="pill-n" style="background:var(--accent);margin:0">${active.length}</span>` : ''}</button>
+      ${dd('fWhen', 'Found', Object.entries(WHEN).map(([k, v]) => [k, v[0]]), state.fWhen, false, 'any')}
+      ${dd('fMatch', 'Match', [['any', 'All'], ['exact', 'Exact', 'The same photo, 95% or more lines up'], ['strong', 'Strong', '80% or more lines up'], ['loose', 'Loose', 'Less, or only a few details match']], state.fMatch, false, 'any')}
+      <button class="ddb${state.showFilters ? ' on' : ''}${active.length ? ' chosen' : ''}" data-act="togglefilters" aria-expanded="${state.showFilters}">＋ More filters${active.length ? ` <b class="num">${active.length}</b>` : ''}</button>
       <span style="flex:1"></span>
       ${dd('fSort', 'Sort', [['act', 'Best to act on'], ['pct', 'Lines up most'], ...(social ? [['fol', 'Most followers']] : [['risk', 'Most suspicious']]), ['newest', 'Newest']], state.fSort, true)}
       <details class="ddw right" data-dd="cols"><summary class="ddb">Columns <span class="caret" aria-hidden="true">▾</span></summary><div class="ddm">${FCOLS.map(([k, l]) => `<label><input type="checkbox" data-act="fcol" data-v="${k}" ${state.fCols[k] ? 'checked' : ''}> ${esc(l)}</label>`).join('')}<span class="faint" style="font-size:12px;padding:4px 10px 6px">Narrow windows show fewer columns.</span></div></details>
+    </div>
+    <div class="qfrow" aria-label="Quick filters"><span class="qflabel">Quick filters</span>
+      ${qf('Found today', newL.filter(c => new Date(c.firstSeen).toDateString() === new Date().toDateString()).length, state.fWhen === 'today', 'ftoday', '1', 'accent')}
+      ${social ? qf('Known stolen accounts', newL.filter(c => c.repeat > 0).length, state.fRepeat, 'qtoggle', 'repeat', 'bad') : qf('Suspicious sites', newL.filter(c => c.risk.level === 'sus').length, state.fRisk === 'sus', 'qtoggle', 'sus', 'bad')}
+      ${qf('Back online', live.filter(c => c.online === 'back').length, state.fFilter === 'Back online', 'qtoggle', 'back', 'copy')}
+      ${qf('Published in the last 3 months', newL.filter(fresh).length, state.fFresh, 'qtoggle', 'fresh', 'ok')}
     </div>
     ${social ? platChips(all.filter(c => passMore(c) && passStatus(c) && passMainNoPlat(c))) : ''}
     ${social ? acctFilterLine(dd, all.filter(c => passStatus(c) && passMainNoAcct(c))) : ''}
@@ -691,7 +693,8 @@ V.found = async () => {
         ${hiddenN ? `<span class="faint">${plural(hiddenN, 'copy', 'copies')} hidden by country</span>` : ''}
         <a href="#hidden" style="font-weight:600;margin-left:auto">All hidden sites ›</a>
       </div></div>` : ''}
-    ${active.length || recent.length ? `<div class="row activebar">${active.map(([k, v]) => `<button class="chip" style="cursor:pointer" data-act="unfilter" data-v="${k}">${esc(v)} ✕</button>`).join('')}${active.length ? `<button class="btn ghost" style="min-height:28px;padding:0 6px;font-size:13px" data-act="unfilter" data-v="all">Clear all</button>` : ''}
+    ${shownOn.length ? `<div class="showing" role="status"><span>Showing <b class="num">${rows.length}</b> of <b class="num">${all.filter(c => passStatus(c)).length}</b> ${esc(state.fFilter === 'All' ? '' : state.fFilter.toLowerCase())} copies</span>${shownOn.map(([k, v]) => `<button class="stag" data-act="unfilter" data-v="${k}" title="Turn this filter off">${esc(v)} <span aria-hidden="true">✕</span></button>`).join('')}<button class="sclear" data-act="unfilter" data-v="all">Clear filters</button></div>` : ''}
+    ${recent.length ? `<div class="row activebar">
       ${recent.length ? `<span class="faint" style="margin-left:auto">Just hidden</span>${recent.map(h => `<button class="chip" style="cursor:pointer;text-decoration:line-through;text-decoration-color:var(--faint)" data-act="showsite" data-v="${esc(h)}" title="Show ${esc(h)} again">${esc(h)} <span style="text-decoration:none">↺</span></button>`).join('')}` : ''}</div>` : ''}
     <div class="cbody">${social && state.sView === 'accounts' ? accountsView(all.filter(c => passMain(c) && passStatus(c))) : body || `<div class="cempty"><b>${state.fFilter === 'New' && !active.length && state.fWhen === 'any' && state.fMatch === 'any' ? 'All caught up' : 'Nothing matches'}</b>${state.fFilter === 'New' && !active.length && state.fWhen === 'any' && state.fMatch === 'any' ? 'Every new copy has an answer. New finds show up here.' : 'Try another tab, or clear a filter.'}</div>`}</div>
     <div class="row faint cfoot"><span>Keys with a copy open: <span class="kbd">Y</span> stolen <span class="kbd">L</span> licensed <span class="kbd">N</span> remove <span class="kbd">→</span> skip <span class="kbd">U</span> undo <span class="kbd">↑</span><span class="kbd">↓</span> move <span class="kbd">?</span> all keys. Also kept in Documents › PageProof › found-copies.txt.</span></div>
@@ -936,8 +939,9 @@ Object.assign(ACTS, {
   qcredit: v => { state.fCredit = v; state.fFilter = 'All'; render(true); },
   togglefilters: () => { state.showFilters = !state.showFilters; render(true); },
   unfilter: v => {
-    if (v === 'all') Object.assign(state, { fVer: 'Any', fFol: 'Any', fType: 'Any', fCountry: 'Any', fAcct: '', fPlat: 'Any', fFresh: false, fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fOwner: '', fYear: 'Any', fQuarter: 'Any', fPhoto: '', fq: '' });
-    else state[v] = v === 'fShop' || v === 'fRepeat' ? false : ['fOwner', 'fPhoto', 'fq', 'fAcct'].includes(v) ? '' : 'Any';
+    if (v === 'all') Object.assign(state, { fWhen: 'any', fMatch: 'any', fVer: 'Any', fFol: 'Any', fType: 'Any', fCountry: 'Any', fAcct: '', fPlat: 'Any', fFresh: false, fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fOwner: '', fYear: 'Any', fQuarter: 'Any', fPhoto: '', fq: '' });
+    else if (v === 'fWhen' || v === 'fMatch') state[v] = 'any';
+    else state[v] = v === 'fShop' || v === 'fRepeat' || v === 'fFresh' ? false : ['fOwner', 'fPhoto', 'fq', 'fAcct'].includes(v) ? '' : 'Any';
     render(true);
   },
   // Group by, Found, Match: the little switches above the list.

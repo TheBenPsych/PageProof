@@ -221,7 +221,8 @@ api.storage.onChanged.addListener(ch => {
   if (ch.fcKeep || ch.fcPause) tick();
 });
 // Every hour the line is worked out again from scratch.
-setInterval(() => { FC.resetQueue(); S.skip = new Set(S.current && S.job ? [S.current.id] : []); }, 3600000);
+// The "every photo once" count is redone too, so Home and the client-finished note stay fresh.
+setInterval(() => { FC.resetQueue(); S.skip = new Set(S.current && S.job ? [S.current.id] : []); FC.coverage().catch(() => {}); }, 3600000);
 $('pause').onclick = async () => {
   const p = (await api.storage.local.get('fcPause')).fcPause;
   await api.storage.local.set({ fcPause: p ? 0 : Date.now() });

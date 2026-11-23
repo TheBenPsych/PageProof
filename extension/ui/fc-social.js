@@ -134,10 +134,10 @@ function acctFilterLine(dd, xs) {
   const countries = [...new Set(xs.map(countryOfAcct).filter(x => x !== 'nk'))].sort();
   const busy = FCD && FCD.accts ? [...FCD.accts.values()].filter(e => e.copies.length && !(FCD.acctInfo || {})[e.key]).length : 0;
   return `<div class="acctfilters" aria-label="Account filters">
-    ${dd('fVer', 'Verified', [['Any', 'Any'], ['yes', 'Verified (any check)', n('fVer', c => ['blue', 'gold', 'grey'].includes(verOf(c))) + ' copies'], ['blue', 'Blue check', n('fVer', c => verOf(c) === 'blue') + ''], ['gold', 'Organisation (gold check)', n('fVer', c => verOf(c) === 'gold') + ''], ['grey', 'Government (grey check)', n('fVer', c => verOf(c) === 'grey') + ''], ['no', 'Not verified', n('fVer', c => verOf(c) === 'no') + ''], ['nk', 'Not known', n('fVer', c => verOf(c) === 'nk') + '']], state.fVer)}
-    ${dd('fFol', 'Followers', [['Any', 'Any'], ...PP_SOCIAL.FOL_BANDS.map(([, , l], i) => [String(i), l, n('fFol', c => PP_SOCIAL.folBand(folOf(c)) === String(i)) + '']), ['nk', 'Not known', n('fFol', c => folOf(c) == null) + '']], state.fFol)}
-    ${dd('fType', 'Account type', [['Any', 'Any'], ...TYPES.map(t => [t, t, n('fType', c => typeOf(c) === t) + '']), ['nk', 'Not known', n('fType', c => typeOf(c) === 'nk') + '']], state.fType)}
-    ${dd('fCountry', 'Country', [['Any', 'Any'], ...countries.map(t => [t, t, n('fCountry', c => countryOfAcct(c) === t) + '']), ['nk', 'Not known', n('fCountry', c => countryOfAcct(c) === 'nk') + '']], state.fCountry)}
+    ${dd('fVer', 'Verified', [['Any', 'Any'], ['yes', 'Verified (any check)', n('fVer', c => ['blue', 'gold', 'grey'].includes(verOf(c))) + ' copies'], ['blue', 'Blue check', n('fVer', c => verOf(c) === 'blue') + ''], ['gold', 'Organisation (gold check)', n('fVer', c => verOf(c) === 'gold') + ''], ['grey', 'Government (grey check)', n('fVer', c => verOf(c) === 'grey') + ''], ['no', 'Not verified', n('fVer', c => verOf(c) === 'no') + ''], ['nk', 'Not known', n('fVer', c => verOf(c) === 'nk') + '']], state.fVer, false, 'Any')}
+    ${dd('fFol', 'Followers', [['Any', 'Any'], ...PP_SOCIAL.FOL_BANDS.map(([, , l], i) => [String(i), l, n('fFol', c => PP_SOCIAL.folBand(folOf(c)) === String(i)) + '']), ['nk', 'Not known', n('fFol', c => folOf(c) == null) + '']], state.fFol, false, 'Any')}
+    ${dd('fType', 'Account type', [['Any', 'Any'], ...TYPES.map(t => [t, t, n('fType', c => typeOf(c) === t) + '']), ['nk', 'Not known', n('fType', c => typeOf(c) === 'nk') + '']], state.fType, false, 'Any')}
+    ${dd('fCountry', 'Country', [['Any', 'Any'], ...countries.map(t => [t, t, n('fCountry', c => countryOfAcct(c) === t) + '']), ['nk', 'Not known', n('fCountry', c => countryOfAcct(c) === 'nk') + '']], state.fCountry, false, 'Any')}
     ${busy ? `<span class="faint" style="font-size:12.5px">${plural(busy, 'account')} still being read</span>` : ''}</div>`;
 }
 // The little badges on a row: check mark, followers, type, company.
