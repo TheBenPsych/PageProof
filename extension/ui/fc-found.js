@@ -170,7 +170,7 @@ const visible = c => !siteHidden(c) && !FCD.countries.includes(c.country);
 function regBox(p, reg) {
   if (!p || !p.rel) return '<div class="regbox none"><span class="muted" style="font-size:13px">This photo was searched from your computer, not from Google Drive, so there are no Drive folders to look in.</span></div>';
   if (!reg) return `<div class="regbox none"><b>No registration number found</b><span class="muted" style="font-size:13px">PageProof looked in the folder names and for an Excel file named like 1-… or VA… in this folder and the folders above it.</span>
-    <div class="ask-row"><input id="regIn" class="chip" style="min-height:34px;padding:0 10px;font-size:14px;flex:1 1 180px" placeholder="VA 2-318-552 or 1-11583920471" aria-label="Registration or application number"><button class="btn sm" data-act="addreg" data-v="${esc(p.folder)}">Add the number</button></div>
+    <div class="ask-row"><input id="regIn" class="chip" style="min-height:34px;padding:0 10px;font-size:14px;flex:1 1 180px" placeholder="VA 1-234-567 or 1-12345678901" aria-label="Registration or application number"><button class="btn sm" data-act="addreg" data-v="${esc(p.folder)}">Add the number</button></div>
     <span class="faint" style="font-size:12.5px">Typed once, it sticks for the whole folder.</span></div>`;
   return `<div class="regbox">${reg.va ? `<div class="row" style="gap:8px"><span class="tag ok" data-gloss="Registered">Registered</span><b class="mono" style="font-size:15px">${esc(reg.va)}</b><button class="btn ghost cpy" data-act="copytext" data-v="${esc(reg.va)}">Copy</button></div>` : ''}
     ${reg.app ? `<div class="row" style="gap:8px"><span class="tag ${reg.va ? 'grey' : 'warn'}" data-gloss="Application">${reg.va ? 'Application' : 'Applied, not registered yet'}</span><b class="mono" style="font-size:${reg.va ? 13.5 : 15}px">${esc(reg.app)}</b><button class="btn ghost cpy" data-act="copytext" data-v="${esc(reg.app)}">Copy</button></div>` : ''}
@@ -940,7 +940,7 @@ Object.assign(ACTS, {
   copytext: async v => { try { await navigator.clipboard.writeText(v); toast('Copied ' + (v.length > 40 ? 'the full path' : v)); } catch (e) { toast('Could not copy. Select the text and press Ctrl+C.'); } },
   addreg: async v => {
     const i = document.getElementById('regIn');
-    if (!i || !(await FC.setReg(v, i.value))) return toast('Type a number like VA 2-318-552 or 1-11583920471.');
+    if (!i || !(await FC.setReg(v, i.value))) return toast('Type a number like VA 1-234-567 or 1-12345678901.');
     toast('Saved for the whole folder.'); render(true);
   },
   checkonline: async () => {

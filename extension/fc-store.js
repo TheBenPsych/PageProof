@@ -378,7 +378,7 @@ const FC = (() => {
   }
   const tidyClient = s => String(s || '').replace(/[\\/|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Client';
 
-  // Walk a path like "NY Post/Registered images/2026/Q4/x.jpg" down from its top folder.
+  // Walk a path like "Sample Client/Registered images/2026/Q4/x.jpg" down from its top folder.
   async function fileFor(photo) {
     const parts = photo.rel.split('/');
     let dir;
@@ -404,8 +404,8 @@ const FC = (() => {
     if (m) return ('janfebmaraprmayjunjulaugsepoctnovdec'.indexOf(m[1].toLowerCase()) / 3 + 1) * 40 + +m[2];
     return 0;
   }
-  // Copyright Office numbers. "VA0002318552" or "VA 2-318-552" = registered (the registration number).
-  // "1-11583920471" = the application (case) number.
+  // Copyright Office numbers. "VA0001234567" or "VA 1-234-567" = registered (the registration number).
+  // "1-12345678901" = the application (case) number.
   function regIn(s) {
     const out = {};
     const va = /(?:^|[^a-z])VA([\s\-_.]*u)?[\s\-_.]*((?:\d[\s\-]?){6,10})(?!\d)/i.exec(s);
@@ -449,7 +449,7 @@ const FC = (() => {
     for await (const [name, h] of dir.entries()) if (h.kind === 'directory' && !/^[.$~]/.test(name)) out.push([name, h]);
     return out.sort((a, b) => a[0].localeCompare(b[0]));
   }
-  // A folder inside the top folder, by its path ("Every Other - G-H/NY Post").
+  // A folder inside the top folder, by its path ("Group G-H/Sample Client").
   async function dirAt(rel) {
     let d = await rootHandle();
     if (!d) throw new Error('The photos folder is not connected');
