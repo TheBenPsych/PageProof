@@ -10,10 +10,27 @@ const api = globalThis.browser || globalThis.chrome;
 const $ = id => document.getElementById(id);
 const S = { me: null, job: null, tab: null, started: 0, last: 0, skip: new Set(), win: null, cpu: null, busyTicks: 0, ticking: false, allowAsked: 0 };
 const NAMES = { google: 'Google', yandex: 'Yandex', bing: 'Bing' };
+const MY_VER = api.runtime.getManifest().version;
+// Is this tab running old code? After an update (or Reload) this page can keep the old version, or
+// lose its link to PageProof altogether. Then it loads itself again, which gives it the new code.
+let reloading = false;
+async function stale() {
+  if (reloading) return true;
+  let now = '';
+  try {
+    if (!api.runtime || !api.runtime.id) throw new Error('cut off');
+    now = (await api.storage.local.get('ppRunVer')).ppRunVer || '';
+  } catch (e) { reloading = true; location.reload(); return true; }
+  if (!now || now === MY_VER) return false;
+  reloading = true;
+  try { await stopJob('PageProof was updated'); } catch (e) { /* closed */ }
+  location.reload();
+  return true;
+}
 const time = t => new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 
 async function status(state, text, extra = {}) {
-  const st = { state, text, beat: Date.now(), win: S.win, tabId: S.me, ...extra };
+  const st = { state, text, beat: Date.now(), win: S.win, tabId: S.me, jobTab: S.tab, ver: MY_VER, ...extra };
   S.lastSt = st;
   await api.storage.local.set({ fcStatus: st });
   const LABEL = { running: ['Searching', 'ok'], waiting: ['Resting', 'ok'], off: ['Off', 'grey'], paused: ['Paused', 'grey'], hours: ['Outside your hours', 'grey'], fifty: ['Paused for today\'s 50', 'warn'],
@@ -69,6 +86,13 @@ function inHours(k, d = new Date()) {
 
 async function stopJob(why) {
   if (S.tab) { try { await api.tabs.remove(S.tab); } catch (e) { /* closed */ } }
+  // Its search site tabs too (closing the photo's page does not close them).
+  if (S.job) {
+    try {
+      const all = await api.storage.local.get(null);
+      for (const [k, v] of Object.entries(all)) if (k.startsWith('rsTabL:') && v === S.job) { await api.tabs.remove(+k.slice(7)).catch(() => {}); await api.storage.local.remove(k); }
+    } catch (e) { /* nothing marked */ }
+  }
   S.job = null; S.tab = null;
   if (why) console.info('PageProof Keep searching:', why);
 }
@@ -110,6 +134,7 @@ async function chores() {
 
 async function tick() {
   if (S.ticking) return;
+  if (await stale()) return;
   S.ticking = true;
   try { await step(); } catch (e) { console.warn('PageProof Keep searching', e); await status('waiting', 'Something went wrong. Trying again in a minute.'); } finally { S.ticking = false; }
 }
@@ -185,7 +210,7 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     // (Documents › PageProof › found-copies.txt).
     FC.backupCopiesSoon();
   }
-  if (msg && msg.type === 'fcRunnerPing') { sendResponse({ ok: true, win: S.win }); return false; }
+  if (msg && msg.type === 'fcRunnerPing') { sendResponse({ ok: true, win: S.win, ver: MY_VER, tab: S.me }); return false; }
   return false;
 });
 api.tabs.onRemoved.addListener(id => { if (id === S.tab) { S.job = null; S.tab = null; } });
@@ -206,10 +231,21 @@ $('open').onclick = e => { e.preventDefault(); api.tabs.create({ url: api.runtim
 (async () => {
   // Only one Keep searching window at a time: if another one holds the lock, this one closes.
   if (navigator.locks) {
-    const mine = await new Promise(res => navigator.locks.request('pageproof-keep-searching', { ifAvailable: true }, lock => { res(!!lock); return lock ? new Promise(() => {}) : null; }));
-    if (!mine) { window.close(); return; }
+    const hold = opts => new Promise(res => navigator.locks.request('pageproof-keep-searching', opts, lock => { res(!!lock); return lock ? new Promise(() => {}) : null; }));
+    let mine = await hold({ ifAvailable: true });
+    if (!mine) {
+      // Another Keep searching tab has it. If that one answers and runs this same version, it
+      // carries on and this one closes. If it is silent or on an old version (left over from
+      // before an update), this one takes over.
+      const other = await Promise.race([api.runtime.sendMessage({ type: 'fcRunnerPing' }).catch(() => null), new Promise(r => setTimeout(() => r(null), 3000))]);
+      if (other && other.ok && other.ver === MY_VER) { window.close(); return; }
+      mine = await hold({ steal: true });
+    }
   }
   try { const me = await api.tabs.getCurrent(); S.win = me.windowId; S.me = me.id; } catch (e) { /* not in a tab */ }
+  // Close any other Keep searching tab (an old one from before an update).
+  try { const me = api.runtime.getURL('runner.html'); for (const t of await api.tabs.query({})) if (t.id !== S.me && (t.url || '').startsWith(me)) api.tabs.remove(t.id).catch(() => {}); } catch (e) { /* no tab list */ }
+  if (!(await api.storage.local.get('ppRunVer')).ppRunVer) await api.storage.local.set({ ppRunVer: MY_VER });
   await RS_LISTS.load().catch(() => {});
   FC.movePics().catch(() => {});
   tick();
