@@ -1,4 +1,4 @@
-// Firm checks for one copy (ideas borrowed from the Claimmark design):
+// Firm checks for one copy:
 //  - the "Document or don't" rules, by kind of site (general rules only: nothing here names a
 //    company, a client or a person, because this code is public),
 //  - reading their page (without your cookies) for the credit line under the picture, signs they
@@ -159,7 +159,7 @@ const PP_CHECKS = (() => {
   }
 
   // ---------------------------------------------------------------- dates and damages
-  // The firm names files Month.Day.Year_Subject_Lastname (6.26.21_Jennifer Lopez_Smith.jpg).
+  // The firm names files Month.Day.Year_Subject_Lastname (6.26.21_Concert_Smith.jpg).
   // Older folders hold a day folder named the same way, so the folder name is the second try.
   function dateIn(s) {
     s = String(s || '');
@@ -184,7 +184,7 @@ const PP_CHECKS = (() => {
   const fmt = d => d.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
   // lvl: ok · warn · bad · '' (not enough to say)
   function damages(pub, reg, now = new Date()) {
-    if (!pub) return { lvl: '', title: 'Publish date not known', text: 'Files named Month.Day.Year_Subject_Lastname (like 6.26.21_Jennifer Lopez_Smith.jpg) show the dates here.' };
+    if (!pub) return { lvl: '', title: 'Publish date not known', text: 'Files named Month.Day.Year_Subject_Lastname (like 6.26.21_Concert_Smith.jpg) show the dates here.' };
     const end = addMonths(pub.date, 3);
     if (!reg || !(reg.va || reg.app)) {
       if (now <= end) return { lvl: 'warn', title: 'Register by ' + fmt(end), end, text: 'No registration number found yet. Filing within 3 months of publishing keeps statutory damages.' };
