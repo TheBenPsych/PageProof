@@ -292,11 +292,18 @@ const FC = (() => {
     const h = await rootHandle();
     if (!h) return 'none';
     let p;
-    try { p = await h.queryPermission({ mode: 'read' }); } catch (e) { return 'none'; }
+    try { p = await RS_LATE(h.queryPermission({ mode: 'read' }), 4000, 'offline'); } catch (e) { return 'none'; }
+    if (p === 'offline') return 'offline';
     if (p !== 'granted') return 'prompt';
     if (check) {
       const t0 = Date.now();
-      try { const it = h.entries(); await it.next(); } catch (e) { return 'offline'; }
+      // Drive for desktop can stop answering without saying no. Wait at most 8 seconds, then count it
+      // as offline, so pages never hang waiting for it (4.3.3: every Find copies page stayed blank).
+      try {
+        const it = h.entries();
+        const ok = await Promise.race([it.next().then(() => true), new Promise(r => setTimeout(() => r(false), 8000))]);
+        if (!ok) return 'offline';
+      } catch (e) { return 'offline'; }
       perf('driveAnswer', Date.now() - t0);
     }
     return 'granted';
@@ -318,15 +325,23 @@ const FC = (() => {
     for (const x of await extraHandles()) { try { await x.h.requestPermission({ mode: 'read' }); } catch (e) { /* skip */ } }
     return !!h;
   }
+  // PageProof only ever READS the photos. If the Documents › PageProof folder turns out to be inside a
+  // photos folder (or to hold one), PageProof forgets it and saves nothing there. Checked only when a
+  // folder is picked: asking again and again could get stuck on a slow Google Drive (4.3.2).
+  async function docsAwayFromPhotos() {
+    try { const d = await RS_DOCS.handle(); if (d && await RS_DOCS.touchesPhotos(d)) await RS_DB.del('handles', 'docs'); } catch (e) { /* can't tell */ }
+  }
   async function pickRoot() {
     const h = await window.showDirectoryPicker({ id: 'pageproof-photos', mode: 'read' });
     await RS_DB.put('handles', 'fcRoot', h);
+    await docsAwayFromPhotos();
     return h;
   }
   async function pickExtra(client) {
     const h = await window.showDirectoryPicker({ id: 'pageproof-extra', mode: 'read' });
     const name = tidyClient(client || h.name);
     await RS_DB.put('handles', 'fcExtra:' + name, h);
+    await docsAwayFromPhotos();
     return { name, h };
   }
   const tidyClient = s => String(s || '').replace(/[\\/|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Client';
@@ -1290,7 +1305,9 @@ const FC = (() => {
         if (!r.ok || !/html/i.test(r.headers.get('content-type') || 'html')) return null;
         const html = (await r.text()).slice(0, 3e6);
         f.pages.push({ url: r.url || url, label });
-        return { html, doc: new DOMParser().parseFromString(html, 'text/html'), url: r.url || url, label };
+        // Nothing in it ever runs, but the browser still logs a red "inline event handler" error for every
+        // onclick= / onload= on their page. Renaming those first keeps the Errors list clean.
+        return { html, doc: new DOMParser().parseFromString(html.replace(/\son([a-z]+\s*=)/gi, ' data-pp-on$1'), 'text/html'), url: r.url || url, label };
       } catch (e) { return null; }
     };
     const addClue = (kind, title, value, src) => { if (value && !f.clues.some(c => c.kind === kind && c.value === value)) f.clues.push({ kind, title, value, src }); };

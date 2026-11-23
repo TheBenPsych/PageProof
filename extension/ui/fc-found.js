@@ -888,7 +888,7 @@ document.addEventListener('keydown', e => {
 async function driveBanner() {
   const st = await FC.driveStateSoft();
   if (st === 'prompt') return `<div class="banner warn" role="alert">${ic('help', 22)}<div style="flex:1 1 260px;min-width:0"><b>One click needed: let PageProof read your photos again</b><div style="font-size:13.5px">Your browser asks once after it restarts. Searching waits until you press Allow. If the browser offers "Allow on every visit", pick that and it stops asking.</div></div><button class="btn primary" data-act="driveallow">Allow</button></div>`;
-  if (st === 'offline') return `<div class="banner bad" role="alert">${ic('help', 22)}<div style="flex:1 1 260px;min-width:0"><b>Can't reach Google Drive. Searching is paused.</b><div style="font-size:13.5px;color:var(--ink)">Drive for desktop is signed out or not running, so the photos folder is missing. Nothing is lost: it picks up where it left off.</div></div><button class="btn primary" data-act="driveretry">Try again</button></div>`;
+  if (st === 'offline') return `<div class="banner bad" role="alert">${ic('help', 22)}<div style="flex:1 1 260px;min-width:0"><b>Google Drive isn't answering. Searching is paused.</b><div style="font-size:13.5px;color:var(--ink)">Drive for desktop is signed out, not running, or stuck. If it stays like this, quit Google Drive from the icon near the clock and open it again. Nothing is lost: searching picks up where it left off.</div></div><button class="btn primary" data-act="driveretry">Try again</button></div>`;
   return '';
 }
 Object.assign(ACTS, {
