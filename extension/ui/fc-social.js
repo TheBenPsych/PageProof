@@ -2,7 +2,7 @@
 // them. Stolen, Hide, Approve and "stolen before" all work per account, the account is found
 // even when the link doesn't show it, and the live page preview gives way to "The post".
 // Loaded after ui/fc-found.js (uses its state, FCD, LIST, HIST, answers and toasts).
-Object.assign(state, { fTab: 'web', tabSaved: {}, fPlat: 'Any', fAcct: '', sView: 'copies', acctEdit: '' });
+Object.assign(state, { fTab: 'web', tabSaved: {}, fPlat: 'Any', fAcct: '', sView: 'copies', acctEdit: '', fVer: 'Any', fFol: 'Any', fType: 'Any', fCountry: 'Any', aSort: 'stolen' });
 
 const isSoc = c => c.use === 'social';
 const inTab = c => (state.fTab === 'social') === isSoc(c);
@@ -16,12 +16,12 @@ const sureTag = a => a.from === 'you' ? '<span class="tag grey">set by you</span
 const acctGroup = key => (FCD && FCD.acctLinkOf && FCD.acctLinkOf.get(key)) || key;
 
 // The tab state: each tab keeps its own filters.
-const TAB_KEYS = ['fFilter', 'fq', 'fWhen', 'fMatch', 'fYear', 'fQuarter', 'fPhoto', 'fView', 'fSort', 'fClient', 'fUse', 'fRisk', 'fCredit', 'fShop', 'fRepeat', 'fOwner', 'fFresh', 'fPlat', 'fAcct', 'more', 'exp', 'sView'];
+const TAB_KEYS = ['fFilter', 'fq', 'fWhen', 'fMatch', 'fYear', 'fQuarter', 'fPhoto', 'fView', 'fSort', 'fClient', 'fUse', 'fRisk', 'fCredit', 'fShop', 'fRepeat', 'fOwner', 'fFresh', 'fPlat', 'fAcct', 'more', 'exp', 'sView', 'fVer', 'fFol', 'fType', 'fCountry'];
 const TAB_START = { web: { fView: 'client' }, social: { fView: 'account' } };
 function switchTab(t) {
   if (t === state.fTab) return;
   state.tabSaved[state.fTab] = Object.fromEntries(TAB_KEYS.map(k => [k, Array.isArray(state[k]) ? state[k].slice() : state[k]]));
-  const base = { fFilter: 'New', fq: '', fWhen: 'any', fMatch: 'any', fYear: 'Any', fQuarter: 'Any', fPhoto: '', fSort: 'act', fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fOwner: '', fFresh: false, fPlat: 'Any', fAcct: '', more: 250, exp: [], sView: 'copies' };
+  const base = { fFilter: 'New', fq: '', fWhen: 'any', fMatch: 'any', fYear: 'Any', fQuarter: 'Any', fPhoto: '', fSort: 'act', fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fOwner: '', fFresh: false, fPlat: 'Any', fAcct: '', more: 250, exp: [], sView: 'copies', fVer: 'Any', fFol: 'Any', fType: 'Any', fCountry: 'Any' };
   Object.assign(state, base, TAB_START[t], state.tabSaved[t] || {});
   state.fTab = t; state.open = ''; state.picked = [];
 }
@@ -62,7 +62,118 @@ async function socIndex(copies) {
   }
   const byName = new Map();
   for (const e of accts.values()) { const n = PP_SOCIAL.plainName(e.acct); if (n.length < 4) continue; if (!byName.has(n)) byName.set(n, []); byName.get(n).push(e); }
-  return { accts, acctLinkOf: linkOf, acctLinks: links, byName, stolenBy };
+  const acctInfo = (await FC.meta.get('acctInfo')) || {};
+  return { accts, acctLinkOf: linkOf, acctLinks: links, byName, stolenBy, acctInfo };
+}
+
+// ---------------------------------------------------------------- the account's details (4.10)
+// Followers, verified, account type, country and owner company, read from the profile page in
+// your own browser by itself: once per account, again every 30 days, a failed read again after
+// 3 days. One account at a time while PageProof is open. Nothing to type in.
+const infoOf = c => (c && c.acct && FCD && FCD.acctInfo && FCD.acctInfo[c.acct.key]) || null;
+const INFO_BUSY = new Set();
+async function readAcctInfo(acct) {
+  if (!acct || INFO_BUSY.has(acct.key)) return null;
+  INFO_BUSY.add(acct.key);
+  try {
+    const pages = await PP_SOCIAL.readProfile(acct);
+    const f = PP_SOCIAL.profileFacts(acct, pages);
+    if (f.website && !f.shop) {
+      const pf = await PP_CHECKS.readPage({ url: f.website, site: RS_SITE.of(f.website) }).catch(() => null);
+      PP_SOCIAL.addShopSign(f, pf);
+    }
+    f.at = new Date().toISOString();
+    const all = (await FC.meta.get('acctInfo')) || {};
+    const was = all[acct.key];
+    // A failed read keeps what was known before (with its date).
+    all[acct.key] = f.ok ? f : { ...(was && was.ok ? was : {}), ok: !!(was && was.ok), failAt: f.at, at: was && was.ok ? was.at : f.at, tries: ((was && was.tries) || 0) + 1 };
+    await FC.meta.set('acctInfo', all);
+    if (FCD) FCD.acctInfo = all;
+    FCD_STALE = true;
+    return all[acct.key];
+  } finally { INFO_BUSY.delete(acct.key); }
+}
+const infoDue = i => !i || (i.ok ? Date.now() - Date.parse(i.at) > 30 * 864e5 && (!i.failAt || Date.now() - Date.parse(i.failAt) > 3 * 864e5) : Date.now() - Date.parse(i.failAt || i.at || 0) > 3 * 864e5);
+let infoQueueOn = false;
+async function infoQueue() {
+  if (infoQueueOn || !FCD) return;
+  const st = await api.storage.local.get('ppAcctRead').catch(() => ({}));
+  if (st.ppAcctRead === false) return;
+  infoQueueOn = true;
+  try {
+    for (;;) {
+      if (!FCD) await loadFC();
+      const info = FCD.acctInfo || {};
+      // Accounts with new copies first, then the rest; each account once.
+      const todo = [...FCD.accts.values()].filter(e => e.copies.length && !INFO_BUSY.has(e.key) && infoDue(info[e.key]))
+        .sort((a, b) => b.copies.filter(x => x.status === 'new').length - a.copies.filter(x => x.status === 'new').length)[0];
+      if (!todo) break;
+      await readAcctInfo(todo.acct).catch(() => null);
+      socRedrawSoon();
+      await new Promise(r => setTimeout(r, 4000));
+    }
+  } finally { infoQueueOn = false; }
+}
+// The filters on the Social media tab: Verified, Followers, Account type, Country.
+const TYPES = ['Business', 'Creator', 'Organisation', 'News or media', 'Fan page', 'Group', 'Person'];
+const verOf = c => { const i = infoOf(c); return !i || !i.ok || !i.verified ? 'nk' : i.verified; };
+const typeOf = c => { const i = infoOf(c); return i && i.ok && i.type ? i.type : 'nk'; };
+const countryOfAcct = c => { const i = infoOf(c); return i && i.country ? i.country : 'nk'; };
+const folOf = c => { const i = infoOf(c); return i && i.ok ? i.followers : null; };
+function passAcct(c) {
+  if (state.fVer !== 'Any') { const v = verOf(c); if (state.fVer === 'yes' ? !['blue', 'gold', 'grey'].includes(v) : v !== state.fVer) return false; }
+  if (state.fFol !== 'Any' && PP_SOCIAL.folBand(folOf(c)) !== state.fFol) return false;
+  if (state.fType !== 'Any' && typeOf(c) !== state.fType) return false;
+  if (state.fCountry !== 'Any' && countryOfAcct(c) !== state.fCountry) return false;
+  return true;
+}
+// passAcct, leaving one filter out (for the numbers in its own menu).
+function passAcctBut(c, k) { const was = state[k]; state[k] = 'Any'; try { return passAcct(c); } finally { state[k] = was; } }
+function acctFilterLine(dd, xs) {
+  const n = (k, test) => xs.filter(c => passAcctBut(c, k) && test(c)).length;
+  const countries = [...new Set(xs.map(countryOfAcct).filter(x => x !== 'nk'))].sort();
+  const busy = FCD && FCD.accts ? [...FCD.accts.values()].filter(e => e.copies.length && !(FCD.acctInfo || {})[e.key]).length : 0;
+  return `<div class="acctfilters" aria-label="Account filters">
+    ${dd('fVer', 'Verified', [['Any', 'Any'], ['yes', 'Verified (any check)', n('fVer', c => ['blue', 'gold', 'grey'].includes(verOf(c))) + ' copies'], ['blue', 'Blue check', n('fVer', c => verOf(c) === 'blue') + ''], ['gold', 'Organisation (gold check)', n('fVer', c => verOf(c) === 'gold') + ''], ['grey', 'Government (grey check)', n('fVer', c => verOf(c) === 'grey') + ''], ['no', 'Not verified', n('fVer', c => verOf(c) === 'no') + ''], ['nk', 'Not known', n('fVer', c => verOf(c) === 'nk') + '']], state.fVer, false, 'Any')}
+    ${dd('fFol', 'Followers', [['Any', 'Any'], ...PP_SOCIAL.FOL_BANDS.map(([, , l], i) => [String(i), l, n('fFol', c => PP_SOCIAL.folBand(folOf(c)) === String(i)) + '']), ['nk', 'Not known', n('fFol', c => folOf(c) == null) + '']], state.fFol, false, 'Any')}
+    ${dd('fType', 'Account type', [['Any', 'Any'], ...TYPES.map(t => [t, t, n('fType', c => typeOf(c) === t) + '']), ['nk', 'Not known', n('fType', c => typeOf(c) === 'nk') + '']], state.fType, false, 'Any')}
+    ${dd('fCountry', 'Country', [['Any', 'Any'], ...countries.map(t => [t, t, n('fCountry', c => countryOfAcct(c) === t) + '']), ['nk', 'Not known', n('fCountry', c => countryOfAcct(c) === 'nk') + '']], state.fCountry, false, 'Any')}
+    ${busy ? `<span class="faint" style="font-size:12.5px">${plural(busy, 'account')} still being read</span>` : ''}</div>`;
+}
+// The little badges on a row: check mark, followers, type, company.
+function acctBadges(c) {
+  const i = infoOf(c);
+  if (!i || !i.ok) return '';
+  const v = { blue: '<span class="vchk" title="Verified">✓ Verified</span>', gold: '<span class="vchk gold" title="Verified organisation">✓ Organisation</span>', grey: '<span class="vchk grey" title="Verified government account">✓ Government</span>' }[i.verified] || '';
+  const t = i.type && !(i.type === 'Organisation' && (i.verified === 'gold' || i.verified === 'grey')) ? `<span class="atype${i.type === 'Business' || i.type === 'Organisation' ? ' biz' : ''}${i.typeSure === 'guess' ? ' guess' : ''}" title="${esc(i.typeSure === 'guess' ? 'A guess from: ' + (i.signs || []).join(', ') : 'Read from the profile' + (i.category ? ': ' + i.category : ''))}">${esc(i.type)}${i.typeSure === 'guess' ? ' (guess)' : ''}</span>` : '';
+  const f = i.followers != null ? `<span class="afol num" title="${esc(i.followers.toLocaleString() + ' ' + i.fw + ' on ' + shortDate(i.at))}">${PP_SOCIAL.shortNum(i.followers)} ${esc(i.fw)}</span>` : '';
+  const co = i.company ? `<span class="aco" title="Company named on the account">${esc(i.company)}</span>` : '';
+  return v + t + f + co;
+}
+// "About this account" in the panel's Account tab.
+function acctAbout(c) {
+  const a = c.acct; if (!a) return '';
+  const i = infoOf(c), busy = INFO_BUSY.has(a.key);
+  if (!i) return `<section class="dsec"><div class="dsh">About this account</div><span class="faint" style="font-size:13px">${busy ? 'Reading the profile in your browser…' : 'Not read yet. PageProof reads every account\'s profile by itself, one at a time.'}</span></section>`;
+  const enc = encodeURIComponent;
+  const rows = [];
+  if (i.followers != null) rows.push(['Followers', i.followers.toLocaleString() + ' ' + i.fw]);
+  rows.push(['Verified', { blue: 'Yes, blue check', gold: 'Yes, organisation (gold check)', grey: 'Yes, government (grey check)', no: 'No' }[i.verified] || 'Not known']);
+  rows.push(['Account type', i.type ? i.type + (i.typeSure === 'guess' ? ' (a guess)' : '') + (i.category ? ' · ' + i.category : '') : 'Not known']);
+  if (i.signs && i.signs.length) rows.push(['Business signs', i.signs.join(', ')]);
+  if (i.company) rows.push(['Company', i.company + (i.address ? '\n' + i.address : '')]);
+  if (i.country) rows.push(['Based in', i.country]);
+  if (i.created) rows.push(['Created', i.created]);
+  if (i.oldNames && i.oldNames.length) rows.push(['Old names', i.oldNames.join(', ')]);
+  if (i.website) rows.push(['Website', i.website + (i.shop ? ' (sells things)' : '')]);
+  if (i.email) rows.push(['Email', i.email]);
+  if (i.phone) rows.push(['Phone', i.phone]);
+  const st = (/,\s*([A-Z]{2})\s+\d{5}/.exec(i.address || '') || [])[1];
+  const look = i.company ? [['State business register', 'https://opencorporates.com/companies' + (st ? '/us_' + st.toLowerCase() : '') + '?q=' + enc(i.company.replace(/,?\s(LLC|L\.L\.C\.|Inc\.?|Corp\.?|Ltd\.?|Co\.)$/i, ''))], ['USPTO trademarks', 'https://tmsearch.uspto.gov/search/search-results?query=' + enc(i.company.replace(/,?\s(LLC|L\.L\.C\.|Inc\.?|Corp\.?|Ltd\.?|Co\.)$/i, ''))], ['Google', 'https://www.google.com/search?q=' + enc('"' + i.company + '"')]] : [];
+  return `<section class="dsec" id="acctabout"><div class="row" style="justify-content:space-between;gap:8px"><div class="dsh" style="margin:0">About this account</div><span class="faint" style="font-size:12px">${i.ok ? 'Read ' + esc(shortDate(i.at)) : 'Couldn\'t read the profile'}${i.failAt && i.ok ? ' · last try failed' : ''}</span></div>
+    ${i.ok ? `<dl class="facts">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd style="white-space:pre-line;overflow-wrap:anywhere">${esc(v)}</dd>`).join('')}</dl>` : `<span class="faint" style="font-size:13px">${esc(platOf(c).name)} didn't show the profile. PageProof tries again by itself in 3 days.</span>`}
+    ${look.length ? `<div class="row" style="gap:6px;flex-wrap:wrap"><span class="muted" style="font-size:12.5px">Who's behind ${esc(i.company)}:</span>${look.map(([l, u]) => `<a class="chip" href="${safeUrl(u)}" target="_blank" rel="noreferrer">${esc(l)}</a>`).join('')}</div>` : ''}
+    <div><button class="btn ghost sm" data-act="readinfo" data-v="${esc(c.id)}"${busy ? ' disabled' : ''}>${busy ? 'Reading…' : 'Read again now'}</button></div></section>`;
 }
 
 // ---------------------------------------------------------------- finding the account
@@ -164,6 +275,7 @@ function socLine(c) {
   const a = c.acct;
   return `<div class="l1 soc">${platBadge(c)}${a ? `<b>${esc(a.handle)}</b>` : '<b class="nofind">Account not found yet</b>'}<span class="pkind">${esc(postWord(c))}</span>${c.status !== 'new' ? tagFor(c) : ''}
     ${a && c.repeat && c.status === 'new' ? `<span class="tag bad" title="You marked this account stolen before">Marked stolen ${c.repeat === 1 ? 'once' : c.repeat + ' times'} before</span>` : ''}
+    ${a ? acctBadges(c) : ''}
     ${!a ? `<button class="btn sm ghost setacct" data-act="openacct" data-v="${esc(c.id)}">Set account</button>` : a.sure === 'likely' ? '<span class="tag warn" title="Read from the page\'s text. Check it once.">Account: likely</span>' : ''}${sigIcons(c)}</div>`;
 }
 // Websites tab: a website showing an embedded social post names the account.
@@ -203,7 +315,7 @@ function acctPane(c) {
     ${a ? `<section class="dsec"><div class="dsh">This account</div><dl class="facts">
       <dt>Stolen before</dt><dd>${stolen.length ? `<b style="color:var(--bad)">${plural(stolen.length, 'time')}</b>${c.repeatAt && c.repeatAt.length ? '<br><span class="muted" style="font-size:12.5px">' + esc(c.repeatAt.slice(-4).map(shortDate).join(', ')) + '</span>' : ''}` : '<span class="muted">Never</span>'}</dd>
       <dt>Copies found</dt><dd>${e ? plural(e.copies.length, 'copy', 'copies') : '1 copy'}${e && e.clients.size ? '<br><span class="muted" style="font-size:12.5px">' + esc([...e.clients].slice(0, 4).join(', ')) + '</span>' : ''} <button class="btn ghost sm" data-act="acctonly" data-v="${esc(a.key)}">See them</button></dd>
-    </dl></section>` : ''}
+    </dl></section>${acctAbout(c)}` : ''}
     ${samePhoto.length ? `<section class="dsec"><div class="dsh">Same photo on other platforms</div>${samePhoto.slice(0, 8).map(x => `<button class="lookup" style="text-align:left;cursor:pointer" data-act="openrow" data-v="${esc(x.id)}">${platBadge(x, 22)}<span><b>${esc(x.acct ? x.acct.handle : 'Account not found')}</b><br><span class="muted" style="font-size:12.5px">${esc(postWord(x))} · ${esc(STATUS[x.status][0])}</span></span></button>`).join('')}</section>` : ''}
     ${a ? `<section class="dsec"><div class="dsh">The same account on other platforms</div>
       ${linked.length ? linked.map(k => { const x = FCD.accts.get(k); return `<div class="row" style="gap:8px;font-size:13.5px">${x ? platBadge({ site: x.site }, 20) : ''}<b>${esc(x ? x.acct.handle : k)}</b><span class="tag ok">same person</span><button class="btn ghost sm" style="margin-left:auto" data-act="unlinkacct" data-v="${esc(a.key + '\n' + k)}">Not the same</button></div>`; }).join('') : ''}
@@ -233,22 +345,26 @@ function accountsView(rows) {
     if (!m.has(k)) m.set(k, { k, xs: [], keys: new Set() });
     const e = m.get(k); e.xs.push(c); if (c.acct) e.keys.add(c.acct.key);
   }
-  const list = [...m.values()].sort((a, b) => (a.k === '~') - (b.k === '~') || (FCD.stolenBy.get(b.k) || []).length - (FCD.stolenBy.get(a.k) || []).length || b.xs.length - a.xs.length);
+  const fol = e => { const c = e.xs.find(x => x.acct && infoOf(x) && infoOf(x).followers != null); return c ? infoOf(c).followers : -1; };
+  const by = { stolen: (a, b) => (FCD.stolenBy.get(b.k) || []).length - (FCD.stolenBy.get(a.k) || []).length, fol: (a, b) => fol(b) - fol(a), copies: (a, b) => b.xs.length - a.xs.length, new: (a, b) => b.xs.filter(x => x.status === 'new').length - a.xs.filter(x => x.status === 'new').length };
+  const list = [...m.values()].sort((a, b) => (a.k === '~') - (b.k === '~') || (by[state.aSort] || by.stolen)(a, b) || b.xs.length - a.xs.length);
   const missing = rows.filter(c => !c.acct && c.status !== 'removed');
   const allowed = k => { try { return RS_LISTS.allowed.includes(k); } catch (e) { return false; } };
   const tr = e => {
-    if (e.k === '~') return `<tr class="arow" data-act="acctonly" data-v="~"><td><span class="plat" style="--pc:#6B7280">?</span> <b style="color:var(--warn)">Account not found yet</b></td><td class="num">${e.xs.length}</td><td class="num">${e.xs.filter(x => x.status === 'new').length}</td><td class="num">${e.xs.filter(x => x.status === 'stolen').length}</td><td>${esc([...new Set(e.xs.map(x => x.clientName).filter(Boolean))].slice(0, 2).join(', '))}</td><td><span class="tag warn">Set account</span></td><td></td></tr>`;
+    if (e.k === '~') return `<tr class="arow" data-act="acctonly" data-v="~"><td><span class="plat" style="--pc:#6B7280">?</span> <b style="color:var(--warn)">Account not found yet</b></td><td></td><td></td><td></td><td></td><td class="num">${e.xs.length}</td><td class="num">${e.xs.filter(x => x.status === 'new').length}</td><td class="num">${e.xs.filter(x => x.status === 'stolen').length}</td><td>${esc([...new Set(e.xs.map(x => x.clientName).filter(Boolean))].slice(0, 2).join(', '))}</td><td><span class="tag warn">Set account</span></td><td></td></tr>`;
     const first = e.xs.find(x => x.acct.key === e.k) || e.xs[0], a = first.acct;
     const st = (FCD.stolenBy.get(e.k) || []).length, others = [...e.keys].filter(k => k !== a.key);
     const linked = (FCD.acctLinks.find(g => g.includes(a.key)) || []).filter(k => k !== a.key && !e.keys.has(k));
     const clients = [...new Set(e.xs.map(x => x.clientName).filter(Boolean))];
+    const i = infoOf(first), vt = i && i.ok ? { blue: '<span class="vchk">✓</span>', gold: '<span class="vchk gold">✓ Org</span>', grey: '<span class="vchk grey">✓ Gov</span>', no: '<span class="faint">No</span>' }[i.verified] || '<span class="faint">?</span>' : '<span class="faint">?</span>';
     const status = allowed(a.key) ? '<span class="tag ok">Approved</span>' : st ? '<span class="tag bad">Known stolen</span>' : '<span class="tag grey">Watching</span>';
     return `<tr class="arow" data-act="acctonly" data-v="${esc(a.key)}"><td>${platBadge(first)} <b>${esc(a.handle)}</b>${others.length || linked.length ? ` <span class="faint" style="font-size:12px">+ ${esc([...others, ...linked].map(k => (FCD.accts.get(k) || { acct: { handle: k } }).acct.handle + ' on ' + PP_SOCIAL.platform((FCD.accts.get(k) || {}).site || k.split('/')[0]).name).join(', '))}</span>` : ''}</td>
+      <td class="num">${i && i.ok && i.followers != null ? PP_SOCIAL.shortNum(i.followers) : '<span class="faint">?</span>'}</td><td>${vt}</td><td>${i && i.ok && i.type ? esc(i.type) + (i.typeSure === 'guess' ? ' <span class="faint">(guess)</span>' : '') : '<span class="faint">Not known</span>'}${i && i.company ? '<br><span class="faint" style="font-size:12px">' + esc(i.company) + '</span>' : ''}</td><td>${i && i.country ? esc(i.country) : '<span class="faint">?</span>'}</td>
       <td class="num">${e.xs.length}</td><td class="num">${e.xs.filter(x => x.status === 'new').length}</td><td class="num">${st}</td><td>${esc(clients.slice(0, 2).join(', '))}${clients.length > 2 ? ' +' + (clients.length - 2) : ''}</td><td>${status}</td>
       <td><a class="btn ghost sm" href="${safeUrl(a.url)}" target="_blank" rel="noreferrer" data-act="openlink" aria-label="Open ${esc(a.handle)}">${ic('ext', 14)}</a></td></tr>`;
   };
   return `${missing.length ? `<div class="banner info" style="margin:12px 14px 0;padding:10px 12px"><span style="flex:1 1 260px;font-size:13.5px"><b>${plural(missing.length, 'post', 'posts')} without an account yet.</b> PageProof keeps trying by itself. Looking in your browser finds most of the rest (it opens each post in a background tab for a few seconds).</span><button class="btn sm" data-act="browserall">Look up ${missing.length} in your browser</button></div>` : ''}
-  <div style="overflow-x:auto"><table class="accts"><thead><tr><th>Account</th><th>Copies</th><th>New</th><th>Stolen</th><th>Clients</th><th>Status</th><th></th></tr></thead><tbody>${list.map(tr).join('')}</tbody></table></div>`;
+  <div style="overflow-x:auto"><table class="accts"><thead><tr><th>Account</th>${[['fol', 'Followers'], ['', 'Verified'], ['', 'Type'], ['', 'Country'], ['copies', 'Copies'], ['new', 'New'], ['stolen', 'Stolen']].map(([k, l]) => k ? `<th><button class="thsort${state.aSort === k ? ' on' : ''}" data-act="asort" data-v="${k}" aria-pressed="${state.aSort === k}">${l}${state.aSort === k ? ' ▾' : ''}</button></th>` : `<th>${l}</th>`).join('')}<th>Clients</th><th>Status</th><th></th></tr></thead><tbody>${list.map(tr).join('')}</tbody></table></div>`;
 }
 
 // ---------------------------------------------------------------- new social sites, asked once
@@ -266,6 +382,15 @@ function socAskBanner(copies) {
 
 Object.assign(ACTS, {
   ftab: v => { switchTab(v); render(true); },
+  readinfo: async v => {
+    const c = FCD.copies.find(x => x.id === v);
+    if (!c || !c.acct) return;
+    const p = readAcctInfo(c.acct); render(true);
+    const i = await p;
+    toast(i && i.ok ? 'Read ' + c.acct.handle + '\'s profile.' : platOf(c).name + ' didn\'t show the profile. PageProof tries again in 3 days.');
+    render(true);
+  },
+  asort: v => { state.aSort = v; render(true); },
   unhidok: async () => { await (globalThis.browser || chrome).storage.local.remove('ppSocialUnhid'); if (FCD) FCD.unhid = []; render(true); },
   fplat: v => { state.fPlat = state.fPlat === v ? 'Any' : v; state.more = 250; render(true); },
   sview: v => { state.sView = v; render(true); },
@@ -349,3 +474,4 @@ function platChips(xs) {
   return `<div class="platchips" role="group" aria-label="Platforms"><button class="pchip${state.fPlat === 'Any' ? ' on' : ''}" data-act="fplat" data-v="Any" aria-pressed="${state.fPlat === 'Any'}">All platforms <i class="num">${xs.length}</i></button>
     ${list.map(e => `<button class="pchip${state.fPlat === e.p.key ? ' on' : ''}" data-act="fplat" data-v="${esc(e.p.key)}" aria-pressed="${state.fPlat === e.p.key}">${platBadge({ site: e.site }, 18)}${esc(e.p.name)} <i class="num">${e.n}</i></button>`).join('')}</div>`;
 }
+function passMainNoAcct(c) { const k = ['fVer', 'fFol', 'fType', 'fCountry'], was = k.map(x => state[x]); k.forEach(x => { state[x] = 'Any'; }); try { return passMain(c); } finally { k.forEach((x, i) => { state[x] = was[i]; }); } }
