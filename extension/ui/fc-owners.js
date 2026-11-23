@@ -49,13 +49,13 @@ Object.assign(ACTS, {
     const added = o.sites.filter(s => !RS_LISTS.hidden.includes(s));
     for (const s of added) await RS_LISTS.add('hidden', s);
     HIST.push({ label: 'All ' + o.name + ' sites hidden', undo: async () => { await RS_LISTS.load(); for (const s of added) await RS_LISTS.remove('hidden', s); } });
-    FCD = null; toast(plural(added.length, 'site') + ' of ' + o.name + ' hidden.', undoLast); render(true);
+    dropFC(); toast(plural(added.length, 'site') + ' of ' + o.name + ' hidden.', undoLast); render(true);
   },
   oreadall: async () => {
     state.whoBusy = true; render(true);
     const sites = [...new Set(FCD.copies.filter(c => c.status !== 'removed').map(c => c.site))].filter(s => !FCD.facts.has(s)).slice(0, 20);
     for (const s of sites) { const c = FCD.copies.find(x => x.site === s); try { await FC.lookup(s, c && c.url); } catch (e) { /* next */ } }
-    state.whoBusy = false; FCD = null; toast('Read ' + plural(sites.length, 'site') + '.'); render(true);
+    state.whoBusy = false; dropFC(); toast('Read ' + plural(sites.length, 'site') + '.'); render(true);
   },
 });
 
@@ -129,7 +129,7 @@ Object.assign(ACTS, {
   whoread: async () => {
     state.whoBusy = true; render(true);
     try { await FC.lookup(state.who.site, state.who.url); } catch (e) { toast('The site could not be read.'); }
-    state.whoBusy = false; FCD = null; render(true);
+    state.whoBusy = false; dropFC(); render(true);
   },
   whocap: async v => { await api.runtime.sendMessage({ type: 'captureUrl', url: v }).catch(() => {}); toast('Opening the page to capture it…'); },
 });

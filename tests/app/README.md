@@ -11,6 +11,7 @@ pretend Google Drive folder, pretend copies found). No real photos, clients or w
 | `checks-setup.js` | Connect your photos step 3: the folder list shows, the same top folder keeps your ticks, and every click shows its result at once |
 | `checks-restore.js` | After a reinstall, Copies found rebuilds missing preview pictures (from Drive, the picture address, or the matching picture on their page) and found-copies.txt keeps the picture address |
 | `checks-answers.js` | Stolen / Licensed / Remove / Skip, Undo, the weekly numbers, photo folders, flags, the backup files |
+| `checks-rows.js` | Copies found: every answer and hide (row buttons, details panel, "All N stolen", Hide site and Only this account, picked rows) takes the row off the list at once and it stays off while Keep searching is running; Undo brings it back; quick clicks on several rows are all saved |
 | `checks-previews.js` | Preview pictures are stored separately and still show on every page |
 | `checks-new.js` | Skipped photos, a broken search site, repeat offenders, Approve site, "Is everything working?", update notice |
 | `checks-44.js` | Firm rule check before Stolen, their page read (credit, prices, ads), dates and damages hint, Ready for legal, research steps, POOL photos skipped, Save as Breaking News photo with the new-or-recycled check |

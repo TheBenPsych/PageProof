@@ -39,13 +39,21 @@ function showLive(id) {
   box.style.display = id ? '' : 'none'; view.style.display = id ? 'none' : '';
 }
 
-async function render(keep) {
+// Only the newest redraw is put on screen. Drawing a page can take a moment (reading thousands of
+// copies), so a redraw that started earlier, for example one from Keep searching, could finish
+// after the one that follows a click and put old rows back (4.9.1). An older one now waits for the
+// newest instead.
+let RENDER_N = 0, RENDER_P = null;
+function render(keep) { const me = ++RENDER_N; const p = render1(keep, me); RENDER_P = p; return p; }
+async function render1(keep, me) {
+  const old = () => me !== RENDER_N;
   let r = route();
   if (!V[r] && !FRAMES[r]) r = 'home';
   ppRenderSide(r);
   document.getElementById('crumb').innerHTML = `<b>PageProof</b> › ${PP_CRUMBS[r] || ''}`;
   document.body.classList.toggle('framed', !!FRAMES[r]);
   if (V[r] && V[r].guard) { const g = await V[r].guard(); if (g) r = g; }
+  if (old()) return RENDER_P;
   state.shown = r; // the page really on screen (a guard can show setup under another page's address)
   if (r === 'results') {
     const id = routeArg('job') || state.liveJob;
@@ -67,6 +75,7 @@ async function render(keep) {
     const sy = window.scrollY, main = document.querySelector('.main'), my = main ? main.scrollTop : 0;
     const inner = keep ? [...view.querySelectorAll(SCROLLERS)].map(e => [e.scrollTop, e.scrollLeft]) : [];
     const html = await V[r]();
+    if (old()) return RENDER_P;
     view.innerHTML = html;
     if (typeof ppLoadPics === 'function') ppLoadPics(view);
     if (keep) {
@@ -501,6 +510,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['An answer always takes the copy off the list', 'In Copies found, pressing Stolen, Licensed, Remove, Hide site, "All N stolen" or an answer in the details panel now takes the row off the list straight away, every time. Before, a page redraw that was already under way (for example while Keep searching was running) could put the answered row back. Clicking answers quickly on several rows also works now: none is lost. Undo still brings a row back.'],
   ['Websites and Social media tabs', 'Copies found now has two tabs. On Social media each copy leads with the account that posted it, with one chip per platform, Group by account and an Accounts list. Each tab keeps its own filters.'],
   ['Stolen, Hide and Approve work per account', 'Marking a social post Stolen remembers the account: its next posts say "Marked stolen before" and come first. Hide and Approve on social posts are for that one account. Hiding a whole platform comes with a warning.'],
   ['The account, even when the link hides it', 'For Instagram /p/ links, TikTok short links and Facebook share links, PageProof follows the link, asks the site\'s public post info and reads the post page. Still missing? "Look in your browser" or paste the profile link.'],
