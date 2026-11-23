@@ -87,6 +87,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
 
   // 6: an answer in the details panel
   const [pd] = await fresh(1, used); used.push(pd);
+  await page.evaluate(() => { state.open = ''; return render(true); }); await page.waitForTimeout(600);   // the panel from step 5 can cover the row
   await click(`${sel(pd)} .l1`); await page.waitForTimeout(1500);
   await click('#drawer button[data-act="dverdict"][data-v="licensed"]');
   await goneNowAndLater([pd], 'Panel Licensed');

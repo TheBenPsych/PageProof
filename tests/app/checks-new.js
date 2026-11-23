@@ -201,9 +201,12 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     await sw.evaluate(() => keepAlive(false, true)); await page.waitForTimeout(4000);
     const info = await sw.evaluate(async () => ({ pinned: (await chrome.tabs.query({ pinned: true })).length, popups: (await chrome.windows.getAll({ windowTypes: ['popup'] })).length }));
     ok(info.pinned >= 1 && info.popups === 0, 'Keep searching opens as a pinned tab, not a separate window');
-    const rp = ctx.pages().find(x => x.url().includes('runner.html'));
-    if (rp) await rp.close();
-    await page.waitForTimeout(1500);
+    // 4.15: closed by hand it comes back by itself; closed three times in 10 minutes it stays closed.
+    for (let i = 0; i < 3; i++) {
+      let rp = null; for (let t = 0; t < 16 && !rp; t++) { rp = ctx.pages().find(x => x.url().includes('runner.html')); if (!rp) await page.waitForTimeout(500); }
+      if (rp) await rp.close();
+      await page.waitForTimeout(3000);
+    }
     await page.goto(url('app.html#keep')); await page.waitForTimeout(2000);
     ok(await page.evaluate(() => /Keep searching is stopped/.test(document.body.textContent) && !!document.querySelector('.banner [data-act="keepshow"]')), 'Closing the pinned tab shows Keep searching is stopped with Start it again');
     await page.evaluate(() => document.querySelector('.banner [data-act="keepshow"]').click()); await page.waitForTimeout(4000);
