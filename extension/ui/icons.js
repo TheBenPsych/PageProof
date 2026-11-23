@@ -51,3 +51,13 @@ PP_ICONS.layers='<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>';
 PP_ICONS.pen='<path d="M4 20l4-1L20 7l-3-3L5 16z"/>';
 PP_ICONS.swap='<path d="M4 8h14l-3-3M20 16H6l3 3"/>';
 function ppIcon(n, s = 20, w = 2) { return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PP_ICONS[n] || ''}</svg>`; }
+// 4.7: small warning icons on Copies found rows and in "Look at these".
+PP_ICONS.warn='<path d="M12 3L2 20h20z"/><path d="M12 10v4M12 17v.5"/>';
+PP_ICONS.nocredit='<circle cx="12" cy="12" r="9"/><path d="M15 9.5a3.5 3.5 0 1 0 0 5"/><path d="M4.5 4.5l15 15"/>';
+PP_ICONS.repeat='<path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>';
+PP_ICONS.back='<path d="M5 12h14M12 5l7 7-7 7"/>';
+PP_ICONS.gone='<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>';
+PP_ICONS.shop='<path d="M4 7h16l-1.5 12h-13z"/><path d="M9 7a3 3 0 0 1 6 0"/>';
+PP_ICONS.clock='<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>';
+PP_ICONS.maybe='<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.5v.4M12 17v.5"/>';
+PP_ICONS.who='<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>';

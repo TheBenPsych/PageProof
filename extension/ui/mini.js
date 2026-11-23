@@ -3,7 +3,7 @@
 // True when version a is newer than version b (the popup must not offer the version already installed).
 const miniNewer = (a, b) => { const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d > 0; } return false; };
 const api = ppApi;
-const SIDE = document.body.classList.contains('side');
+const SIDE = document.body.classList.contains('sidepane');
 const $ = id => document.getElementById(id);
 const appUrl = h => api.runtime.getURL('app.html#' + h);
 const canUse = tab => tab && /^(https?|file):/.test(tab.url || '');
@@ -75,11 +75,12 @@ async function draw() {
 }
 
 $('themeBtn').onclick = () => ppTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
-ppTheme().then(draw);
+// Never leave the panel blank: say what went wrong instead.
+ppTheme().then(draw).catch(e => err('PageProof could not load this panel: ' + (e && e.message || e) + '. Close it and open it again.'));
 // The side panel stays open: redraw when the tab, the search or the finds change.
 if (SIDE) {
   let t = null;
-  const soon = () => { clearTimeout(t); t = setTimeout(draw, 300); };
+  const soon = () => { clearTimeout(t); t = setTimeout(() => draw().then(() => err(''), e => err('PageProof could not load this panel: ' + (e && e.message || e))), 300); };
   api.tabs.onActivated.addListener(soon);
   api.tabs.onUpdated.addListener((id, ch) => { if (ch.url || ch.status === 'complete') soon(); });
   api.storage.onChanged.addListener(ch => { if (ch.fcStatus || ch.fcChanged || ch.fcPause || ch.fcKeep || ch.ppTheme || ch.fcNeedsAllow || ch.ppUpdate) soon(); });
