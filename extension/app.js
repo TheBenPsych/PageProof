@@ -462,6 +462,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['The Keep searching window closes with the browser', 'When you close your last browser window, the small Keep searching window closes too, so nothing is left in the taskbar. It opens again, minimised, with your next browser window.'],
   ['Search tabs show the PageProof logo', 'The small pinned Google Lens, Yandex and Bing tabs now show the PageProof logo and name, so they are easy to tell apart from your own tabs. The red Google Drive bar also clears the moment you press Allow.'],
   ['A rule check before you mark Stolen', 'Pick what kind of site it is (company, church, public university, person, user-posted article and more). PageProof stops and asks before marking Stolen on uses that usually can\'t be pursued, like YouTube embeds or embeds from outside the U.S. You can still go ahead, or Remove it instead.'],
   ['Their page, read for you', 'The copy details now show the photo credit next to the picture on their page, signs it was on purpose (prices, Add to cart, ads), the date first published (from the photo\'s file name), a damages hint, and a Ready for legal checklist. The Evidence report gets a new "About this use" box.'],
