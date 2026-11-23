@@ -12,6 +12,7 @@ pretend Google Drive folder, pretend copies found). No real photos, clients or w
 | `checks-previews.js` | Preview pictures are stored separately and still show on every page |
 | `checks-new.js` | Skipped photos, a broken search site, repeat offenders, Approve site, "Is everything working?", update notice |
 | `checks-44.js` | Firm rule check before Stolen, their page read (credit, prices, ads), dates and damages hint, Ready for legal, research steps, POOL photos skipped, Save as Breaking News photo with the new-or-recycled check |
+| `checks-47.js` | The calmer details panel (Look at these, tabs, picture views, answers pinned, More menu, Hide site opens the next copy), number tiles, dropdowns, Damages and Client columns, Columns menu, sticky group headings, Hide site in One at a time |
 | `speed.js` | Every main page draws quickly with 50,000 photos and 5,000 copies |
 
 To run them yourself (needs Node.js):

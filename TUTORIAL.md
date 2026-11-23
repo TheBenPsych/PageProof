@@ -367,11 +367,11 @@ PageProof never changes its own files, and never writes anything inside the **In
 
 ## 19. Before you mark Stolen: rules, their page and Ready for legal
 
-Open a copy in **Copies found**. The details panel now has four extra boxes:
+Open a copy in **Copies found** and pick the **Claim** tab in the details panel (Their page has its own tab). You'll find:
 
 - **Firm rules.** Pick what kind of site it is (PageProof guesses: a company, a nonprofit, a public university, a government site, a church, a person who isn't famous, a celebrity, a law firm, or a user-posted article). Red **Stop** lines are uses that usually can't be pursued, such as a YouTube embed or an embed from outside the U.S. Yellow **Warn** lines need a closer look. When you press **Stolen** on a copy with a red Stop line, PageProof asks first. Yellow Warn lines only show in the panel. You can **Mark Stolen anyway**, or **Remove instead**.
 - **Their page.** PageProof reads their page once (nothing on it runs) and shows the **photo credit** next to the picture, **signs it was on purpose** (a price, an Add to cart button, ads), and whether the photo is in an embedded post. Press **Read again** if the page changed.
-- **Dates and damages.** The date first published comes from the photo's file name (like `10.29.26_Subject_Name.jpg`) or its folder. With the registration number, PageProof gives a hint: registered in time for **statutory damages**, still time to **register by** a date, or **likely actual damages only**. Always check the date on the certificate.
+- **Dates and damages.** The date first published comes from the photo's file name (like `10.29.26_Subject_Name.jpg`) or its folder. If neither has a date, this box is left out. With the registration number, PageProof gives a hint: registered in time for **statutory damages**, still time to **register by** a date, or **likely actual damages only**. Always check the date on the certificate.
 - **Ready for legal?** (Stolen copies only.) Five ticks: page captured, registration number, kind of site, no Stop rules, and their page read. Buttons next to each missing tick fix it.
 
 The **Evidence report** PDF gets an **About this use** box with the same facts.
@@ -389,6 +389,26 @@ On a newspaper's page, right-click the photo and choose **PageProof › Save as 
 5. Press **Save as …** and pick the folder in the Save As window.
 
 Photos with `_POOL_` in their name are never searched by Keep searching.
+
+## 21. The details panel and the Copies found list (4.7)
+
+**The details panel** (click any row):
+
+1. **Pictures first.** Under them, switch between **Side by side**, **Slider** (drag across to compare) and **Their page** (a live look). PageProof remembers your pick.
+2. **Small chips** show how much lines up, how it's used, the country and their size.
+3. **Look at these** lists only what needs you: a suspicious site, a removed credit, a repeat offender, back online, a firm rule, a damages date. Each has a button that jumps to the right tab. Everything fine shows as one green line.
+4. **Four tabs** hold the rest: **Summary**, **Their page**, **Claim** (Ready for legal, registration, dates and damages, firm rules, Drive path) and **Site** (who's behind it, Approve site, Hide site). A small dot marks a tab with something to check.
+5. **Stolen, Licensed, Remove, Skip** and **Undo** stay pinned at the bottom. **More** holds Approve site, every Hide site choice, Compare and more. Hiding a site opens the next copy, like any answer.
+
+**The Copies found list:**
+
+- **Number tiles** at the top (New, Found today, Suspicious sites, Back online, Published in the last 3 months). Click one to filter, click again to undo it.
+- **Group, Found, Match and Sort** are small dropdowns next to the tabs. The other quick filters are under **＋ Filters**.
+- Each row shows a coloured **Lines up** bar, the **Client**, and **Damages**: *Statutory*, *Register by* a date, or *Actual only* (empty when the file name has no date). Small icons replace the coloured warning words: hover one to read it.
+- **Columns** lets you turn columns on or off. Narrow windows show fewer.
+- Group headings stay at the top while you scroll.
+
+**One at a time** now has **Hide site** next to Approve site, with the same choices (only this account, only this sub-site, the whole site).
 
 ## Quick troubleshooting
 

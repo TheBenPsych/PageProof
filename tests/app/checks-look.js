@@ -82,7 +82,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     ['fWhen', 'week', `c => Date.now() - new Date(c.firstSeen) < 7 * 864e5 + 6e4`, 'Found: this week'],
     ['fMatch', 'exact', `c => matchKind(c) === 'exact'`, 'Match: Exact'],
   ]) {
-    await page.click(`[data-act="fset"][data-v="${k}|${v}"]`); await page.waitForTimeout(500);
+    await page.click(`[data-dd="${k}"] > summary`); await page.click(`[data-act="fset"][data-v="${k}|${v}"]`); await page.waitForTimeout(500);
     const r = await page.evaluate(t => ({ n: LIST.length, good: LIST.every(id => (0, eval)('(' + t + ')')(FCD.copies.find(c => c.id === id))) }), test).catch(async () => page.evaluate(() => ({ n: LIST.length, good: null })));
     ok(r.n > 0 && r.n < all && r.good !== false, name + ' narrows the list (' + r.n + ')');
     await page.evaluate(k => { state[k] = 'any'; render(true); }, k); await page.waitForTimeout(400);
@@ -90,7 +90,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   for (const g of ['photo', 'site', 'owner', 'list', 'client']) {
     const has = await page.evaluate(g => !!document.querySelector(`[data-act="fset"][data-v="fView|${g}"]`), g);
     if (!has) continue;
-    await page.click(`[data-act="fset"][data-v="fView|${g}"]`); await page.waitForTimeout(600);
+    await page.click('[data-dd="fView"] > summary'); await page.click(`[data-act="fset"][data-v="fView|${g}"]`); await page.waitForTimeout(600);
     const r = await page.evaluate(() => ({ heads: document.querySelectorAll('.ghead').length, rows: document.querySelectorAll('.crow').length }));
     ok(r.rows > 0 && (g === 'list' ? r.heads === 0 : r.heads > 0), 'Group by ' + g + ': ' + r.heads + ' groups, ' + r.rows + ' rows');
     if (g === 'photo') await shot('found-by-photo');
@@ -138,7 +138,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const one = await page.evaluate(async b => {
     const c = FCD.copies.find(c => c.status === 'new' && c.site === 'bigblog.example');
     const r = await FC.DB.get('copies', c.id); r.url = b + '/story'; r.img = b + '/pic.png'; await FC.DB.put('copies', r);
-    FCD = null; await loadFC(); state.fq = 'bigblog.example'; state.open = c.id; render(true);
+    FCD = null; await loadFC(); state.fq = 'bigblog.example'; state.dView = 'page'; state.open = c.id; render(true);
     return c.id;
   }, base);
   await page.waitForTimeout(6000);

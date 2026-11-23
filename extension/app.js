@@ -465,6 +465,10 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['A calmer details panel', 'The copy details panel now shows the pictures first, then a short "Look at these" list with only the things that need you. Everything else sits in four small tabs: Summary, Their page, Claim and Site. Stolen, Licensed, Remove, Skip and Undo stay pinned at the bottom, and Approve site and Hide site are in the More menu.'],
+  ['Slide between the two pictures', 'Under the pictures, pick Side by side, Slider (drag across to compare) or Their page (a live look at their page). PageProof remembers your choice.'],
+  ['Copies found at a glance', 'Number tiles at the top (New, Found today, Suspicious sites, Back online, Published in the last 3 months) filter the list with one click. Group, Found, Match and Sort are now small dropdowns on one line, and the other quick filters are under Filters.'],
+  ['New columns, your choice', 'Rows now show a coloured Lines up bar, the Client, and a Damages column (Statutory, Register by a date, or Actual only). Small icons replace the coloured warning tags; hover one to read it. Pick the columns you want from the Columns menu. Group headings stay at the top while you scroll.'],
   ['Hidden countries work again', 'Copies from countries you hide (like France or Lithuania) are hidden again, and the Country column shows the country from the web address ending (.fr, .lt, .com.tr). Endings used all over the world, like .com, .io, .co, .tv, .me and .ai, never count as a country.'],
   ['The side panel shows again', 'The PageProof side panel (beside the page in Chrome and Edge) opened empty, because it borrowed a name from the main page\'s left menu and was slid out of sight on narrow screens. It now shows Capture this page, Photos on this page and Copies found again. If it ever can\'t load, it says why instead of staying blank.'],
   ['Home lines up', 'The boxes on Home now sit in the same three columns as the three big cards at the top, so every edge lines up. On a narrow window they stack in one column.'],

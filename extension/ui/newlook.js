@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.addEventListener('click', e => {
     if (!e.target.closest('.undo-wrap')) undoMenu(false);
-    if (!e.target.closest('.tmenu') && !e.target.closest('[data-act="rowmenu"],[data-act="stripok"]')) closeRowMenu();
+    if (!e.target.closest('.tmenu') && !e.target.closest('[data-act="rowmenu"],[data-act="stripok"],[data-act="dmore"]')) closeRowMenu();
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') { undoMenu(false); closeRowMenu(); } });
 });

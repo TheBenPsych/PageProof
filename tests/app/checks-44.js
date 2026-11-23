@@ -54,7 +54,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.evaluate(i => { state.open = i; }, id);
   await go('found'); await page.evaluate(i => { state.open = i; render(true); }, id);
   await page.waitForTimeout(4000);
-  const dr = await page.evaluate(() => { const t = (document.querySelector('.drawer') || document.body).innerText; return { t, rules: !!document.querySelector('#rulesbox') }; });
+  const dr = await page.evaluate(() => { const t = (document.querySelector('.drawer') || document.body).textContent; return { t, rules: !!document.querySelector('#rulesbox') }; });
   ok(dr.rules && /Firm rules/i.test(dr.t), 'The details panel has Firm rules');
   ok(/Jane Ortiz/.test(dr.t), 'The credit line was read from their page');
   ok(/24\.99|price/i.test(dr.t) && /ads/i.test(dr.t), 'Signs it was on purpose: the price and the ads');

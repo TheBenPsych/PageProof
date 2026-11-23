@@ -4,7 +4,7 @@
 // grouping by client, photo, site or site owner.
 Object.assign(state, {
   open: '', picked: [], fFilter: 'New', fq: '', fWhen: 'any', fMatch: 'any', fYear: 'Any', fQuarter: 'Any', fPhoto: '', sis: null, fView: 'client', fSort: 'act', fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fOwner: '',
-  showFilters: false, exp: [], more: 250, qi: 0, cmpMode: 'side', cut: 50, rvTab: 'review', recentHides: [],
+  showFilters: false, fFresh: false, dTab: 'sum', dTabFor: '', dView: '', slide: 50, fCols: null, exp: [], more: 250, qi: 0, cmpMode: 'side', cut: 50, rvTab: 'review', recentHides: [],
 });
 const HIST = [];         // every answer and hide, newest last, so each one can be undone in turn
 let FCD = null;          // what's loaded from the copies database (cleared when anything changes)
@@ -22,6 +22,12 @@ const FLAG_ICON = {
 const shortDate = iso => { if (!iso) return ''; const d = new Date(iso); const t = new Date(); if (d.toDateString() === t.toDateString()) return 'Today'; const y = new Date(t - 86400000); if (d.toDateString() === y.toDateString()) return 'Yesterday'; return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: d.getFullYear() === t.getFullYear() ? undefined : 'numeric' }); };
 const plural = (n, a, b) => n + ' ' + (n === 1 ? a : (b || a + 's'));
 
+// The nearest folder with a VA or 1-… number, like FC.regFor, from numbers already read.
+function regSync(p, regs) {
+  let rel = (p && p.folder) || '', va = '', app = '';
+  while (rel && !(va && app)) { const r = regs[rel]; if (r) { va = va || r.va; app = app || r.app; } rel = rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : ''; }
+  return va || app ? { va, app } : null;
+}
 async function loadFC() {
   if (FCD) return FCD;
   const [copies, clients, countries, sites] = [await FC.allCopies(), await FC.DB.all('clients'), await FC.hiddenCountries(), await FC.DB.all('sites')];
@@ -30,6 +36,7 @@ async function loadFC() {
   const idList = [...ids];
   (await FC.DB.getMany('photos', idList)).forEach((p, i) => { if (p) photos.set(idList[i], p); });
   const facts = new Map(sites.map(f => [f.site, f]));
+  const regs = (await FC.meta.get('regs')) || {};
   for (const c of copies) {
     if (!STATUS[c.status]) c.status = 'new';     // a line edited by hand in found-copies.txt
     c.risk = FC.riskOf(c, facts.get(c.site));
@@ -38,6 +45,9 @@ async function loadFC() {
     const p = photos.get(c.photo);
     c.photoName = p ? p.name : c.photoName || 'Photo';
     c.clientName = (p && p.client) || c.client || '';
+    // 4.7: the Damages column. No publish date (an odd file name) means no damages answer at all.
+    const pub = PP_CHECKS.pubDate(p);
+    c.dmg = pub ? PP_CHECKS.damages(pub, regSync(p, regs)) : null;
   }
   const ownerList = await FC.owners([...new Set(copies.filter(c => c.status !== 'removed').map(c => c.site))]);
   const ownerOf = new Map();
@@ -111,7 +121,7 @@ async function loadOurs(root = document) {
 function passMain(c) {
   return (state.fClient === 'Any' || (c.clientName || 'Client unknown') === state.fClient) && (state.fUse === 'Any' || c.use === state.fUse) &&
     (state.fRisk === 'Any' || c.risk.level === state.fRisk) && (state.fCredit === 'Any' || (c.credit || '') === state.fCredit) && (!state.fShop || c.use === 'shop') && (!state.fRepeat || (c.repeat > 0 && c.status === 'new')) &&
-    (!state.fOwner || (FCD.ownerOf.get(c.site) || {}).key === state.fOwner) && passMore(c);
+    (!state.fOwner || (FCD.ownerOf.get(c.site) || {}).key === state.fOwner) && (!state.fFresh || (c.dmg && c.dmg.end && Date.now() <= c.dmg.end.getTime())) && passMore(c);
 }
 // The newer filters: the search box, found when, how strong the match is, photo year and quarter.
 function passMore(c) {
@@ -203,20 +213,22 @@ function kindSelect(c, kind, id) {
   return `<select ${id ? `id="${id}"` : 'data-act="setkind"'} class="kindsel" aria-label="Kind of site">
     <option value="">${kind ? 'Not picked' : 'Pick one…'}</option>${PP_CHECKS.KINDS.map(([k, n]) => `<option value="${k}"${k === (kind || (id ? guess : '')) ? ' selected' : ''}>${esc(n)}${!kind && k === guess ? ' (best guess)' : ''}</option>`).join('')}</select>`;
 }
-function checksHtml(c, reg, kind, hits, pub, capturedAt) {
+// The firm checks, cut into the parts the panel's tabs show (4.7).
+function checksParts(c, reg, kind, hits, pub, capturedAt) {
   const pf = c.pf, busy = PF_BUSY.has(c.id) || !pf;
   const purpose = PP_CHECKS.onPurpose(pf);
-  const dmg = PP_CHECKS.damages(pub, reg);
+  const dmg = pub ? PP_CHECKS.damages(pub, reg) : null;
   const tagFor2 = { ok: 'ok', warn: 'warn', bad: 'bad', '': 'grey' };
   const legal = c.status === 'stolen' ? PP_CHECKS.legal({ c, reg, pub, kind, hits, pf, capturedAt }) : null;
   const ready = legal ? legal.filter(x => x[0] === true).length : 0;
   const fix = { capture: 'Capture', kind: 'Pick', readpage: 'Read it' };
-  return `
-  <section class="dsec" id="rulesbox"><div class="dsh">Firm rules</div>
+  return {
+    purpose, dmg, legal, ready,
+    rules: `<section class="dsec" id="rulesbox"><div class="dsh">Firm rules</div>
     <div class="row" style="gap:8px;font-size:13.5px"><span>Kind of site</span>${kindSelect(c, kind)}${kind ? '' : '<span class="faint" style="font-size:12.5px">asked once per site</span>'}</div>
     ${hits.length ? hits.map(ruleRow).join('') : `<span class="faint" style="font-size:13px">${kind ? 'No firm rule stops this copy.' : 'Pick the kind of site to see the firm\'s rules for it.'}</span>`}
-  </section>
-  <section class="dsec"><div class="dsh">Their page</div>
+  </section>`,
+    page: `<section class="dsec"><div class="dsh">What their page says</div>
     ${busy ? '<span class="muted" style="font-size:13.5px">Reading their page (without your cookies)…</span>'
       : !pf.ok ? `<div class="row" style="gap:8px;font-size:13.5px"><span class="muted">Could not read their page: ${esc(pf.why || '')}</span><button class="btn ghost sm" data-act="readpage">Try again</button></div>`
       : `<dl class="facts" style="margin:0">
@@ -224,18 +236,44 @@ function checksHtml(c, reg, kind, hits, pub, capturedAt) {
         <dt>On purpose?</dt><dd>${purpose.length ? purpose.map(t => `<div>${esc(t)}</div>`).join('') : '<span class="muted">No selling or ads found</span>'}</dd>
         ${pf.yt || pf.embedPost ? `<dt>Embeds</dt><dd>${[pf.yt ? 'YouTube video' : '', pf.embedPost ? 'Social media post' : ''].filter(Boolean).join(', ')} on the page${pf.imgFound ? ' (the photo itself is on the page too)' : ''}</dd>` : ''}
       </dl><span class="faint" style="font-size:12px">Read ${shortDate(pf.at).toLowerCase()} · <a href="#" data-act="readpage">Read again</a></span>`}
-  </section>
-  <section class="dsec"><div class="dsh">Dates and damages</div>
+  </section>`,
+    // No publish date (an odd file name): no damages section at all (Ben, 2026-11-23).
+    damages: dmg ? `<section class="dsec"><div class="dsh">Dates and damages</div>
     <dl class="facts" style="margin:0">
-      <dt>Published</dt><dd>${pub ? `<b>${PP_CHECKS.fmt(pub.date)}</b><br><span class="muted" style="font-size:12.5px">From ${esc(pub.from)}</span>` : '<span class="muted">Not known</span>'}</dd>
-      ${dmg.end ? `<dt>3 months</dt><dd>${PP_CHECKS.fmt(dmg.end)}</dd>` : ''}
+      <dt>Published</dt><dd><b>${PP_CHECKS.fmt(pub.date)}</b><br><span class="muted" style="font-size:12.5px">From ${esc(pub.from)}</span></dd>
+      <dt>3 months</dt><dd>${PP_CHECKS.fmt(dmg.end)}</dd>
     </dl>
-    <div class="regbox ${dmg.lvl === 'ok' ? '' : 'none'}" style="${dmg.lvl === 'bad' ? 'border-left-color:var(--bad);background:var(--bad-soft)' : dmg.lvl === '' ? 'border-left-color:var(--line);background:var(--surface)' : ''}"><span><span class="tag ${tagFor2[dmg.lvl]}">${esc(dmg.title)}</span></span><span class="muted" style="font-size:13px">${esc(dmg.text)}</span></div>
-  </section>
-  ${legal ? `<section class="dsec" id="legalbox"><div class="dsh">Ready for legal? <span class="tag ${ready === legal.length ? 'ok' : 'warn'}" style="margin-left:6px;letter-spacing:0;text-transform:none">${ready} of ${legal.length} ready</span></div>
+    <div class="regbox ${dmg.lvl === 'ok' ? '' : 'none'}" style="${dmg.lvl === 'bad' ? 'border-left-color:var(--bad);background:var(--bad-soft)' : ''}"><span><span class="tag ${tagFor2[dmg.lvl]}">${esc(dmg.title)}</span></span><span class="muted" style="font-size:13px">${esc(dmg.text)}</span></div>
+  </section>` : '',
+    legalBox: legal ? `<section class="dsec" id="legalbox"><div class="dsh">Ready for legal? <span class="tag ${ready === legal.length ? 'ok' : 'warn'}" style="margin-left:6px;letter-spacing:0;text-transform:none">${ready} of ${legal.length} ready</span></div>
     ${legal.map(([ok, label, act]) => `<div class="lrow ${ok === true ? 'y' : ok === false ? 'n' : 'q'}"><span class="lbox" aria-hidden="true">${ok === true ? '✓' : ok === false ? '!' : '?'}</span><span style="flex:1;min-width:0">${esc(label)}</span>${act ? `<button class="btn ghost sm" data-act="legalfix" data-v="${act}">${fix[act]}</button>` : ''}</div>`).join('')}
-    <span class="faint" style="font-size:12.5px">The Evidence report can still be made at any time.</span></section>` : ''}`;
+    <span class="faint" style="font-size:12.5px">The Evidence report can still be made at any time.</span></section>` : '',
+  };
 }
+// What the list's Damages column says: the same answer as the panel, short.
+function dmgCell(c) {
+  const d = c.dmg;
+  if (!d) return '';
+  const end = d.end ? d.end.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+  if (d.lvl === 'ok') return `<span class="tag ok" title="${esc(d.text)}">Statutory</span>`;
+  if (d.lvl === 'warn') return `<span class="tag warn" title="${esc(d.text)}">Register by ${esc(end)}</span>`;
+  if (d.lvl === 'bad') return `<span class="tag bad" title="${esc(d.text)}">Actual only</span>`;
+  return '';
+}
+// Small warning icons for a row (4.7): the words show when you hover.
+function signals(c) {
+  const s = [];
+  if (c.match === 'maybe') s.push(['warn', 'maybe', 'Maybe the same photo. Look closely.']);
+  if (c.risk.level === 'sus') s.push(['bad', 'warn', 'Suspicious site' + (c.risk.why.length ? ': ' + c.risk.why.join(', ') : '')]);
+  else if (c.risk.level === 'watch') s.push(['warn', 'warn', 'Worth a look' + (c.risk.why.length ? ': ' + c.risk.why.join(', ') : '')]);
+  if (c.credit === 'removed') s.push(['copy', 'nocredit', 'Credit removed: your client\'s photo has a copyright line in its hidden data and their copy does not']);
+  if (c.repeat && c.status === 'new') s.push(['bad', 'repeat', `Repeat offender: you already marked ${c.repeat} ${c.repeat === 1 ? 'copy' : 'copies'} on ${c.repeatWho} as Stolen`]);
+  if (c.status !== 'removed' && c.online === 'back') s.push(['bad', 'back', 'Back online: it was gone and is up again']);
+  if (c.status !== 'removed' && c.online === 'gone') s.push(['grey', 'gone', 'Gone: the page no longer shows the photo']);
+  if (c.use === 'shop') s.push(['ok', 'shop', 'Selling something: a shop page, product listing or ad']);
+  return s;
+}
+const sigIcons = c => { const s = signals(c); return s.length ? `<span class="sig">${s.map(([col, i, t]) => `<span class="tag ${col}" title="${esc(t)}" aria-label="${esc(t)}">${ic(i, 13)}</span>`).join('')}</span>` : ''; };
 // Before a copy is marked Stolen: the kind of site (once per site) and the rules that apply.
 // Resolves 'stolen', 'removed' (Remove instead) or null (cancelled).
 async function ruleGate(c) {
@@ -276,71 +314,121 @@ async function ruleGate(c) {
     d.showModal(); sel.focus();
   });
 }
+// The copy details panel (4.7, calmer): pictures first, a short "Look at these" list of only the
+// things that need you, the rest in four small tabs, and the answer buttons pinned at the bottom.
+const DTABS = [['sum', 'Summary'], ['page', 'Their page'], ['claim', 'Claim'], ['site', 'Site']];
 async function drawer(list) {
   if (!state.open) return '';
   const c = FCD.copies.find(x => x.id === state.open);
   if (!c) return '';
+  if (state.dTabFor !== c.id) { state.dTabFor = c.id; state.dTab = 'sum'; }
   const p = FCD.photos.get(c.photo);
   const [reg, path, doubles] = [p ? await FC.regFor(p) : null, p ? await FC.pathOf(p) : '', p ? await FC.doublesOf(p) : []];
   const o = FCD.ownerOf.get(c.site);
   const f = FCD.facts.get(c.site);
   const clients = [...FCD.clients.keys()].sort();
-  // Firm checks (checks.js): kind of site, their page read without cookies, dates, Ready for legal.
   const [kinds, logR] = await Promise.all([siteKinds(), api.storage.local.get('log').catch(() => ({}))]);
   const kind = kinds[FC.baseOf(c.site)] || '';
   const pub = PP_CHECKS.pubDate(p);
   const hits = PP_CHECKS.rules(c, kind, c.pf);
   const capturedAt = PP_CHECKS.captureOf(logR.log, c.url);
   if (!c.pf && !PF_BUSY.has(c.id)) readTheirPage(c).then(() => { if (state.open === c.id) render(true); }).catch(() => {});
+  const ck = checksParts(c, reg, kind, hits, pub, capturedAt);
   const sz = c.w && p && p.w ? (Math.abs(c.w / c.h - p.w / p.h) / (p.w / p.h) > 0.06 ? 'cropped' : (c.w * c.h) / (p.w * p.h) > 1.15 ? 'bigger than your client\'s' : (c.w * c.h) / (p.w * p.h) < 0.85 ? 'smaller' : 'same size') : '';
   const idx = list.indexOf(c.id);
   const last = HIST[HIST.length - 1];
-  return `<aside class="drawer" aria-label="Copy details" id="drawer">
+  // "Look at these": only problems, each with where to go next. The rest folds into one green line.
+  const look = [], fine = [];
+  if (c.match === 'maybe') look.push(['warn', 'maybe', 'Maybe the same photo', 'The checker is not sure. Compare them closely.', 'compare', 'Compare']);
+  if (c.risk.level === 'sus') look.push(['bad', 'warn', 'Suspicious site', c.risk.why.join(' · '), 'dtab', 'Site', 'site']);
+  else if (c.risk.level === 'watch') look.push(['warn', 'warn', 'Worth a look', c.risk.why.join(' · '), 'dtab', 'Site', 'site']);
+  else fine.push('Site looks normal');
+  if (c.credit === 'removed') look.push(['copy', 'nocredit', 'Credit removed', 'Your client\'s photo carries a copyright line in its hidden data. Their copy has none.']);
+  else if (c.credit === 'kept') fine.push('Credit kept');
+  if (c.repeat && c.status === 'new') look.push(['bad', 'repeat', `Repeat offender (${c.repeat} stolen before)`, `You already marked copies on ${c.repeatWho} as Stolen.`]);
+  if (c.status !== 'removed' && c.online === 'back') look.push(['bad', 'back', 'Back online', 'It was gone and is up again.']);
+  else if (c.status !== 'removed' && c.online === 'gone') look.push(['grey', 'gone', 'Gone', 'The page no longer shows the photo.' + (c.onlineWhy ? ' ' + c.onlineWhy : '')]);
+  else fine.push('Still online');
+  for (const h of hits.filter(h => h.lvl === 'stop' || h.lvl === 'warn')) look.push([h.lvl === 'stop' ? 'bad' : 'warn', 'warn', 'Firm rule: ' + PP_CHECKS.LVL[h.lvl][0], h.text, 'dtab', 'Claim', 'claim']);
+  if (ck.dmg && ck.dmg.lvl === 'warn') look.push(['warn', 'clock', ck.dmg.title, ck.dmg.text, 'dtab', 'Claim', 'claim']);
+  else if (ck.dmg && ck.dmg.lvl === 'bad') look.push(['bad', 'clock', ck.dmg.title, ck.dmg.text, 'dtab', 'Claim', 'claim']);
+  else if (ck.dmg && ck.dmg.lvl === 'ok') fine.push('Statutory damages');
+  if (!c.clientName) look.push(['warn', 'who', 'Client unknown', 'Set the client in the Summary tab.', 'dtab', 'Summary', 'sum']);
+  if (ck.legal && ck.ready < ck.legal.length) look.push(['warn', 'doc', `Ready for legal: ${ck.ready} of ${ck.legal.length}`, ck.legal.filter(x => x[0] !== true).map(x => x[1]).join(' · '), 'dtab', 'Claim', 'claim']);
+  const lookN = look.filter(x => x[0] !== 'grey').length;
+  const dot = { page: c.credit === 'removed', claim: hits.some(h => h.lvl !== 'info') || (ck.dmg && ck.dmg.lvl !== 'ok') || (ck.legal && ck.ready < ck.legal.length), site: c.risk.level !== 'ok' || (c.repeat && c.status === 'new') };
+  const tab = state.dTab, show = k => tab === k ? '' : ' hidden';
+  const view = state.dView || 'side';
+  const ourSrc = oursImg(p), theirSrc = theirImg(c);
+  const viewer = view === 'page' ? pageBoxHtml(c)
+    : view === 'slide' ? `<div class="dslide" style="--cut:${state.slide}%"><img data-our="${esc(c.photo)}" src="${ourSrc}" alt="Your client's photo"><img class="top" src="${theirSrc}" alt="Their copy" referrerpolicy="no-referrer"><span class="lab l">Your client's</span><span class="lab r">Theirs</span><i class="handle" aria-hidden="true"></i><input type="range" min="0" max="100" value="${state.slide}" data-act="dslide" aria-label="Slide between your client's photo and theirs"></div>`
+    : `<div class="pair"><div class="frame ours"><img data-our="${esc(c.photo)}" src="${ourSrc}" alt="Your client's photo"><span class="lab">Your client's</span></div><div class="frame theirs"><img src="${theirSrc}" alt="Their copy" referrerpolicy="no-referrer"><span class="lab">Theirs</span></div></div>`;
+  return `<aside class="drawer calm" aria-label="Copy details" id="drawer">
   <div class="dhead"><button class="btn sm icon" data-act="dstep" data-v="-1" aria-label="Previous copy"${idx > 0 ? '' : ' disabled'}>‹</button><button class="btn sm icon" data-act="dstep" data-v="1" aria-label="Next copy"${idx >= 0 && idx < list.length - 1 ? '' : ' disabled'}>›</button><span class="muted num" style="font-size:13px">${idx >= 0 ? `${idx + 1} of ${list.length}` : ''}</span><span style="flex:1"></span>${tagFor(c)}<button class="btn sm icon" data-act="closedrawer" aria-label="Close">✕</button></div>
-  <div style="min-width:0"><h2 style="font-size:20px;overflow-wrap:anywhere">${esc(c.site)}</h2><a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a></div>
-  ${last ? `<button class="btn" style="min-height:34px;justify-content:flex-start;font-size:13.5px;border-color:var(--accent);color:var(--accent)" data-act="undo">↶ Undo: ${esc(last.label)}<span class="kbd" style="margin-left:auto">U</span></button>` : ''}
-  <div class="pair"><div class="frame ours"><img data-our="${esc(c.photo)}" src="${oursImg(p)}" alt="Your client's photo"><span class="lab">Your client's</span></div><div class="frame theirs"><img src="${theirImg(c)}" alt="Their copy" referrerpolicy="no-referrer"><span class="lab">Theirs</span></div></div>
-  <div class="row" style="gap:8px">${repeatTag(c)}${flagWords(c)}${c.pct >= 0 && c.pct != null ? `<b style="color:${c.pct >= 80 ? 'var(--bad)' : 'var(--warn)'}" data-gloss="Lines up">${c.pct}% lines up</b>` : ''}${c.match === 'maybe' ? '<span class="tag warn" data-gloss="Maybe">Maybe</span>' : ''}<button class="btn ghost sm" style="margin-left:auto" data-act="compare">Compare closely</button></div>
-  ${keptBoxHtml(c)}
-  ${pageBoxHtml(c)}
-  ${p && p.rel ? `${reg ? `<section class="dsec"><div class="dsh">Copyright registration</div>${regBox(p, reg)}</section>` : ''}<section class="dsec"><div class="dsh">Your client's photo in Drive</div>${pathBox(path)}</section>` : ''}
-  ${checksHtml(c, reg, kind, hits, pub, capturedAt)}
-  <dl class="facts">
-    <dt>Page</dt><dd class="mono" style="font-size:12px;overflow-wrap:anywhere"><a href="${safeUrl(c.url)}" target="_blank" rel="noreferrer">${esc(c.url)}</a></dd>
-    ${c.title ? `<dt>Title</dt><dd>${esc(c.title)}</dd>` : ''}
-    <dt>Photo</dt><dd>${esc(c.photoName)}${p && p.w ? `<br><span class="muted" style="font-size:13px">${p.w} × ${p.h}</span>` : ''}</dd>
-    <dt>Client</dt><dd>${c.clientName ? esc(c.clientName) : `<span style="color:var(--warn);font-weight:600">Client unknown</span> <select data-act="setclient" aria-label="Set the client" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:13px;padding:2px 4px"><option value="">Set…</option>${clients.map(n => `<option>${esc(n)}</option>`).join('')}</select>`}</dd>
-    ${o && o.real ? `<dt>Site owner</dt><dd><a href="#owners" data-act="gowner" data-v="${esc(o.key)}" style="font-weight:600">${esc(o.name)}</a><br><span class="muted" style="font-size:13px">${esc(o.kind)}${o.sites.length > 1 ? ' · ' + FCD.copies.filter(x => o.sites.includes(x.site) && x.status !== 'removed').length + ' copies on their sites' : ''}</span></dd>` : ''}
-    ${doubles.length > 1 ? `<dt>Double</dt><dd><div style="border:1px solid var(--accent);background:var(--accent-soft);border-radius:10px;padding:8px 10px;font-size:13.5px"><b>You have ${doubles.length} versions of this photo</b>${doubles.map(d => `<br>${esc(d.name)}${d.w ? ' (' + d.w + ' × ' + d.h + ')' : ''}${d.id === p.id ? ' · <b>this one</b>' : ''}`).join('')}<br><b style="color:var(--copy)">Note them all in the claim.</b></div></dd>` : ''}
-    <dt>How it's used</dt><dd>${esc(FC.USE[c.use][0])}<br><span class="muted" style="font-size:13px">${esc(FC.USE[c.use][1])}</span></dd>
-    <dt>Site check</dt><dd>${RISK[c.risk.level][0]}${c.risk.why.length ? `<br><span class="muted" style="font-size:13px">${esc(c.risk.why.join(' · '))}</span>` : ''}</dd>
-    <dt>Credit</dt><dd>${c.credit ? CREDIT[c.credit] : `<button class="btn ghost sm" data-act="checkcredit">Check the hidden data</button>`}</dd>
-    ${c.country ? `<dt>Country</dt><dd>${esc(c.country)} <button class="btn ghost sm" data-act="hidecountry" data-v="${esc(c.country)}">Hide this country</button></dd>` : ''}
-    <dt>Seen</dt><dd>${shortDate(c.firstSeen)}${c.lastSeen && c.lastSeen !== c.firstSeen ? ' → ' + shortDate(c.lastSeen) : ''}, ${c.times > 1 ? c.times + ' times' : 'once'}${c.by ? `<br><span class="muted" style="font-size:13px">First found by ${esc(c.by)}${c.engines && c.engines.length ? ' on ' + c.engines.map(e => ({ google: 'Google Lens', yandex: 'Yandex', bing: 'Bing' }[e] || esc(e))).join(', ') : ''}</span>` : ''}</dd>
-    <dt>Online now</dt><dd>${onlineText(c)}${c.checked ? `<br><span class="muted" style="font-size:13px">Checked ${shortDate(c.checked)}${c.onlineWhy ? ': ' + esc(c.onlineWhy) : ''}</span>` : ''} <button class="btn ghost sm" data-act="checkonline">Check now</button></dd>
-    ${c.w ? `<dt>Their size</dt><dd>${c.w} × ${c.h}${sz ? ' · ' + sz : ''}</dd>` : ''}
-  </dl>
-  <a class="lookup" href="#who" data-act="gowho" data-v="${esc(c.id)}">${ic('owner', 18)}<span><b>Who's behind this site</b><br><span class="muted" style="font-size:13px">${f ? esc(f.names && f.names[0] ? 'Probably ' + f.names[0] : 'Names, contacts and domain facts') : 'Read names, contacts and domain facts off the site'}</span></span><span style="margin-left:auto">${ic('chev', 16)}</span></a>
-  <details class="hidebox" id="okbox"><summary><b>Is this site allowed to use the photo?</b> <span class="muted" style="font-size:13px">Approve it</span></summary>
-    <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
-    ${c.clientName ? `<button class="lookup" style="text-align:left;cursor:pointer" data-act="approvesite" data-v="client"><span style="color:var(--ok);display:inline-flex">${ic('check', 20)}</span><span><b>Approved for ${esc(c.clientName)} only</b><br><span class="muted" style="font-size:12.5px">${esc(FC.baseOf(c.site))} may use this client's photos. Other clients' photos there still show as new.</span></span></button>` : ''}
-    <button class="lookup" style="text-align:left;cursor:pointer" data-act="approvesite" data-v="all"><span style="color:var(--ok);display:inline-flex">${ic('check', 20)}</span><span><b>Approved for every client</b><br><span class="muted" style="font-size:12.5px">${esc(FC.baseOf(c.site))} may use any client's photos (a partner, a wire service, your own site).</span></span></button>
-    <span class="faint" style="font-size:12.5px">Copies on an approved site are marked Licensed by themselves, now and in every later search. Change it in Settings › Hidden and approved sites.</span></div></details>
-  <details class="hidebox" id="hidebox"><summary><b>Don't want results from this site?</b> <span class="muted" style="font-size:13px">Hide it</span></summary>
-    <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">${hideChoices(c).map(([v, l, d]) => `<button class="lookup" style="text-align:left;cursor:pointer" data-act="hidesite" data-v="${esc(v)}"><span style="color:var(--bad);display:inline-flex">${ic('ban', 20)}</span><span><b>${esc(l)}</b><br><span class="muted" style="font-size:12.5px">${esc(d)}</span></span></button>`).join('')}
-    <span class="faint" style="font-size:12.5px">Hidden sites never show again in any search. Bring them back from the Sites chips above the list, or Settings › Hidden and approved sites.</span></div></details>
-  <div class="dacts" style="display:flex;flex-direction:column;gap:8px;margin-top:auto">
+  <div class="dscroll" id="dscroll">
+  <div class="dsite"><h2>${esc(c.site)}</h2><a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a></div>
+  <div class="dview">${viewer}</div>
+  <div class="dvbar"><div class="seg sm" role="radiogroup" aria-label="Picture view">${[['side', 'Side by side'], ['slide', 'Slider'], ['page', 'Their page']].map(([k, l]) => `<button role="radio" aria-checked="${view === k}" class="${view === k ? 'on' : ''}" data-act="dview" data-v="${k}">${l}</button>`).join('')}</div><button class="btn ghost sm" data-act="compare">${ic('layers', 15)} Compare closely</button></div>
+  <div class="dchips">${c.pct >= 0 && c.pct != null ? `<span class="fchip" data-gloss="Lines up"><b style="color:${c.pct >= 80 ? 'var(--bad)' : 'var(--warn)'}">${c.pct}%</b> lines up</span>` : ''}<span class="fchip">${esc(FC.USE[c.use][0])}</span>${c.country ? `<span class="fchip">${esc(c.country)}</span>` : ''}${c.w ? `<span class="fchip">${c.w} × ${c.h}${sz ? ' · ' + sz : ''}</span>` : ''}</div>
+  <section class="attn" id="lookbox"><h3>${lookN ? `${ic('warn', 15)} Look at these (${lookN})` : `${ic('check', 15)} Nothing needs a look`}</h3>
+    ${look.map(([col, i, t, s, act, b, v]) => `<div class="it"><span class="ico tag ${col}">${ic(i, 15)}</span><div><b>${esc(t)}</b>${s ? `<span>${esc(s)}</span>` : ''}</div>${act ? `<button class="btn sm" data-act="${act}"${v ? ` data-v="${v}"` : ''}>${b}</button>` : ''}</div>`).join('')}
+    ${fine.length ? `<div class="okline">${ic('check', 14)} ${fine.map(esc).join(' · ')}</div>` : ''}</section>
+  <div class="dtabs" role="tablist">${DTABS.map(([k, l]) => `<button role="tab" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}" data-act="dtab" data-v="${k}">${l}${dot[k] ? '<span class="dot" title="Something to check here"></span>' : ''}</button>`).join('')}</div>
+  <div class="dpane" data-tab="sum"${show('sum')}>
+    <dl class="facts">
+      <dt>Client</dt><dd>${c.clientName ? esc(c.clientName) : `<span style="color:var(--warn);font-weight:600">Client unknown</span> <select data-act="setclient" aria-label="Set the client" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:13px;padding:2px 4px"><option value="">Set…</option>${clients.map(n => `<option>${esc(n)}</option>`).join('')}</select>`}</dd>
+      <dt>Photo</dt><dd>${esc(c.photoName)}${p && p.w ? `<br><span class="muted" style="font-size:13px">${p.w} × ${p.h}</span>` : ''}</dd>
+      <dt>How it's used</dt><dd>${esc(FC.USE[c.use][0])}<br><span class="muted" style="font-size:13px">${esc(FC.USE[c.use][1])}</span></dd>
+      <dt>Seen</dt><dd>${shortDate(c.firstSeen)}${c.lastSeen && c.lastSeen !== c.firstSeen ? ' → ' + shortDate(c.lastSeen) : ''}, ${c.times > 1 ? c.times + ' times' : 'once'}${c.by ? `<br><span class="muted" style="font-size:13px">First found by ${esc(c.by)}${c.engines && c.engines.length ? ' on ' + c.engines.map(e => ({ google: 'Google Lens', yandex: 'Yandex', bing: 'Bing' }[e] || esc(e))).join(', ') : ''}</span>` : ''}</dd>
+      <dt>Online now</dt><dd>${onlineText(c)}${c.checked ? `<br><span class="muted" style="font-size:13px">Checked ${shortDate(c.checked)}${c.onlineWhy ? ': ' + esc(c.onlineWhy) : ''}</span>` : ''} <button class="btn ghost sm" data-act="checkonline">Check now</button></dd>
+      ${doubles.length > 1 ? `<dt>Double</dt><dd><div style="border:1px solid var(--accent);background:var(--accent-soft);border-radius:10px;padding:8px 10px;font-size:13.5px"><b>You have ${doubles.length} versions of this photo</b>${doubles.map(d => `<br>${esc(d.name)}${d.w ? ' (' + d.w + ' × ' + d.h + ')' : ''}${d.id === p.id ? ' · <b>this one</b>' : ''}`).join('')}<br><b style="color:var(--copy)">Note them all in the claim.</b></div></dd>` : ''}
+    </dl>
+    ${keptBoxHtml(c)}
+  </div>
+  <div class="dpane" data-tab="page"${show('page')}>
+    <dl class="facts">
+      ${c.title ? `<dt>Title</dt><dd>${esc(c.title)}</dd>` : ''}
+      <dt>Page</dt><dd class="mono" style="font-size:12px;overflow-wrap:anywhere"><a href="${safeUrl(c.url)}" target="_blank" rel="noreferrer">${esc(c.url)}</a></dd>
+      <dt>Hidden data</dt><dd>${c.credit ? CREDIT[c.credit] : `<button class="btn ghost sm" data-act="checkcredit">Check the hidden data</button>`}</dd>
+    </dl>
+    ${ck.page}
+    ${view !== 'page' ? `<button class="btn sm" style="align-self:flex-start" data-act="dview" data-v="page">${ic('eye', 15)} See their page above</button>` : ''}
+  </div>
+  <div class="dpane" data-tab="claim"${show('claim')}>
+    ${ck.legalBox}
+    ${p && p.rel && reg ? `<section class="dsec"><div class="dsh">Copyright registration</div>${regBox(p, reg)}</section>` : ''}
+    ${ck.damages}
+    ${ck.rules}
+    ${p && p.rel ? `<section class="dsec"><div class="dsh">Your client's photo in Drive</div>${pathBox(path)}</section>` : ''}
+  </div>
+  <div class="dpane" data-tab="site"${show('site')}>
+    <a class="lookup" href="#who" data-act="gowho" data-v="${esc(c.id)}">${ic('owner', 18)}<span><b>Who's behind this site</b><br><span class="muted" style="font-size:13px">${f ? esc(f.names && f.names[0] ? 'Probably ' + f.names[0] : 'Names, contacts and domain facts') : 'Read names, contacts and domain facts off the site'}</span></span><span style="margin-left:auto">${ic('chev', 16)}</span></a>
+    <dl class="facts">
+      ${o && o.real ? `<dt>Site owner</dt><dd><a href="#owners" data-act="gowner" data-v="${esc(o.key)}" style="font-weight:600">${esc(o.name)}</a><br><span class="muted" style="font-size:13px">${esc(o.kind)}${o.sites.length > 1 ? ' · ' + FCD.copies.filter(x => o.sites.includes(x.site) && x.status !== 'removed').length + ' copies on their sites' : ''}</span></dd>` : ''}
+      <dt>Site check</dt><dd>${RISK[c.risk.level][0]}${c.risk.why.length ? `<br><span class="muted" style="font-size:13px">${esc(c.risk.why.join(' · '))}</span>` : ''}</dd>
+      ${c.country ? `<dt>Country</dt><dd>${esc(c.country)} <button class="btn ghost sm" data-act="hidecountry" data-v="${esc(c.country)}">Hide this country</button></dd>` : ''}
+    </dl>
+    <details class="hidebox" id="okbox"><summary><b>Is this site allowed to use the photo?</b> <span class="muted" style="font-size:13px">Approve it</span></summary>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+      ${c.clientName ? `<button class="lookup" style="text-align:left;cursor:pointer" data-act="approvesite" data-v="client"><span style="color:var(--ok);display:inline-flex">${ic('check', 20)}</span><span><b>Approved for ${esc(c.clientName)} only</b><br><span class="muted" style="font-size:12.5px">${esc(FC.baseOf(c.site))} may use this client's photos. Other clients' photos there still show as new.</span></span></button>` : ''}
+      <button class="lookup" style="text-align:left;cursor:pointer" data-act="approvesite" data-v="all"><span style="color:var(--ok);display:inline-flex">${ic('check', 20)}</span><span><b>Approved for every client</b><br><span class="muted" style="font-size:12.5px">${esc(FC.baseOf(c.site))} may use any client's photos (a partner, a wire service, your own site).</span></span></button>
+      <span class="faint" style="font-size:12.5px">Copies on an approved site are marked Licensed by themselves, now and in every later search. Change it in Settings › Hidden and approved sites.</span></div></details>
+    <details class="hidebox" id="hidebox"><summary><b>Don't want results from this site?</b> <span class="muted" style="font-size:13px">Hide it</span></summary>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">${hideChoices(c).map(([v, l, d]) => `<button class="lookup" style="text-align:left;cursor:pointer" data-act="hidesite" data-v="${esc(v)}"><span style="color:var(--bad);display:inline-flex">${ic('ban', 20)}</span><span><b>${esc(l)}</b><br><span class="muted" style="font-size:12.5px">${esc(d)}</span></span></button>`).join('')}
+      <span class="faint" style="font-size:12.5px">Hidden sites never show again in any search. Bring them back from Settings › Hidden and approved sites.</span></div></details>
+  </div>
+  </div>
+  <div class="dacts dfoot">
+  ${last ? `<button class="undoline" data-act="undo">↶ Undo: ${esc(last.label)}<span class="kbd" style="margin-left:auto">U</span></button>` : ''}
   ${c.status === 'removed' ? `<div class="banner info" style="padding:10px 12px"><span style="flex:1;font-size:14px"><b>Removed</b><br><span class="muted">Hidden from your results. It won't come back for this photo.</span></span><button class="btn" data-act="putback">Put back</button></div>` : `
     ${['stolen', 'licensed'].includes(c.status) ? `<div class="row" style="gap:8px;font-size:13.5px"><span>Your answer: ${tagFor(c)}</span><button class="btn ghost sm" style="margin-left:auto" data-act="changeans">Change answer</button></div>` : ''}
-    <span class="faint" style="font-size:12.5px">Choose one and the next copy opens here</span>
-    <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:6px">
-      <button class="btn stolen" style="flex-direction:column;gap:0;min-height:52px" data-act="dverdict" data-v="stolen"><b>Stolen</b><span class="kbd">Y</span></button>
-      <button class="btn licensed" style="flex-direction:column;gap:0;min-height:52px" data-act="dverdict" data-v="licensed"><b>Licensed</b><span class="kbd">L</span></button>
-      <button class="btn" style="flex-direction:column;gap:0;min-height:52px" data-act="dverdict" data-v="removed"><b>Remove</b><span class="kbd">N</span></button>
-      <button class="btn" style="flex-direction:column;gap:0;min-height:52px" data-act="dverdict" data-v="skip"><b>Skip</b><span class="kbd">→</span></button>
+    <div class="dans" title="Choose one and the next copy opens here">
+      <button class="btn stolen" data-act="dverdict" data-v="stolen"><b>Stolen</b><span class="kbd">Y</span></button>
+      <button class="btn licensed" data-act="dverdict" data-v="licensed"><b>Licensed</b><span class="kbd">L</span></button>
+      <button class="btn" data-act="dverdict" data-v="removed"><b>Remove</b><span class="kbd">N</span></button>
+      <button class="btn" data-act="dverdict" data-v="skip"><b>Skip</b><span class="kbd">→</span></button>
     </div>`}
-    <div class="grid" style="grid-template-columns:1fr 1fr;gap:6px"><a class="btn" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer">Open page</a><button class="btn" data-act="capturecopy">${ic('capture', 16)} Capture</button><button class="btn" data-act="openok">${ic('check', 16)} Approve site</button><button class="btn" data-act="openhide">${ic('ban', 16)} Hide site</button></div>
-    <button class="btn primary" data-act="evidence">${ic('doc', 18)} Evidence report</button>
+    <div class="dfoot2"><button class="btn primary" data-act="evidence">${ic('doc', 17)} Evidence report</button><button class="btn" data-act="capturecopy">${ic('capture', 16)} Capture</button><button class="btn" data-act="dmore" data-v="${esc(c.id)}" aria-label="More choices">${ic('dots', 16)} More</button></div>
   </div></aside>`;
 }
 
@@ -359,24 +447,34 @@ const flagWords = c => {
   return f.map(([col, t, why]) => `<span class="tag ${col}" title="${esc(why)}">${t}</span>`).join('');
 };
 const onlineTag = c => c.status === 'removed' ? '' : c.online === 'back' ? '<span class="tag bad" data-gloss="Back online">Back online</span>' : c.online === 'gone' ? '<span class="tag grey" data-gloss="Gone">Gone</span>' : '';
-// One copy as a row: both pictures, the site, the page link, and the answer buttons.
+// The row's lined-up columns (4.7). You pick which show (Columns menu); narrow windows drop the
+// least needed ones by themselves.
+const FCOLS = [['pct', 'Lines up'], ['client', 'Client'], ['dmg', 'Damages'], ['use', 'How it\'s used'], ['country', 'Country'], ['found', 'Found']];
+const luBar = p => p == null || p < 0 ? '<span class="faint">–</span>' : `<span class="lu"><b class="num">${p}%</b><s><u style="width:${p}%;background:${p >= 95 ? 'var(--bad)' : p >= 80 ? 'var(--copy)' : 'var(--warn)'}"></u></s></span>`;
+// One copy as a row: both pictures, the site, the page link, quiet warning icons, the columns, and the answer buttons.
 function copyRow(c) {
-  const p = FCD.photos.get(c.photo), done = c.status !== 'new';
+  const p = FCD.photos.get(c.photo), done = c.status !== 'new', K = state.fCols;
+  const cell = (k, label, html) => K[k] ? `<span class="cc-${k}"><i>${label}</i>${html}</span>` : '';
   return `<div class="frow crow${state.open === c.id ? ' on' : ''}" data-act="openrow" data-v="${esc(c.id)}">
     <input type="checkbox" class="cpick" aria-label="Pick ${esc(c.site)}" data-act="pick" data-v="${esc(c.id)}" ${state.picked.includes(c.id) ? 'checked' : ''}>
     <div class="cpair" data-hover="${esc(c.id)}"><img class="ours" src="${oursImg(p)}" alt="" loading="lazy"><img class="thumb" src="${theirImg(c)}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>
     <div class="cinfo">
-      <div class="l1"><b>${esc(c.site)}</b>${done ? tagFor(c) : ''}${c.match === 'maybe' ? '<span class="tag warn" data-gloss="Maybe">Maybe</span>' : ''}${repeatTag(c)}${flagWords(c)}${onlineTag(c)}</div>
+      <div class="l1"><b>${esc(c.site)}</b>${done ? tagFor(c) : ''}${sigIcons(c)}</div>
       <a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink" title="Open this page in a new tab"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>
       <div class="l3">${esc(c.photoName)}<span class="l3x">${c.pct >= 0 && c.pct != null ? ` · <b class="num" data-gloss="Lines up">${c.pct}%</b> lines up` : ''} · ${esc(FC.USE[c.use][0])}${c.country ? ' · ' + esc(c.country) : ''} · found ${shortDate(c.firstSeen).toLowerCase()}</span></div>
     </div>
-    <div class="ccols"><span><i>Lines up</i><b>${c.pct >= 0 && c.pct != null ? c.pct + '%' : '–'}</b></span><span><i>Use</i><span title="${esc(FC.USE[c.use][0])}">${esc(FC.USE[c.use][0])}</span></span><span><i>Country</i><span>${esc(c.country || 'Not known')}</span></span><span><i>Found</i><span>${esc(shortDate(c.firstSeen))}</span></span></div>
+    <div class="ccols">${cell('pct', 'Lines up', luBar(c.pct))}${cell('client', 'Client', c.clientName ? `<span title="${esc(c.clientName)}">${esc(c.clientName)}</span>` : '<span style="color:var(--warn);font-weight:600">Unknown</span>')}${K.dmg ? (dmgCell(c) ? `<span class="cc-dmg"><i>Damages</i>${dmgCell(c)}</span>` : '<span class="cc-dmg" aria-hidden="true"></span>') : ''}${cell('use', 'Use', `<span title="${esc(FC.USE[c.use][0])}">${esc(FC.USE[c.use][0])}</span>`)}${cell('country', 'Country', `<span>${esc(c.country || 'Not known')}</span>`)}${cell('found', 'Found', `<span>${esc(shortDate(c.firstSeen))}</span>`)}</div>
     <div class="acts">${c.status === 'removed' ? `<button class="btn sm" data-act="rowans" data-v="new|${esc(c.id)}">Put back</button>` : done ? `<button class="btn sm" data-act="rowans" data-v="new|${esc(c.id)}">Change answer</button>`
       : `<button class="btn sm stolen" data-act="rowans" data-v="stolen|${esc(c.id)}">Stolen</button><button class="btn sm licensed" data-act="rowans" data-v="licensed|${esc(c.id)}">Licensed</button><button class="btn sm" data-act="rowans" data-v="removed|${esc(c.id)}">Remove</button>`}
       <button class="btn sm icon" data-act="rowmenu" data-v="${esc(c.id)}" aria-label="More choices for ${esc(c.site)}">${ic('dots', 18)}</button></div></div>`;
 }
 V.found = async () => {
   await loadFC();
+  if (!state.fCols || !state.dView) {
+    const pr = await api.storage.local.get(['fcCols', 'fcDView']).catch(() => ({}));
+    state.fCols = Object.assign({ pct: true, client: true, dmg: true, use: true, country: true, found: true }, pr.fcCols || {});
+    state.dView = pr.fcDView || 'side';
+  }
   if (routeArg('open')) { state.open = routeArg('open'); state.fFilter = 'All'; history.replaceState(null, '', '#found'); }
   if (routeArg('client')) { state.fClient = routeArg('client'); state.fFilter = 'All'; history.replaceState(null, '', '#found'); }
   if (routeArg('filter')) { state.fFilter = routeArg('filter'); history.replaceState(null, '', '#found'); }
@@ -462,45 +560,52 @@ V.found = async () => {
     <section class="card pad" style="text-align:center;padding:48px 22px;display:flex;flex-direction:column;align-items:center;gap:12px"><h2>Nothing found yet</h2><p class="muted" style="margin:0;max-width:56ch">Copies show up here as soon as a search finds them. Turn on Keep searching, run today's 50, or search a few photos now.</p>
     <div class="row" style="justify-content:center"><a class="btn primary" href="#keep">Keep searching</a><a class="btn" href="#search">New search</a></div></section>`;
   }
-  // Quick filters: one click each. The number is how many copies it would show.
+  // Quick filters: one click each. The number is how many copies it would show. (4.7: they live in Filters.)
   const chip = (label, n, on, act, v, col) => n || on ? `<button class="qchip${on ? ' on' : ''}" data-act="${act}" data-v="${v}" aria-pressed="${on}">${col ? `<i style="background:var(--${col})"></i>` : ''}${label} <span class="num">${n}</span></button>` : '';
   const years = [...new Set(everything.map(c => (FCD.photos.get(c.photo) || {}).year).filter(Boolean))].sort((a, b) => b - a);
-  const seg = (id, opts, cur, label) => `<div class="seg sm" role="radiogroup" aria-label="${label}">${opts.map(([k, l]) => `<button role="radio" aria-checked="${cur === k}" class="${cur === k ? 'on' : ''}" data-act="fset" data-v="${id}|${k}">${l}</button>`).join('')}</div>`;
+  // 4.7: one tidy line. Each switch is a small dropdown.
+  const dd = (id, label, opts, cur, right) => `<details class="ddw${right ? ' right' : ''}" data-dd="${id}"><summary class="ddb">${label}${cur != null ? ` <b>${esc((opts.find(o => o[0] === cur) || opts[0])[1])}</b>` : ''} <span class="caret" aria-hidden="true">▾</span></summary><div class="ddm" role="menu">${opts.map(([k, l, s]) => `<button role="menuitemradio" aria-checked="${cur === k}" class="${cur === k ? 'on' : ''}" data-act="fset" data-v="${id}|${k}">${esc(l)}${s ? `<span class="sub">${esc(s)}</span>` : ''}</button>`).join('')}</div></details>`;
+  const newL = live.filter(c => c.status === 'new');
+  const tile = (label, n, on, act, v, col, hero) => `<button class="ftile${hero ? ' hero' : ''}${on ? ' on' : ''}" data-act="${act}" data-v="${v}" aria-pressed="${on}"><b class="num">${n}</b><span>${label}</span>${col ? `<i style="background:var(--${col})"></i>` : ''}</button>`;
+  const fresh = c => c.dmg && c.dmg.end && Date.now() <= c.dmg.end.getTime();
   return `${head('', 'Copies found', 'Answer right on the row, or click a row to see more.', `<button class="btn" data-act="fcsv">${ic('down', 16)} Download</button>${nNew ? `<a class="btn primary" href="#review">One at a time (${nNew})</a>` : ''}`)}
   ${await driveBanner()}
-  <div class="qchips" aria-label="Quick filters">
-    ${chip('Back online', live.filter(c => c.online === 'back').length, state.fFilter === 'Back online', 'qtoggle', 'back', 'bad')}
-    ${chip('Repeat offenders', live.filter(c => c.repeat && c.status === 'new').length, state.fRepeat, 'qtoggle', 'repeat', 'bad')}
-    ${chip('Suspicious sites', live.filter(c => c.risk.level === 'sus').length, state.fRisk === 'sus', 'qtoggle', 'sus', 'bad')}
-    ${chip('Selling something', live.filter(c => c.use === 'shop').length, state.fShop, 'qtoggle', 'shop', 'ok')}
-    ${chip('Credit removed', live.filter(c => c.credit === 'removed').length, state.fCredit === 'removed', 'qtoggle', 'credit', 'copy')}
-    ${chip('Copied onto their site', live.filter(c => c.use === 'copied').length, state.fUse === 'copied', 'qtoggle', 'copied')}
-    ${chip('Shown from another site', live.filter(c => c.use === 'embedded').length, state.fUse === 'embedded', 'qtoggle', 'embedded')}
-    ${chip('Social posts', live.filter(c => c.use === 'social').length, state.fUse === 'social', 'qtoggle', 'social')}
-    ${chip('Gone offline', live.filter(c => c.online === 'gone').length, state.fFilter === 'Gone', 'qtoggle', 'gone')}
-    <details class="keyfold"><summary>What do these mean?</summary><section class="key" aria-label="What the labels mean">
-      <div class="kitem"><span class="tag bad">Suspicious site</span><div><span>Young site, hidden owner, odd ending like .xyz, or a name copycat sites use.</span></div></div>
-      <div class="kitem"><span class="tag warn">Worth a look</span><div><span>Something is a bit off. Not a clear warning.</span></div></div>
-      <div class="kitem"><span class="tag copy">Credit removed</span><div><span>Your client's photo has a copyright line in its hidden data. Their copy doesn't.</span></div></div>
-      <div class="kitem"><span class="tag bad">2 stolen before</span><div><span>Repeat offender: you already marked copies on this site, or on another site of the same owner, as Stolen.</span></div></div>
-      <div class="kitem"><span class="tag ok">Selling something</span><div><span>A shop page, product listing or ad. Commercial use.</span></div></div>
-      <div class="kitem"><span class="tag grey">Exact / Strong / Loose</span><div><span>Exact: the same photo and 95% or more lines up. Strong: 80% or more. Loose: less, or only a few details match.</span></div></div>
-    </section></details>
+  <div class="ftiles" aria-label="Quick counts">
+    ${tile('New, waiting for you', nNew, state.fFilter === 'New' && state.fWhen === 'any' && state.fRisk === 'Any' && !state.fFresh, 'ffilter', 'New', '', true)}
+    ${tile('Found today', newL.filter(c => new Date(c.firstSeen).toDateString() === new Date().toDateString()).length, state.fWhen === 'today', 'ftoday', '1', 'accent')}
+    ${tile('Suspicious sites', newL.filter(c => c.risk.level === 'sus').length, state.fRisk === 'sus', 'qtoggle', 'sus', 'bad')}
+    ${tile('Back online', live.filter(c => c.online === 'back').length, state.fFilter === 'Back online', 'qtoggle', 'back', 'copy')}
+    ${tile('Published in the last 3 months', newL.filter(fresh).length, state.fFresh, 'qtoggle', 'fresh', 'ok')}
   </div>
   <section class="card found-card">
-    <div class="toolbar">
+    <div class="toolbar tidy">
       <div class="tabs" role="tablist" aria-label="Status">${['New', 'Stolen', 'Licensed', 'Removed', 'All'].map(f => `<button role="tab" aria-selected="${state.fFilter === f}" class="${state.fFilter === f ? 'on' : ''}" data-act="ffilter" data-v="${f}">${f} <span>${cnt(f)}</span></button>`).join('')}${['Still online', 'Back online', 'Gone'].includes(state.fFilter) ? `<button role="tab" aria-selected="true" class="on" data-act="ffilter" data-v="${state.fFilter}">${state.fFilter} <span>${cnt(state.fFilter)}</span></button>` : ''}</div>
-      <div class="row tb2">
-        <label class="mini">Sort<select data-act="fsel" data-v="fSort">${[['act', 'Best to act on'], ['pct', 'Lines up most'], ['risk', 'Most suspicious'], ['newest', 'Newest']].map(([k, l]) => `<option value="${k}" ${state.fSort === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-        <button class="btn sm" data-act="togglefilters" aria-expanded="${state.showFilters}">More filters${active.length ? ` <span class="pill-n" style="background:var(--accent);margin:0">${active.length}</span>` : ''}</button>
-      </div>
-    </div>
-    <div class="segbar">
-      <span class="seggrp"><span class="mini">Group by</span>${seg('fView', [['client', 'Client'], ['photo', 'Photo'], ['site', 'Site'], ['owner', 'Site owner'], ['list', 'None']], state.fView, 'Group by')}</span>
-      <span class="seggrp"><span class="mini">Found</span>${seg('fWhen', Object.entries(WHEN).map(([k, v]) => [k, v[0]]), state.fWhen, 'Found when')}</span>
-      <span class="seggrp"><span class="mini">Match</span>${seg('fMatch', Object.entries(MATCH), state.fMatch, 'How strong the match is')}</span>
+      ${dd('fView', 'Group', [['client', 'Client'], ['photo', 'Photo'], ['site', 'Site'], ['owner', 'Site owner'], ['list', 'None']], state.fView)}
+      ${dd('fWhen', 'Found', Object.entries(WHEN).map(([k, v]) => [k, v[0]]), state.fWhen)}
+      ${dd('fMatch', 'Match', [['any', 'All'], ['exact', 'Exact', 'The same photo, 95% or more lines up'], ['strong', 'Strong', '80% or more lines up'], ['loose', 'Loose', 'Less, or only a few details match']], state.fMatch)}
+      <button class="ddb${state.showFilters ? ' on' : ''}" data-act="togglefilters" aria-expanded="${state.showFilters}">＋ Filters${active.length ? ` <span class="pill-n" style="background:var(--accent);margin:0">${active.length}</span>` : ''}</button>
+      <span style="flex:1"></span>
+      ${dd('fSort', 'Sort', [['act', 'Best to act on'], ['pct', 'Lines up most'], ['risk', 'Most suspicious'], ['newest', 'Newest']], state.fSort, true)}
+      <details class="ddw right" data-dd="cols"><summary class="ddb">Columns <span class="caret" aria-hidden="true">▾</span></summary><div class="ddm">${FCOLS.map(([k, l]) => `<label><input type="checkbox" data-act="fcol" data-v="${k}" ${state.fCols[k] ? 'checked' : ''}> ${esc(l)}</label>`).join('')}<span class="faint" style="font-size:12px;padding:4px 10px 6px">Narrow windows show fewer columns.</span></div></details>
     </div>
     ${state.showFilters ? `<div class="filters fpanel">
+      <div class="qchips" aria-label="Quick filters"><span style="font-weight:600">Quick filters</span>
+      ${chip('Repeat offenders', live.filter(c => c.repeat && c.status === 'new').length, state.fRepeat, 'qtoggle', 'repeat', 'bad')}
+      ${chip('Selling something', live.filter(c => c.use === 'shop').length, state.fShop, 'qtoggle', 'shop', 'ok')}
+      ${chip('Credit removed', live.filter(c => c.credit === 'removed').length, state.fCredit === 'removed', 'qtoggle', 'credit', 'copy')}
+      ${chip('Copied onto their site', live.filter(c => c.use === 'copied').length, state.fUse === 'copied', 'qtoggle', 'copied')}
+      ${chip('Shown from another site', live.filter(c => c.use === 'embedded').length, state.fUse === 'embedded', 'qtoggle', 'embedded')}
+      ${chip('Social posts', live.filter(c => c.use === 'social').length, state.fUse === 'social', 'qtoggle', 'social')}
+      ${chip('Gone offline', live.filter(c => c.online === 'gone').length, state.fFilter === 'Gone', 'qtoggle', 'gone')}</div>
+      <details class="keyfold"><summary>What do the icons mean?</summary><section class="key" aria-label="What the icons mean">
+        <div class="kitem"><span class="tag bad">${ic('warn', 13)}</span><div><span><b>Suspicious site</b> (red) or <b>Worth a look</b> (yellow): young site, hidden owner, odd ending like .xyz, or a name copycat sites use.</span></div></div>
+        <div class="kitem"><span class="tag copy">${ic('nocredit', 13)}</span><div><span><b>Credit removed</b>: your client's photo has a copyright line in its hidden data. Their copy doesn't.</span></div></div>
+        <div class="kitem"><span class="tag bad">${ic('repeat', 13)}</span><div><span><b>Repeat offender</b>: you already marked copies on this site, or another site of the same owner, as Stolen.</span></div></div>
+        <div class="kitem"><span class="tag bad">${ic('back', 13)}</span><div><span><b>Back online</b> after it was gone. <span class="tag grey">${ic('gone', 13)}</span> <b>Gone</b>: the photo is no longer on the page.</span></div></div>
+        <div class="kitem"><span class="tag ok">${ic('shop', 13)}</span><div><span><b>Selling something</b>: a shop page, product listing or ad.</span></div></div>
+        <div class="kitem"><span class="tag warn">${ic('maybe', 13)}</span><div><span><b>Maybe</b>: the checker is not sure it is the same photo.</span></div></div>
+        <div class="kitem"><span class="tag ok">Statutory</span><div><span><b>Damages column</b>: Statutory (registered), Register by a date (no number yet, window still open), Actual only (window closed). Empty when the file name has no date.</span></div></div>
+      </section></details>
       ${sel('fClient', 'Client', [['Any', 'Any'], ...[...new Set(everything.map(c => c.clientName || 'Client unknown'))].sort().map(n => [n, n])], state.fClient)}
       ${sel('fYear', 'Photo year', [['Any', 'Any'], ...years.map(y => [y, y])], state.fYear)}
       ${sel('fQuarter', 'Quarter', [['Any', 'Any'], [1, 'Q1'], [2, 'Q2'], [3, 'Q3'], [4, 'Q4']], state.fQuarter)}
@@ -630,10 +735,14 @@ async function drawerVerdict2(status, id, c) {
 }
 
 async function hideSite(entry, label) {
+  const was = state.open, cs = FCD ? FCD.copies : [];
   await RS_LISTS.load(); await RS_LISTS.add('hidden', entry);
   if (!state.recentHides.includes(entry)) state.recentHides.push(entry);
+  // 4.7: if the open copy is now hidden, the next copy in the list opens (like Stolen or Remove).
+  const gone = id => { const x = cs.find(y => y.id === id); return !x || RS_LISTS.isHidden(x.site, x.url); };
+  if (was && gone(was)) { const i = LIST.indexOf(was); state.open = LIST.slice(i + 1).find(id => !gone(id)) || LIST.slice(0, Math.max(0, i)).reverse().find(id => !gone(id)) || ''; }
   FCD = null;
-  HIST.push({ label: (label || entry) + ' hidden', undo: async () => { await RS_LISTS.load(); await RS_LISTS.remove('hidden', entry); } });
+  HIST.push({ label: (label || entry) + ' hidden', undo: async () => { await RS_LISTS.load(); await RS_LISTS.remove('hidden', entry); }, open: was || undefined });
   toastUndo(entry + ' hidden. It never shows again in any search.');
 }
 
@@ -654,6 +763,20 @@ async function ourBlob(p) {
 
 Object.assign(ACTS, {
   openrow: v => { state.open = v; render(true); },
+  // 4.7 panel: tabs switch in place (no redraw), the picture view and column picks are remembered.
+  dtab: v => {
+    state.dTab = v;
+    const d = document.getElementById('drawer'); if (!d) return;
+    d.querySelectorAll('.dtabs [data-act="dtab"]').forEach(b => { const on = b.dataset.v === v; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+    d.querySelectorAll('.dpane').forEach(p => { p.hidden = p.dataset.tab !== v; });
+    const t = d.querySelector('.dtabs'), sc = document.getElementById('dscroll');
+    if (t && sc && t.offsetTop < sc.scrollTop) sc.scrollTop = t.offsetTop - 8;
+  },
+  dview: async v => { state.dView = v; api.storage.local.set({ fcDView: v }).catch(() => {}); await render(true); },
+  dmore: (v, el) => ACTS.rowmenu(v, el),
+  ftoday: () => { state.fWhen = state.fWhen === 'today' ? 'any' : 'today'; state.fFilter = 'New'; state.more = 250; render(true); },
+  fcol: async (v, el) => { state.fCols[v] = !!el.checked; api.storage.local.set({ fcCols: state.fCols }).catch(() => {}); await render(true); const d = document.querySelector('[data-dd="cols"]'); if (d) d.open = true; },
+  dslide: (v, el) => { state.slide = Number(el.value) || 50; },
   closedrawer: () => { state.open = ''; render(true); },
   dstep: v => { const n = LIST[LIST.indexOf(state.open) + Number(v)]; if (n) { state.open = n; render(true); } },
   dverdict: v => drawerVerdict(v),
@@ -686,7 +809,7 @@ Object.assign(ACTS, {
   qcredit: v => { state.fCredit = v; state.fFilter = 'All'; render(true); },
   togglefilters: () => { state.showFilters = !state.showFilters; render(true); },
   unfilter: v => {
-    if (v === 'all') Object.assign(state, { fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fOwner: '', fYear: 'Any', fQuarter: 'Any', fPhoto: '', fq: '' });
+    if (v === 'all') Object.assign(state, { fFresh: false, fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fOwner: '', fYear: 'Any', fQuarter: 'Any', fPhoto: '', fq: '' });
     else state[v] = v === 'fShop' || v === 'fRepeat' ? false : ['fOwner', 'fPhoto', 'fq'].includes(v) ? '' : 'Any';
     render(true);
   },
@@ -697,6 +820,7 @@ Object.assign(ACTS, {
     if (v === 'back' || v === 'gone') { const f = v === 'back' ? 'Back online' : 'Gone'; state.fFilter = state.fFilter === f ? 'New' : f; }
     else if (v === 'repeat') { state.fRepeat = !state.fRepeat; if (state.fRepeat) state.fFilter = 'New'; }
     else if (v === 'sus') state.fRisk = state.fRisk === 'sus' ? 'Any' : 'sus';
+    else if (v === 'fresh') { state.fFresh = !state.fFresh; if (state.fFresh) state.fFilter = 'New'; }
     else if (v === 'shop') state.fShop = !state.fShop;
     else if (v === 'credit') state.fCredit = state.fCredit === 'removed' ? 'Any' : 'removed';
     else state.fUse = state.fUse === v ? 'Any' : v;
@@ -776,7 +900,7 @@ Object.assign(ACTS, {
     } finally { if (was !== id && ['compare', 'capture'].includes(what)) state.open = was; else if (was !== id) { state.open = was; render(true); } }
   },
   hidesite: async v => { await hideSite(v); render(true); },
-  openok: () => { const d = document.getElementById('okbox'); if (d) { d.open = true; d.scrollIntoView({ block: 'center', behavior: 'smooth' }); } },
+  openok: () => { ACTS.dtab('site'); const d = document.getElementById('okbox'); if (d) { d.open = true; d.scrollIntoView({ block: 'center', behavior: 'smooth' }); } },
   approvesite: async v => {
     const c = FCD.copies.find(x => x.id === state.open);
     if (!c) return;
@@ -789,7 +913,7 @@ Object.assign(ACTS, {
     toastUndo(base + ' is approved' + (who ? ' for ' + who : ' for every client') + '. Its copies are marked Licensed.');
     render(true);
   },
-  openhide: () => { const d = document.getElementById('hidebox'); if (d) { d.open = true; d.scrollIntoView({ block: 'center', behavior: 'smooth' }); } },
+  openhide: () => { ACTS.dtab('site'); const d = document.getElementById('hidebox'); if (d) { d.open = true; d.scrollIntoView({ block: 'center', behavior: 'smooth' }); } },
   showsite: async v => {
     await RS_LISTS.load(); await RS_LISTS.remove('hidden', v); FCD = null;
     HIST.push({ label: v + ' shown again', undo: async () => { await RS_LISTS.load(); await RS_LISTS.add('hidden', v); } });
@@ -855,6 +979,7 @@ Object.assign(ACTS, {
   legalfix: async v => {
     if (v === 'capture') return ACTS.capturecopy();
     if (v === 'readpage') return ACTS.readpage();
+    ACTS.dtab('claim');
     const s = document.querySelector('#rulesbox .kindsel');
     if (s) { s.scrollIntoView({ block: 'center', behavior: 'smooth' }); s.focus(); }
   },
@@ -998,7 +1123,8 @@ V.review = async () => {
         <button data-act="rverdict" data-v="skip" title="Decide later"><b>Skip</b><span class="kbd">→</span></button>
       </div>
       <div class="row rvmore"><button class="btn" data-act="rvcompare">${ic('layers', 16)} Compare</button><button class="btn" data-act="evidence" data-v="${esc(c.id)}">${ic('doc', 16)} Evidence report</button><button class="btn" data-act="rvcapture">${ic('capture', 16)} Capture</button>
-        <details class="rvok"><summary class="btn">${ic('check', 16)} Approve site</summary><div class="tmenu">${c.clientName ? `<button data-act="rvapprove" data-v="client"><b>For ${esc(c.clientName)} only</b><span>${esc(FC.baseOf(c.site))} may use this client's photos</span></button>` : ''}<button data-act="rvapprove" data-v="all"><b>For every client</b><span>${esc(FC.baseOf(c.site))} may use any photo</span></button></div></details></div>
+        <details class="rvok"><summary class="btn">${ic('check', 16)} Approve site</summary><div class="tmenu">${c.clientName ? `<button data-act="rvapprove" data-v="client"><b>For ${esc(c.clientName)} only</b><span>${esc(FC.baseOf(c.site))} may use this client's photos</span></button>` : ''}<button data-act="rvapprove" data-v="all"><b>For every client</b><span>${esc(FC.baseOf(c.site))} may use any photo</span></button></div></details>
+        <details class="rvok"><summary class="btn">${ic('ban', 16)} Hide site</summary><div class="tmenu">${hideChoices(c).map(([v, l, d]) => `<button data-act="rvhide" data-v="${esc(v)}"><b>${esc(l)}</b><span>${esc(d)}</span></button>`).join('')}</div></details></div>
     </section>
     <aside class="card pad" style="flex:2 1 340px;display:flex;flex-direction:column;gap:16px" aria-label="About this copy">
       ${pageBoxHtml(c)}
@@ -1044,6 +1170,8 @@ Object.assign(ACTS, {
   rvcompare: () => { state.open = state.rvCurrent; return ACTS.compare(); },
   // The same Capture and Approve site as the details panel, for the copy on screen here.
   rvcapture: async () => { state.open = state.rvCurrent; try { await ACTS.capturecopy(); } finally { state.open = ''; } },
+  // 4.7: hide a site or account from One at a time; the next copy shows, Undo brings it back.
+  rvhide: async v => { await hideSite(v); await render(true); },
   rvapprove: async v => { state.open = state.rvCurrent; try { await ACTS.approvesite(v); } finally { state.open = ''; } },
 });
 
@@ -1095,3 +1223,16 @@ Object.assign(ACTS, {
   },
   driveretry: async () => { const st = await FC.driveStateSoft(true); toast(st === 'granted' ? 'Google Drive is back. Searching carries on.' : 'Still can\'t reach Google Drive.'); render(true); },
 });
+
+// 4.7: the picture slider moves as you drag; the little dropdowns close when you click elsewhere.
+document.addEventListener('input', e => {
+  const r = e.target.closest && e.target.closest('[data-act="dslide"]');
+  if (r) { state.slide = Number(r.value) || 50; r.parentElement.style.setProperty('--cut', state.slide + '%'); }
+});
+document.addEventListener('click', e => {
+  document.querySelectorAll('details.ddw[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; });
+}, true);
+document.addEventListener('toggle', e => {
+  const d = e.target;
+  if (d.matches && d.matches('details.ddw') && d.open) document.querySelectorAll('details.ddw[open]').forEach(x => { if (x !== d) x.open = false; });
+}, true);
