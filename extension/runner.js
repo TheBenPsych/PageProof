@@ -56,6 +56,10 @@ async function computerBusy() {
   return '';
 }
 
+// Today's 50 (or another big Drive search) is running: it says so every 20 seconds and says
+// "finished" at the end. 5 minutes of silence also counts as finished (its page was closed), so a
+// slow moment on a busy computer no longer lets Keep searching start in the middle of it.
+const fiftyRunning = f => !!(f && f.beat && f.running !== false && Date.now() - f.beat < 5 * 60000);
 function inHours(k, d = new Date()) {
   if (k.hours === 'all') return true;
   const day = d.getDay(), hr = d.getHours() + d.getMinutes() / 60;
@@ -122,7 +126,7 @@ async function step() {
     else return status('running', 'Searching one photo. ' + tally + '.', { current: S.current });
   }
   if (!inHours(k)) return status('hours', 'Waiting for your hours (' + (k.hours === 'all' ? 'all day' : (k.from ?? 8) + ':00 to ' + (k.to ?? 18) + ':00' + (k.weekdays !== false ? ', weekdays' : '')) + '). ' + tally + '.');
-  if (st.fcFifty && Date.now() - st.fcFifty.beat < 60000) return status('fifty', 'Today\'s 50 are running. Keep searching carries on by itself when they finish.');
+  if (fiftyRunning(st.fcFifty)) return status('fifty', 'Today\'s 50 are running. Keep searching carries on by itself when they finish.');
   const ds = await FC.driveState(true);
   if (ds === 'none') return status('setup', 'Connect your photos first: open Find copies and follow the 4 steps.');
   if (ds === 'prompt') {

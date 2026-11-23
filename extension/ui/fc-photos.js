@@ -467,7 +467,7 @@ V.keep = async () => {
   const hrs = k.hours === 'all' ? 24 : Math.max(1, k.to - k.from);
   const G = cov.groups;
   const bar = (label, [a, b], note) => `<div style="display:flex;flex-direction:column;gap:4px"><div class="row" style="font-size:14px"><b>${label}</b><span class="faint" style="margin-left:auto">${b ? Math.round(a / b * 100) : 100}% up to date · ${a.toLocaleString()} of ${b.toLocaleString()}</span></div><span class="bar"><i style="width:${b ? a / b * 100 : 100}%"></i></span><span class="faint" style="font-size:12.5px">${note}</span></div>`;
-  const fifty = store.fcFifty && Date.now() - store.fcFifty.beat < 60000;
+  const fifty = !!(store.fcFifty && store.fcFifty.beat && store.fcFifty.running !== false && Date.now() - store.fcFifty.beat < 5 * 60000);
   const hourOpts = Array.from({ length: 24 }, (_, h) => h);
   const hlabel = h => new Date(2000, 0, 1, h).toLocaleTimeString(undefined, { hour: 'numeric' });
   return `${head('Find copies', 'Keep searching', 'Searches your clients\' photos one at a time, all day, in a small pinned PageProof tab. It goes gently so the search sites don\'t block you.')}

@@ -27,8 +27,13 @@ function showLive(id) {
     const f = document.createElement('iframe');
     f.className = 'tool'; f.title = 'Search results'; f.src = 'revsearch.html?job=' + encodeURIComponent(id);
     box.append(f); LIVE.set(id, f);
-    // Keep at most 4 open; drop the oldest.
-    while (LIVE.size > 4) { const [k, old] = LIVE.entries().next().value; old.remove(); LIVE.delete(k); }
+    // Keep at most 4 open; drop the oldest that isn't busy (a search still running is never dropped).
+    const busy = fr => { try { return !!(fr.contentWindow && fr.contentWindow.ppBusy && fr.contentWindow.ppBusy()); } catch (e) { return false; } };
+    while (LIVE.size > 4) {
+      const old = [...LIVE.entries()].find(([k, fr]) => k !== id && !busy(fr));
+      if (!old) break;
+      old[1].remove(); LIVE.delete(old[0]);
+    }
   }
   for (const [k, f] of LIVE) f.hidden = k !== id;
   box.style.display = id ? '' : 'none'; view.style.display = id ? 'none' : '';
@@ -502,6 +507,8 @@ const NEWS = [
   ['The post instead of the live preview', 'Social sites block the live page preview, so social copies show the caption, date, likes and comments with Open post and Capture buttons.'],
   ['New social sites caught', 'About 80 social sites are known. A new one (links like /@name/1234) is asked about once. Change any site in Settings › Hidden and approved sites › Social sites.'],
   ['The same account elsewhere', 'The Account tab shows the same photo posted on other platforms, accounts with the same name elsewhere, and quick links to look for the name. "Same person" joins accounts so stolen counts add up.'],
+  ['Big searches keep going in the background', 'A search of many photos (like today\'s 50) slowed to a stop when its page was not on screen, and Keep searching then started its one-photo searches in the middle of it. The search now keeps its own clock, so it carries on while you work in other tabs or pages, and the browser may not put it to sleep. Keep searching waits until it has really finished. If its page is closed or reloaded halfway, opening it again carries on where it stopped.'],
+  ['PageProof logo on every search tab', 'Some pinned search tabs showed the Yandex or Bing picture icon instead of the PageProof logo. The logo now goes on as soon as the tab opens and stays on. Search tabs that fail now close too (they used to stay as sleeping tabs, which lost the logo); the tab button on the results page opens that page again.'],
   ['No more matches on the same press wall', 'Two different shots in front of the same sponsor wall (the same logos printed over and over) could line up on the logos and show as a copy. The photo check now looks at what lines up: if it is only logos that repeat elsewhere on the wall, it is a different photo. Compare says "Different photo, same backdrop". Copies already in your list are not changed, so remove the wrong ones once.'],
   ['Missing pictures come back by themselves', 'After moving or reinstalling PageProof, Copies found showed the logo instead of the pictures. It now rebuilds them quietly in the background while Copies found is open: your client\'s photo from Google Drive, and their copy from its picture address or, if only the page link was kept, from the picture on their page that lines up with your photo. If nothing on their page lines up, the logo stays rather than a wrong picture. found-copies.txt now also keeps each copy\'s picture address, so a future reinstall gets them straight back.'],
   ['Folder list in Connect your photos shows again', 'In step 3 of Connect your photos the list of folders had shrunk to a tiny faint box, so there was nothing to tick. It is back to full size. And choosing the same top folder again (after a reinstall) now keeps the folders you had ticked instead of starting over. Pages also no longer wait for you to click somewhere else before showing what changed after you tick a box.'],

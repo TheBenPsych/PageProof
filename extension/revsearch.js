@@ -9,7 +9,21 @@
 // and Bing pages) hands each picture over and reads the links back.
 const api = globalThis.browser || globalThis.chrome;
 const $ = id => document.getElementById(id);
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+// Timers come from a small worker (timer-worker.js): a hidden page's own timers are slowed to
+// about once a minute, which made a big search stall when its page was not on screen.
+const CLOCK = (() => {
+  let w = null, n = 0;
+  const cbs = new Map();
+  try {
+    w = new Worker('timer-worker.js');
+    w.onmessage = e => { const c = cbs.get(e.data.id); if (c) { if (c.once) cbs.delete(e.data.id); c.fn(); } };
+  } catch (e) { w = null; }
+  return {
+    after(ms, fn) { if (!w) return setTimeout(fn, ms); const id = ++n; cbs.set(id, { fn, once: true }); w.postMessage({ type: 'after', id, ms }); return id; },
+    every(ms, fn) { if (!w) return setInterval(fn, ms); const id = ++n; cbs.set(id, { fn }); w.postMessage({ type: 'every', id, ms }); return id; },
+  };
+})();
+const sleep = ms => new Promise(r => CLOCK.after(ms, r));
 // Lets other work run for a moment without a timer: browsers slow timers right down while the
 // window is minimized, which used to stall the photo checks for hours.
 const breathe = () => new Promise(r => { const c = new MessageChannel(); c.port1.onmessage = () => { c.port1.close(); r(); }; c.port2.postMessage(0); });
@@ -355,11 +369,16 @@ async function runOne(p, engine) {
   try { try { tab = await api.tabs.create({ ...opts, pinned: true }); } catch (e) { tab = await api.tabs.create(opts); } }
   catch (e) { run.state = 'fail'; run.why = 'Could not open a tab'; renderSoon(); return; }
   run.tabId = tab.id;
+  tagTab(tab.id);
   // Search tabs are pinned (small icons at the left of the tab bar) so they don't fill it. A
   // pinned tab can't be in a tab group, so the old coloured groups are no longer made.
   await new Promise(done => R.tasks.set(tab.id, { p, engine, tabId: tab.id, stage: 'upload', deadline: Date.now() + TASK_TIMEOUT, done }));
 }
 
+// Marks PageProof's own search tabs, so rsearch.js puts the PageProof logo on them straight away
+// (even before this page answers it) and never on tabs you opened yourself.
+const tagTab = id => { try { api.storage.session && api.storage.session.set({ ['rsTab:' + id]: 1 }).catch(() => {}); } catch (e) { /* Firefox without session storage */ } };
+const untagTab = id => { try { api.storage.session && api.storage.session.remove('rsTab:' + id).catch(() => {}); } catch (e) { /* ignore */ } };
 function finishTask(t, state, why) {
   if (!R.tasks.has(t.tabId)) return;
   R.tasks.delete(t.tabId);
@@ -369,11 +388,15 @@ function finishTask(t, state, why) {
   if (t.captcha) { t.captcha = false; updatePause(t.engine); }
   if (picDone(t.p)) maybeIngest(t.p);
   saveJob(); renderSoon();
-  // Search tabs are the big memory cost (each one is a full Google/Yandex/Bing page), so a
-  // finished one is closed at once. A failed one is kept so you can look at it, but put to
-  // sleep (discarded): it stays in the tab strip and uses almost no memory until clicked.
-  if (state === 'fail') { if (api.tabs.discard) api.tabs.discard(t.tabId).then(d => { if (d) run.tabId = d.id; }).catch(() => {}); }
-  else api.tabs.remove(t.tabId).catch(() => {});
+  // Search tabs are the big memory cost (each one is a full Google/Yandex/Bing page), so every
+  // search tab closes when it is done, failed ones too (a failed tab put to sleep lost the
+  // PageProof logo and showed the site's own icon among the pinned tabs). A failed one's address
+  // is kept, so its "Yandex tab" button opens that page again.
+  untagTab(t.tabId);
+  const close = () => api.tabs.remove(t.tabId).catch(() => {});
+  if (state === 'fail') api.tabs.get(t.tabId).then(tab => { if (!run.pageUrl && tab && /^https?:/.test(tab.url || '')) { run.pageUrl = tab.url; saveJob(); } }).catch(() => {}).finally(close);
+  else close();
+  delete run.tabId;
   t.done();
 }
 
@@ -712,9 +735,24 @@ async function scoreWorker() {
 const SLOTS = { free: 3, wait: [] };
 const takeSlot = () => (SLOTS.free > 0 ? (SLOTS.free--, Promise.resolve()) : new Promise(r => SLOTS.wait.push(r)));
 const giveSlot = () => { const n = SLOTS.wait.shift(); if (n) n(); else SLOTS.free++; };
+// Keeps a running search awake when its page is not on screen: the tab may not be put to sleep
+// (discarded) by the browser, and holding a lock tells Chrome and Edge the page is busy, so they
+// don't freeze it. Both are undone when the search ends.
+function stayAwake(on) {
+  if (R.myTab) api.tabs.update(R.myTab, { autoDiscardable: !on }).catch(() => {});
+  if (on && navigator.locks && !R.awake) navigator.locks.request('pageproof-search-running-' + job.id, () => new Promise(r => { R.awake = r; })).catch(() => {});
+  if (!on && R.awake) { R.awake(); R.awake = null; }
+}
+// While today's 50 runs, Keep searching waits. This says "still running" every 20 seconds (from
+// the worker clock, so it keeps coming when the page is hidden) and "finished" at the end.
+function fiftyBeat(running) {
+  if (!job || job.kind !== 'fifty') return;
+  api.storage.local.set({ fcFifty: { id: job.id, beat: running ? Date.now() : 0, running: !!running } }).catch(() => {});
+}
 async function runJob(onlyEngines) {
   R.running = true; R.stop = false;
-  job.started = true; saveJob(true);
+  job.started = true; delete job.finished; saveJob(true);
+  stayAwake(true); fiftyBeat(true);
   const sp = SPEED[job.speed] || SPEED.normal;
   const workers = [];
   for (const e of onlyEngines || job.engines) {
@@ -740,6 +778,7 @@ async function runJob(onlyEngines) {
   R.running = false;
   job.finished = new Date().toISOString();
   saveJob(true); renderSoon();
+  fiftyBeat(false); stayAwake(false);
   for (const p of job.pics) maybeIngest(p);
   autoDone();
 }
@@ -778,10 +817,10 @@ function autoDone() {
   });
 }
 // Give up on tabs that never answer.
-setInterval(() => {
+CLOCK.every(1000, () => {
   const now = Date.now();
   for (const t of [...R.tasks.values()]) if (!t.captcha && now > t.deadline) finishTask(t, 'fail', 'No answer from the page. Open the tab to look at it yourself.');
-}, 1000);
+});
 
 // ---------- what to show ----------
 function sizeNote(p, l) {
@@ -1067,11 +1106,7 @@ async function initResults() {
   const lim = job.limits || (await ppHardware()).limits;
   SLOTS.free = Math.max(1, lim.tabs || 3);
   POOL_SIZE = Math.max(1, Math.min(POOL_SIZE, lim.checks || 4));
-  // While today's 50 runs, Keep searching waits.
-  if (job.kind === 'fifty') {
-    const beat = () => { if (R.running) api.storage.local.set({ fcFifty: { id: job.id, beat: Date.now() } }); };
-    beat(); setInterval(beat, 20000);
-  }
+  if (job.kind === 'fifty') CLOCK.every(20000, () => { if (R.running) fiftyBeat(true); });
   for (const p of job.pics) {
     try {
       const rec = await RS_MEM.get(p.hash);
@@ -1083,15 +1118,26 @@ async function initResults() {
     if (!p.prevSnapshot && R.prev[p.i]) p.prevSnapshot = { lastSearched: R.prev[p.i].lastSearched, urls: R.prev[p.i].urls };
     for (const l of p.links) { l.pic = p.i; if ((l.sv !== SCORE_VERSION || l.pct === null) && !knownScore(p, l)) R.scoreQ.push(l); }   // older searches (and links an old version skipped) get checked
   }
-  // Pages reopened later: anything that was mid-search is marked as not finished.
-  for (const p of job.pics) for (const e of job.engines) if (['go', 'captcha'].includes(p.runs[e].state)) { p.runs[e].state = 'fail'; p.runs[e].why = 'The results window was closed or reloaded during this search.'; }
+  // Only one page runs a search: if it is already running in another PageProof tab, this one
+  // just shows it.
+  let mine = true;
+  if (navigator.locks) mine = await new Promise(res => navigator.locks.request('pageproof-job-' + job.id, { ifAvailable: true }, lock => { res(!!lock); return lock ? new Promise(() => {}) : null; }));
+  // A search that was cut off (its page closed, reloaded or put to sleep by the browser) carries
+  // on where it stopped: photos that were mid-search are searched again, then the rest.
+  const unfinished = mine && !job.auto && job.started && !job.finished;
+  for (const p of job.pics) for (const e of job.engines) if (['go', 'captcha'].includes(p.runs[e].state)) {
+    if (unfinished) { p.runs[e].state = 'wait'; delete p.runs[e].why; }
+    else { p.runs[e].state = 'fail'; p.runs[e].why = 'The results window was closed or reloaded during this search.'; }
+  }
   if (!job.auto) await docsBanner(renderResults);
   renderResults();
   scoreAll();
   for (const p of job.pics) maybeIngest(p);
-  if (!job.started) runJob();
+  if (mine && (!job.started || unfinished)) runJob();
   window.addEventListener('beforeunload', e => { if (R.running) { e.preventDefault(); e.returnValue = ''; } });
-  window.addEventListener('pagehide', () => { if (saveTimer) saveJob(true); });
+  window.addEventListener('pagehide', () => { if (saveTimer) saveJob(true); if (R.running) fiftyBeat(false); });
+  // Asked by the full PageProof page before it drops an old results frame (it never drops a busy one).
+  window.ppBusy = () => R.running || R.scoring || R.tasks.size > 0;
 }
 
 // =====================================================================================

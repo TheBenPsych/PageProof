@@ -759,6 +759,15 @@ api.runtime.onInstalled.addListener(d => {
   try { api.sidePanel && api.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }); } catch (e) { /* no side panel */ }
   if (api.alarms) api.alarms.clear('rsDaily');
 });
+// A search site tab asks "am I one of PageProof's search tabs?" (rsearch.js), to show the
+// PageProof logo. The results page marks its tabs in session storage (rsTab:<id>).
+api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (!msg || msg.type !== 'rsIsMine' || !sender.tab || sender.id !== api.runtime.id) return false;
+  if (!api.storage.session) { sendResponse({ mine: false }); return false; }
+  const k = 'rsTab:' + sender.tab.id;
+  api.storage.session.get(k).then(r => sendResponse({ mine: !!r[k] })).catch(() => sendResponse({ mine: false }));
+  return true;
+});
 // Messages from PageProof's own pages (never from websites).
 api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || sender.id !== api.runtime.id) return false;
