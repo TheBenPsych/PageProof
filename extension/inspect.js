@@ -324,7 +324,7 @@ async function makeReportPdf() {
   if (s.level !== 'rich') items.push({ p: s.level === 'none'
     ? 'No hidden data was found in this file. Camera, date and copyright details have been removed, or were never added. This usually means it is a screenshot or a re-upload to social media or a website.'
     : 'Only a little hidden data was found in this file. Most camera and copyright details are missing.', box: '#fef3c7', color: '#78350f' });
-  if (s.ai.length) items.push({ p: 'Signs this was made or changed with AI: ' + s.ai.join('. ') + '.', box: '#ede9fe', color: '#4c1d95' });
+  if (s.ai.length) items.push({ p: 'Signs this was made or changed with AI: ' + s.ai.join('. ') + '.', box: '#dbeafe', color: '#1e3a8a' });
   items.push({ h: 'What the hidden data says' }, { kv: [
     ['Camera', [s.camera, s.lens].filter(Boolean).join(' · ') || 'Not found'], ['Taken', s.taken || 'Not found'],
     ['Place (GPS)', s.gps ? s.gps.lat + ', ' + s.gps.lon + (s.gps.alt != null ? ' (altitude ' + Math.round(s.gps.alt) + ' m)' : '') + '   google.com/maps?q=' + s.gps.lat + ',' + s.gps.lon : 'Not found'],
