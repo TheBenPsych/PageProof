@@ -750,8 +750,9 @@ dd q{quotes:"“" "”";font-style:italic}
   .ccols>span>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .cinfo .l3 .l3x{display:none}
 }
-.homemain{flex:2 1 520px;display:flex;flex-direction:column;gap:20px;min-width:0}
-@container pg (min-width:1500px){
-  .homemain{display:block;columns:2;column-gap:20px;flex:3 1 900px}
-  .homemain>*{break-inside:avoid;margin-bottom:20px}
-}
+/* Home: the three start cards and the boxes under them share one 3-column grid, so every edge lines up.
+   Narrow windows stack everything in one column. */
+.home3{display:grid;grid-template-columns:minmax(0,1fr);gap:20px}
+.homecol{display:flex;flex-direction:column;gap:20px;min-width:0}
+.homecol:empty{display:none}
+@container pg (min-width:820px){ .home3{grid-template-columns:repeat(3,minmax(0,1fr))} }
