@@ -186,7 +186,6 @@ async function homeFinds() {
   const hw = await ppHardware();
   const vis = copies.filter(c => !FC.hiddenCopy(c, RS_LISTS.hidden));
   const nNew = vis.filter(c => c.status === 'new').length;
-  const back = vis.filter(c => c.status !== 'removed' && c.online === 'back');
   const by = {};
   for (const c of vis) if (c.status === 'new') by[c.client || 'Client unknown'] = (by[c.client || 'Client unknown'] || 0) + 1;
   const top = Object.entries(by).sort((a, b) => b[1] - a[1]);
@@ -199,7 +198,6 @@ async function homeFinds() {
   if (k.on && !store.fcPause && st && st.state === 'closed') jobs.push({ lvl: 'bad', title: 'Keep searching is stopped', sub: 'Its pinned PageProof tab was closed, so no new photos are being searched.', btn: { act: 'keepshow', label: 'Start it again', main: 1 } });
   for (const [e, until] of Object.entries(await FC.brokenEngines())) jobs.push({ lvl: 'bad', title: `${FC.ENGINE_NAME[e]} may have stopped working`, sub: `It gave nothing for many photos in a row, so it rests until ${new Date(until).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}. The other search sites carry on.`, btn: { href: '#health', label: 'See details' } });
   // 2. copies that need you
-  if (back.length) jobs.push({ lvl: 'bad', icon: 'copies', title: `${back.length} ${back.length === 1 ? 'copy is' : 'copies are'} back online`, sub: 'They had gone, and came back: ' + esc([...new Set(back.map(c => c.site))].slice(0, 3).join(', ')), btn: { href: '#found?filter=Back%20online', label: 'See them', main: 1 } });
   if (caps.up.length) jobs.push(capJob(caps.up));
   if (nNew) jobs.push({ lvl: 'warn', icon: 'copies', id: 'jobNew', title: `${nNew.toLocaleString()} new ${nNew === 1 ? 'copy' : 'copies'} to answer`,
     sub: top.slice(0, 4).map(([n, v]) => `<a href="#found?client=${encodeURIComponent(n)}">${esc(n)} ${v}</a>`).join(' · ') + (top.length > 4 ? ` · ${top.length - 4} more clients` : ''),
