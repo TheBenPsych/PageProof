@@ -48,7 +48,7 @@ const PP_CHECKS = (() => {
     if (pf && pf.ok && pf.yt && !pf.imgFound) out.push({ lvl: 'stop', text: 'The photo looks like it is inside a YouTube embed on their page. YouTube embeds are not accepted.', why: 'YouTube embed' });
     const embed = c.use === 'embedded' || (pf && pf.ok && pf.embedPost && !pf.imgFound);
     if (embed) {
-      if (c.country) out.push({ lvl: 'stop', text: 'This is an embed on a site outside the U.S. (' + c.country + '). Embeds are not accepted outside the U.S.', why: 'Embed' });
+      if (c.country && c.country !== 'United States') out.push({ lvl: 'stop', text: 'This is an embed on a site outside the U.S. (' + c.country + '). Embeds are not accepted outside the U.S.', why: 'Embed' });
       else out.push({ lvl: 'warn', text: 'This is an embed (their page shows the photo from another site). Embeds are not accepted in the 9th Circuit (' + NINTH + ') or outside the U.S. Don\'t mix embedded and copied uses in one case.', why: 'Embed' });
     }
     if (c.use === 'social') out.push({ lvl: 'info', text: 'Don\'t take screenshots of social media shares. If this is a share of the client\'s own post, remove it.', why: 'Social post' });

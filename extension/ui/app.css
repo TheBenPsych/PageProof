@@ -755,8 +755,7 @@ dd q{quotes:"“" "”";font-style:italic}
   .homemain>*{break-inside:avoid;margin-bottom:20px}
 }
 
-/* =====================================================================================
-   4.7 calmer Copies found + details panel (Ben's picks 1-6, 8-12, 15, 16).
+/* ==============================================================================   4.7 calmer Copies found + details panel (Ben's picks 1-6, 8-12, 15, 16).
    Panel: pictures first, "Look at these", four tabs, answers pinned at the bottom.
    List: number tiles, one tidy filter line, lines-up bar, quiet icons, picked columns.
    ===================================================================================== */
@@ -857,3 +856,10 @@ dd q{quotes:"“" "”";font-style:italic}
 /* group headings stay at the top while you scroll */
 .found-card{overflow:clip}
 .cbody>.ghead{position:sticky;top:var(--top-h,64px);z-index:4}
+=======
+/* Home: the three start cards and the boxes under them share one 3-column grid, so every edge lines up.
+   Narrow windows stack everything in one column. */
+.home3{display:grid;grid-template-columns:minmax(0,1fr);gap:20px}
+.homecol{display:flex;flex-direction:column;gap:20px;min-width:0}
+.homecol:empty{display:none}
+@container pg (min-width:820px){ .home3{grid-template-columns:repeat(3,minmax(0,1fr))} }

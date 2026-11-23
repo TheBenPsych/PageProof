@@ -41,6 +41,7 @@ async function loadFC() {
     if (!STATUS[c.status]) c.status = 'new';     // a line edited by hand in found-copies.txt
     c.risk = FC.riskOf(c, facts.get(c.site));
     c.use = c.use || FC.useOf(c);
+    if (!c.country) c.country = FC.countryOf(c.site);   // copies brought back from found-copies.txt had none
     const p = photos.get(c.photo);
     c.photoName = p ? p.name : c.photoName || 'Photo';
     c.clientName = (p && p.client) || c.client || '';
