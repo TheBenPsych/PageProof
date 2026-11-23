@@ -588,6 +588,9 @@ async function keepAlive(show, force) {
   if (!st.fcKeep || !st.fcKeep.on || !st.fcDrive || !st.fcDrive.done) return;
   const ss = api.storage.session ? await api.storage.session.get('fcClosed').catch(() => ({})) : {};
   if (ss.fcClosed && !force) return;
+  // Never open it on its own when every browser window is closed (the browser can keep running in
+  // the background): it waits until a browser window is open again.
+  if (!(await normalWindows())) return;
   if (api.storage.session) await api.storage.session.remove('fcClosed').catch(() => {});
   // Already open? (Its heartbeat is fresh and its window is still there.)
   const s = st.fcStatus;
@@ -601,10 +604,18 @@ async function keepAlive(show, force) {
   runnerWin = w.id;
 }
 let runnerWin = null;
+const normalWindows = async () => { try { return (await api.windows.getAll({ windowTypes: ['normal'] })).length; } catch (e) { return 1; } };
 api.windows.onRemoved.addListener(async id => {
   const st = (await api.storage.local.get('fcStatus')).fcStatus;
-  if (id === runnerWin || (st && st.win === id)) { runnerWin = null; if (api.storage.session) api.storage.session.set({ fcClosed: Date.now() }).catch(() => {}); }
+  const rid = runnerWin || (st && st.win);
+  if (id === runnerWin || (st && st.win === id)) { runnerWin = null; if (!closingRunner && api.storage.session) api.storage.session.set({ fcClosed: Date.now() }).catch(() => {}); closingRunner = false; return; }
+  // The last browser window was closed: close the small Keep searching window too, so nothing is
+  // left in the taskbar. It opens again (minimised) with the next browser window.
+  if (rid && !(await normalWindows())) { closingRunner = true; api.windows.remove(rid).catch(() => { closingRunner = false; }); }
 });
+let closingRunner = false;
+// A browser window opened again (after the last one was closed): start Keep searching again.
+api.windows.onCreated.addListener(w => { if (w && w.type === 'normal') setTimeout(() => keepAlive(false), 3000); });
 // Today's 50 at the time you picked (weekdays), if "Start by itself" is on.
 async function fiftySchedule() {
   if (!api.alarms) return;
