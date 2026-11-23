@@ -466,15 +466,21 @@ async function rescore() {
   const same = CH ? Math.round(CH.sameShare * 100) : 0, unt = CH ? Math.round(CH.untouchedLines * 100) : 0;
   // Heavily edited: a solid part is clearly the same photo (strong, many matching squares), and a
   // big part was painted over or redrawn (an added object, redrawn faces, a headline band).
-  const heavy = CH && enough && S.strength >= 0.75 && CH.sameShare >= 0.2 && CH.untouchedLines >= 0.6 && CH.changedShare >= 0.25;
+  // Press walls repeat the same logos: a different shot in front of the same wall lines up on
+  // those logos and nothing else. Then it is not the same photo, whatever the % says.
+  const RP = off || S.lines < 0.15 ? null : PP_ALIGN.repeats(P.A.bitmap, P.B.bitmap, T);
+  const wall = !!(RP && RP.backdropOnly);
+  if (wall) CH = null;
+  const heavy = !wall && CH && enough && S.strength >= 0.75 && CH.sameShare >= 0.2 && CH.untouchedLines >= 0.6 && CH.changedShare >= 0.25;
   const verdict = off ? ['bad', 'The copy is mostly off the original', 'Line them up first.']
+    : wall ? ['bad', 'Different photo, same backdrop', 'Only the logos printed over and over on the wall behind lines up. The people and everything else are different. A different shot in front of the same press wall lines up there, so this is not the same photo.']
     : pct >= 85 && S.strength >= 0.8 ? ['good', 'Very likely the same photo', 'They match detail for detail wherever they overlap.']
     : heavy ? ['good', 'Same photo, heavily edited (things added or redrawn)', 'Inside the green part the copy lines up with the original detail for detail. The red parts were painted over, added or redrawn (for example a new object, changed faces or a headline).']
     : pct >= 25 && enough && S.strength >= 0.75 ? ['good', 'Very likely the same photo, with things added on top', pct + '% of the area they share lines up detail for detail. The rest differs, usually a headline, logo, caption or crop added to the copy. The red parts on the picture show where.']
     : pct >= 15 ? ['mid', 'Partly lines up', 'Check the overlay by eye. They may not be lined up exactly yet, or only part of the photo was used.']
     : ['bad', 'Probably not lined up, or not the same photo', 'Try "Line them up automatically", or drag the copy into place.'];
   if (verdict[0] === 'bad') CH = null;
-  scoreInfo = { pct, strength, verdict, overlap: S.overlap, overlapA: S.overlapA, heavy: !!heavy, same, unt, changed: CH ? 100 - same : 0 };
+  scoreInfo = { pct, strength, verdict, overlap: S.overlap, overlapA: S.overlapA, heavy: !!heavy, wall, same, unt, changed: CH ? 100 - same : 0 };
   const box = $('score');
   box.hidden = false; box.className = 'card ' + verdict[0];
   box.innerHTML = '';
@@ -485,7 +491,7 @@ async function rescore() {
     // The headline number only judges the part that wasn't painted over; the overall one stays below.
     p.textContent = unt + '% lines up';
     const u = document.createElement('div'); u.className = 'under'; u.textContent = 'in the part that wasn\'t painted over'; box.append(u);
-  } else p.textContent = pct + '% lines up';
+  } else { p.textContent = wall ? 'Only the backdrop lines up' : pct + '% lines up'; if (wall) p.style.fontSize = '19px'; }
   if (CH && verdict[0] === 'good') {
     const bar = document.createElement('div'); bar.className = 'split';
     const g = document.createElement('i'); g.style.width = same + '%'; bar.append(g);
@@ -495,7 +501,7 @@ async function rescore() {
     box.append(bar, key);
   }
   const sm = document.createElement('small');
-  sm.textContent = verdict[2] + (heavy ? ' Over everything they share: ' + pct + '%.' : '') + ' The copy covers ' + Math.round(Math.min(1, S.overlapA) * 100) + '% of the original. The score is a guide; the overlay is what to show.';
+  sm.textContent = verdict[2] + (wall ? ' (' + pct + '% of the shared area lines up, all of it repeating logos.)' : '') + (heavy ? ' Over everything they share: ' + pct + '%.' : '') + ' The copy covers ' + Math.round(Math.min(1, S.overlapA) * 100) + '% of the original. The score is a guide; the overlay is what to show.';
   box.append(sm);
   for (const sp of spots) measureSpot(sp);
   if (spots.length) renderSpots();

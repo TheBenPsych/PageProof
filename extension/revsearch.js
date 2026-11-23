@@ -596,8 +596,9 @@ async function measure(p, bmp) {
   try {
     const w = await checkInWorker(p, small);
     if (w && w.stuck) return { pct: -1, sv: SCORE_VERSION };        // took too long: shown as "Can't check"
-    const best = w ? (w.none ? null : { inliers: w.inliers, sc: w })
+    let best = w ? (w.none ? null : { inliers: w.inliers, sc: w, backdrop: w.backdrop })
       : await PP_ALIGN.align(await origBitmap(p), small, undefined, { fast: true });
+    if (best && !w && best.sc.lines >= 0.3) best.backdrop = PP_ALIGN.repeats(await origBitmap(p), small, best).backdropOnly;
     return {
       pct: best ? Math.max(0, Math.min(100, Math.round(best.sc.lines * 100))) : 0,
       inl: best && best.inliers || 0,                       // matching details found in both pictures
@@ -606,6 +607,8 @@ async function measure(p, bmp) {
       // Share of the middle of your picture (where the subject usually is) that lines up.
       mid: best && best.sc.midTex >= 8 ? +(best.sc.midMatched / best.sc.midTex).toFixed(2) : null,
       n: best ? best.sc.inside || 0 : 0,                   // small squares compared at all (the shared area)
+      // Only a repeating press wall (the same logos printed over and over) lines up.
+      wall: best && best.backdrop ? 1 : 0,
       sv: SCORE_VERSION,
     };
   } catch (e) { return { pct: 0, inl: 0, tiles: 0, str: 0, mid: null, sv: SCORE_VERSION }; }
@@ -643,7 +646,7 @@ async function scoreLink(l) {
 // the middle), same-backdrop different photos about 0.3.
 // Version 4: a copy shrunk to a dot no longer counts (it was compared over two tiny squares and
 // could show 100%); at least 40 squares must be compared and 12 must match for Same photo.
-const SCORE_VERSION = 4;
+const SCORE_VERSION = 5;   // 5: press-wall check (4.8.3)
 const userNo = l => !!(l.url && job && job.pics[l.pic] && RS_REJECT.notMatch(l.url, job.pics[l.pic].name));
 function verdict(l) {
   if (l.rescued) return 'maybe';          // you said it is a copy
@@ -652,6 +655,7 @@ function verdict(l) {
   if (l.pct === null || l.pct < 0) return 'cant';
   if (l.n != null && l.n < 40) return 'no';   // shared area too small to say anything
   if (!(l.tiles >= 12)) return 'no';           // too few matching squares, whatever the %
+  if (l.wall) return 'no';                     // only the repeating logos behind the people line up
   if (l.mid !== null && l.mid !== undefined && l.mid < 0.35) return 'no';
   const midOk = l.mid === null || l.mid === undefined || l.mid >= 0.42;
   // Most of the shared area must line up. Copies with a big headline over them (about 55%)

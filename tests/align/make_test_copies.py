@@ -152,5 +152,38 @@ for sname, A in srcs.items():
         manifest.append({'orig': f'{sname}.png', 'copy': os.path.basename(fn), 'G': G[:2].tolist(), 'cw': img.width, 'ch': img.height})
 neg = [('coffee.png', 'astronaut.png'), ('chelsea.png', 'astronaut.png'), ('rocket.png', 'coffee.png'), ('motorcycle_left.png', 'chelsea.png')]
 for a, c in neg: manifest.append({'orig': a, 'copy': c, 'G': None})
+
+# Press-conference sponsor walls ("step and repeat"): the same logos printed over and over.
+# Two different shots in front of the same wall share the logos but nothing else, so they must
+# NOT count as the same photo. A real copy of a wall shot (cropped, with a headline) still must.
+def wall(w, h, sc=1.0, dx=0, dy=0):
+    im = Image.new('RGB', (w, h), (28, 60, 170)); d = ImageDraw.Draw(im)
+    fb = ImageFont.truetype(FONT, int(44 * sc)); fs = ImageFont.truetype(FONT.replace('-Bold', ''), int(22 * sc))
+    cw, ch = int(260 * sc), int(170 * sc)
+    for j in range(-1, h // ch + 2):
+        for i in range(-1, w // cw + 2):
+            x, y = i * cw + (cw // 2 if j % 2 else 0) + dx, j * ch + dy
+            if (i + j) % 2:
+                d.rounded_rectangle((x + 10 * sc, y + 10 * sc, x + 200 * sc, y + 120 * sc), radius=int(10 * sc), fill=(245, 245, 245))
+                d.text((x + 28 * sc, y + 30 * sc), 'QUBIT', font=fb, fill=(20, 110, 60)); d.text((x + 34 * sc, y + 84 * sc), 'TRAINING CENTER', font=fs, fill=(20, 110, 60))
+            else:
+                for k in range(6):
+                    a = k * math.pi / 3; d.ellipse((x + 60 * sc + 26 * sc * math.cos(a) - 9 * sc, y + 40 * sc + 26 * sc * math.sin(a) - 9 * sc, x + 60 * sc + 26 * sc * math.cos(a) + 9 * sc, y + 40 * sc + 26 * sc * math.sin(a) + 9 * sc), outline='white', width=max(2, int(4 * sc)))
+                d.text((x + 10 * sc, y + 90 * sc), 'Harbor Health', font=fs, fill='white')
+    return im
+def person(im, src, box):
+    # a person (another test photo) standing in front of the wall
+    p = Image.open(os.path.join(D, src)).convert('RGB').resize((box[2] - box[0], box[3] - box[1]))
+    mk = Image.new('L', p.size, 0); ImageDraw.Draw(mk).ellipse((0, 0, p.width, p.height * 1.6), fill=255)
+    im.paste(p, box[:2], mk.filter(ImageFilter.GaussianBlur(6))); return im
+WW, WH = 1000, 640
+wo = person(wall(WW, WH), 'astronaut.png', (120, 60, 560, 640)); wo.save(f'{OUT}/wall.png')
+# different shots: other person / same person moved, wall from another spot (bigger, slanted)
+for name, src, box, sc, dx, dy, sl in [('wall-other-person', 'chelsea.png', (420, 80, 900, 640), 1.3, 40, -30, 0.06), ('wall-other-shot', 'coffee.png', (60, 120, 520, 640), 0.85, -70, 20, -0.04), ('wall-same-logos-tilted', 'motorcycle_left.png', (300, 200, 1000, 640), 1.1, 15, 55, 0.08)]:
+    c = person(wall(WW, WH, sc, dx, dy), src, box).transform((WW, WH), Image.AFFINE, (1, sl, -sl * WH / 2, 0, 1, 0), resample=Image.BICUBIC)
+    c.save(f'{OUT}/{name}.png'); manifest.append({'orig': 'wall.png', 'copy': name + '.png', 'G': None})
+# a real copy of the wall shot: cropped round the person, a headline added
+img, G = make(wo, S(1.2) @ T(-80, -40), (700, 760)); text(img, 'PRESS DAY', 600, 70)
+img.save(f'{OUT}/wall__real-copy-crop-headline.png'); manifest.append({'orig': 'wall.png', 'copy': 'wall__real-copy-crop-headline.png', 'G': G[:2].tolist()})
 json.dump(manifest, open(f'{OUT}/manifest.json', 'w'))
 print(len(manifest))
