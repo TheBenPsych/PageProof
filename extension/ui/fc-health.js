@@ -69,7 +69,7 @@ async function healthLights() {
   // Preview pictures
   L.push([moved ? 'ok' : 'warn', 'Preview pictures', moved ? 'Kept in their own small store.' : 'Still being tidied after the update. This finishes by itself.']);
   // Version
-  const up = st.ppUpdate;
+  const up = st.ppUpdate ? { ...st.ppUpdate, has: !!st.ppUpdate.latest && ppNewer(st.ppUpdate.latest, VERSION) } : null;
   if (up && up.has) L.push(['warn', 'PageProof version', 'You have ' + VERSION + '. Version ' + up.latest + ' is ready.', '<a class="btn primary sm" href="#health?update=1" data-act="upgo">Update</a>']);
   else if (up && up.error) L.push(['grey', 'PageProof version', 'You have ' + VERSION + '. Could not ask GitHub for the newest version: ' + up.error]);
   else L.push([up ? 'ok' : 'grey', 'PageProof version', 'You have ' + VERSION + (up ? ', the newest. Checked ' + agoText(up.at) + '.' : '. Not checked yet.')]);

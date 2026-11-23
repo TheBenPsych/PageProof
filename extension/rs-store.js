@@ -138,10 +138,14 @@ const RS_DOCS = {
     const d = await RS_DOCS.handle();
     // Safety net: if this folder is the photos folder, inside it, or holds it (for example the
     // photos folder was picked later), PageProof writes nothing at all. Checked every 10 minutes.
-    if (!RS_DOCS._safe || Date.now() - RS_DOCS._safe.at > 600000) RS_DOCS._safe = { at: Date.now(), ok: !(await RS_DOCS.touchesPhotos(d)) };
+    // The check is shared by every caller and never waits more than a few seconds.
+    if (!RS_DOCS._safe || Date.now() - RS_DOCS._safe.at > 600000) {
+      if (!RS_DOCS._checking) RS_DOCS._checking = RS_DOCS.touchesPhotos(d).then(t => { RS_DOCS._safe = { at: Date.now(), ok: !t }; }).finally(() => { RS_DOCS._checking = null; });
+      await RS_DOCS._checking;
+    }
     return RS_DOCS._safe.ok ? d : null;
   },
-  _safe: null,
+  _safe: null, _checking: null,
   // True when a folder is one of the picked photos folders, sits inside one, or contains one.
   async photoHandles() {
     const out = [];
@@ -151,13 +155,20 @@ const RS_DOCS = {
     } catch (e) { /* none */ }
     return out;
   },
+  // Each folder question gets 2 seconds and the whole check 4 seconds: a slow drive (Google Drive)
+  // can leave the browser's answer hanging, and that froze PageProof's main page in 4.3.2. If the
+  // browser cannot tell in time, the folder counts as safe (it was already checked when it was picked).
   async touchesPhotos(d) {
     if (!d) return false;
-    for (const p of await RS_DOCS.photoHandles()) {
+    const late = (p, ms, v) => Promise.race([p, new Promise(r => setTimeout(() => r(v), ms))]);
+    return late(RS_DOCS._touches(d, late), 4000, false);
+  },
+  async _touches(d, late) {
+    for (const p of await late(RS_DOCS.photoHandles(), 2000, [])) {
       try {
-        if (await p.isSameEntry(d)) return true;
-        if ((await p.resolve(d)) !== null) return true;        // picked folder is inside the photos
-        if ((await d.resolve(p)) !== null) return true;        // picked folder holds the photos
+        if (await late(p.isSameEntry(d), 2000, false)) return true;
+        if ((await late(p.resolve(d), 2000, null)) !== null) return true;   // picked folder is inside the photos
+        if ((await late(d.resolve(p), 2000, null)) !== null) return true;   // picked folder holds the photos
       } catch (e) { /* can't tell for this one */ }
     }
     return false;

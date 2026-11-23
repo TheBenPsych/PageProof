@@ -682,6 +682,8 @@ api.runtime.onStartup.addListener(() => { fiftySchedule(); keepAlive(false); new
 api.runtime.onInstalled.addListener(d => {
   fiftySchedule(); newBadge();
   if (d.reason === 'install') api.tabs.create({ url: api.runtime.getURL('app.html#setup') });
+  // After an update the saved "version X is ready" note is old news: forget it and ask GitHub again.
+  if (d.reason === 'update') api.storage.local.remove('ppUpdate').then(() => updateCheck(true)).catch(() => {});
   try { api.sidePanel && api.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }); } catch (e) { /* no side panel */ }
   if (api.alarms) api.alarms.clear('rsDaily');
 });

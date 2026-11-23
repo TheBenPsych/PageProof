@@ -167,6 +167,26 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.evaluate(() => chrome.storage.local.set({ fcNeedsAllow: Date.now() }));
   await pop.goto(url('popup.html')); await pop.waitForTimeout(1200);
   ok(await pop.evaluate(() => !!document.getElementById('allow')), 'Toolbar menu shows the Allow button when Drive needs its click');
+  // 4.3.3: an old "newer version" note must not offer the version already installed
+  const mine = await pop.evaluate(() => chrome.runtime.getManifest().version);
+  await page.evaluate(v => chrome.storage.local.set({ ppUpdate: { at: Date.now(), latest: v, has: true, error: '' } }), mine);
+  await pop.reload(); await pop.waitForTimeout(1200);
+  ok(await pop.evaluate(() => !/is ready/.test(document.body.innerText)), 'Toolbar menu does not offer the version already installed');
+  await page.evaluate(() => chrome.storage.local.set({ ppUpdate: { at: Date.now(), latest: '99.0.0', has: true, error: '' } }));
+  await pop.reload(); await pop.waitForTimeout(1200);
+  ok(await pop.evaluate(() => /99\.0\.0 is ready/.test(document.body.innerText)), 'Toolbar menu still offers a really newer version');
+  // 4.3.3: a folder question the browser never answers must not leave the main page blank
+  await page.evaluate(async () => {
+    const root = await navigator.storage.getDirectory();
+    await RS_DB.put('handles', 'docs', await root.getDirectoryHandle('PageProof', { create: true }));
+    await RS_DB.put('handles', 'fcExtra:Hang test', await root.getDirectoryHandle('Photos', { create: true }));
+  });
+  const hang = await ctx.newPage();
+  await hang.addInitScript(() => { FileSystemHandle.prototype.isSameEntry = () => new Promise(() => {}); FileSystemDirectoryHandle.prototype.resolve = () => new Promise(() => {}); });
+  await hang.goto(url('app.html#home')); await hang.waitForTimeout(6000);
+  ok(await hang.evaluate(() => document.getElementById('side').textContent.length > 20 && document.getElementById('view').textContent.length > 100), 'Main page draws even when the browser never answers a folder question');
+  await hang.close();
+  await page.evaluate(async () => { await RS_DB.del('handles', 'docs'); await RS_DB.del('handles', 'fcExtra:Hang test'); });
   console.log(fails ? fails + ' FAILED' : 'ALL PASSED');
   await ctx.close(); process.exit(fails ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });
