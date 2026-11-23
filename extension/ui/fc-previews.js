@@ -84,7 +84,7 @@ const FC_PREV = (() => {
       const { p, file } = await photoFile(c.photo);
       if (file) {
         ours = file;
-        if (p && !p.thumb && !p.th) { await FC.setThumb('photos', p, await smallJpeg(file)); changed = true; }
+        if (p && !p.thumb && !p.th) { const pic = await smallJpeg(file); const now = await FC.DB.get('photos', p.id); if (now && !now.thumb && !now.th) { await FC.setThumb('photos', now, pic); changed = true; } }
       }
     } catch (e) { /* Drive not reachable for this one */ }
     // Their copy.
@@ -109,16 +109,18 @@ const FC_PREV = (() => {
         } finally { ask({ type: 'forget', key }); }
       }
     }
+    let pic = '';
+    if (blob) { try { pic = await smallJpeg(blob); } catch (e) { /* not a picture after all */ } }
+    // Read the copy again right before saving and change only the picture fields, so an answer
+    // given meanwhile (Stolen, Licensed…) is never written over.
     const fresh = await FC.DB.get('copies', c.id);
     if (!fresh) return changed;
     fresh.thTried = new Date().toISOString();
-    if (blob) {
-      try {
-        if (from && !fresh.img) fresh.img = from;
-        await FC.setThumb('copies', fresh, await smallJpeg(blob));
-        FC.keepSoon([fresh]);   // also keep their file again, for evidence
-        return true;
-      } catch (e) { /* not a picture after all */ }
+    if (pic) {
+      if (from && !fresh.img) fresh.img = from;
+      await FC.setThumb('copies', fresh, pic);
+      FC.keepSoon([fresh]);   // also keep their file again, for evidence
+      return true;
     }
     await FC.DB.put('copies', fresh);
     return changed;
@@ -134,7 +136,7 @@ const FC_PREV = (() => {
       const pids = [...new Set(all.filter(c => c.status !== 'removed').map(c => c.photo))];
       let made = 0;
       for (const p of (await FC.DB.getMany('photos', pids)).filter(p => p && p.rel && !p.thumb && !p.th)) {
-        try { await FC.setThumb('photos', p, await smallJpeg(await FC.fileFor(p))); made++; } catch (e) { /* Drive not reachable */ }
+        try { const pic = await smallJpeg(await FC.fileFor(p)); const now = await FC.DB.get('photos', p.id); if (now && !now.thumb && !now.th) { await FC.setThumb('photos', now, pic); made++; } } catch (e) { /* Drive not reachable */ }
         if (made && made % 10 === 0) FC.touch('photos');
       }
       if (made % 10) FC.touch('photos');

@@ -8,7 +8,11 @@ Object.assign(state, {
 });
 const HIST = [];         // every answer and hide, newest last, so each one can be undone in turn
 let FCD = null;          // what's loaded from the copies database (cleared when anything changes)
-api.storage.onChanged.addListener(ch => { if (ch.fcChanged || ch.rsHidden || ch.fcHiddenCountries) FCD = null; });
+// A change elsewhere (Keep searching, the picture rebuild, another tab) only marks it stale: the
+// next draw reads it again, but a click in between still finds its copy. (Clearing it outright
+// made a button press do nothing until the page was drawn again, 4.6.4.)
+let FCD_STALE = false;
+api.storage.onChanged.addListener(ch => { if (ch.fcChanged || ch.rsHidden || ch.fcHiddenCountries) FCD_STALE = true; });
 
 const STATUS = { new: ['New', 'copy'], stolen: ['Stolen', 'bad'], licensed: ['Licensed', 'ok'], removed: ['Removed', 'grey'] };
 const RISK = { ok: ['Looks normal', ''], watch: ['Worth a look', 'warn'], sus: ['Suspicious', 'bad'] };
@@ -23,7 +27,8 @@ const shortDate = iso => { if (!iso) return ''; const d = new Date(iso); const t
 const plural = (n, a, b) => n + ' ' + (n === 1 ? a : (b || a + 's'));
 
 async function loadFC() {
-  if (FCD) return FCD;
+  if (FCD && !FCD_STALE) return FCD;
+  FCD_STALE = false;
   const [copies, clients, countries, sites] = [await FC.allCopies(), await FC.DB.all('clients'), await FC.hiddenCountries(), await FC.DB.all('sites')];
   const ids = new Set(copies.map(c => c.photo));
   const photos = new Map();
