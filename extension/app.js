@@ -463,6 +463,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['The side panel shows again', 'The PageProof side panel (beside the page in Chrome and Edge) opened empty, because it borrowed a name from the main page\'s left menu and was slid out of sight on narrow screens. It now shows Capture this page, Photos on this page and Copies found again. If it ever can\'t load, it says why instead of staying blank.'],
   ['One PageProof folder', 'PageProof can now live in the same folder as your saved work: the program goes in Documents › PageProof › Install, and your finds, settings and lists stay in Documents › PageProof. PageProof never writes inside Install, and it refuses that folder if you pick it by mistake. From this version PageProof also keeps the same ID wherever its folder is, so moving or reinstalling it no longer loses what is stored in the browser.'],
   ['Symbols in the right-click menu', 'Every PageProof item in the right-click menu now starts with a small symbol, like 📸 Capture this page or 🔍 Find copies of it, so you can tell them apart at a glance.'],
   ['A red dot instead of a number', 'The PageProof icon in the toolbar now shows a small red dot in its top-right corner when new copies are waiting, so the logo stays visible. Hover the icon to see how many.'],
