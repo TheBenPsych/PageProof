@@ -281,26 +281,26 @@ Object.assign(ACTS, {
     if (!a) return toast('Paste a profile link (like instagram.com/name) or type @name.');
     const undo = await FC.setAcct(v, { ...a, from: 'you', sure: 'sure', at: new Date().toISOString() });
     HIST.push({ label: 'account set to ' + a.handle, undo, open: v });
-    state.acctEdit = ''; FCD = null; toastUndo('Account set to ' + a.handle + '. Kept for this post from now on.'); render(true);
+    state.acctEdit = ''; FCD_STALE = true; toastUndo('Account set to ' + a.handle + '. Kept for this post from now on.'); render(true);
   },
-  clearacct: async v => { const undo = await FC.setAcct(v, null); HIST.push({ label: 'account cleared', undo, open: v }); state.acctEdit = ''; FCD = null; toastUndo('Account cleared.'); render(true); },
+  clearacct: async v => { const undo = await FC.setAcct(v, null); HIST.push({ label: 'account cleared', undo, open: v }); state.acctEdit = ''; FCD_STALE = true; toastUndo('Account cleared.'); render(true); },
   findacct: async v => {
     const c = FCD.copies.find(x => x.id === v); if (!c) return;
     toast('Looking for the account…');
-    const a = await findAcct(c, true); FCD = null;
+    const a = await findAcct(c, true); FCD_STALE = true;
     toast(a ? 'Found: ' + a.handle : 'Still not found. Try "Look in your browser".'); render(true);
   },
   browseracct: async v => {
     const c = FCD.copies.find(x => x.id === v); if (!c) return;
     toast('Opening the post in a background tab for a few seconds…');
-    const a = await findInBrowser(c); FCD = null;
+    const a = await findInBrowser(c); FCD_STALE = true;
     toast(a ? 'Found: ' + a.handle + (a.sure === 'likely' ? ' (likely: check it once)' : '') : 'Your browser couldn\'t see who posted it either. Paste the profile link instead.'); render(true);
   },
   browserall: async () => {
     const xs = FCD.copies.filter(c => isSoc(c) && !c.acct && c.status !== 'removed' && visible(c));
     let n = 0, i = 0;
     for (const c of xs) { i++; toast(`Looking in your browser: ${i} of ${xs.length}…`); if (await findInBrowser(c)) n++; if (route() !== 'found') break; }
-    FCD = null; toast(`Found ${n} of ${xs.length} accounts.`); render(true);
+    FCD_STALE = true; toast(`Found ${n} of ${xs.length} accounts.`); render(true);
   },
   linkacct: async v => {
     const [a, b] = v.split('\n');
@@ -310,7 +310,7 @@ Object.assign(ACTS, {
     next.push([...new Set([...(ga || [a]), ...(gb || [b])])]);
     await FC.meta.set('acctLinks', next); FC.backupSoon();
     HIST.push({ label: 'accounts joined', undo: async () => { await FC.meta.set('acctLinks', links); FC.backupSoon(); } });
-    FCD = null; toastUndo('Joined: they now count as the same person.'); render(true);
+    FCD_STALE = true; toastUndo('Joined: they now count as the same person.'); render(true);
   },
   unlinkacct: async v => {
     const [a, b] = v.split('\n');
@@ -318,7 +318,7 @@ Object.assign(ACTS, {
     const next = links.map(g => g.includes(a) && g.includes(b) ? g.filter(k => k !== b) : g).filter(g => g.length > 1);
     await FC.meta.set('acctLinks', next); FC.backupSoon();
     HIST.push({ label: 'accounts split', undo: async () => { await FC.meta.set('acctLinks', links); FC.backupSoon(); } });
-    FCD = null; toastUndo('Split: they count as separate accounts again.'); render(true);
+    FCD_STALE = true; toastUndo('Split: they count as separate accounts again.'); render(true);
   },
   approveacct: async v => {
     const c = FCD.copies.find(x => x.id === state.open);
@@ -328,7 +328,7 @@ Object.assign(ACTS, {
     const i = LIST.indexOf(c.id);
     const nextId = LIST.slice(i + 1).find(id => { const x = FCD.copies.find(y => y.id === id); return x && !(x.acct && x.acct.key === c.acct.key); }) || '';
     HIST.push({ label: c.acct.handle + ' approved' + (who ? ' for ' + who : ' for every client'), undo, open: c.id });
-    FCD = null; state.open = nextId;
+    FCD_STALE = true; state.open = nextId;
     toastUndo(c.acct.handle + ' is approved' + (who ? ' for ' + who : ' for every client') + '. Their posts are marked Licensed.');
     render(true);
   },
@@ -336,7 +336,7 @@ Object.assign(ACTS, {
     const [site, kind] = v.split('|');
     const was = await PP_SOCIAL.setMine(site, kind); FC.backupSoon();
     HIST.push({ label: site + ' marked ' + (kind === 'social' ? 'social' : 'a website'), undo: () => PP_SOCIAL.setMine(site, was) });
-    FCD = null; toastUndo(kind === 'social' ? site + ' is a social site now. Its copies are on the Social media tab.' : site + ' stays a website.'); render(true);
+    FCD_STALE = true; toastUndo(kind === 'social' ? site + ' is a social site now. Its copies are on the Social media tab.' : site + ' stays a website.'); render(true);
   },
 });
 

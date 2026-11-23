@@ -213,7 +213,7 @@ async function readTheirPage(c, again) {
     const pf = await PP_CHECKS.readPage(c);
     const cc = await FC.DB.get('copies', c.id);
     if (cc) { cc.pf = pf; await FC.DB.put('copies', cc); }
-    c.pf = pf; FCD = null;
+    c.pf = pf; FCD_STALE = true;      // 4.9: never cleared outright (it is also read in the background now)
     return pf;
   } finally { PF_BUSY.delete(c.id); }
 }
@@ -382,6 +382,7 @@ async function drawer(list) {
   const viewer = view === 'page' ? (livePage ? pageBoxHtml(c) : postCard(c))
     : view === 'slide' ? `<div class="dslide" style="--cut:${state.slide}%"><img data-our="${esc(c.photo)}" src="${ourSrc}" alt="Your client's photo"><img class="top" src="${theirSrc}" alt="Their copy" referrerpolicy="no-referrer"><span class="lab l">Your client's</span><span class="lab r">Theirs</span><i class="handle" aria-hidden="true"></i><input type="range" min="0" max="100" value="${state.slide}" data-act="dslide" aria-label="Slide between your client's photo and theirs"></div>`
     : `<div class="pair"><div class="frame ours"><img data-our="${esc(c.photo)}" src="${ourSrc}" alt="Your client's photo"><span class="lab">Your client's</span></div><div class="frame theirs"><img src="${theirSrc}" alt="Their copy" referrerpolicy="no-referrer"><span class="lab">Theirs</span></div></div>`;
+  if (!FCD) await loadFC();        // something cleared it while the panel was being read
   return `<aside class="drawer calm" aria-label="Copy details" id="drawer">
   <div class="dhead"><button class="btn sm icon" data-act="dstep" data-v="-1" aria-label="Previous copy"${idx > 0 ? '' : ' disabled'}>‹</button><button class="btn sm icon" data-act="dstep" data-v="1" aria-label="Next copy"${idx >= 0 && idx < list.length - 1 ? '' : ' disabled'}>›</button><span class="muted num" style="font-size:13px">${idx >= 0 ? `${idx + 1} of ${list.length}` : ''}</span><span style="flex:1"></span>${tagFor(c)}<button class="btn sm icon" data-act="closedrawer" aria-label="Close">✕</button></div>
   <div class="dscroll" id="dscroll">
@@ -738,7 +739,7 @@ async function answerCopies(ids, status, label) {
   }
   const h = { label, undo: async () => { await undo(); if (undoLic) await undoLic(); }, open: ids.length === 1 ? ids[0] : '' };
   HIST.push(h);
-  FCD = null;
+  FCD_STALE = true;
   return h;
 }
 // "Remove" teaches the photo check quietly: the numbers are kept to tune it later.

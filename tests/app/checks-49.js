@@ -11,7 +11,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
 (async () => {
   const { ctx, url } = await start({ viewport: { width: 1600, height: 1000 } });
   const page = await ctx.newPage();
-  page.on('pageerror', e => { fails++; console.log('PAGEERROR', String(e).slice(0, 300)); });
+  page.on('pageerror', e => { fails++; console.log('PAGEERROR', String(e.stack || e).slice(0, 900)); });
   const shot = async n => { if (SHOTS) await page.screenshot({ path: SHOTS + '/' + n + '.png' }); };
   const go = async h => { await page.goto(url('app.html#' + h)); await page.waitForTimeout(1300); };
   await go('help'); await seed(page); await page.reload(); await page.waitForTimeout(1000);
