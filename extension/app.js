@@ -462,6 +462,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Pages open fast again', 'Pages no longer wait for Google Drive. PageProof checks Drive in the background by asking for one of your ticked folders (not the whole shared drive list, which can take a minute), and only shows "Google Drive isn\'t answering" when it really doesn\'t answer.'],
   ['Pages open even when Google Drive is stuck', 'When Google Drive for desktop stopped answering, Home, Copies found, Clients and photos, Keep searching and Settings stayed blank while they waited for it. Now they wait 8 seconds at most, then open with a red "Google Drive isn\'t answering" bar and a Try again button.'],
   ['Main page and update notice fixed', 'The main PageProof page could stay blank (only the top bar showed) while your browser was slow to answer a question about your folders. It now always opens within a few seconds. The toolbar menu no longer offers an update to the version you already have.'],
   ['Your Drive photos: read only, double-checked', 'PageProof only ever reads your Google Drive photos. It never changes, moves, renames, deletes or adds anything there. Now it also refuses to use a folder inside your photos for its own lists, and the search sites get a clean copy of each photo with no hidden data and a plain name (photo.jpg).'],
