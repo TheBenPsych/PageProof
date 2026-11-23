@@ -120,6 +120,22 @@ async function capture(tab, auto) {
   const tabId = tab.id;
   const windowId = tab.windowId;
   await api.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+  // 4.14: close cookie notices and sign-up boxes that cover the page, with the site's own buttons.
+  // Settings › Capture can turn this off. What was pressed goes in the capture log.
+  let popups = [];
+  try {
+    const { ppPopups } = await api.storage.local.get('ppPopups');
+    if (ppPopups !== false) {
+      popups = (await inPage(tabId, 'closePopups')) || [];
+      if (popups.length) {
+        await sleep(700);
+        // A site may reload after "Accept": put the helpers back if they are gone.
+        await api.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+        try { popups = popups.concat((await inPage(tabId, 'closePopups')) || []); } catch (e) { /* keep the first ones */ }
+        await sleep(300);
+      }
+    }
+  } catch (e) { /* capture as it is */ }
   // Open shortened post descriptions, and give the site's opening animation time to finish.
   let expanded = await inPage(tabId, 'expandMore');
   if (expanded) await sleep(1500);
@@ -149,6 +165,7 @@ async function capture(tab, auto) {
     blocked: info.blocked || null
   };
 
+  if (popups.length) record.notes.push('Before the first screen, PageProof closed ' + (popups.length === 1 ? 'a pop-up' : popups.length + ' pop-ups') + ' covering the page, using the site\'s own buttons: ' + popups.join('; ') + '. Nothing else on the page was changed.');
   if (expanded) record.notes.push('PageProof clicked "more" to show the full post description.');
   if (info.single) record.notes.push('This page shows one post per screen (like Instagram Reels), so only the post on screen was captured, not the ones after it.');
 

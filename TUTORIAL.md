@@ -302,7 +302,7 @@ Pick **PageProof** itself, never the **Install** folder inside it. Install holds
 
 ## 17. Find copies of your clients' photos, all day
 
-Open the full PageProof page (click the PageProof icon › **Open full PageProof**). The menu on the left has **Copies found**, **Clients and photos** and **Keep searching**. Everything else (Inspect, Compare, Markup, Convert, Verify, Skipped photos, Site owners and more) is on the **Tools** page. The bar at the top has a **search box**, **Undo** and **Capture a page**.
+Open the full PageProof page (click the PageProof icon › **Open full PageProof**). The menu on the left has five items: **Home** (a list of what to do now, most urgent first), **Copies found** (with One at a time, Keep searching and your searches), **Clients**, **Evidence** (your captures, **Needs a capture**, Verify and the photo tools) and **Settings** (Is everything working, hidden sites, Help). The bar at the top has a **search box**, **Undo** and **Capture a page**. The thin line at the bottom shows whether Drive is connected and searching is running; anything stopped turns red with a **Fix it** button.
 
 **Set up once: Connect your photos (4 steps).**
 1. Install **Google Drive for desktop** (google.com/drive/download) and sign in with your work account. File Explorer then shows **Google Drive (G:)**.

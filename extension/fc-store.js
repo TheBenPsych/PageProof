@@ -1202,12 +1202,19 @@ const FC = (() => {
     const old = new Map((await copiesOf(p.id)).map(c => [c.id, c]));
     const out = [];
     let fresh = 0;
+    const oldList = [...old.values()];
     for (const l of links) {
       const id = p.id + '|' + l.key;
-      const c = old.get(id);
+      // The same page under another address (phone version, tracking bits) is that copy (4.14).
+      let c = old.get(id);
+      if (!c) {
+        c = samePage(oldList.concat(out.filter(x => !old.has(x.id))), l.url);
+        if (c) { addAlt(c, l.url); if (out.includes(c)) continue; }
+      }
+      const other = c && c.key !== l.key;      // found under another address: keep the copy's own
       // A small picture that is too big to keep is left out (cutting it short would break it).
       const th = String(l.thumb || '');
-      const base = { url: l.url, key: l.key, site: l.site, title: l.title || '', thumb: th.length <= 60000 ? th : '', img: l.img || '', engines: l.engines || [], exact: !!l.exact,
+      const base = { url: other ? c.url : l.url, key: other ? c.key : l.key, pk: pageKey(other ? c.url : l.url), site: other ? c.site : l.site, title: l.title || '', thumb: th.length <= 60000 ? th : '', img: l.img || '', engines: l.engines || [], exact: !!l.exact,
         pct: l.pct, inl: l.inl, tiles: l.tiles, str: l.str, mid: l.mid, match: l.verdict, w: l.w, h: l.h };
       if (c) {
         if (!base.thumb && c.thumb) base.thumb = c.thumb;
@@ -1260,7 +1267,9 @@ const FC = (() => {
     const p = await photoForPic(pic);
     const id = p.id + '|' + l.key, now = new Date().toISOString();
     if (await DB.get('copies', id)) return;
-    const n = { id, photo: p.id, client: p.client || '', url: l.url, key: l.key, site: l.site, title: l.title || '', thumb: String(l.thumb || '').slice(0, 60000), img: l.img || '',
+    const same = samePage(await copiesOf(p.id), l.url);
+    if (same) { addAlt(same, l.url); await DB.put('copies', same); touch('copies'); return; }
+    const n = { id, photo: p.id, client: p.client || '', url: l.url, key: l.key, pk: pageKey(l.url), site: l.site, title: l.title || '', thumb: String(l.thumb || '').slice(0, 60000), img: l.img || '',
       engines: l.engines || [], exact: !!l.exact, pct: l.pct, inl: l.inl, tiles: l.tiles, str: l.str, mid: l.mid, match: l.verdict || 'maybe', w: l.w, h: l.h,
       firstSeen: now, lastSeen: now, times: 1, by: (by || 'a search') + ' (added by hand)', status: 'new', online: 'up' };
     n.country = countryOf(l.site); n.use = useOf(n);
@@ -1271,6 +1280,68 @@ const FC = (() => {
     if (pic.thumb && !p.thumb && !p.th) { p.thumb = pic.thumb; const pr = splitPic(p); if (pr) await pics.putMany([pr]); }
     await DB.put('photos', p);
     queueDirty(true); backupCopiesSoon(); touch('copies');
+  }
+  // ---------------------------------------------------------------- same page, other address (4.14)
+  // Search sites often give one page under several addresses: the phone version (m.), the AMP
+  // version, share and tracking bits on the end. pageKey() is the same for all of them, so they
+  // show as ONE copy: you answer once, and one use is never counted as three. The copy keeps its
+  // first address; the others are listed in c.alts. (The copy's own key, RS_UTIL.key, is left as
+  // it was, so nothing already saved changes its name.)
+  const TRACK = /^(utm_|fbclid|gclid|dclid|msclkid|igsh|mc_cid|mc_eid|_ga|_gl|ocid|cmpid|cmp$|smid|share$|shared$|s$|ref$|ref_src|ref_url|src$|source$|via$|si$|spm$|xtor|ito$|ns_|taid$|mbid$|output$|outputtype$|amp$|__twitter_impression|ncid$|soc_src|soc_trk|feature$)/i;
+  function pageKey(url) {
+    try {
+      const u = new URL(url);
+      const host = u.hostname.toLowerCase().replace(/^(www\d?|m|mobile|amp)\./, '').replace(/\.cdn\.ampproject\.org$/, '');
+      const path = u.pathname.replace(/\/(index\.html?|amp\.html?)$/i, '/').replace(/\/amp\/?$/i, '/').replace(/^\/amp\//i, '/').replace(/\.amp(\.html?)?$/i, '$1').replace(/\/+$/, '');
+      const q = [...u.searchParams.entries()].filter(([k]) => !TRACK.test(k)).sort((a, b) => (a[0] + a[1]).localeCompare(b[0] + b[1]));
+      return (host + path + (q.length ? '?' + q.map(([k, v]) => k + '=' + v).join('&') : '')).toLowerCase();
+    } catch (e) { return String(url || '').toLowerCase(); }
+  }
+  // The copy in `list` that is the same page as `url`, if there is one.
+  function samePage(list, url) {
+    const k = pageKey(url);
+    return list.find(c => (c.pk || pageKey(c.url)) === k) || null;
+  }
+  function addAlt(c, url) {
+    if (!url || url === c.url) return;
+    c.alts = c.alts || [];
+    if (!c.alts.includes(url) && c.alts.length < 20) c.alts.push(url);
+  }
+  // One time (4.14): fold copies already saved that are the same page. The answered one is kept
+  // (or the oldest one if none is answered); a group with two different answers is left alone.
+  const RANK = { stolen: 4, licensed: 3, removed: 2, new: 1 };
+  async function mergeSamePages() {
+    if (await meta.get('pageMerge')) return 0;
+    return navigator.locks.request('pp-page-merge', async () => {
+      if (await meta.get('pageMerge')) return 0;
+      const groups = new Map();
+      for (const c of await allCopies()) {
+        const g = c.photo + '|' + pageKey(c.url);
+        if (!groups.has(g)) groups.set(g, []);
+        groups.get(g).push(c);
+      }
+      const keep = [], drop = [], photos = new Set();
+      for (const list of groups.values()) {
+        if (list.length < 2) continue;
+        const answered = new Set(list.filter(c => c.status !== 'new').map(c => c.status));
+        if (answered.size > 1) continue;
+        list.sort((a, b) => (RANK[b.status] || 0) - (RANK[a.status] || 0) || String(a.firstSeen).localeCompare(String(b.firstSeen)));
+        const k = list[0];
+        k.pk = pageKey(k.url);
+        for (const o of list.slice(1)) {
+          addAlt(k, o.url); for (const u of o.alts || []) addAlt(k, u);
+          k.times = (k.times || 1) + (o.times || 1);
+          if (String(o.lastSeen) > String(k.lastSeen)) k.lastSeen = o.lastSeen;
+          if (!k.thumb && !k.th && o.thumb) k.thumb = o.thumb;
+          drop.push(o.id);
+        }
+        keep.push(k); photos.add(k.photo);
+      }
+      if (keep.length) await DB.putMany('copies', keep);
+      if (drop.length) { await DB.delMany('copies', drop); await recount(photos); backupCopiesSoon(); touch('copies'); }
+      await meta.set('pageMerge', new Date().toISOString());
+      return drop.length;
+    });
   }
   // One time (4.2.2): the photo check could shrink their picture to a dot and compare it over a
   // couple of tiny squares, which showed different photos as "100% lines up". Copies it let in
@@ -1289,6 +1360,16 @@ const FC = (() => {
       await meta.set('dotFix', now);
       return bad.length;
     });
+  }
+  // 4.14: an evidence pack was saved from a capture of this copy (Evidence › Needs a capture).
+  // how: 'pack' (saved through PageProof) or 'hand' (you say it was captured another way).
+  async function markCaptured(id, how = 'pack') {
+    const c = await DB.get('copies', id);
+    if (!c) return null;
+    const before = JSON.parse(JSON.stringify(c));
+    c.packAt = new Date().toISOString(); c.packHow = how;
+    await DB.put('copies', c); backupCopiesSoon(); touch('copies');
+    return async () => { await DB.put('copies', before); touch('copies'); };
   }
   // Mark a photo as searched with nothing found (so it moves down the line).
   async function searchedNothing(pic, by) { return ingest(pic, [], by); }
@@ -1735,7 +1816,7 @@ const FC = (() => {
     if (left.length !== list.length) backupSoon(true);
   }
 
-  return { DB, meta, open, touch, pics, dropDotMatches, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
+  return { DB, meta, open, touch, pics, dropDotMatches, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, setPicked, pickInside, SCAN, applyPendingFlags, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setClients, logWeek, week, weekKey, firstNotes, searchedOnce,
     isPool, hiddenCountries, setHiddenCountries, ownerFor, pathOf, logReport, USE, useOf, riskOf, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
