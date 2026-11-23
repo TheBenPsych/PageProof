@@ -189,7 +189,7 @@ V.home = async () => {
     </div>
   </div>`;
 };
-// Home's Find copies cards: new copies waiting, Keep searching, still online, by client.
+// Home's Find copies cards: new copies waiting, Keep searching, by client.
 async function homeFinds() {
   const d = await FC.drive();
   if (!d.done) return { alerts: '', side: '', main: `<section class="card pad row" style="gap:14px"><span class="ic" style="color:var(--accent)">${ic('find', 26)}</span><div style="flex:1 1 260px"><h2>Search all your clients' photos, all day</h2><span class="muted" style="font-size:14px">Connect the shared Google Drive once and PageProof keeps looking for copies by itself.</span></div><a class="btn primary" href="#connect">Connect your photos</a></section>` };
@@ -197,9 +197,6 @@ async function homeFinds() {
   const hw = await ppHardware();
   const vis = copies.filter(c => !FC.hiddenCopy(c, RS_LISTS.hidden));
   const nNew = vis.filter(c => c.status === 'new').length;
-  const back = vis.filter(c => c.status !== 'removed' && c.online === 'back');
-  const stolen = vis.filter(c => c.status === 'stolen');
-  const up = stolen.filter(c => c.online !== 'gone').length;
   const by = {};
   for (const c of vis) if (c.status === 'new') by[c.client || 'Client unknown'] = (by[c.client || 'Client unknown'] || 0) + 1;
   const top = Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 6);
@@ -209,13 +206,15 @@ async function homeFinds() {
   const ds = await FC.driveState(false);
   let alerts = '';
   if (k.on && !store.fcPause && st && st.state === 'closed' && typeof keepClosedBanner === 'function') alerts += keepClosedBanner();
+  if (typeof keepReopenedBanner === 'function') alerts += await keepReopenedBanner();
+  const clk = (await api.storage.local.get('ppClockOff')).ppClockOff;
+  if (clk && Math.abs(clk.off) > 120 && Date.now() - clk.at < 14 * 86400000) alerts += `<div class="banner bad" role="alert">${ic('help', 22)}<div style="flex:1 1 260px"><b>This computer's clock is ${Math.round(Math.abs(clk.off) / 60)} minutes ${clk.off > 0 ? 'fast' : 'slow'}</b><div style="font-size:13.5px;color:var(--ink)">Times written in your evidence won't match the trusted timestamp. Fix: Windows Settings › Time &amp; language › Date &amp; time › turn on "Set time automatically" and press "Sync now". It's checked again at your next capture.</div></div><a class="btn" href="#health">Details</a></div>`;
   if (store.fcDriveOffline) alerts += `<div class="banner bad" role="alert">${ic('help', 22)}<div style="flex:1 1 260px"><b>Can't reach Google Drive. Searching is paused.</b><div style="font-size:13.5px;color:var(--ink)">Drive for desktop is signed out or not running. It picks up where it left off.</div></div><a class="btn" href="#keep">Keep searching</a></div>`;
   else if (ds === 'prompt') alerts += `<div class="banner warn" role="alert">${ic('help', 22)}<div style="flex:1 1 260px"><b>One click needed: let PageProof read your photos again</b></div><button class="btn primary" data-act="driveallow">Allow</button></div>`;
   // A client reached 100%: every one of its photos searched at least once (4.10).
   const fin = (await FC.firstNotes()).filter(n => n.at > (store.fcFirstSeen || '') && Date.now() - Date.parse(n.at) < 14 * 86400000);
   if (fin.length) alerts += `<div class="banner info" role="status" id="firstDone"><div style="flex:1 1 260px"><b>${fin.length === 1 ? esc(fin[0].name) + ': every photo searched at least once' : fin.length + ' clients now have every photo searched at least once'}</b><div style="font-size:13.5px">${esc(fin.map(n => n.name + ' (' + n.n.toLocaleString() + ' photos)').slice(0, 4).join(', '))}${fin.length > 4 ? ' and more' : ''}. New photos still get their first search when they arrive.</div></div><a class="btn" href="#keep">See progress</a><button class="btn ghost" data-act="firstseen">OK</button></div>`;
   for (const [e, until] of Object.entries(await FC.brokenEngines())) alerts += `<div class="banner bad" role="alert">${ic('help', 22)}<div style="flex:1 1 260px"><b>${FC.ENGINE_NAME[e]} may have stopped working</b><div style="font-size:13.5px;color:var(--ink)">It gave nothing for many photos in a row, so PageProof is resting it until ${new Date(until).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}. Those empty results are not counted against your photos. The other search sites carry on.</div></div><a class="btn" href="#health">See details</a></div>`;
-  if (back.length) alerts += `<div class="banner bad" role="alert"><div style="flex:1 1 260px"><b>${back.length} ${back.length === 1 ? 'copy is' : 'copies are'} back online</b><div style="font-size:13.5px;color:var(--ink)">They had gone, and came back: ${esc([...new Set(back.map(c => c.site))].slice(0, 3).join(', '))}</div></div><a class="btn primary" href="#found?filter=Back%20online">See them</a></div>`;
   const main = `<section class="card pad" style="display:flex;flex-direction:column;gap:12px">
     <div class="row"><h2>New copies by client</h2><a class="btn ghost" style="margin-left:auto" href="#found">Copies found</a>${nNew ? `<a class="btn primary" href="#review">One at a time (${nNew})</a>` : ''}</div>
     ${top.length ? top.map(([n, v]) => `<a href="#found?client=${encodeURIComponent(n)}" class="row" style="gap:10px;color:inherit;text-decoration:none;flex-wrap:nowrap"><span style="width:160px;flex-shrink:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n)}</span><span class="bar" style="flex:1"><i style="width:${v / max * 100}%;background:var(--copy)"></i></span><span class="num" style="width:40px;text-align:right">${v}</span></a>`).join('') : '<p class="muted" style="margin:0">Nothing new to review. Well done.</p>'}
@@ -225,10 +224,7 @@ async function homeFinds() {
     <span class="muted" style="font-size:14px">${k.on && alive ? esc(st.text) : k.on && st && st.state === 'closed' ? 'Stopped: its pinned tab was closed.' : k.on ? 'The search tab is starting.' : 'Turn it on to search all day.'}</span>
     <span class="faint" style="font-size:13px">Today: ${today.searched} ${today.searched === 1 ? 'photo' : 'photos'} searched, ${today.found} new ${today.found === 1 ? 'copy' : 'copies'}</span>
     <a class="btn" href="#keep">Open Keep searching</a></section>
-    ${homeFirst(store.fcFirst, k, hw)}
-    <section class="card pad" style="display:flex;flex-direction:column;gap:8px"><h2>Still online?</h2>
-    <span class="muted" style="font-size:14px">${stolen.length ? `${up} of ${stolen.length} copies you marked stolen are still up. They're checked every week.` : 'Copies you mark stolen are checked every week.'}</span>
-    <div class="row"><a class="btn" href="#found?filter=Stolen">Stolen copies</a><a class="btn ghost" href="#weekly">Weekly summary</a></div></section>`;
+    ${homeFirst(store.fcFirst, k, hw)}`;
   // Most copied photos: your photos that turn up on the most pages.
   const per = new Map();
   for (const c of vis) if (c.status !== 'removed' && c.status !== 'licensed') per.set(c.photo, (per.get(c.photo) || 0) + 1);
@@ -536,6 +532,17 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['A check before you save', 'Pressing Save evidence pack first checks what people forget: an empty case number or name, a page that looks blocked, your photo missing from the capture, or a wrong computer clock. If all is fine it saves straight away; if not, you see a short list with Fix buttons and Save anyway.'],
+  ['Is your photo on the capture?', 'When you capture a page from Copies found, PageProof looks for your client\'s photo on the captured screens and ticks it off ("on screen 2"), or warns you before you save if it isn\'t there.'],
+  ['Blocked page warning', 'If a capture shows a login wall, "page not found", "access denied", a robot check or an empty page, a red box says so straight away, with Capture again.'],
+  ['Computer clock check', 'Each capture compares this computer\'s clock with the trusted timestamp. More than 2 minutes off shows on Home and Is everything working, with the Windows steps to fix it.'],
+  ['Hands off during a capture', 'If you switch tabs or minimise the window mid-capture, PageProof pauses and carries on when you come back (it used to photograph the wrong tab). Scrolling the page mid-capture no longer spoils the joins.'],
+  ['Closed the searching tab by mistake? It comes back', 'The pinned Keep searching tab reopens by itself and carries on, with a note on Home and a Pause button if you meant to stop. Its tab now says "leave open", and asks before closing.'],
+  ['Stolen copies are protected', 'Hiding a site or account, or removing a group of picked copies, never hides or removes copies you marked Stolen.'],
+  ['No more racing through by accident', 'Holding a key down gives one answer, not one after another. After 12 answers in 20 seconds PageProof offers a quick look at them, with Change on each.'],
+  ['Clear notes when ticking folders', 'Ticking a year or quarter folder, or a big group folder, in Connect your photos now explains how it will be used, with Untick it and Yes, use it.'],
+  ['Greyed-out buttons explain themselves', 'Point at a switched-off button to see why it is off and what to do.'],
+  ['"Still online" checks removed', 'PageProof no longer revisits Stolen pages every week to see if they are still up, so no computer time is spent on it. The Still online card, Back online and Gone tags and filters are gone.'],
   ['No more update notices', 'PageProof no longer checks GitHub for new versions or shows an Update button. New versions now come straight from your team lead.'],
   ['Big searches run quietly in the pinned tab', 'A search you start (New search, Today\'s 50, or photos picked in Your photos) now runs in the small pinned PageProof tab, the same one Keep searching uses. No new tab opens in front of you, and you can close the PageProof page while it works. To see how far it is, open All searches (or the search itself). If a search site wants a quick "are you a robot" check, a small notice pops up instead of jumping to that tab. Today\'s 50 at its set time no longer opens a PageProof page either.'],
   ['Followers, verified and account type on social copies', 'PageProof reads each account\'s profile by itself (in a background tab of your browser, one account at a time, once a month): followers, the check mark, and what kind of account it is. The Social media tab gets Verified, Followers, Account type and Country filters, Sort by Most followers, and the Accounts list shows and sorts by them.'],

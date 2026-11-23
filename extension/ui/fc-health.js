@@ -14,7 +14,7 @@ const msText = ms => ms == null ? '' : ms < 1000 ? ms + ' ms' : (ms / 1000).toFi
 // ---------------------------------------------------------------- the lights
 // Each light: [colour, title, what it says, optional button html]
 async function healthLights() {
-  const st = await api.storage.local.get(['fcStatus', 'fcPause', 'fcRest', 'fcLastSearch', 'ppBackupAt', 'fcPerf']);
+  const st = await api.storage.local.get(['fcStatus', 'fcPause', 'fcRest', 'fcLastSearch', 'ppBackupAt', 'fcPerf', 'ppClockOff']);
   const [k, d, ds, docs, eng, rs, skipped, moved] = [await FC.keep(), await FC.drive(), await FC.driveStateSoft(true), await RS_DOCS.state(), await FC.engines(), await RS_JOB.settings(), await FC.skipped(), await FC.meta.get('picsMoved')];
   const perf = st.fcPerf || {}, now = Date.now(), L = [];
   // Google Drive
@@ -23,6 +23,11 @@ async function healthLights() {
   else if (ds === 'prompt') L.push(['warn', 'Google Drive photos', 'Your browser needs one click before PageProof can read the photos (it asks after every restart).', '<button class="btn primary sm" data-act="driveallow">Allow</button>']);
   else if (ds === 'offline') L.push(['bad', 'Google Drive photos', 'Can\'t be reached. Drive for desktop is signed out or not running.', '<button class="btn sm" data-act="driveretry">Try again</button>']);
   else L.push(['bad', 'Google Drive photos', 'The photos folder is no longer linked.', '<a class="btn sm" href="#connect">Connect again</a>']);
+  // 4.15: this computer's clock, compared with the trusted timestamp at the last capture.
+  const ck = st.ppClockOff;
+  if (!ck) L.push(['grey', 'Computer clock', 'Checked at your next capture (against the trusted timestamp).']);
+  else if (Math.abs(ck.off) > 120) L.push(['bad', 'Computer clock', `${Math.round(Math.abs(ck.off) / 60)} minutes ${ck.off > 0 ? 'fast' : 'slow'} at your last capture (${agoText(ck.at)}). Times written in evidence won't match the trusted timestamp. Fix: Windows Settings › Time & language › Date & time › turn on "Set time automatically", then press "Sync now".`]);
+  else L.push(['ok', 'Computer clock', 'Right to within ' + Math.max(1, Math.abs(ck.off)) + ' seconds at your last capture (' + agoText(ck.at) + ').']);
   // Keep searching
   const s = st.fcStatus, alive = s && now - s.beat < 90000;
   if (!d.done) L.push(['grey', 'Keep searching', 'Waiting for the photos to be connected.']);
@@ -159,8 +164,8 @@ function storageCard() {
     <div class="stlist">${STORE_PARTS.map(([k, l, c]) => `<div><i style="background:${c}"></i><span>${l}${{ kept: ' (' + s.kept.n.toLocaleString() + ')', pages: ' (' + s.pages.n.toLocaleString() + ')', prev: ' (' + s.prev.n.toLocaleString() + ')', caps: ' (' + s.caps.n + ' of the 10 most recent)' }[k] || ''}</span><b>${sizeText(s.sizes[k])}</b></div>`).join('')}</div>
     <div style="border-top:1px solid var(--line);padding-top:14px;display:flex;flex-direction:column;gap:10px">
       <h3 style="margin:0;font-size:15px">Free up space</h3>
-      ${opts.map(([k, l, n, b, why]) => `<label class="stopt${n ? '' : ' none'}"><input type="checkbox" data-act="stpick" data-v="${k}"${pick[k] && n ? ' checked' : ''}${n ? '' : ' disabled'}><span><b>${l}</b><small>${n ? n.toLocaleString() + (n === 1 ? ' item, ' : ' items, ') + sizeText(b) + '. ' : 'Nothing to clear. '}${why}</small></span></label>`).join('')}
-      <div class="row" style="gap:12px"><button class="btn primary" data-act="stfree"${chosen.length ? '' : ' disabled'}>${chosen.length ? 'Free up ' + sizeText(total) : 'Tick what to clear'}</button>
+      ${opts.map(([k, l, n, b, why]) => `<label class="stopt${n ? '' : ' none'}"><input type="checkbox" data-act="stpick" data-v="${k}"${pick[k] && n ? ' checked' : ''}${n ? '' : ' disabled data-why="There is nothing of this kind to clear right now."'}><span><b>${l}</b><small>${n ? n.toLocaleString() + (n === 1 ? ' item, ' : ' items, ') + sizeText(b) + '. ' : 'Nothing to clear. '}${why}</small></span></label>`).join('')}
+      <div class="row" style="gap:12px"><button class="btn primary" data-act="stfree"${chosen.length ? '' : ' disabled data-why="Tick at least one kind of saved data above first."'}>${chosen.length ? 'Free up ' + sizeText(total) : 'Tick what to clear'}</button>
         <span class="muted" style="font-size:13.5px;display:inline-flex;align-items:center;gap:6px">${ic('check', 16)} Copies you marked Stolen are never deleted here.</span></div>
     </div>
   </section>`;

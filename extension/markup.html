@@ -21,10 +21,10 @@
 
     <section class="out">
       <h3>Share your marked-up copy</h3>
-      <button id="copy" class="main save" disabled title="Copy the marked-up picture so you can paste it into an email or document (Ctrl+C)">📋 Copy image</button>
+      <button id="copy" class="main save" disabled data-why="Add a picture first (Add an image, or drop one here)." title="Copy the marked-up picture so you can paste it into an email or document (Ctrl+C)">📋 Copy image</button>
       <div class="grid">
-        <button id="png" class="tile small" disabled title="Save the marked-up copy as a picture file">⬇ Save as PNG</button>
-        <button id="pdf" class="tile small" disabled title="Save the marked-up copy as a PDF file">⬇ Save as PDF</button>
+        <button id="png" class="tile small" disabled data-why="Add a picture first (Add an image, or drop one here)." title="Save the marked-up copy as a picture file">⬇ Save as PNG</button>
+        <button id="pdf" class="tile small" disabled data-why="Add a picture first (Add an image, or drop one here)." title="Save the marked-up copy as a PDF file">⬇ Save as PDF</button>
       </div>
     </section>
 
@@ -55,7 +55,7 @@
         <div class="grid">
           <button class="tile small" id="undo" title="Undo (Ctrl+Z)">↶ Undo</button>
           <button class="tile small" id="redo" title="Redo (Ctrl+Y)">↷ Redo</button>
-          <button class="tile small" id="del" title="Delete the selected marking (Delete key)" disabled>🗑 Delete</button>
+          <button class="tile small" id="del" title="Delete the selected marking (Delete key)" disabled data-why="Click a marking on the picture first, then Delete removes it.">🗑 Delete</button>
           <button class="tile small" id="clearAll">✖ Clear all</button>
           <button class="tile small wide" id="clearArea" hidden>↔ Use whole page</button>
         </div>
@@ -91,5 +91,6 @@
   <script src="pdf.js"></script>
   <script src="unzip.js"></script>
   <script src="markup.js"></script>
+<script src="ui/why.js"></script>
 </body>
 </html>

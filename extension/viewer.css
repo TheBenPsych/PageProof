@@ -87,3 +87,17 @@ body.with-side { display: flex; align-items: flex-start; }
   #side .links { margin-top: 0; }
 }
 #side #caseBox label { flex: none; }
+
+/* 4.15: warnings on the capture page (blocked page, clock) and the "Before you save" check */
+.ppwarn{border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.4;background:var(--t-sunk,#1e293b);color:var(--t-ink,#fff);border-left:4px solid var(--t-warn,#B45309);display:flex;flex-direction:column;gap:6px}
+.ppwarn[hidden]{display:none}
+.ppwarn.bad{border-left-color:var(--t-bad,#C81E1E)}
+.ppwarn b{font-size:14px}
+.ppwarn ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.ppwarn li{display:flex;gap:8px;align-items:flex-start}
+.ppwarn li .ok{color:var(--t-ok,#15803D);font-weight:700}
+.ppwarn li .no{color:var(--t-warn,#B45309);font-weight:700}
+.ppwarn .row{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.ppwarn button{font:inherit;font-size:13px;font-weight:600;border-radius:8px;padding:6px 10px;cursor:pointer;border:1px solid var(--t-line,#475569);background:transparent;color:var(--t-ink,#fff)}
+.ppwarn button.go{background:var(--t-accent,#2563EB);border-color:transparent;color:#fff}
+#caseBox input.miss{border-color:var(--t-warn,#B45309);box-shadow:0 0 0 2px color-mix(in srgb,var(--t-warn,#B45309) 30%,transparent)}

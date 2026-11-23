@@ -5,7 +5,7 @@
 //    or on low battery, and gives a search site an hour's rest if it asks "are you a robot".
 //  - Looks for new photos every hour (this and last quarter's folders), every folder once a week
 //    (on a weekday, 8 AM to 6 PM, when the office computers are on).
-//  - Checks once a week that copies marked Stolen are still online, and reads who is behind new sites.
+//  - Reads who is behind new sites.
 const api = globalThis.browser || globalThis.chrome;
 const $ = id => document.getElementById(id);
 const S = { me: null, job: null, tab: null, started: 0, last: 0, skip: new Set(), win: null, cpu: null, busyTicks: 0, ticking: false, allowAsked: 0 };
@@ -114,12 +114,6 @@ async function chores() {
       await FC.applyPendingFlags();
     } else if (now - (m.quick || 0) > 3600000) {
       const r = await FC.scan({ full: false, background: true }); if (!r.busy && !r.state) ch.quick = now;
-    }
-    // Once a week: are the copies marked Stolen still online? A few at a time.
-    if (now - (m.online || 0) > 7 * 86400000) {
-      const due = (await FC.DB.by('copies', 'status', 'stolen')).filter(c => !c.checked || now - Date.parse(c.checked) > 6.5 * 86400000);
-      for (const c of due.slice(0, 5)) await FC.checkOnline(c);
-      if (due.length <= 5) ch.online = now;
     }
     // Who's behind new sites: one site at a time, only sites with copies you still care about.
     if (now - (m.owner || 0) > 120000) {
@@ -340,10 +334,14 @@ $('open').onclick = e => { e.preventDefault(); api.tabs.create({ url: api.runtim
   }
   try { const me = await api.tabs.getCurrent(); S.win = me.windowId; S.me = me.id; } catch (e) { /* not in a tab */ }
   // Close any other Keep searching tab (an old one from before an update).
-  try { const me = api.runtime.getURL('runner.html'); for (const t of await api.tabs.query({})) if (t.id !== S.me && (t.url || '').startsWith(me)) api.tabs.remove(t.id).catch(() => {}); } catch (e) { /* no tab list */ }
+  try { const me = api.runtime.getURL('runner.html'); const others = (await api.tabs.query({})).filter(t => t.id !== S.me && (t.url || '').startsWith(me)); if (others.length) { await api.storage.local.set({ ppRunnerQuit: Date.now() }); await new Promise(r => setTimeout(r, 300)); } for (const t of others) if (t.id !== S.me && (t.url || '').startsWith(me)) api.tabs.remove(t.id).catch(() => {}); } catch (e) { /* no tab list */ }
   if (!(await api.storage.local.get('ppRunVer')).ppRunVer) await api.storage.local.set({ ppRunVer: MY_VER });
   await RS_LISTS.load().catch(() => {});
   FC.movePics().catch(() => {});
+  // 4.15: closing this tab asks first ("Leave site?"). The browser only shows that box after
+  // someone has clicked in the tab. PageProof itself closing or reloading it never asks.
+  addEventListener('beforeunload', e => { if (!reloading && !S.quit) { e.preventDefault(); e.returnValue = ''; } });
+  api.storage.onChanged.addListener(ch => { if (ch.ppRunnerQuit) S.quit = true; });
   tick();
   setInterval(tick, 30000);
   bgNext();

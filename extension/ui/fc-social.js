@@ -173,7 +173,7 @@ function acctAbout(c) {
   return `<section class="dsec" id="acctabout"><div class="row" style="justify-content:space-between;gap:8px"><div class="dsh" style="margin:0">About this account</div><span class="faint" style="font-size:12px">${i.ok ? 'Read ' + esc(shortDate(i.at)) : 'Couldn\'t read the profile'}${i.failAt && i.ok ? ' · last try failed' : ''}</span></div>
     ${i.ok ? `<dl class="facts">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd style="white-space:pre-line;overflow-wrap:anywhere">${esc(v)}</dd>`).join('')}</dl>` : `<span class="faint" style="font-size:13px">${esc(platOf(c).name)} didn't show the profile. PageProof tries again by itself in 3 days.</span>`}
     ${look.length ? `<div class="row" style="gap:6px;flex-wrap:wrap"><span class="muted" style="font-size:12.5px">Who's behind ${esc(i.company)}:</span>${look.map(([l, u]) => `<a class="chip" href="${safeUrl(u)}" target="_blank" rel="noreferrer">${esc(l)}</a>`).join('')}</div>` : ''}
-    <div><button class="btn ghost sm" data-act="readinfo" data-v="${esc(c.id)}"${busy ? ' disabled' : ''}>${busy ? 'Reading…' : 'Read again now'}</button></div></section>`;
+    <div><button class="btn ghost sm" data-act="readinfo" data-v="${esc(c.id)}"${busy ? ' disabled data-why="Already reading this account. Wait a moment."' : ''}>${busy ? 'Reading…' : 'Read again now'}</button></div></section>`;
 }
 
 // ---------------------------------------------------------------- finding the account

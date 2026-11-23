@@ -67,13 +67,16 @@ const PP_TSA = (() => {
     try {
       const ctl = new AbortController();
       const timer = setTimeout(() => ctl.abort(), 25000);
+      const t0 = Date.now();
       const res = await fetch(svc.url, { method: 'POST', body: query, signal: ctl.signal,
         headers: { 'Content-Type': 'application/timestamp-query' } });
       clearTimeout(timer);
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const reply = new Uint8Array(await res.arrayBuffer());
+      const t1 = Date.now();
       const { time } = readReply(reply);
-      return { service: svc.name, file: svc.file || svc.name.toLowerCase(), url: svc.url, time, query, reply };
+      // askedAt: this computer's clock halfway through the request, to compare with the signed time.
+      return { service: svc.name, file: svc.file || svc.name.toLowerCase(), url: svc.url, time, query, reply, askedAt: Math.round((t0 + t1) / 2), rtt: t1 - t0 };
     } catch (e) {
       return { service: svc.name, url: svc.url, error: String((e && e.message) || e) };
     }

@@ -96,12 +96,9 @@ async function readFC() {
 }
 const siteHidden = c => FC.hiddenCopy(c, RS_LISTS.hidden) || (PEND_ARR.length > 0 && FC.hiddenCopy(c, PEND_ARR));
 const repeatTag = c => c.repeat && c.status === 'new' ? `<span class="tag bad" style="font-size:11.5px" title="You already marked ${c.repeat} ${c.repeat === 1 ? 'copy' : 'copies'} on ${esc(c.repeatWho)} as Stolen">${c.repeat} stolen before</span>` : '';
-const actScore = c => (c.status === 'new' || c.status === 'stolen' ? 40 : 0) + (c.repeat && c.status === 'new' ? 30 : 0) + (c.online === 'back' ? 45 : c.online === 'up' ? 20 : 0) + (c.use === 'shop' ? 20 : 0) + (c.credit === 'removed' ? 12 : 0) + (c.risk.level === 'sus' ? -6 : 0) + (c.pct || 0) / 10;
-const onlineText = c => c.online === 'back' ? 'Back online' + (c.backAt ? ' ' + shortDate(c.backAt) : '') : c.online === 'gone' ? 'Gone' + (c.goneAt ? ' since ' + shortDate(c.goneAt) : '') : 'Still up';
+const actScore = c => (c.status === 'new' || c.status === 'stolen' ? 40 : 0) + (c.repeat && c.status === 'new' ? 30 : 0) + (c.status !== 'removed' ? 20 : 0) + (c.use === 'shop' ? 20 : 0) + (c.credit === 'removed' ? 12 : 0) + (c.risk.level === 'sus' ? -6 : 0) + (c.pct || 0) / 10;
 const tagFor = c => `<span class="tag ${STATUS[c.status][1]}">${STATUS[c.status][0]}</span>`;
 const lineBar = p => p == null || p < 0 ? '<span class="faint" style="font-size:12.5px">—</span>' : `<div class="row" style="gap:8px;flex-wrap:nowrap"><span class="num" style="width:34px;text-align:right;font-weight:600">${p}%</span><span class="bar" style="width:46px;flex-shrink:0"><i style="width:${p}%;background:${p >= 80 ? 'var(--bad)' : p >= 60 ? 'var(--warn)' : 'var(--faint)'}"></i></span></div>`;
-const onDot = c => c.status === 'removed' ? '<span class="faint">—</span>' : c.online === 'back' ? '<span class="tag bad" style="font-size:12px" data-gloss="Back online">Back!</span>'
-  : `<span class="row" style="gap:6px;flex-wrap:nowrap;font-size:13px;color:var(--${c.online === 'gone' ? 'warn' : 'muted'})" data-gloss="${c.online === 'gone' ? 'Gone' : 'Still online'}"><span class="dot" style="color:var(--${c.online === 'gone' ? 'warn' : 'ok'})"></span>${c.online === 'gone' ? 'Gone' : 'Up'}</span>`;
 function flagsFor(c) {
   const f = [];
   if (c.risk.level === 'sus') f.push(['sus', 'bad', 'Suspicious site: ' + c.risk.why.join(', ')]);
@@ -170,9 +167,6 @@ function passStatus(c, f = state.fFilter) {
   if (f === 'Removed') return c.status === 'removed';
   if (c.status === 'removed') return false;
   if (f === 'All') return true;
-  if (f === 'Still online') return c.online !== 'gone';
-  if (f === 'Back online') return c.online === 'back';
-  if (f === 'Gone') return c.online === 'gone';
   return STATUS[c.status][0] === f;
 }
 // Sister sites: after you mark a copy stolen, other new copies of the same photo (or the same
@@ -297,8 +291,6 @@ function signals(c) {
   else if (c.risk.level === 'watch') s.push(['warn', 'warn', 'Worth a look' + (c.risk.why.length ? ': ' + c.risk.why.join(', ') : '')]);
   if (c.credit === 'removed') s.push(['copy', 'nocredit', 'Credit removed: your client\'s photo has a copyright line in its hidden data and their copy does not']);
   if (c.repeat && c.status === 'new' && !isSoc(c)) s.push(['bad', 'repeat', `Repeat offender: you already marked ${c.repeat} ${c.repeat === 1 ? 'copy' : 'copies'} on ${c.repeatWho} as Stolen`]);
-  if (c.status !== 'removed' && c.online === 'back') s.push(['bad', 'back', 'Back online: it was gone and is up again']);
-  if (c.status !== 'removed' && c.online === 'gone') s.push(['grey', 'gone', 'Gone: the page no longer shows the photo']);
   if (c.use === 'shop') s.push(['ok', 'shop', 'Selling something: a shop page, product listing or ad']);
   return s;
 }
@@ -380,9 +372,6 @@ async function drawer(list) {
   if (soc && !c.acct) look.push(['warn', 'who', 'Account not found yet', 'The link doesn\'t show who posted it. Set it in the Account tab.', 'dtab', 'Account', 'acct']);
   if (soc && c.repeat && c.status === 'new') look.push(['bad', 'repeat', `Known account: marked stolen ${c.repeat === 1 ? 'once' : c.repeat + ' times'} before`, `You marked ${c.acct.handle}'s posts stolen before${c.repeatAt && c.repeatAt.length ? ' (' + c.repeatAt.slice(-3).map(shortDate).join(', ') + ')' : ''}.`, 'dtab', 'Account', 'acct']);
   else if (c.repeat && c.status === 'new') look.push(['bad', 'repeat', `Repeat offender (${c.repeat} stolen before)`, `You already marked copies on ${c.repeatWho} as Stolen.`]);
-  if (c.status !== 'removed' && c.online === 'back') look.push(['bad', 'back', 'Back online', 'It was gone and is up again.']);
-  else if (c.status !== 'removed' && c.online === 'gone') look.push(['grey', 'gone', 'Gone', 'The page no longer shows the photo.' + (c.onlineWhy ? ' ' + c.onlineWhy : '')]);
-  else fine.push('Still online');
   for (const h of hits.filter(h => h.lvl === 'stop' || h.lvl === 'warn')) look.push([h.lvl === 'stop' ? 'bad' : 'warn', 'warn', 'Firm rule: ' + PP_CHECKS.LVL[h.lvl][0], h.text, 'dtab', 'Claim', 'claim']);
   if (ck.dmg && ck.dmg.lvl === 'warn') look.push(['warn', 'clock', ck.dmg.title, ck.dmg.text, 'dtab', 'Claim', 'claim']);
   else if (ck.dmg && ck.dmg.lvl === 'bad') look.push(['bad', 'clock', ck.dmg.title, ck.dmg.text, 'dtab', 'Claim', 'claim']);
@@ -403,7 +392,7 @@ async function drawer(list) {
     : `<div class="pair"><div class="frame ours"><img data-our="${esc(c.photo)}" src="${ourSrc}" alt="Your client's photo"><span class="lab">Your client's</span></div><div class="frame theirs"><img src="${theirSrc}" alt="Their copy" referrerpolicy="no-referrer"><span class="lab">Theirs</span></div></div>`;
   if (!FCD) await loadFC();        // something cleared it while the panel was being read
   return `<aside class="drawer calm" aria-label="Copy details" id="drawer">
-  <div class="dhead"><button class="btn sm icon" data-act="dstep" data-v="-1" aria-label="Previous copy"${idx > 0 ? '' : ' disabled'}>‹</button><button class="btn sm icon" data-act="dstep" data-v="1" aria-label="Next copy"${idx >= 0 && idx < list.length - 1 ? '' : ' disabled'}>›</button><span class="muted num" style="font-size:13px">${idx >= 0 ? `${idx + 1} of ${list.length}` : ''}</span><span style="flex:1"></span>${tagFor(c)}<button class="btn sm icon" data-act="closedrawer" aria-label="Close">✕</button></div>
+  <div class="dhead"><button class="btn sm icon" data-act="dstep" data-v="-1" aria-label="Previous copy"${idx > 0 ? '' : ' disabled data-why="This is the first copy in the list."'}>‹</button><button class="btn sm icon" data-act="dstep" data-v="1" aria-label="Next copy"${idx >= 0 && idx < list.length - 1 ? '' : ' disabled data-why="This is the last copy in the list."'}>›</button><span class="muted num" style="font-size:13px">${idx >= 0 ? `${idx + 1} of ${list.length}` : ''}</span><span style="flex:1"></span>${tagFor(c)}<button class="btn sm icon" data-act="closedrawer" aria-label="Close">✕</button></div>
   <div class="dscroll" id="dscroll">
   <div class="dsite">${soc ? `<div class="row" style="gap:10px;flex-wrap:nowrap">${platBadge(c, 30)}<div style="min-width:0"><h2 style="overflow-wrap:anywhere">${c.acct ? esc(c.acct.handle) : '<span style="color:var(--warn)">Account not found yet</span>'}</h2><div class="muted" style="font-size:12.5px">${esc(postWord(c))}${c.acct ? ` · <a href="${safeUrl(c.acct.url)}" target="_blank" rel="noreferrer">Open account ${ic('ext', 12)}</a>` : ` · <a href="#" data-act="dtab" data-v="acct">Set account</a>`}</div></div></div>` : `<h2>${esc(c.site)}</h2>`}<a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a></div>
   <div class="dview">${viewer}</div>
@@ -419,7 +408,6 @@ async function drawer(list) {
       <dt>Photo</dt><dd>${esc(c.photoName)}${p && p.w ? `<br><span class="muted" style="font-size:13px">${p.w} × ${p.h}</span>` : ''}</dd>
       <dt>How it's used</dt><dd>${esc(FC.USE[c.use][0])}<br><span class="muted" style="font-size:13px">${esc(FC.USE[c.use][1])}</span></dd>
       <dt>Seen</dt><dd>${shortDate(c.firstSeen)}${c.lastSeen && c.lastSeen !== c.firstSeen ? ' → ' + shortDate(c.lastSeen) : ''}, ${c.times > 1 ? c.times + ' times' : 'once'}${c.by ? `<br><span class="muted" style="font-size:13px">First found by ${esc(c.by)}${c.engines && c.engines.length ? ' on ' + c.engines.map(e => ({ google: 'Google Lens', yandex: 'Yandex', bing: 'Bing' }[e] || esc(e))).join(', ') : ''}</span>` : ''}</dd>
-      <dt>Online now</dt><dd>${onlineText(c)}${c.checked ? `<br><span class="muted" style="font-size:13px">Checked ${shortDate(c.checked)}${c.onlineWhy ? ': ' + esc(c.onlineWhy) : ''}</span>` : ''} <button class="btn ghost sm" data-act="checkonline">Check now</button></dd>
       ${doubles.length > 1 ? `<dt>Double</dt><dd><div style="border:1px solid var(--accent);background:var(--accent-soft);border-radius:10px;padding:8px 10px;font-size:13.5px"><b>You have ${doubles.length} versions of this photo</b>${doubles.map(d => `<br>${esc(d.name)}${d.w ? ' (' + d.w + ' × ' + d.h + ')' : ''}${d.id === p.id ? ' · <b>this one</b>' : ''}`).join('')}<br><b style="color:var(--copy)">Note them all in the claim.</b></div></dd>` : ''}
     </dl>
     ${keptBoxHtml(c)}
@@ -486,7 +474,6 @@ const flagWords = c => {
   if (c.use === 'shop') f.push(['ok', 'Selling something', 'A shop page, product listing or ad']);
   return f.map(([col, t, why]) => `<span class="tag ${col}" title="${esc(why)}">${t}</span>`).join('');
 };
-const onlineTag = c => c.status === 'removed' ? '' : c.online === 'back' ? '<span class="tag bad" data-gloss="Back online">Back online</span>' : c.online === 'gone' ? '<span class="tag grey" data-gloss="Gone">Gone</span>' : '';
 // The row's lined-up columns (4.7). You pick which show (Columns menu); narrow windows drop the
 // least needed ones by themselves.
 const FCOLS = [['pct', 'Lines up'], ['client', 'Client'], ['dmg', 'Damages'], ['use', 'How it\'s used'], ['country', 'Country'], ['found', 'Found']];
@@ -657,7 +644,6 @@ V.found = async () => {
     <div class="qfrow" aria-label="Quick filters"><span class="qflabel">Quick filters</span>
       ${qf('Found today', newL.filter(c => new Date(c.firstSeen).toDateString() === new Date().toDateString()).length, state.fWhen === 'today', 'ftoday', '1', 'accent')}
       ${social ? qf('Known stolen accounts', newL.filter(c => c.repeat > 0).length, state.fRepeat, 'qtoggle', 'repeat', 'bad') : qf('Suspicious sites', newL.filter(c => c.risk.level === 'sus').length, state.fRisk === 'sus', 'qtoggle', 'sus', 'bad')}
-      ${qf('Back online', live.filter(c => c.online === 'back').length, state.fFilter === 'Back online', 'qtoggle', 'back', 'copy')}
       ${qf('Published in the last 3 months', newL.filter(fresh).length, state.fFresh, 'qtoggle', 'fresh', 'ok')}
     </div>
     ${social ? platChips(all.filter(c => passMore(c) && passStatus(c) && passMainNoPlat(c))) : ''}
@@ -668,13 +654,11 @@ V.found = async () => {
       ${chip('Selling something', live.filter(c => c.use === 'shop').length, state.fShop, 'qtoggle', 'shop', 'ok')}
       ${chip('Credit removed', live.filter(c => c.credit === 'removed').length, state.fCredit === 'removed', 'qtoggle', 'credit', 'copy')}
       ${chip('Copied onto their site', live.filter(c => c.use === 'copied').length, state.fUse === 'copied', 'qtoggle', 'copied')}
-      ${chip('Shown from another site', live.filter(c => c.use === 'embedded').length, state.fUse === 'embedded', 'qtoggle', 'embedded')}
-      ${chip('Gone offline', live.filter(c => c.online === 'gone').length, state.fFilter === 'Gone', 'qtoggle', 'gone')}</div>
+      ${chip('Shown from another site', live.filter(c => c.use === 'embedded').length, state.fUse === 'embedded', 'qtoggle', 'embedded')}</div>
       <details class="keyfold"><summary>What do the icons mean?</summary><section class="key" aria-label="What the icons mean">
         <div class="kitem"><span class="tag bad">${ic('warn', 13)}</span><div><span><b>Suspicious site</b> (red) or <b>Worth a look</b> (yellow): young site, hidden owner, odd ending like .xyz, or a name copycat sites use.</span></div></div>
         <div class="kitem"><span class="tag copy">${ic('nocredit', 13)}</span><div><span><b>Credit removed</b>: your client's photo has a copyright line in its hidden data. Their copy doesn't.</span></div></div>
         <div class="kitem"><span class="tag bad">${ic('repeat', 13)}</span><div><span><b>Repeat offender</b>: you already marked copies on this site, or another site of the same owner, as Stolen.</span></div></div>
-        <div class="kitem"><span class="tag bad">${ic('back', 13)}</span><div><span><b>Back online</b> after it was gone. <span class="tag grey">${ic('gone', 13)}</span> <b>Gone</b>: the photo is no longer on the page.</span></div></div>
         <div class="kitem"><span class="tag ok">${ic('shop', 13)}</span><div><span><b>Selling something</b>: a shop page, product listing or ad.</span></div></div>
         <div class="kitem"><span class="tag warn">${ic('maybe', 13)}</span><div><span><b>Maybe</b>: the checker is not sure it is the same photo.</span></div></div>
         <div class="kitem"><span class="tag ok">Statutory</span><div><span><b>Damages column</b>: Statutory (registered), Register by a date (no number yet, window still open), Actual only (window closed). Empty when the file name has no date.</span></div></div>
@@ -685,7 +669,6 @@ V.found = async () => {
       ${sel('fUse', 'Used as', [['Any', 'Any'], ...Object.entries(FC.USE).map(([k, v]) => [k, v[0]])], state.fUse)}
       ${sel('fRisk', 'Site check', [['Any', 'Any'], ['ok', 'Looks normal'], ['watch', 'Worth a look'], ['sus', 'Suspicious']], state.fRisk)}
       ${sel('fCredit', 'Credit', [['Any', 'Any'], ['kept', 'Credits your client'], ['removed', 'Credit removed'], ['', 'Not checked yet']], state.fCredit)}
-      ${sel('fFilter', 'Online', [[['Still online', 'Back online', 'Gone'].includes(state.fFilter) ? 'All' : state.fFilter, 'Any'], ['Still online', 'Still online'], ['Back online', 'Back online'], ['Gone', 'Gone']], state.fFilter)}
       <div class="countries">
         <span style="font-weight:600">Countries</span>
         ${FCD.countries.length ? `<span class="faint">Hiding</span>${FCD.countries.map(c => `<button class="chip" style="cursor:pointer;text-decoration:line-through;text-decoration-color:var(--faint)" data-act="showcountry" data-v="${esc(c)}" title="Show ${esc(c)} again">${esc(c)} <span style="text-decoration:none">↺</span></button>`).join('')}` : '<span class="faint">Showing every country</span>'}
@@ -798,8 +781,43 @@ async function answerCopies(ids, status, label) {
   }
   const h = { label, undo: async () => { await undo(); if (undoLic) await undoLic(); }, open: ids.length === 1 ? ids[0] : '' };
   HIST.push(h);
+  if (status !== 'new') fastCheck(ids, status);
   return h;
 }
+// 4.15 (Ben's idea 10): racing through answers can hit the wrong copy. After 12 answers in 20
+// seconds, offer one quick look at them (at most once every 3 minutes). Nothing is changed by itself.
+const FAST = { list: [], shownAt: 0 };
+function fastCheck(ids, status) {
+  const now = Date.now();
+  for (const id of ids.slice(0, 1)) FAST.list.push({ id, status, at: now });
+  FAST.list = FAST.list.filter(x => now - x.at < 60000).slice(-40);
+  const burst = FAST.list.filter(x => now - x.at < 20000);
+  if (burst.length < 12 || now - FAST.shownAt < 180000) return;
+  FAST.shownAt = now;
+  const ask = document.getElementById('fastAsk') || Object.assign(document.createElement('div'), { id: 'fastAsk' });
+  ask.className = 'banner info fastask';
+  ask.setAttribute('role', 'status');
+  ask.innerHTML = `<div style="flex:1 1 240px"><b>That was quick: ${burst.length} answers in 20 seconds</b><div style="font-size:13.5px">Want a quick look at them before moving on?</div></div><button class="btn primary" data-act="fastlook">Look at the last ${burst.length}</button><button class="btn ghost" data-act="fastok">They're fine</button>`;
+  ask.dataset.ids = JSON.stringify(burst.map(x => x.id));
+  document.body.appendChild(ask);
+}
+Object.assign(ACTS, {
+  fastok: () => { const a = document.getElementById('fastAsk'); if (a) a.remove(); },
+  fastlook: async () => {
+    const a = document.getElementById('fastAsk'); const ids = a ? JSON.parse(a.dataset.ids || '[]') : []; if (a) a.remove();
+    const all = await FC.DB.getMany('copies', ids);
+    const d = document.createElement('dialog');
+    d.className = 'pp-ask fastlook';
+    d.style.cssText = 'border:1px solid var(--line);border-radius:16px;padding:22px;background:var(--surface);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.35);width:min(640px,92vw)';
+    const rows = all.filter(Boolean).map(c => `<div class="row" style="gap:10px;flex-wrap:nowrap;border-top:1px solid var(--line);padding:8px 0"><span class="tag ${STATUS[c.status] ? STATUS[c.status][1] : 'grey'}" style="flex-shrink:0">${STATUS[c.status] ? STATUS[c.status][0] : esc(c.status)}</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.url)}"><b>${esc(c.site)}</b> <span class="muted">${esc(c.url.replace(/^https?:\/\/(www\.)?/, ''))}</span></span><button class="btn sm" type="button" data-fopen="${esc(c.id)}">Change</button></div>`).join('');
+    d.innerHTML = `<form method="dialog" style="display:flex;flex-direction:column;gap:6px"><b style="font-size:18px">Your last ${ids.length} answers</b><span class="muted" style="font-size:13.5px">Newest last. Press Change to open one and give it a different answer.</span><div style="max-height:60vh;overflow:auto">${rows}</div><div class="row" style="justify-content:flex-end"><button class="btn primary" value="ok">They're all right</button></div></form>`;
+    document.body.appendChild(d);
+    d.addEventListener('keydown', e => e.stopPropagation());
+    d.addEventListener('click', e => { const b = e.target.closest('[data-fopen]'); if (!b) return; const id = b.dataset.fopen; d.close(); state.fFilter = 'All'; state.open = id; if (route() !== 'found') location.hash = '#found'; render(true); });
+    d.addEventListener('close', () => d.remove());
+    d.showModal();
+  },
+});
 // "Remove" teaches the photo check quietly: the numbers are kept to tune it later.
 async function learn(c) {
   try {
@@ -862,7 +880,8 @@ async function hideSite(entry, label) {
   }
   if (!state.recentHides.includes(e)) state.recentHides.push(e);
   HIST.push({ label: (label || entry) + ' hidden', undo: async () => { await RS_LISTS.load(); await RS_LISTS.remove('hidden', e); }, open: was || undefined });
-  toastUndo(entry + ' hidden. It never shows again in any search.');
+  const keptN = cs.filter(c => c.status === 'stolen' && RS_SITE.entryFor(c.site, c.url, [e])).length;
+  toastUndo(entry + ' hidden. It never shows again in any search.' + (keptN ? ' ' + plural(keptN, 'copy', 'copies') + ' you marked Stolen there stay' + (keptN === 1 ? 's' : '') + ' in your list.' : ''));
 }
 
 // What the Evidence report says about the use: dates, damages, credit line, signs it was on purpose.
@@ -903,9 +922,14 @@ Object.assign(ACTS, {
   pick: v => { const i = state.picked.indexOf(v); if (i >= 0) state.picked.splice(i, 1); else state.picked.push(v); render(true); },
   clearpick: () => { state.picked = []; render(true); },
   bulk: async v => {
-    const ids = state.picked.slice();
+    let ids = state.picked.slice();
     if (!ids.length) return;
     state.picked = [];
+    // 4.15: Remove never touches copies you marked Stolen (they keep their evidence).
+    let kept = 0;
+    if (v === 'removed' && FCD) { const st = new Set(FCD.copies.filter(c => c.status === 'stolen').map(c => c.id)); kept = ids.filter(id => st.has(id)).length; ids = ids.filter(id => !st.has(id)); }
+    if (!ids.length) { toast(plural(kept, 'Stolen copy', 'Stolen copies') + ' kept. Stolen copies are never removed in a group; open one to change its answer.'); render(true); return; }
+    if (kept) setTimeout(() => toast(plural(kept, 'Stolen copy', 'Stolen copies') + ' left as they are. Only the other ' + plural(ids.length, 'copy', 'copies') + ' were removed.', undoLast), 2700);
     markNow(ids, v);
     await inTurn(async () => {
       await answerCopies(ids, v, plural(ids.length, 'copy', 'copies') + ' ' + VERB[v]);
@@ -948,8 +972,7 @@ Object.assign(ACTS, {
   fset: v => { const [k, val] = v.split('|'); state[k] = val; state.more = 250; render(true); },
   // Quick filter chips: click to turn on, click again to turn off.
   qtoggle: v => {
-    if (v === 'back' || v === 'gone') { const f = v === 'back' ? 'Back online' : 'Gone'; state.fFilter = state.fFilter === f ? 'New' : f; }
-    else if (v === 'repeat') { state.fRepeat = !state.fRepeat; if (state.fRepeat) state.fFilter = 'New'; }
+    if (v === 'repeat') { state.fRepeat = !state.fRepeat; if (state.fRepeat) state.fFilter = 'New'; }
     else if (v === 'sus') state.fRisk = state.fRisk === 'sus' ? 'Any' : 'sus';
     else if (v === 'fresh') { state.fFresh = !state.fFresh; if (state.fFresh) state.fFilter = 'New'; }
     else if (v === 'shop') state.fShop = !state.fShop;
@@ -1081,13 +1104,6 @@ Object.assign(ACTS, {
     if (!i || !(await FC.setReg(v, i.value))) return toast('Type a number like VA 1-234-567 or 1-12345678901.');
     toast('Saved for the whole folder.'); render(true);
   },
-  checkonline: async () => {
-    const c = await FC.DB.get('copies', state.open);
-    if (!c) return;
-    toast('Checking ' + c.site + '…');
-    const r = await FC.checkOnline(c);
-    dropFC(); toast(r.online === 'gone' ? 'Gone: ' + (r.onlineWhy || 'the photo is not on the page') : r.online === 'back' ? 'Back online!' : 'Still online.'); render(true);
-  },
   checkcredit: async () => {
     const c = await FC.DB.get('copies', state.open);
     const p = c && await FC.DB.get('photos', c.photo);
@@ -1161,8 +1177,8 @@ Object.assign(ACTS, {
   gowho: v => { const c = FCD.copies.find(x => x.id === v); if (c) { state.who = { site: c.site, url: c.url, copy: c.id }; location.hash = 'who'; } },
   fcsv: async () => {
     await loadFC();
-    const head = ['Status', 'Online', 'Client', 'Photo', 'Site', 'Page', 'Lines up %', 'Match', 'Used as', 'Site check', 'Country', 'First seen', 'Last seen', 'Times seen', 'Found by'];
-    const rows = FCD.copies.map(c => [STATUS[c.status][0], onlineText(c), c.clientName, c.photoName, c.site, c.url, c.pct == null ? '' : c.pct, c.match, FC.USE[c.use][0], RISK[c.risk.level][0], c.country || '', (c.firstSeen || '').slice(0, 10), (c.lastSeen || '').slice(0, 10), c.times || 1, c.by || '']);
+    const head = ['Status', 'Client', 'Photo', 'Site', 'Page', 'Lines up %', 'Match', 'Used as', 'Site check', 'Country', 'First seen', 'Last seen', 'Times seen', 'Found by'];
+    const rows = FCD.copies.map(c => [STATUS[c.status][0], c.clientName, c.photoName, c.site, c.url, c.pct == null ? '' : c.pct, c.match, FC.USE[c.use][0], RISK[c.risk.level][0], c.country || '', (c.firstSeen || '').slice(0, 10), (c.lastSeen || '').slice(0, 10), c.times || 1, c.by || '']);
     // Spreadsheet programs run cells that start with = + - @ as formulas, so those get a ' first.
     const q = v => { let t = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; };
     const a = document.createElement('a');
@@ -1188,7 +1204,22 @@ async function matchReport(c, caseNo) {
 // Capture a copy's page. PageProof remembers which copy it was, so when the evidence pack (zip)
 // is saved on the capture page, the match report PDF is saved next to it as its own file (4.5).
 async function captureCopy(c) {
-  await api.storage.local.set({ fcCapFor: { url: c.url, id: c.id, at: Date.now() } });
+  // 4.15: also a 640-pixel copy of your client's photo, so the capture page can check that the
+  // photo really is on the captured page (from Drive, at most 4 seconds; else the small preview).
+  let pic = '';
+  try {
+    const p = await FC.DB.get('photos', c.photo);
+    const file = p ? await RS_LATE(FC.fileFor(p).catch(() => null), 4000, null) : null;
+    if (file) {
+      const b = await createImageBitmap(file); const k = Math.min(1, 640 / Math.max(b.width, b.height));
+      const cv = new OffscreenCanvas(Math.max(1, Math.round(b.width * k)), Math.max(1, Math.round(b.height * k)));
+      cv.getContext('2d').drawImage(b, 0, 0, cv.width, cv.height); b.close && b.close();
+      const blob = await cv.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
+      pic = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
+    }
+    if (!pic && p) pic = await FC.thumbOf(p);
+  } catch (e) { /* the check is skipped */ }
+  await api.storage.local.set({ fcCapFor: { url: c.url, id: c.id, at: Date.now(), pic } });
   await api.runtime.sendMessage({ type: 'captureUrl', url: c.url }).catch(() => {});
   toast('Opening ' + c.site + ' to capture it. When you save the evidence pack, the match report PDF is saved too.');
 }
@@ -1250,12 +1281,12 @@ V.review = async () => {
   return `${hd}
   <div class="rvtop">${tabs}
     <div class="rvprog" aria-label="Review progress"><div class="bar"><i style="width:${Math.max(2, (at - 1) / state.rvStart * 100)}%"></i></div><b class="num">${at.toLocaleString()} of ${state.rvStart.toLocaleString()}</b>${c.skipped ? '<span class="faint">skipped before</span>' : ''}</div>
-    <button class="btn" data-act="undo"${HIST.length ? ` title="Undo: ${esc(HIST[HIST.length - 1].label)}"` : ' disabled'}>${ic('undo', 16)} Undo <span class="kbd">U</span></button>
+    <button class="btn" data-act="undo"${HIST.length ? ` title="Undo: ${esc(HIST[HIST.length - 1].label)}"` : ' disabled data-why="Nothing to undo yet. After you answer a copy, Undo puts it back."'}>${ic('undo', 16)} Undo <span class="kbd">U</span></button>
     <div class="seg" role="radiogroup" aria-label="View">${[['side', 'Side by side'], ['swipe', 'Swipe']].map(([k, l]) => `<button role="radio" aria-checked="${state.cmpMode === k}" class="${state.cmpMode === k ? 'on' : ''}" data-act="cmode" data-v="${k}">${l}</button>`).join('')}</div></div>
   <div class="split rv">
     <section class="card pad review-cap" style="flex:3 1 560px;display:flex;flex-direction:column;gap:14px" aria-label="Your client's photo and their copy">
       ${pics}
-      <div class="rvsite"><div class="l1">${isSoc(c) ? `${platBadge(c, 26)}<h2>${c.acct ? esc(c.acct.handle) : '<span style="color:var(--warn)">Account not found yet</span>'}</h2><span class="muted">${esc(postWord(c))}</span>` : `<h2>${esc(c.site)}</h2>`}<span class="tag ${c.match === 'same' ? 'bad' : 'warn'}">${c.match === 'same' ? 'Same photo' : 'Maybe'}${c.pct >= 0 && c.pct != null ? ' · ' + c.pct + '% lines up' : ''}</span>${repeatTag(c)}${flagWords(c)}${onlineTag(c)}</div>
+      <div class="rvsite"><div class="l1">${isSoc(c) ? `${platBadge(c, 26)}<h2>${c.acct ? esc(c.acct.handle) : '<span style="color:var(--warn)">Account not found yet</span>'}</h2><span class="muted">${esc(postWord(c))}</span>` : `<h2>${esc(c.site)}</h2>`}<span class="tag ${c.match === 'same' ? 'bad' : 'warn'}">${c.match === 'same' ? 'Same photo' : 'Maybe'}${c.pct >= 0 && c.pct != null ? ' · ' + c.pct + '% lines up' : ''}</span>${repeatTag(c)}${flagWords(c)}</div>
         <a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" title="Open this page in a new tab"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>
         <div class="l3">${esc(c.photoName)} · ${esc(c.clientName || 'Client unknown')} · ${esc(FC.USE[c.use][0])} · found ${shortDate(c.firstSeen).toLowerCase()}</div></div>
       ${c.repeat ? `<div class="banner warn" style="padding:8px 12px;font-size:13.5px"><span><b>${isSoc(c) ? 'Known account.' : 'Repeat offender.'}</b> You already marked ${plural(c.repeat, 'copy', 'copies')} ${isSoc(c) ? 'by' : 'on'} ${esc(c.repeatWho)} as Stolen. These come first.</span></div>` : ''}
@@ -1329,6 +1360,8 @@ document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const map = { y: 'stolen', l: 'licensed', n: 'removed', Delete: 'removed', ArrowRight: 'skip' };
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  // 4.15: holding a key down gives ONE answer, not one copy after another.
+  if (e.repeat && (map[k] || k === 'u')) { e.preventDefault(); return; }
   if (k === 'u' && HIST.length && ['found', 'review'].includes(r)) { e.preventDefault(); undoLast(); return; }
   if (r === 'found' && state.open) {
     if (k === 'Escape') { state.open = ''; render(true); return; }

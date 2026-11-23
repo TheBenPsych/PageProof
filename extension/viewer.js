@@ -271,6 +271,7 @@ function renderSlice(plan, y0, h) {
   return canvas;
 }
 
+let oursJob = null, blockedOk = false, clockOff = 0, checkedOnce = false;
 async function start() {
   if (params.get('error')) {
     $('sub').textContent = 'The capture did not work';
@@ -338,6 +339,21 @@ async function start() {
     }
     return { c, k };
   };
+
+  // 4.15 idea 3: does this capture look like a login wall, "page not found" or a robot check?
+  const srvGone = /^(404|410)\b/.test(String((rec.server || {}).status || ''));
+  const blocked = rec.blocked || (srvGone ? { kind: 'gone', why: 'the website said the page is gone (' + rec.server.status + ')' } : null);
+  if (blocked) {
+    $('warnBox').innerHTML = '<b>This capture may not show the real page</b><span></span><div class="row"><button class="go" id="wbAgain">Capture again</button><button id="wbKeep">Keep it</button></div>';
+    $('warnBox').querySelector('span').textContent = 'It looks like ' + blocked.why + '. ' + (blocked.kind === 'login' ? 'Log in on the site (if your team is allowed to), then capture again.' : blocked.kind === 'robot' ? 'Answer the check on the site, then capture again.' : 'Check the address on the site, then capture again if needed.');
+    $('warnBox').hidden = false;
+    $('wbAgain').onclick = async () => { try { await api.runtime.sendMessage({ type: 'captureUrl', url: rec.url }); } catch (e) { /* closed */ } };
+    $('wbKeep').onclick = () => { $('warnBox').hidden = true; blockedOk = true; };
+  }
+
+  // 4.15 idea 2: when this page was captured from a copy in Copies found, look for the client's
+  // photo on the captured screens (the same picture check as Copies found, in a background worker).
+  oursJob = findOurs(rec).catch(() => null);
 
   // "Copy": put the whole capture on the clipboard, to paste into an email, chat or document.
   $('copy').disabled = false;
@@ -492,6 +508,21 @@ async function start() {
   if (!good.length) notes.push('No trusted timestamp could be added (' + stamps.map(t => t.service + ': ' + t.error).join('; ') + '). Everything else is saved.');
   else if (good.length < stamps.length) notes.push('Timestamped by ' + good.map(t => t.service).join(' and ') + ' (' + stamps.filter(t => t.error).map(t => t.service).join(', ') + ' did not answer).');
   setStatus(notes.join(' '));
+  // 4.15 idea 5: the trusted timestamps carry the time servers' own clocks. If this computer's
+  // clock is more than 2 minutes off, the times written in the pack won't match them.
+  for (const t of good) {
+    const signed = Date.parse(String(t.time || '').replace(' ', 'T').replace(/(\d)$/, '$1Z'));
+    if (!isFinite(signed) || !t.askedAt || t.rtt > 10000) continue;
+    const off = Math.round((t.askedAt - signed) / 1000);   // + = this computer is ahead
+    try { await api.storage.local.set({ ppClockOff: { off, at: Date.now(), by: t.service } }); } catch (e) { /* fine */ }
+    if (Math.abs(off) > 120) clockOff = off;
+    break;
+  }
+  if (clockOff) {
+    const mins = Math.round(Math.abs(clockOff) / 60);
+    notes.push('This computer\'s clock is ' + mins + ' minute' + (mins === 1 ? '' : 's') + (clockOff > 0 ? ' fast' : ' slow') + ' compared with the trusted timestamp. The timestamp is the time to rely on.');
+    setStatus(notes.join(' '));
+  }
 
 
   const detailsText = () => {
@@ -592,7 +623,8 @@ async function start() {
     setStatus('Saved ' + zipName + '. Its fingerprint (' + zipHash.slice(0, 16) + '...) is in your capture log.' + (rep ? ' The match report PDF (the copy PageProof found) is being saved as its own file.' : ''));
     return zipName;
   };
-  $('pack').onclick = () => savePack(false);
+  $('pack').onclick = async () => { if (await readyToSave()) savePack(false); };
+  ['caseRef', 'collector'].forEach(id => $(id).addEventListener('input', () => $(id).classList.remove('miss')));
 
   // Batch mode: fill in the case details, save, report back, close.
   if (params.get('auto')) {
@@ -636,4 +668,82 @@ async function askMatchReport(caseNo, rec) {
     if (!open) await api.tabs.create({ url: api.runtime.getURL('app.html#found'), active: false });
     return true;
   } catch (e) { return false; }
+}
+
+// ---------- 4.15: "Before you save" (Ben's idea 1) ----------
+// Pressing Save evidence pack checks what people forget. If all is fine it saves straight away.
+// Otherwise a short list shows, one fix button per line, and "Save anyway". Asked once per capture.
+async function readyToSave() {
+  const $ = id => document.getElementById(id);
+  if (checkedOnce) return true;
+  const issues = [];
+  if (!$('caseRef').value.trim()) issues.push(['case', 'The case number is empty', 'Add case number']);
+  if (!$('collector').value.trim()) issues.push(['name', 'Collected by (your name) is empty', 'Add your name']);
+  const blockedNow = !$('warnBox').hidden && !blockedOk;
+  if (blockedNow) issues.push(['blocked', 'It may not be the real page (see the red box above)', '']);
+  const ours = oursJob ? await Promise.race([oursJob, new Promise(r => setTimeout(() => r({ state: 'busy' }), 1500))]) : null;
+  if (ours && ours.state === 'missing') issues.push(['ours', 'Your client\'s photo was not found on the capture', '']);
+  if (clockOff) issues.push(['clock', 'This computer\'s clock is ' + Math.round(Math.abs(clockOff) / 60) + ' minutes ' + (clockOff > 0 ? 'fast' : 'slow'), '']);
+  if (!issues.length) return true;
+  const box = $('checkBox');
+  const good = [];
+  if ($('collector').value.trim()) good.push('Collected by: ' + $('collector').value.trim());
+  if (ours && ours.state === 'found') good.push('Your photo is on the capture (screen ' + ours.screen + ')');
+  box.innerHTML = '<b>Before you save</b><ul></ul><div class="row"><button id="ckAnyway">Save anyway</button></div>';
+  const ul = box.querySelector('ul');
+  for (const [k, text, fix] of issues) {
+    const li = document.createElement('li');
+    li.innerHTML = '<span class="no">!</span><span style="flex:1"></span>';
+    li.children[1].textContent = text;
+    if (fix) { const b = document.createElement('button'); b.className = 'go'; b.textContent = fix; b.onclick = () => { const f = $(k === 'case' ? 'caseRef' : 'collector'); f.classList.add('miss'); f.focus(); }; li.append(b); }
+    ul.append(li);
+  }
+  for (const g of good) { const li = document.createElement('li'); li.innerHTML = '<span class="ok">✔</span><span></span>'; li.children[1].textContent = g; ul.append(li); }
+  box.hidden = false;
+  checkedOnce = true;   // the next press of Save saves (after a fix, or as it is)
+  $('ckAnyway').onclick = () => { box.hidden = true; document.getElementById('pack').click(); };
+  const first = issues.find(i => i[2]);
+  if (first) { const f = $(first[0] === 'case' ? 'caseRef' : 'collector'); f.classList.add('miss'); f.focus(); }
+  return false;
+}
+
+// ---------- 4.15: is the client's photo on this capture? (Ben's idea 2) ----------
+async function findOurs(rec) {
+  const api = globalThis.browser || globalThis.chrome;
+  const $ = id => document.getElementById(id);
+  const { fcCapFor: f } = await api.storage.local.get('fcCapFor');
+  const same = (a, b) => String(a || '').replace(/[#].*$/, '').replace(/\/$/, '') === String(b || '').replace(/[#].*$/, '').replace(/\/$/, '');
+  if (!f || !f.pic || Date.now() - f.at > 6 * 3600000) return null;
+  if (!same(f.url, rec.url) && !(Math.abs(new Date(rec.time) - f.at) < 180000)) return null;
+  $('pfOurs').hidden = false;
+  let worker = null;
+  try {
+    const orig = await createImageBitmap(await (await fetch(f.pic)).blob());
+    worker = new Worker('score-worker.js');
+    let n = 0;
+    const ask = bmp => new Promise(res => {
+      const id = ++n;
+      const t = setTimeout(() => res(null), 30000);
+      worker.addEventListener('message', function on(e) { if (e.data.id !== id) return; clearTimeout(t); worker.removeEventListener('message', on); res(e.data.out); });
+      worker.postMessage({ type: 'check', id, key: 'ours', bmp }, [bmp]);
+    });
+    worker.postMessage({ type: 'orig', key: 'ours', bmp: orig }, [orig]);
+    const tiles = [...rec.main.tiles, ...rec.sections.flatMap(x => x.tiles)];
+    for (const [i, t] of tiles.entries()) {
+      if (!t.bmp) continue;
+      const k = Math.min(1, 1100 / Math.max(t.bmp.width, t.bmp.height));
+      const b = await createImageBitmap(t.bmp, { resizeWidth: Math.max(1, Math.round(t.bmp.width * k)), resizeHeight: Math.max(1, Math.round(t.bmp.height * k)), resizeQuality: 'high' });
+      const o = await ask(b);
+      if (o && o.lines >= 0.45 && o.inliers >= 10 && (o.matched || 0) >= 12 && (o.strength || 0) >= 0.7 && !o.backdrop) {
+        const screen = i < rec.main.tiles.length ? i + 1 : 'in a scroll box';
+        proof('pfOurs', 'ok', 'Your photo is on the capture (' + (typeof screen === 'number' ? 'screen ' + screen : screen) + ', ' + Math.round(o.lines * 100) + '% lines up)');
+        return { state: 'found', screen };
+      }
+    }
+    proof('pfOurs', 'part', 'Your client\'s photo was not found on the capture. It may have been taken down, sit in a slider, or not have loaded.');
+    return { state: 'missing' };
+  } catch (e) {
+    proof('pfOurs', 'part', 'Could not check for your photo on the capture');
+    return null;
+  } finally { if (worker) worker.terminate(); }
 }

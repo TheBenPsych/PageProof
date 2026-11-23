@@ -25,7 +25,8 @@ async function inPage(tabId, name, ...args) {
 
 // The progress card is hidden for every screenshot, then shown again.
 let ovTab = null;
-async function shoot(windowId) {
+async function shoot(windowId, tabId) {
+  if (tabId != null) await holdStill(tabId);
   const wait = lastShot + MIN_GAP_MS - Date.now();
   if (wait > 0) await sleep(wait);
   if (ovTab) await inPage(ovTab, 'ovHide').catch(() => {});
@@ -34,6 +35,46 @@ async function shoot(windowId) {
   finally { if (ovTab && ovStep) inPage(ovTab, 'ovShow', ovStep[0], ovStep[1]).catch(() => {}); }
 }
 let ovStep = null;
+
+// 4.15 (Ben: "messing with a tab working"): the browser can only photograph the tab on screen.
+// If you switch to another tab (or minimise the window) mid-capture, PageProof waits for you to
+// come back instead of photographing the wrong tab. If you scroll or drag the page, it waits for
+// you to stop, puts the page back where it was, and takes that screen again.
+let lastScroll = null;   // [kind, ...args] of the last scroll, so it can be done again
+async function holdStill(tabId) {
+  let told = false;
+  const until = Date.now() + 10 * 60000;
+  for (;;) {
+    let t = null, w = null;
+    try { t = await api.tabs.get(tabId); w = await api.windows.get(t.windowId); } catch (e) { throw new Error('The tab being captured was closed.'); }
+    if (t.active && w.state !== 'minimized') break;
+    if (stopRequested) return;
+    if (Date.now() > until) { requestStop(); pausedNote = 'The capture waited 10 minutes for you to come back to its tab, then stopped.'; return; }
+    if (!told) {
+      told = true;
+      api.action.setBadgeBackgroundColor({ color: '#B45309' }); api.action.setBadgeText({ text: 'WAIT' });
+      inPage(tabId, 'ovNote', 'Paused: you went to another tab. It carries on when you come back here.').catch(() => {});
+      try { api.notifications.create('ppCapPaused', { type: 'basic', iconUrl: api.runtime.getURL('icons/icon128.png'), title: 'Capture paused', message: 'You switched away from the page being captured. Click here to go back and it carries on.', priority: 2 }); } catch (e) { /* no notifications */ }
+      pausedTab = tabId; pausedNote = pausedNote || 'You switched tabs during this capture, so PageProof paused until you came back.';
+    }
+    await sleep(500);
+  }
+  if (told) {
+    try { api.notifications.clear('ppCapPaused'); } catch (e) { /* none */ }
+    await sleep(700);   // let the page draw again
+    if (lastScroll) { await inPage(tabId, ...lastScroll).catch(() => {}); await sleep(SETTLE_MS); }
+  }
+  // Someone scrolled or clicked: wait until they have stopped, then put the page back.
+  const before = await inPage(tabId, 'touchedAt').catch(() => 0);
+  if (before && before > shotSince) {
+    for (let i = 0; i < 20; i++) { await sleep(400); const t2 = await inPage(tabId, 'touchedAt').catch(() => 0); if (Date.now() - t2 > 900) break; }
+    if (lastScroll) { await inPage(tabId, ...lastScroll).catch(() => {}); await sleep(SETTLE_MS); }
+    touchedNote = true;
+  }
+  shotSince = Date.now();
+}
+let shotSince = 0, pausedNote = '', pausedTab = null, touchedNote = false;
+try { api.notifications.onClicked.addListener(async id => { if (id !== 'ppCapPaused' || pausedTab == null) return; try { const t = await api.tabs.get(pausedTab); await api.tabs.update(t.id, { active: true }); await api.windows.update(t.windowId, { focused: true, state: 'normal' }); } catch (e) { /* closed */ } }); } catch (e) { /* none */ }
 
 function progress(text) {
   if (stopRequested) return;
@@ -86,6 +127,8 @@ async function capture(tab, auto) {
   if (lifted) { expanded += lifted; await sleep(400); }
   const info = await inPage(tabId, 'prepare', true);
   ovTab = tabId; ovStep = null;
+  shotSince = Date.now(); pausedNote = ''; pausedTab = null; touchedNote = false; lastScroll = null;
+  await inPage(tabId, 'guardOn').catch(() => {});
 
   const record = {
     id: 'cap-' + Date.now(),
@@ -102,7 +145,8 @@ async function capture(tab, auto) {
     html: info.html,
     main: { width: info.viewWidth, height: 0, tiles: [], background: info.background },
     sections: [],
-    notes: []
+    notes: [],
+    blocked: info.blocked || null
   };
 
   if (expanded) record.notes.push('PageProof clicked "more" to show the full post description.');
@@ -116,11 +160,12 @@ async function capture(tab, auto) {
     for (let i = 0; i < MAX_PAGE_SHOTS; i++) {
       progress(String(i + 1));
       ovStep = ['Screen ' + (i + 1) + '.', 'Step 1 of 3'];
+      lastScroll = ['scrollPage', y];
       const at = await inPage(tabId, 'scrollPage', y);
       await sleep(i === 0 ? SETTLE_MS * 2 : SETTLE_MS);
       // Some sites (like Google) only make their top bar "stick" after you scroll, so check again before every later screen.
       if (i > 0) await inPage(tabId, 'hideFixed');
-      const shot = await shoot(windowId);
+      const shot = await shoot(windowId, tabId);
       record.main.tiles.push({ src: shot, crop: at.crop, destX: at.crop.x, destY: at.destY });
       record.main.height = Math.max(record.main.height, at.total, at.destY + at.crop.h);
       if (i === 0) await inPage(tabId, 'hideFixed');
@@ -160,10 +205,11 @@ async function capture(tab, auto) {
           let left = 0, at = null;
           for (;;) {
             if (stopRequested || shots++ >= MAX_SECTION_SHOTS) break rows;
+            lastScroll = ['scrollSection', s.n, left, top, false];
             at = await inPage(tabId, 'scrollSection', s.n, left, top, shots === 1);
             if (!at) break rows;
             await sleep(SETTLE_MS);
-            add(await shoot(windowId), at, at.contentX, at.contentY);
+            add(await shoot(windowId, tabId), at, at.contentX, at.contentY);
             if (at.scrollLeft >= at.maxX - 1) break;
             left = at.scrollLeft + at.crop.w;
           }
@@ -174,7 +220,9 @@ async function capture(tab, auto) {
 
       if (sec.tiles.length) record.sections.push(sec);
     }
-    if (stopRequested) record.notes.push('You stopped this capture early, so it holds only what was captured up to that point.');
+    if (pausedNote) record.notes.push(pausedNote);
+    if (touchedNote) record.notes.push('The page was scrolled or clicked during the capture, so PageProof waited, put the page back and took that screen again.');
+    if (stopRequested && !/waited 10 minutes/.test(pausedNote)) record.notes.push('You stopped this capture early, so it holds only what was captured up to that point.');
   } finally {
     ovTab = null; ovStep = null;
     await inPage(tabId, 'restore').catch(() => {});
@@ -615,12 +663,26 @@ let runnerTab = null;
 const normalWindows = async () => { try { return await api.windows.getAll({ windowTypes: ['normal'] }); } catch (e) { return [{ id: undefined }]; } };
 // You closed the helper tab yourself (not by closing the whole window): it stays closed until the
 // browser opens again, or you press Start it again in PageProof.
+// 4.15 (Ben: "closing the wrong thing"): a Keep searching tab closed by hand comes straight back,
+// pinned and in the background, and carries on. Home says so, with "Keep it stopped". Closed 3
+// times in 10 minutes means someone really wants it closed: then it stays closed as before.
 api.tabs.onRemoved.addListener(async (id, info) => {
   const st = (await api.storage.local.get('fcStatus')).fcStatus;
   if (id !== runnerTab && !(st && st.tabId === id)) return;
   runnerTab = null;
   await api.storage.local.set({ fcStatus: { ...(st || {}), state: 'closed', beat: 0 } }).catch(() => {});
-  if (!info.isWindowClosing && api.storage.session) api.storage.session.set({ fcClosed: Date.now() }).catch(() => {});
+  if (info.isWindowClosing) return;
+  const quit = (await api.storage.local.get('ppRunnerQuit')).ppRunnerQuit;
+  if (quit && Date.now() - quit < 15000) return;          // PageProof closed it itself
+  const r = (await api.storage.local.get('fcReopened')).fcReopened || { times: [] };
+  const times = (r.times || []).filter(t => Date.now() - t < 10 * 60000);
+  if (times.length >= 2) {
+    if (api.storage.session) api.storage.session.set({ fcClosed: Date.now() }).catch(() => {});
+    await api.storage.local.set({ fcReopened: { times: [], at: 0 } }).catch(() => {});
+    return;
+  }
+  await api.storage.local.set({ fcReopened: { times: [...times, Date.now()], at: Date.now(), seen: false } }).catch(() => {});
+  setTimeout(() => keepAlive(false, true), 1500);
 });
 // A browser window opened again: start Keep searching again (it closed with the last window).
 api.windows.onCreated.addListener(w => { if (w && w.type === 'normal') setTimeout(() => keepAlive(false), 3000); });
@@ -699,6 +761,8 @@ function freshStart() {
     };
     // Is it one of PageProof's own pages? (If the browser hides the address, a pinned tab is.)
     const ownPage = t => t.url ? t.url.startsWith(OWN) : !!t.pinned;
+    await api.storage.local.set({ ppRunnerQuit: Date.now() }).catch(() => {});
+    await sleep(300);
     await shut(st.tabId, ownPage);     // the old Keep searching tab
     await shut(st.jobTab, ownPage);    // the photo it was searching
     // Any other copies of the Keep searching page or a pinned Keep searching photo search.

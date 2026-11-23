@@ -942,3 +942,6 @@ table.accts tr.arow:hover{background:var(--sunk)}
 .stag span{color:var(--faint)}
 .sclear{margin-left:auto;border:0;background:none;color:var(--accent);font-weight:700;font-size:13.5px;cursor:pointer;padding:2px 4px;font-family:inherit}
 .sclear:hover{text-decoration:underline}
+
+/* 4.15: "That was quick" note */
+.fastask{position:fixed;right:20px;bottom:20px;z-index:60;max-width:520px;box-shadow:0 12px 40px rgba(0,0,0,.25)}

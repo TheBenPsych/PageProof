@@ -283,8 +283,30 @@
       innerWidth: window.innerWidth,
       single,
       sections: targets.map(t => ({ n: t.n, kind: t.kind, label: t.label, axes: t.axes, options: t.options })),
-      html
+      html,
+      blocked: blockedSigns()
     };
+  }
+
+  // 4.15: does this look like a page that is NOT the real page? (A login wall, "page not found",
+  // a robot check, "access denied", or an empty page.) Only words actually on screen count.
+  function blockedSigns() {
+    try {
+      const vis = el => { const r = el.getBoundingClientRect(); const st = getComputedStyle(el); return r.width > 0 && r.height > 0 && st.visibility !== 'hidden' && st.display !== 'none'; };
+      const text = ((document.body && document.body.innerText) || '').replace(/\s+/g, ' ').trim();
+      const head = [document.title, ...[...document.querySelectorAll('h1, h2, [role="heading"]')].filter(vis).slice(0, 6).map(h => h.innerText)].join(' | ');
+      const top = head + ' | ' + text.slice(0, 1500);
+      const pics = [...document.images].filter(i => i.naturalWidth >= 150 && vis(i)).length;
+      const robot = /(verify(ing)? (that )?you are (a )?human|are you a robot|i'?m not a robot|checking (if the site connection is secure|your browser)|just a moment\.\.\.|press (&|and) hold|unusual traffic from your|attention required|captcha)/i;
+      if (robot.test(top) || document.querySelector('iframe[src*="captcha"], iframe[src*="challenges.cloudflare"], #challenge-form')) return { kind: 'robot', why: 'a robot check ("are you human?") covering the page' };
+      if (/\b(access denied|403 forbidden|you don'?t have permission to access|request blocked|you have been blocked)\b/i.test(top)) return { kind: 'denied', why: 'an "Access denied" message instead of the page' };
+      if (/\b(404|page not found|page (does not|doesn'?t) exist|this page (isn'?t|is not) available|content (isn'?t|is not) available|no longer available|post (isn'?t|is not) available|sorry, this page|we couldn'?t find (that|this) page|video unavailable|account suspended|this account doesn'?t exist)\b/i.test(head + ' | ' + text.slice(0, 600))) return { kind: 'gone', why: 'a "page not found" or "not available" message' };
+      const login = /((log|sign) ?in|create an account|sign up) (to (continue|see|view|read|keep)|for (full )?access)|you must (log|sign) ?in|(log|sign) ?in to (instagram|facebook|x|twitter|linkedin|pinterest|tiktok)|subscribe to (continue|keep) reading|this content is for subscribers/i;
+      const pass = [...document.querySelectorAll('input[type="password"]')].some(vis);
+      if (login.test(top) && (pass || pics < 3 || text.length < 3000)) return { kind: 'login', why: 'a "log in to continue" or subscriber wall covering the page' };
+      if (text.length < 40 && pics === 0) return { kind: 'empty', why: 'an empty page (no words or pictures showed)' };
+    } catch (e) { /* page too odd to read */ }
+    return null;
   }
 
   // Allow some growth (pictures loading in), but not endless new articles.
@@ -377,6 +399,7 @@
   }
 
   function restore() {
+    guardOff();
     ovRemove();
     removeBadges();
     hidden.forEach(([el, v]) => { el.style.visibility = v; });
@@ -417,5 +440,30 @@
   }
   function ovRemove() { if (ov) ov.remove(); ov = null; }
 
-  window.__pageproof = { expandMore, unclamp, prepare, scrollPage, hideFixed, removeBadges, scrollSection, grewNow, restore, ovShow, ovHide, ovRemove };
+  // 4.15 hands off: while a capture runs, your mouse wheel and scrolling keys don't move the page
+  // (PageProof is scrolling it), and anything else you do (dragging the scroll bar, clicking) is
+  // noticed, so that screen is taken again instead of making a broken join in the evidence.
+  let touched = 0, guarding = false;
+  const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ', 'Spacebar']);
+  const stopScroll = e => {
+    if (!e.isTrusted) return;
+    if (e.type === 'keydown' && !SCROLL_KEYS.has(e.key)) return;
+    e.preventDefault(); touched = Date.now();
+    if (ovText) ovText.textContent = 'Hands off for a moment: PageProof is scrolling the page for you.';
+  };
+  const noticed = e => { if (e.isTrusted && !(ov && e.composedPath && e.composedPath().includes(ov))) touched = Date.now(); };
+  function guardOn() {
+    if (guarding) return; guarding = true;
+    for (const t of ['wheel', 'touchmove', 'keydown']) addEventListener(t, stopScroll, { capture: true, passive: false });
+    addEventListener('mousedown', noticed, true);
+  }
+  function guardOff() {
+    if (!guarding) return; guarding = false;
+    for (const t of ['wheel', 'touchmove', 'keydown']) removeEventListener(t, stopScroll, { capture: true, passive: false });
+    removeEventListener('mousedown', noticed, true);
+  }
+  const touchedAt = () => touched;
+  function ovNote(text) { if (ovText) ovText.textContent = text; }
+
+  window.__pageproof = { expandMore, unclamp, prepare, scrollPage, hideFixed, removeBadges, scrollSection, grewNow, restore, ovShow, ovHide, ovRemove, guardOn, guardOff, touchedAt, ovNote };
 })();

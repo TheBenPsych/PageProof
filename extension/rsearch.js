@@ -245,7 +245,7 @@
   function brand() {
     if (branded) return;
     branded = true;
-    const want = 'PageProof · ' + ENGINE_NAME[engine];
+    const want = '🔒 PageProof · ' + ENGINE_NAME[engine] + ' · leave open';
     const fix = () => {
       if (!document.head) return;
       // Every icon the site gives (some put theirs outside the head, or as a "shortcut icon"
