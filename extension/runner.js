@@ -33,7 +33,7 @@ async function status(state, text, extra = {}) {
   const st = { state, text, beat: Date.now(), win: S.win, tabId: S.me, jobTab: S.tab, ver: MY_VER, ...extra };
   S.lastSt = st;
   await api.storage.local.set({ fcStatus: st });
-  const LABEL = { running: ['Searching', 'ok'], waiting: ['Resting', 'ok'], off: ['Off', 'grey'], paused: ['Paused', 'grey'], hours: ['Outside your hours', 'grey'], fifty: ['Paused for today\'s 50', 'warn'],
+  const LABEL = { running: ['Searching', 'ok'], waiting: ['Resting', 'ok'], off: ['Off', 'grey'], paused: ['Paused', 'grey'], hours: ['Outside your hours', 'grey'], fifty: ['Paused for a big search', 'warn'],
     offline: ['Google Drive offline', 'bad'], allow: ['Needs one click', 'warn'], busy: ['Computer busy', 'warn'], resting: ['Search sites resting', 'warn'], setup: ['Not set up', 'warn'], idle: ['Nothing due', 'ok'] };
   const [l, c] = LABEL[state] || ['Working', 'grey'];
   $('state').textContent = l; $('state').className = 'tag ' + c;
@@ -143,6 +143,7 @@ async function step() {
   const st = await api.storage.local.get(['fcPause', 'fcFifty', 'fcToday']);
   const today = st.fcToday && st.fcToday.day === new Date().toDateString() ? st.fcToday : { searched: 0, found: 0 };
   const tally = today.searched + ' photos searched today' + (today.found ? ', ' + today.found + ' new copies' : '');
+  if (BG.id) return status('fifty', 'A big search is running in this tab' + (BG.text ? ' (' + BG.text + ')' : '') + '. ' + (k.on && !st.fcPause ? 'Keep searching carries on by itself when it finishes.' : 'You can leave this tab and carry on working.'));
   if (!k.on) { await stopJob(); return status('off', 'Keep searching is off. Turn it on in Find copies › Keep searching.'); }
   if (st.fcPause) { await stopJob(); return status('paused', 'Paused. Press Resume and it picks up with the next photo. ' + tally + '.'); }
   // A search is running: wait for it (at most 12 minutes).
@@ -151,7 +152,7 @@ async function step() {
     else return status('running', 'Searching one photo. ' + tally + '.', { current: S.current });
   }
   if (!inHours(k)) return status('hours', 'Waiting for your hours (' + (k.hours === 'all' ? 'all day' : (k.from ?? 8) + ':00 to ' + (k.to ?? 18) + ':00' + (k.weekdays !== false ? ', weekdays' : '')) + '). ' + tally + '.');
-  if (fiftyRunning(st.fcFifty)) return status('fifty', 'Today\'s 50 are running. Keep searching carries on by itself when they finish.');
+  if (fiftyRunning(st.fcFifty) || BG.id) return status('fifty', (BG.id ? 'A big search is running in this tab' + (BG.text ? ' (' + BG.text + ')' : '') : 'Today\'s 50 are running') + '. Keep searching carries on by itself when it finishes.');
   const ds = await FC.driveState(true);
   if (ds === 'none') return status('setup', 'Connect your photos first: open Find copies and follow the 4 steps.');
   if (ds === 'prompt') {
@@ -203,6 +204,98 @@ async function step() {
   await status('running', 'Searching one photo. ' + tally + '.', { current: S.current });
 }
 
+// ---------------------------------------------------------------- big searches (4.11, Ben)
+// Searches you start yourself (New search, today's 50, photos picked in Your photos) run here, in a
+// hidden frame, one at a time, in the order they were started. Nothing opens in front of you, and
+// the page you started them from can be closed. All searches shows how far each one is.
+const BG = { id: null, frame: null, since: 0, text: '' };
+async function bgList() { return (await api.storage.local.get('fcBgJobs')).fcBgJobs || []; }
+async function bgDrop(id) { const q = (await bgList()).filter(x => x !== id); await api.storage.local.set({ fcBgJobs: q }); }
+function bgDone() {
+  if (BG.frame) BG.frame.remove();
+  const id = BG.id;
+  Object.assign(BG, { id: null, frame: null, text: '' });
+  $('big').hidden = true;
+  api.storage.local.set({ fcFifty: { id, beat: 0, running: false } }).catch(() => {});
+  FC.backupCopiesSoon();
+  bgDrop(id).then(() => setTimeout(() => { bgNext(); tick(); }, 2000));
+}
+let bgBusy = false;
+async function bgNext() {
+  if (bgBusy || reloading) return;
+  bgBusy = true;
+  try {
+    await fiftyWanted();
+    if (BG.id) return;
+    for (const id of await bgList()) {
+      const job = await RS_DB.get('jobs', id).catch(() => null);
+      // Deleted, or already finished (its frame said so just before a reload): off the list.
+      if (!job || (job.finished && job.pics.every(p => p.ingested || !job.engines.some(e => p.runs[e].state === 'done')))) { await bgDrop(id); continue; }
+      // Keep searching's one-photo search steps aside (it starts again after this one).
+      await stopJob('a big search starts');
+      Object.assign(BG, { id, since: Date.now(), text: '' });
+      const f = document.createElement('iframe');
+      f.src = 'revsearch.html?job=' + encodeURIComponent(id) + '&bg=1';
+      f.title = 'Big search'; f.style.display = 'none';
+      document.body.append(f); BG.frame = f;
+      bgShow(job);
+      await status('fifty', 'A big search is running in this tab. Keep searching carries on by itself when it finishes.');
+      return;
+    }
+    closeIfIdle();
+  } finally { bgBusy = false; }
+}
+// The card shows how far the big search is.
+async function bgShow(job) {
+  if (!BG.id) return;
+  job = job || await RS_DB.get('jobs', BG.id).catch(() => null);
+  if (!job) return;
+  const done = job.pics.filter(p => Object.values(p.runs).every(r => !['wait', 'go', 'captcha'].includes(r.state))).length;
+  const check = job.pics.some(p => Object.values(p.runs).some(r => r.state === 'captcha'));
+  BG.text = done + ' of ' + job.pics.length + ' photos done';
+  $('big').hidden = false;
+  $('bigText').textContent = (job.kind === 'fifty' ? 'Today\'s ' + job.pics.length : 'A search of ' + job.pics.length + (job.pics.length === 1 ? ' photo' : ' photos')) + ': ' + BG.text + (check ? '. A search site wants a quick check (see the notice, or All searches).' : '.');
+  $('bigBar').style.width = Math.round(done / Math.max(1, job.pics.length) * 100) + '%';
+  // A search that finished but never said so (for example its last photo could not be added):
+  // after 10 minutes it is let go, so the line never gets stuck.
+  if (job.finished && Date.now() - Date.parse(job.finished) > 10 * 60000) bgDone();
+}
+// Keep searching switched off and no big search left: this tab is not needed.
+async function closeIfIdle() {
+  if (BG.id || (await bgList()).length || (await api.storage.local.get('fcFiftyWant')).fcFiftyWant) return;
+  const k = await FC.keep();
+  if (!k.on) window.close();
+}
+// Today's 50 at the time you picked: the background asks this tab to start it, so no PageProof
+// page has to open (4.11). Needs Google Drive's OK (once after each browser restart).
+async function fiftyWanted() {
+  const w = (await api.storage.local.get('fcFiftyWant')).fcFiftyWant;
+  if (!w) return;
+  if (Date.now() - w > 12 * 3600000) { await api.storage.local.remove('fcFiftyWant'); return; }
+  const ds = await FC.driveState(true);
+  if (ds !== 'granted') {
+    if (ds === 'prompt' && Date.now() - S.allowAsked > 3 * 3600000 && api.notifications) {
+      S.allowAsked = Date.now();
+      api.notifications.create('fcAllow', { type: 'basic', iconUrl: api.runtime.getURL('icons/icon128.png'), title: 'Today\'s 50 is waiting for one click', message: 'Your browser asks once after it restarts. Click here, then Allow, and today\'s 50 starts by itself.', priority: 1 });
+    }
+    return;
+  }
+  await api.storage.local.remove('fcFiftyWant');
+  const k = await FC.keep();
+  const n = Math.min(k.perDay, 100);
+  await status('running', 'Getting today\'s ' + n + ' photos ready from Google Drive…');
+  const ps = await FC.next(n + 10, new Set(), { first: k.fiftyWhich === 'first' });
+  const pics = [];
+  for (const p of ps) {
+    if (pics.length >= n) break;
+    const pic = await FC.readPhoto(p);
+    if (!pic.error) pics.push(pic);
+  }
+  if (!pics.length) return;
+  const job = await RS_JOB.create(pics, { kind: 'fifty' });
+  if (job) await RS_JOB.queue(job.id);
+}
+
 api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === 'fcAutoDone' && msg.job === S.job) {
     S.job = null; S.tab = null; setTimeout(tick, 2000);
@@ -210,6 +303,7 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     // (Documents › PageProof › found-copies.txt).
     FC.backupCopiesSoon();
   }
+  if (msg && msg.type === 'fcBgDone' && msg.job === BG.id) bgDone();
   if (msg && msg.type === 'fcRunnerPing') { sendResponse({ ok: true, win: S.win, ver: MY_VER, tab: S.me }); return false; }
   return false;
 });
@@ -217,7 +311,8 @@ api.tabs.onRemoved.addListener(id => { if (id === S.tab) { S.job = null; S.tab =
 api.storage.onChanged.addListener(ch => {
   // Flags, priority clients or folders changed: work out the line again.
   if (ch.fcQueueDirty) { FC.resetQueue(); S.skip = new Set(S.current && S.job ? [S.current.id] : []); }
-  if (ch.fcKeep && ch.fcKeep.newValue && !ch.fcKeep.newValue.on) { stopJob().finally(() => window.close()); return; }
+  if (ch.fcKeep && ch.fcKeep.newValue && !ch.fcKeep.newValue.on) { stopJob().finally(closeIfIdle); return; }
+  if (ch.fcBgJobs || ch.fcFiftyWant) bgNext();
   if (ch.fcKeep || ch.fcPause) tick();
 });
 // Every hour the line is worked out again from scratch.
@@ -251,6 +346,8 @@ $('open').onclick = e => { e.preventDefault(); api.tabs.create({ url: api.runtim
   FC.movePics().catch(() => {});
   tick();
   setInterval(tick, 30000);
+  bgNext();
+  setInterval(() => { if (BG.id) bgShow(); else bgNext(); }, 10000);
   // "Still here", every 30 seconds, even in the middle of a long job (the weekly read of every
   // folder can take many minutes). Without it the background thought this window had closed and
   // kept opening a new one, which closed itself again straight away, about once a minute.

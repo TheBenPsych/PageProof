@@ -30,6 +30,19 @@ const breathe = () => new Promise(r => { const c = new MessageChannel(); c.port1
 const rand = ([a, b]) => a + Math.random() * (b - a);
 const PARAMS = new URLSearchParams(location.search);
 const VIEW = PARAMS.get('job') ? 'results' : (PARAMS.get('view') || 'setup');
+// Big searches you start yourself (4.11, Ben) run inside the pinned Keep searching tab, in a hidden
+// frame (revsearch.html?job=ID&bg=1), so no PageProof tab has to stay open and nothing pulls you
+// away from your work. Any results page you open for such a search only WATCHES it: it reads the
+// saved search every 2 seconds and never runs or saves it itself.
+const BG = PARAMS.get('bg') === '1';
+const BG_LIST = 'fcBgJobs';
+async function bgQueued(id) { try { return ((await api.storage.local.get(BG_LIST))[BG_LIST] || []).includes(id); } catch (e) { return false; } }
+async function bgQueue(id) {
+  const q = (await api.storage.local.get(BG_LIST))[BG_LIST] || [];
+  if (!q.includes(id)) q.push(id);
+  await api.storage.local.set({ [BG_LIST]: q });
+  api.runtime.sendMessage({ type: 'fcBgStart' }).catch(() => {});
+}
 
 const ENGINES = {
   google: { name: 'Google Lens', short: 'Google', start: 'https://www.google.com/imghp?hl=en', what: 'exact matches', letter: '' },
@@ -294,6 +307,7 @@ const R = { tasks: new Map(), paused: {}, captchas: {}, gaveUp: {}, queues: {}, 
 
 let saveTimer = null;
 function saveJob(now) {
+  if (R.watch) return;                              // the pinned tab saves it
   clearTimeout(saveTimer);
   const go = () => RS_DB.put('jobs', job.id, job).catch(() => {});
   if (now) return go();
@@ -442,7 +456,11 @@ async function onCaptcha(t) {
       (job.engines.length > 1 ? 'The other sites keep searching meanwhile.' : '') + (R.captchas[t.engine] >= 3 ? ' ' + name + ' has asked ' + R.captchas[t.engine] + ' times now; you can skip it and try again later.' : '')),
     h('span', { class: 'sp' }), h('button', { text: 'Show me the tab', onclick: show }),
     h('button', { class: 'btn', text: 'Skip ' + name + ' for now', onclick: () => giveUp(t.engine) })]);
-  show();
+  if (!BG) { show(); return; }
+  // In the pinned tab nobody sees this page: a small notice instead of jumping to the tab, so you
+  // are not pulled away from your work. Click it (or "Show me the tab" in All searches) when ready.
+  saveJob(true);
+  if (api.notifications) api.notifications.create('rsCaptcha:' + t.tabId, { type: 'basic', iconUrl: api.runtime.getURL('icons/icon128.png'), title: name + ' wants a quick check', message: 'Click here, then tick the box in the ' + name + ' tab. Your search carries on by itself. The other sites keep searching meanwhile.', priority: 1 });
 }
 
 function captchaCleared(t) {
@@ -450,8 +468,9 @@ function captchaCleared(t) {
   t.p.runs[t.engine].state = 'go';
   t.deadline = Date.now() + TASK_TIMEOUT;
   updatePause(t.engine);
-  if (R.myTab) api.tabs.update(R.myTab, { active: true }).catch(() => {});
-  renderSoon();
+  if (R.myTab && !BG) api.tabs.update(R.myTab, { active: true }).catch(() => {});
+  if (BG && api.notifications) api.notifications.clear('rsCaptcha:' + t.tabId).catch(() => {});
+  saveJob(); renderSoon();
 }
 
 function giveUp(engine) {
@@ -706,7 +725,7 @@ const VERDICT = {
 };
 // Checks every picture's links in the background, three at a time, the picture on screen first.
 async function scoreAll() {
-  if (R.scoring) return;
+  if (R.scoring || R.watch) return;                 // the pinned tab does the checks
   R.scoring = true;
   // 6 at a time: downloads overlap well; more than that mostly waits on the computer itself.
   const run = () => Promise.all(Array.from({ length: Math.max(3, POOL_SIZE * 2) }, scoreWorker));
@@ -750,14 +769,14 @@ const giveSlot = () => { const n = SLOTS.wait.shift(); if (n) n(); else SLOTS.fr
 // (discarded) by the browser, and holding a lock tells Chrome and Edge the page is busy, so they
 // don't freeze it. Both are undone when the search ends.
 function stayAwake(on) {
-  if (R.myTab) api.tabs.update(R.myTab, { autoDiscardable: !on }).catch(() => {});
+  if (R.myTab && !BG) api.tabs.update(R.myTab, { autoDiscardable: !on }).catch(() => {});   // the pinned tab is always kept awake
   if (on && navigator.locks && !R.awake) navigator.locks.request('pageproof-search-running-' + job.id, () => new Promise(r => { R.awake = r; })).catch(() => {});
   if (!on && R.awake) { R.awake(); R.awake = null; }
 }
 // While today's 50 runs, Keep searching waits. This says "still running" every 20 seconds (from
 // the worker clock, so it keeps coming when the page is hidden) and "finished" at the end.
 function fiftyBeat(running) {
-  if (!job || job.kind !== 'fifty') return;
+  if (!job || (job.kind !== 'fifty' && !BG)) return;   // any big search in the pinned tab
   api.storage.local.set({ fcFifty: { id: job.id, beat: running ? Date.now() : 0, running: !!running } }).catch(() => {});
 }
 async function runJob(onlyEngines) {
@@ -799,7 +818,7 @@ async function runJob(onlyEngines) {
 // added to the copies list (Find copies › All copies found), with the photo's client.
 const BY = { keep: 'Keep searching', fifty: 'today\'s 50', new: 'a search' };
 function maybeIngest(p) {
-  if (!p || p.ingested || !picDone(p)) return;
+  if (!p || p.ingested || !picDone(p) || R.watch) return;
   // What each search site gave back, for "is this site still working?" (-1 = no answer).
   const health = {};
   for (const e of job.engines) { const st = p.runs[e].state; if (st === 'done') health[e] = p.links.filter(l => (l.engines || []).includes(e)).length; else if (st === 'fail') health[e] = -1; }
@@ -818,11 +837,13 @@ function maybeIngest(p) {
 // Keep searching runs a search in a background window: when it's finished, tell that window and close.
 let autoClosing = false;
 function autoDone() {
-  if (!job || !job.auto || autoClosing || R.running) return;
+  if (!job || !(job.auto || BG) || autoClosing || R.running) return;
   if (!job.pics.every(p => p.ingested || picDone(p) && !job.engines.some(e => p.runs[e].state === 'done'))) return;
   if (job.pics.some(p => !p.ingested && job.engines.some(e => p.runs[e].state === 'done'))) return;
   autoClosing = true;
   saveJob(true).finally(() => {
+    // In the pinned tab: tell it this search is finished, so it closes the frame and starts the next.
+    if (BG) { api.runtime.sendMessage({ type: 'fcBgDone', job: job.id }).catch(() => {}); return; }
     api.runtime.sendMessage({ type: 'fcAutoDone', job: job.id, found: job.pics.reduce((a, p) => a + p.links.filter(isSame).length, 0) }).catch(() => {});
     setTimeout(() => window.close(), 300);
   });
@@ -896,7 +917,7 @@ function statusLine(p) {
 
 function resultsSide() {
   const done = job.pics.filter(picDone).length, total = job.pics.length;
-  const busy = R.running;
+  const busy = R.running || (R.watch && !job.finished);
   const links = job.pics.reduce((a, p) => a + shownCount(p), 0);
   const sites = new Set(job.pics.flatMap(p => visibleLinks(p, { raw: true, withHidden: false }).map(l => l.site))).size;
   const when = new Date(job.created);
@@ -905,7 +926,9 @@ function resultsSide() {
     ? h('div', {}, h('div', { id: 'domain', text: 'Searching ' + plural(total, 'picture') }),
       h('div', { id: 'sub', text: done + ' done · ' + job.pics.filter(picBusy).length + ' searching · ' + (total - done - job.pics.filter(picBusy).length) + ' waiting' }),
       h('div', { class: 'prog' }, h('i', { style: 'width:' + Math.round(done / total * 100) + '%' })),
-      h('p', { class: 'hint', text: 'You can use other PageProof pages and other tabs meanwhile. Keep the PageProof tab open until it finishes.' }))
+      job.bg ? h('p', { class: 'hint' }, job.started ? 'This search runs in the small pinned PageProof tab at the left of your tab bar. You can close this page and keep working. Open All searches any time to see how far it is.'
+        : 'Waiting for the small pinned PageProof tab to start this search (it runs one big search at a time).', job.started ? null : h('button', { class: 'ghost', text: '▶ Start it now', onclick: () => api.runtime.sendMessage({ type: 'fcBgStart' }).catch(() => {}) }))
+        : h('p', { class: 'hint', text: 'You can use other PageProof pages and other tabs meanwhile. Keep the PageProof tab open until it finishes.' }))
     : h('div', {}, h('div', { id: 'domain', text: plural(total, 'picture') + ' searched' }),
       h('div', { id: 'sub', text: when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) + ' · ' + plural(job.pics.reduce((a, p) => a + sameCount(p), 0), 'same-photo link') + ' (of ' + links + ' found)' + (job.pics.some(checking) ? ' · still checking matches…' : '') }));
   const list = h('div', { class: 'card plist' }, job.pics.map(p => {
@@ -917,11 +940,16 @@ function resultsSide() {
       h('img', { src: p.thumb, alt: '' }), h('div', { class: 'n' }, h('b', { text: (p.i + 1) + '. ' + p.name }), h('small', { text: statusLine(p) }), checkLine(p)), state);
   }));
   const actions = busy
-    ? [h('button', { class: 'big stop', text: '⏹ Stop and keep results so far', onclick: () => { R.stop = true; for (const t of [...R.tasks.values()]) finishTask(t, 'skip', 'Stopped'); } })]
+    ? [h('button', { class: 'big stop', text: '⏹ Stop and keep results so far', onclick: () => {
+        if (R.watch) { api.runtime.sendMessage({ type: 'ppBgStop', job: job.id }).catch(() => {}); banner([h('b', { text: 'Stopping… ' }), 'The searches already running finish their page, then it stops.'], 'info'); return; }
+        R.stop = true; for (const t of [...R.tasks.values()]) finishTask(t, 'skip', 'Stopped');
+      } })]
     : [h('button', { class: 'big', text: '💾 Save results', onclick: () => { saveCsv(); savePdf(); } }),
       h('div', { class: 'grid2' }, h('button', { class: 'ghost', text: '📄 PDF report', onclick: savePdf }), h('button', { class: 'ghost', text: '📊 Spreadsheet', onclick: saveCsv })),
       left ? h('button', { class: 'ghost', text: '🔁 Search the rest (' + left + ')', onclick: () => {
         for (const p of job.pics) for (const e of job.engines) if (['skip', 'fail'].includes(p.runs[e].state)) p.runs[e].state = 'wait';
+        // A pinned-tab search: back into the pinned tab's line, and this page watches it again.
+        if (job.bg && !BG) { delete job.finished; saveJob(true).then(() => bgQueue(job.id)).then(() => watch()); return; }
         runJob();
       } }) : null];
   side(head, list, ...actions, h('div', { class: 'links' },
@@ -1119,6 +1147,35 @@ async function closeOldTabs() {
     try { const t = await api.tabs.get(id); await api.tabs.remove(id); } catch (e) { /* already closed */ }
   }
 }
+// Watching a search that runs in the pinned tab: read it again every 2 seconds. When it has
+// finished and left the pinned tab's line, this page becomes an ordinary results page.
+let watchTimer = null;
+function watch() {
+  R.watch = true;
+  clearInterval(watchTimer);
+  const look = async () => {
+    const fresh = await RS_DB.get('jobs', job.id).catch(() => null);
+    if (!fresh) return;
+    const sel = R.sel; job = fresh; R.sel = Math.min(sel, job.pics.length - 1);
+    for (const p of job.pics) for (const l of p.links) l.pic = p.i;
+    const capt = [];
+    for (const p of job.pics) for (const e of job.engines) if (p.runs[e].state === 'captcha' && p.runs[e].tabId) capt.push([e, p.runs[e].tabId]);
+    if (capt.length) {
+      const [e, tabId] = capt[0];
+      banner([h('span', {}, h('b', { text: ENGINES[e].short + ' wants a quick check. ' }), 'Tick the box in the ' + ENGINES[e].short + ' tab and the search carries on by itself. The other sites keep searching meanwhile.'),
+        h('span', { class: 'sp' }), h('button', { text: 'Show me the tab', onclick: async () => { try { const t = await api.tabs.update(tabId, { active: true }); await api.windows.update(t.windowId, { focused: true }); } catch (err) { /* gone */ } } })]);
+    } else if (R.capt) banner(null);
+    R.capt = capt.length > 0;
+    if (job.finished && !(await bgQueued(job.id))) {
+      clearInterval(watchTimer); R.watch = false;
+      renderResults(); scoreAll(); for (const p of job.pics) maybeIngest(p);
+      return;
+    }
+    renderSoon();
+  };
+  watchTimer = setInterval(look, 2000);
+  look();
+}
 async function initResults() {
   job = await RS_DB.get('jobs', PARAMS.get('job'));
   if (!job) { $('main').replaceChildren(h('div', { class: 'none', text: 'This search was not found. It may have been deleted.' })); side(); return; }
@@ -1129,12 +1186,12 @@ async function initResults() {
     if (area === 'local' && (ch.rsHidden || ch.rsAllowed || ch.rsRejected)) RS_LISTS.load().then(() => renderResults());
   });
   try { const me = await api.tabs.getCurrent(); R.myTab = me.id; R.winId = me.windowId; } catch (e) { /* ignore */ }
-  if (R.myTab && !job.auto) api.storage.local.set({ rsOpenJob: { id: job.id, tab: R.myTab } });
+  if (R.myTab && !job.auto && !job.bg) api.storage.local.set({ rsOpenJob: { id: job.id, tab: R.myTab } });
   // Never more tabs or photo checks than this computer can take.
   const lim = job.limits || (await ppHardware()).limits;
   SLOTS.free = Math.max(1, lim.tabs || 3);
   POOL_SIZE = Math.max(1, Math.min(POOL_SIZE, lim.checks || 4));
-  if (job.kind === 'fifty') CLOCK.every(20000, () => { if (R.running) fiftyBeat(true); });
+  if (job.kind === 'fifty' || BG) CLOCK.every(20000, () => { if (R.running) fiftyBeat(true); });
   for (const p of job.pics) {
     try {
       const rec = await RS_MEM.get(p.hash);
@@ -1148,6 +1205,9 @@ async function initResults() {
   }
   // Only one page runs a search: if it is already running in another PageProof tab, this one
   // just shows it.
+  // A pinned-tab search still in its line: this page only watches (and never takes its lock, or
+  // the pinned tab could not run it).
+  if (job.bg && !BG && (!job.finished || await bgQueued(job.id))) { renderResults(); watch(); return; }
   let mine = true;
   if (navigator.locks) mine = await new Promise(res => navigator.locks.request('pageproof-job-' + job.id, { ifAvailable: true }, lock => { res(!!lock); return lock ? new Promise(() => {}) : null; }));
   // A search that was cut off (its page closed, reloaded or put to sleep by the browser) carries
@@ -1161,12 +1221,16 @@ async function initResults() {
     if (unfinished) { p.runs[e].state = 'wait'; delete p.runs[e].why; }
     else { p.runs[e].state = 'fail'; p.runs[e].why = 'The results window was closed or reloaded during this search.'; }
   }
-  if (!job.auto) await docsBanner(renderResults);
+  if (!job.auto && !BG) await docsBanner(renderResults);
   renderResults();
   scoreAll();
   for (const p of job.pics) maybeIngest(p);
   if (mine && (!job.started || unfinished)) runJob();
-  window.addEventListener('beforeunload', e => { if (R.running) { e.preventDefault(); e.returnValue = ''; } });
+  if (!BG) window.addEventListener('beforeunload', e => { if (R.running) { e.preventDefault(); e.returnValue = ''; } });
+  if (BG) api.runtime.onMessage.addListener(msg => {
+    if (msg && msg.type === 'ppBgStop' && msg.job === job.id && R.running) { R.stop = true; for (const t of [...R.tasks.values()]) finishTask(t, 'skip', 'Stopped'); }
+    return false;
+  });
   window.addEventListener('pagehide', () => { if (saveTimer) saveJob(true); });
   // Asked by the full PageProof page before it drops an old results frame (it never drops a busy one).
   window.ppBusy = () => R.running || R.scoring || R.tasks.size > 0;
@@ -1187,14 +1251,19 @@ async function renderPast() {
       const nNew = j.pics.reduce((a, p) => a + p.links.filter(l => l.isNew && isSame(l) && !RS_LISTS.isHidden(l.site, l.url)).length, 0);
       return h('div', { class: 'tr' }, h('img', { src: j.pics[0] && j.pics[0].thumb, alt: '' }),
         h('b', { text: new Date(j.created).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) + (KIND[j.kind] || (j.folder ? ' · daily 50' : '')) }),
-        h('span', { text: plural(j.pics.length, 'picture') }), h('span', {}, plural(links, 'same-photo link'), nNew ? [' ', h('span', { class: 'tag new', text: nNew + ' new' })] : ''),
+        h('span', {}, plural(j.pics.length, 'picture'), j.bg && !j.finished ? [h('br'), h('small', { class: 'muted', text: j.started ? 'Running in the pinned tab · ' + j.pics.filter(p => Object.values(p.runs).every(r => !['wait', 'go', 'captcha'].includes(r.state))).length + ' done' : 'Waiting for the pinned tab' })] : null),
+        h('span', {}, plural(links, 'same-photo link'), nNew ? [' ', h('span', { class: 'tag new', text: nNew + ' new' })] : ''),
         h('span', {}, h('button', { class: 'btn', text: 'Open', onclick: () => goResults(j.id) })),
         h('button', { class: 'del', title: 'Delete this search from the list (the copies it found stay in All copies found)', text: '🗑', onclick: async () => {
           await RS_DB.del('jobs', j.id); renderPast();
           banner([h('b', { text: 'Search deleted. ' }), 'The copies it found are still in All copies found.', h('span', { class: 'sp' }), h('button', { text: '↶ Undo', onclick: async () => { await RS_DB.put('jobs', j.id, j); banner(null); renderPast(); } })], 'info');
         } }));
     })) : h('div', { class: 'none', text: 'No searches yet.' }));
+  // A search running in the pinned tab: the list shows how far it is, so it is read again now and then.
+  clearTimeout(pastTimer);
+  if (jobs.some(j => j.bg && !j.finished)) pastTimer = setTimeout(renderPast, 15000);
 }
+let pastTimer = null;
 
 // =====================================================================================
 // Start

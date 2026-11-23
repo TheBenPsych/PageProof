@@ -53,6 +53,9 @@ const RS_JOB = (() => {
     const job = {
       id: 'rs' + Date.now() + Math.random().toString(36).slice(2, 5), created: new Date().toISOString(), engines,
       speed: opts.speed || (opts.kind === 'keep' ? 'careful' : s.speed), closeTabs: true, kind: opts.kind || 'new', folder: opts.kind === 'fifty', auto: !!opts.auto, started: false,
+      // Searches you start (New search, today's 50, photos picked in Your photos) run in the pinned
+      // Keep searching tab, not in the page you started them from (4.11, Ben).
+      bg: opts.kind !== 'keep',
       limits: { tabs: hw.limits.tabs, checks: hw.limits.checks },
       pics: pics.map((p, i) => ({ ...p, i, links: [], runs: Object.fromEntries(engines.map(e => [e, { state: 'wait' }])) })),
     };
@@ -63,18 +66,27 @@ const RS_JOB = (() => {
     } catch (e) { /* ignore */ }
     return job;
   }
-  // Show its results (where the searches run) inside the full PageProof page, as
-  // app.html#results?job=ID. No separate window: from PageProof itself the page just switches;
-  // from anywhere else a PageProof tab opens next to the tab you're in. The search tabs open as
-  // small pinned tabs in that same browser window.
-  async function open(job) {
+  // Hand a search to the small pinned Keep searching tab, which runs it in the background (one big
+  // search at a time, in the order they were started), so no page has to stay open and no new tab
+  // pulls you away from your work (4.11, Ben). Inside the full PageProof page you then see its
+  // progress (app.html#results?job=ID); from anywhere else nothing opens: All searches shows it.
+  async function queue(id) {
+    const q = (await api.storage.local.get('fcBgJobs')).fcBgJobs || [];
+    if (!q.includes(id)) q.push(id);
+    await api.storage.local.set({ fcBgJobs: q });
+    await api.runtime.sendMessage({ type: 'fcBgStart' }).catch(() => {});
+  }
+  async function open(job, opts = {}) {
+    if (job.bg) await queue(job.id);
     const hash = 'results?job=' + encodeURIComponent(job.id);
+    if (opts.quiet) return;
     try { if (/\/app\.html$/.test(window.top.location.pathname)) { window.top.location.hash = hash; return; } } catch (e) { /* not inside PageProof */ }
+    if (job.bg) return;
     const url = api.runtime.getURL('app.html#' + hash);
     let here = null;
     try { here = await api.tabs.getCurrent(); } catch (e) { /* not in a tab */ }
     try { await api.tabs.create(here ? { url, windowId: here.windowId, index: here.index + 1, active: true } : { url, active: true }); }
     catch (e) { await api.tabs.create({ url, active: true }); }
   }
-  return { prepare, create, open, settings, resting, ENGINES };
+  return { prepare, create, open, queue, settings, resting, ENGINES };
 })();
