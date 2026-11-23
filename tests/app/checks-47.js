@@ -1,5 +1,5 @@
 // Checks for 4.7: the calmer details panel (Look at these, tabs, picture views, pinned answers,
-// More menu) and the Copies found list (number tiles, dropdowns, Damages + Client columns,
+// More menu) and the Copies found list (Quick filters, chosen = blue, Showing line, dropdowns, Damages + Client columns,
 // Columns menu, sticky group headings). Pretend photos and sites only.
 const { start } = require('./h.js');
 process.env.NP = 400; process.env.NC = 120;
@@ -29,12 +29,22 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await shot('47-found');
 
   // ---- list
-  const t = await page.evaluate(() => [...document.querySelectorAll('.ftile')].map(b => b.textContent.replace(/\s+/g, ' ').trim()));
-  ok(t.length === 5 && /New/.test(t[0]) && /last 3 months/.test(t[4]), 'Five number tiles at the top (' + t.join(' | ') + ')');
-  await page.click('.ftile[data-v="fresh"]'); await page.waitForTimeout(600);
+  const t = await page.evaluate(() => [...document.querySelectorAll('.qf')].map(b => b.textContent.replace(/\s+/g, ' ').trim()));
+  ok(t.length === 4 && /Found today/.test(t[0]) && /last 3 months/.test(t[3]), 'Four Quick filter buttons (' + t.join(' | ') + ')');
+  await page.click('.qf[data-v="fresh"]'); await page.waitForTimeout(600);
   const fr = await page.evaluate(id => ({ n: LIST.length, has: LIST.includes(id) }), ids.fresh);
   ok(fr.n >= 1 && fr.has, 'The "Published in the last 3 months" tile filters to recent photos (' + fr.n + ')');
-  await page.click('.ftile[data-v="fresh"]'); await page.waitForTimeout(500);
+  const on = await page.evaluate(() => { const b = document.querySelector('.qf[data-v="fresh"]'); return { on: b.classList.contains('on'), tick: !!b.querySelector('.tick'), bg: getComputedStyle(b).backgroundColor, showing: (document.querySelector('.showing') || {}).textContent || '' }; });
+  ok(on.on && on.tick && !/255, 255, 255/.test(on.bg) && /Published in the last 3 months/.test(on.showing) && /Clear filters/.test(on.showing), 'A chosen Quick filter is solid blue with a tick, and the Showing line names it (' + on.bg + ')');
+  await page.click('.qf[data-v="fresh"]'); await page.waitForTimeout(500);
+  ok(await page.evaluate(() => !document.querySelector('.showing')), 'The Showing line goes away when nothing is filtered');
+  if (SHOTS) { await page.evaluate(() => { state.fMatch = 'strong'; state.fFresh = true; state.fView = 'client'; return render(true); }); await page.waitForTimeout(500); await page.screenshot({ path: SHOTS + '/411-filters.png', clip: { x: 0, y: 0, width: 1920, height: 620 } });
+    await page.evaluate(() => { state.fFresh = false; state.fView = 'list'; return render(true); }); }
+  await page.evaluate(() => { state.fMatch = 'strong'; return render(true); }); await page.waitForTimeout(400);
+  const ch = await page.evaluate(() => ({ n: document.querySelectorAll('.ddb.chosen').length, x: !!document.querySelector('[data-dd="fMatch"] .ddx'), tab: (document.querySelector('.found-card .tabs button.on .tick') || {}).textContent }));
+  ok(ch.n === 1 && ch.x && ch.tab === '✓', 'A changed dropdown lights up with an ✕, and the chosen status tab has a tick');
+  await page.click('[data-dd="fMatch"] .ddx'); await page.waitForTimeout(400);
+  ok(await page.evaluate(() => state.fMatch === 'any' && !document.querySelector('.ddb.chosen')), 'The ✕ puts the dropdown back to normal');
   const dm = await page.evaluate(ids => {
     const cell = id => { const r = document.querySelector(`.crow[data-v="${CSS.escape(id)}"] .cc-dmg`); return r ? r.textContent.trim() : null; };
     return { fresh: cell(ids.fresh), old: cell(ids.old), nodate: cell(ids.nodate) };
@@ -117,7 +127,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   // dark mode: no white boxes in the panel
   await page.evaluate(() => { const st = document.createElement('style'); st.textContent = '*{transition:none!important}'; document.head.appendChild(st); document.documentElement.dataset.theme = 'dark'; }); await page.waitForTimeout(500);
   await shot('47-panel-dark');
-  const white = await page.evaluate(() => { const lum = c => { const m = c.match(/[\d.]+/g).map(Number); return m.length > 3 && m[3] === 0 ? -1 : (0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2]) / 255; }; return [...document.querySelectorAll('#drawer *, .ftiles *, .toolbar *')].filter(e => e.offsetParent && !e.closest('img,.handle,.ftile.hero') && e.getBoundingClientRect().width > 30 && lum(getComputedStyle(e).backgroundColor) > 0.85).map(e => e.className + '@' + (e.closest('[id]') || {}).id + ':' + getComputedStyle(e).backgroundColor + ':' + e.textContent.trim().slice(0,10)).slice(0, 3); });
+  const white = await page.evaluate(() => { const lum = c => { const m = c.match(/[\d.]+/g).map(Number); return m.length > 3 && m[3] === 0 ? -1 : (0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2]) / 255; }; return [...document.querySelectorAll('#drawer *, .qfrow *, .toolbar *')].filter(e => e.offsetParent && !e.closest('img,.handle') && e.getBoundingClientRect().width > 30 && lum(getComputedStyle(e).backgroundColor) > 0.85).map(e => e.className + '@' + (e.closest('[id]') || {}).id + ':' + getComputedStyle(e).backgroundColor + ':' + e.textContent.trim().slice(0,10)).slice(0, 3); });
   ok(!white.length, 'Nothing white in dark mode ' + white.join(', '));
   await ctx.close();
   console.log(fails ? fails + ' FAILED' : 'ALL PASSED');
