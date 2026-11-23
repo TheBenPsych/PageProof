@@ -91,14 +91,18 @@ let redrawT = null;
 // Keep searching writes a heartbeat every 30 seconds. Only what you can see counts as a change.
 const statusLook = s => (s ? [s.state, s.text, s.current && s.current.id].join('|') : '');
 api.storage.onChanged.addListener(ch => {
-  if ((ch.fcEngines || ch.ppUpdate) && ['home', 'health'].includes(route()) && !state.upBusy) { clearTimeout(redrawT); redrawT = setTimeout(() => render(true), 600); return; }
+  if ((ch.fcEngines || ch.ppUpdate) && ['home', 'health'].includes(state.shown) && !state.upBusy) { clearTimeout(redrawT); redrawT = setTimeout(() => render(true), 600); return; }
   if (!ch.fcChanged && !ch.fcStatus) return;
   if (!ch.fcChanged && statusLook(ch.fcStatus.oldValue) === statusLook(ch.fcStatus.newValue)) return;
-  if (ch.fcStatus && !['keep', 'home'].includes(route())) return;
-  if (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  if (ch.fcStatus && !['keep', 'home'].includes(state.shown)) return;
+  // Don't redraw under someone typing. A ticked checkbox or a pressed button keeps focus too, but
+  // must not stop the page from showing what changed (4.6.1).
+  const fe = document.activeElement;
+  if (fe && (fe.tagName === 'TEXTAREA' || fe.tagName === 'SELECT' || (fe.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|range|color|file)$/i.test(fe.type)))) return;
   if (document.querySelector('dialog[open]')) return;
   clearTimeout(redrawT);
-  redrawT = setTimeout(() => { if (!FRAMES[route()] && V[route()] && !V[route()].noAutoRedraw) render(true); }, ch.fcStatus ? 400 : 1500);
+  // state.shown, not route(): a guard can show another page (setup) under this address (see 4.0.10).
+  redrawT = setTimeout(() => { const s = state.shown || route(); if (!FRAMES[route()] && V[s] && !V[s].noAutoRedraw) render(true); }, ch.fcStatus ? 400 : 1500);
 });
 document.getElementById('themeBtn').onclick = () => ppTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
 document.getElementById('menuBtn').onclick = () => document.getElementById('side').classList.toggle('open');
@@ -463,7 +467,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
-  ['Folder list in Connect your photos shows again', 'In step 3 of Connect your photos the list of folders had shrunk to a tiny faint box, so there was nothing to tick. It is back to full size. And choosing the same top folder again (after a reinstall) now keeps the folders you had ticked instead of starting over.'],
+  ['Folder list in Connect your photos shows again', 'In step 3 of Connect your photos the list of folders had shrunk to a tiny faint box, so there was nothing to tick. It is back to full size. And choosing the same top folder again (after a reinstall) now keeps the folders you had ticked instead of starting over. Pages also no longer wait for you to click somewhere else before showing what changed after you tick a box.'],
   ['One PageProof folder', 'PageProof can now live in the same folder as your saved work: the program goes in Documents › PageProof › Install, and your finds, settings and lists stay in Documents › PageProof. PageProof never writes inside Install, and it refuses that folder if you pick it by mistake. From this version PageProof also keeps the same ID wherever its folder is, so moving or reinstalling it no longer loses what is stored in the browser.'],
   ['Symbols in the right-click menu', 'Every PageProof item in the right-click menu now starts with a small symbol, like 📸 Capture this page or 🔍 Find copies of it, so you can tell them apart at a glance.'],
   ['A red dot instead of a number', 'The PageProof icon in the toolbar now shows a small red dot in its top-right corner when new copies are waiting, so the logo stays visible. Hover the icon to see how many.'],

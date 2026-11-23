@@ -8,6 +8,7 @@ pretend Google Drive folder, pretend copies found). No real photos, clients or w
 
 | File | What it checks |
 | --- | --- |
+| `checks-setup.js` | Connect your photos step 3: the folder list shows, the same top folder keeps your ticks, and every click shows its result at once |
 | `checks-answers.js` | Stolen / Licensed / Remove / Skip, Undo, the weekly numbers, photo folders, flags, the backup files |
 | `checks-previews.js` | Preview pictures are stored separately and still show on every page |
 | `checks-new.js` | Skipped photos, a broken search site, repeat offenders, Approve site, "Is everything working?", update notice |
