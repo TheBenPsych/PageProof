@@ -202,6 +202,20 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     ok(t > 100, 'Page ' + r + ' opens even when Google Drive never answers');
   }
   await stuck.close();
+  // 4.3.5: Drive is up but listing the top folder is slow (a minute on a big shared drive): pages draw at once, no red bar
+  const slow = await ctx.newPage();
+  await slow.addInitScript(() => {
+    const D = FileSystemDirectoryHandle.prototype, orig = D.entries;
+    D.entries = function () { const it = orig.call(this); return { next: () => new Promise(r => setTimeout(() => r(it.next()), 20000)), [Symbol.asyncIterator]() { return this; } }; };
+  });
+  for (const r of ['found', 'clients', 'keep']) {
+    const t0 = Date.now();
+    await slow.goto(url('app.html#' + r));
+    await slow.waitForFunction(() => document.getElementById('view').textContent.length > 100, null, { timeout: 15000 }).catch(() => {});
+    const ms = Date.now() - t0, txt = await slow.evaluate(() => document.getElementById('view').textContent);
+    ok(ms < 6000 && !/isn't answering/.test(txt), 'Page ' + r + ' opens quickly with no red bar when Drive is only slow (' + ms + ' ms)');
+  }
+  await slow.close();
   await page.evaluate(async () => { await RS_DB.del('handles', 'docs'); await RS_DB.del('handles', 'fcExtra:Hang test'); });
   console.log(fails ? fails + ' FAILED' : 'ALL PASSED');
   await ctx.close(); process.exit(fails ? 1 : 0);
