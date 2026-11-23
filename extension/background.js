@@ -579,42 +579,44 @@ async function captureUrl(url, near) {
   return { ok: true };
 }
 
-// ---------- Keep searching: keep its small window open ----------
-// It writes a heartbeat (fcStatus.beat) every 30 seconds. If that stops while Keep searching is
-// on, the window is opened again, minimised. If you close it yourself, it stays closed until the
-// browser is opened again.
+// ---------- Keep searching: keep its pinned tab open ----------
+// The helper (runner.html) lives in a small pinned PageProof tab (4.4.3, Ben's pick: no extra
+// window or taskbar icon). It writes a heartbeat (fcStatus.beat) every 30 seconds. If that stops
+// while Keep searching is on, the tab is opened again. If you close it yourself, it stays closed
+// (PageProof shows a "Start it again" button) until the browser is opened again.
 async function keepAlive(show, force) {
   const st = await api.storage.local.get(['fcKeep', 'fcStatus', 'fcDrive']);
   if (!st.fcKeep || !st.fcKeep.on || !st.fcDrive || !st.fcDrive.done) return;
   const ss = api.storage.session ? await api.storage.session.get('fcClosed').catch(() => ({})) : {};
   if (ss.fcClosed && !force) return;
-  // Never open it on its own when every browser window is closed (the browser can keep running in
-  // the background): it waits until a browser window is open again.
-  if (!(await normalWindows())) return;
+  // Never open it when every browser window is closed (the browser can keep running in the background).
+  const wins = await normalWindows();
+  if (!wins.length) return;
   if (api.storage.session) await api.storage.session.remove('fcClosed').catch(() => {});
-  // Already open? (Its heartbeat is fresh and its window is still there.)
+  // Already open? (Its heartbeat is fresh and its tab is still there.)
   const s = st.fcStatus;
-  if (s && s.win && Date.now() - s.beat < 90000) {
-    try { await api.windows.get(s.win); if (show) await api.windows.update(s.win, { focused: true, state: 'normal' }); return; } catch (e) { /* closed */ }
+  if (s && s.tabId && Date.now() - s.beat < 90000) {
+    try { const t = await api.tabs.get(s.tabId); if (show) { await api.tabs.update(t.id, { active: true }); await api.windows.update(t.windowId, { focused: true }); } return; } catch (e) { /* closed */ }
   }
-  // A second window closes itself if one is already running (see runner.js).
-  const url = api.runtime.getURL('runner.html');
-  const w = await api.windows.create({ url, type: 'popup', width: 520, height: 420, focused: !!show });
-  if (!show) await api.windows.update(w.id, { state: 'minimized' }).catch(() => {});
-  runnerWin = w.id;
+  // A second helper closes itself if one is already running (see runner.js).
+  const win = wins.find(w => w.focused) || wins[0];
+  const t = await api.tabs.create({ windowId: win.id, url: api.runtime.getURL('runner.html'), pinned: true, index: 0, active: !!show });
+  // Browsers put quiet tabs to sleep to save memory; this one must stay awake to keep searching.
+  api.tabs.update(t.id, { autoDiscardable: false }).catch(() => {});
+  runnerTab = t.id;
 }
-let runnerWin = null;
-const normalWindows = async () => { try { return (await api.windows.getAll({ windowTypes: ['normal'] })).length; } catch (e) { return 1; } };
-api.windows.onRemoved.addListener(async id => {
+let runnerTab = null;
+const normalWindows = async () => { try { return await api.windows.getAll({ windowTypes: ['normal'] }); } catch (e) { return [{ id: undefined }]; } };
+// You closed the helper tab yourself (not by closing the whole window): it stays closed until the
+// browser opens again, or you press Start it again in PageProof.
+api.tabs.onRemoved.addListener(async (id, info) => {
   const st = (await api.storage.local.get('fcStatus')).fcStatus;
-  const rid = runnerWin || (st && st.win);
-  if (id === runnerWin || (st && st.win === id)) { runnerWin = null; if (!closingRunner && api.storage.session) api.storage.session.set({ fcClosed: Date.now() }).catch(() => {}); closingRunner = false; return; }
-  // The last browser window was closed: close the small Keep searching window too, so nothing is
-  // left in the taskbar. It opens again (minimised) with the next browser window.
-  if (rid && !(await normalWindows())) { closingRunner = true; api.windows.remove(rid).catch(() => { closingRunner = false; }); }
+  if (id !== runnerTab && !(st && st.tabId === id)) return;
+  runnerTab = null;
+  await api.storage.local.set({ fcStatus: { ...(st || {}), state: 'closed', beat: 0 } }).catch(() => {});
+  if (!info.isWindowClosing && api.storage.session) api.storage.session.set({ fcClosed: Date.now() }).catch(() => {});
 });
-let closingRunner = false;
-// A browser window opened again (after the last one was closed): start Keep searching again.
+// A browser window opened again: start Keep searching again (it closed with the last window).
 api.windows.onCreated.addListener(w => { if (w && w.type === 'normal') setTimeout(() => keepAlive(false), 3000); });
 // Today's 50 at the time you picked (weekdays), if "Start by itself" is on.
 async function fiftySchedule() {

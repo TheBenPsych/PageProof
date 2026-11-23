@@ -44,7 +44,7 @@ async function healthLights() {
   if (!d.done) L.push(['grey', 'Keep searching', 'Waiting for the photos to be connected.']);
   else if (!k.on) L.push(['grey', 'Keep searching', 'Switched off.', '<a class="btn sm" href="#keep">Open Keep searching</a>']);
   else if (st.fcPause) L.push(['warn', 'Keep searching', 'Paused by you.', '<a class="btn sm" href="#keep">Open Keep searching</a>']);
-  else if (!alive) L.push(['warn', 'Keep searching', 'Switched on, but its small window is not running.', '<button class="btn sm" data-act="keepshow">Start it</button>']);
+  else if (!alive) L.push(['warn', 'Keep searching', 'Switched on, but its pinned tab is not running.', '<button class="btn sm" data-act="keepshow">Start it</button>']);
   else L.push([['offline', 'allow', 'setup'].includes(s.state) ? 'warn' : 'ok', 'Keep searching', s.text || 'Running.']);
   // Last photo searched
   const last = st.fcLastSearch;

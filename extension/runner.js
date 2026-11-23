@@ -1,5 +1,5 @@
 // Keep searching: searches the photos in the shared Google Drive one at a time, all day, in this
-// small window (it can be minimised). The background opens it when Keep searching is on.
+// small pinned PageProof tab. The background opens it when Keep searching is on.
 //  - Rests between photos (the pace), only in the hours you picked.
 //  - Waits while today's 50 run, while Google Drive can't be reached, while the computer is busy
 //    or on low battery, and gives a search site an hour's rest if it asks "are you a robot".
@@ -8,12 +8,12 @@
 //  - Checks once a week that copies marked Stolen are still online, and reads who is behind new sites.
 const api = globalThis.browser || globalThis.chrome;
 const $ = id => document.getElementById(id);
-const S = { job: null, tab: null, started: 0, last: 0, skip: new Set(), win: null, cpu: null, busyTicks: 0, ticking: false, allowAsked: 0 };
+const S = { me: null, job: null, tab: null, started: 0, last: 0, skip: new Set(), win: null, cpu: null, busyTicks: 0, ticking: false, allowAsked: 0 };
 const NAMES = { google: 'Google', yandex: 'Yandex', bing: 'Bing' };
 const time = t => new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 
 async function status(state, text, extra = {}) {
-  const st = { state, text, beat: Date.now(), win: S.win, ...extra };
+  const st = { state, text, beat: Date.now(), win: S.win, tabId: S.me, ...extra };
   S.lastSt = st;
   await api.storage.local.set({ fcStatus: st });
   const LABEL = { running: ['Searching', 'ok'], waiting: ['Resting', 'ok'], off: ['Off', 'grey'], paused: ['Paused', 'grey'], hours: ['Outside your hours', 'grey'], fifty: ['Paused for today\'s 50', 'warn'],
@@ -166,6 +166,7 @@ async function step() {
   S.job = job.id; S.started = Date.now(); S.last = Date.now();
   S.current = { id: p.id, name: p.name, sub: (p.client || 'Client unknown') + ' · on ' + job.engines.map(e => NAMES[e]).join(', '), thumb: pic.thumb };
   // Pinned: a small icon at the left of the tab bar instead of a full tab.
+  try { S.win = (await api.tabs.getCurrent()).windowId; } catch (e) { /* not in a tab */ }   // the tab may have been dragged to another window
   const opts = { windowId: S.win, url: api.runtime.getURL('revsearch.html?job=' + job.id), active: false };
   let t;
   try { t = await api.tabs.create({ ...opts, pinned: true }); } catch (e) { t = await api.tabs.create(opts); }
@@ -204,7 +205,7 @@ $('open').onclick = e => { e.preventDefault(); api.tabs.create({ url: api.runtim
     const mine = await new Promise(res => navigator.locks.request('pageproof-keep-searching', { ifAvailable: true }, lock => { res(!!lock); return lock ? new Promise(() => {}) : null; }));
     if (!mine) { window.close(); return; }
   }
-  try { const me = await api.tabs.getCurrent(); S.win = me.windowId; } catch (e) { /* not in a tab */ }
+  try { const me = await api.tabs.getCurrent(); S.win = me.windowId; S.me = me.id; } catch (e) { /* not in a tab */ }
   await RS_LISTS.load().catch(() => {});
   FC.movePics().catch(() => {});
   tick();

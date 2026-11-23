@@ -445,12 +445,12 @@ Object.assign(ACTS, {
 
 // ---------------------------------------------------------------- Keep searching and today's 50
 const STATE_TAG = { running: ['Searching', 'ok'], waiting: ['Resting between photos', 'ok'], off: ['Off', 'grey'], paused: ['Paused', 'grey'], hours: ['Outside your hours', 'grey'], fifty: ['Paused while today\'s 50 run', 'warn'],
-  offline: ['Google Drive offline', 'bad'], allow: ['Needs one click', 'warn'], busy: ['Computer busy', 'warn'], resting: ['Search sites resting', 'warn'], setup: ['Not set up', 'warn'], idle: ['Nothing due right now', 'ok'] };
+  offline: ['Google Drive offline', 'bad'], allow: ['Needs one click', 'warn'], busy: ['Computer busy', 'warn'], resting: ['Search sites resting', 'warn'], setup: ['Not set up', 'warn'], idle: ['Nothing due right now', 'ok'], closed: ['Stopped', 'bad'] };
 V.keep = async () => {
   if (routeArg('start50')) { history.replaceState(null, '', '#keep'); setTimeout(() => ACTS.fifty(), 300); }
   const [k, st, cov, hw, store] = [await FC.keep(), (await api.storage.local.get('fcStatus')).fcStatus, await FC.coverage(), await ppHardware(), await api.storage.local.get(['fcToday', 'fcRest', 'fcPause', 'fcFifty'])];
   const alive = st && Date.now() - st.beat < 90000;
-  const s = !k.on ? 'off' : store.fcPause ? 'paused' : alive ? st.state : 'waiting';
+  const s = !k.on ? 'off' : store.fcPause ? 'paused' : alive ? st.state : st && st.state === 'closed' ? 'closed' : 'waiting';
   const [tl, tc] = STATE_TAG[s] || ['Starting', 'grey'];
   const today = store.fcToday && store.fcToday.day === new Date().toDateString() ? store.fcToday : { searched: 0, found: 0 };
   const rest = Object.entries(store.fcRest || {}).filter(([, t]) => t > Date.now());
@@ -464,13 +464,14 @@ V.keep = async () => {
   const fifty = store.fcFifty && Date.now() - store.fcFifty.beat < 60000;
   const hourOpts = Array.from({ length: 24 }, (_, h) => h);
   const hlabel = h => new Date(2000, 0, 1, h).toLocaleTimeString(undefined, { hour: 'numeric' });
-  return `${head('Find copies', 'Keep searching', 'Searches your clients\' photos one at a time, all day, in a small window you can minimise. It goes gently so the search sites don\'t block you.')}
+  return `${head('Find copies', 'Keep searching', 'Searches your clients\' photos one at a time, all day, in a small pinned PageProof tab. It goes gently so the search sites don\'t block you.')}
   ${await driveBanner()}
+  ${k.on && !store.fcPause && st && st.state === 'closed' ? keepClosedBanner() : ''}
   <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
     <div class="row"><label class="switch"><input type="checkbox" data-act="keepon" ${k.on ? 'checked' : ''}><span></span></label><h2>Keep searching is ${k.on ? 'on' : 'off'}</h2><span class="tag ${tc}" style="margin-left:auto">${tl}</span></div>
-    ${k.on ? `<p class="muted" style="margin:0">${esc(alive ? st.text : 'Starting the search window…')}</p>
+    ${k.on ? `<p class="muted" style="margin:0">${esc(alive ? st.text : st && st.state === 'closed' ? 'Stopped: its pinned tab was closed.' : 'Starting the search tab…')}</p>
       ${alive && st.current ? `<div class="row" style="gap:10px"><img class="thumb" src="${safeImg(st.current.thumb) || 'icons/icon48.png'}" width="64" height="44" alt=""><div><b>${esc(st.current.name)}</b><div class="muted" style="font-size:13px">${esc(st.current.sub || '')}</div></div></div>` : ''}
-      <div class="row"><button class="btn" data-act="keeppause">${store.fcPause ? 'Resume' : 'Pause'}</button><button class="btn" data-act="keepshow">Show the search window</button>${broken.length ? `<span style="font-size:13.5px;color:var(--bad)">May have stopped working, resting: ${broken.map(([e, t]) => esc(FC.ENGINE_NAME[e]) + ' until ' + new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })).join(', ')}. <a href="#health">Details</a></span>` : ''}${rest.length ? `<span class="muted" style="font-size:13.5px">Resting after a robot check: ${rest.map(([e, t]) => esc({ google: 'Google', yandex: 'Yandex', bing: 'Bing' }[e] || e) + ' until ' + new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })).join(', ')}</span>` : ''}</div>`
+      <div class="row"><button class="btn" data-act="keeppause">${store.fcPause ? 'Resume' : 'Pause'}</button><button class="btn" data-act="keepshow">Show the search tab</button>${broken.length ? `<span style="font-size:13.5px;color:var(--bad)">May have stopped working, resting: ${broken.map(([e, t]) => esc(FC.ENGINE_NAME[e]) + ' until ' + new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })).join(', ')}. <a href="#health">Details</a></span>` : ''}${rest.length ? `<span class="muted" style="font-size:13.5px">Resting after a robot check: ${rest.map(([e, t]) => esc({ google: 'Google', yandex: 'Yandex', bing: 'Bing' }[e] || e) + ' until ' + new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })).join(', ')}</span>` : ''}</div>`
     : '<p class="muted" style="margin:0">Turn it on and PageProof searches in the background while you work. You can stop it any time.</p>'}
     <div class="grid g3">
       <div class="stat"><b>${today.searched}</b><span>photos searched today</span></div>
@@ -513,11 +514,11 @@ Object.assign(ACTS, {
     await FC.setKeep({ on: el.checked });
     if (el.checked) { await api.storage.local.remove('fcPause'); api.runtime.sendMessage({ type: 'fcKeepWake' }).catch(() => {}); }
     else api.runtime.sendMessage({ type: 'fcKeepStop' }).catch(() => {});
-    toast(el.checked ? 'Keep searching is on. A small search window opens; you can minimise it.' : 'Keep searching is off.');
+    toast(el.checked ? 'Keep searching is on. It runs in a small pinned PageProof tab.' : 'Keep searching is off.');
     render(true);
   },
   keeppause: async () => { const p = (await api.storage.local.get('fcPause')).fcPause; if (p) await api.storage.local.remove('fcPause'); else await api.storage.local.set({ fcPause: Date.now() }); render(true); },
-  keepshow: async () => { const st = (await api.storage.local.get('fcStatus')).fcStatus; try { if (st && st.win) { await api.windows.update(st.win, { focused: true, state: 'normal' }); return; } } catch (e) { /* closed */ } api.runtime.sendMessage({ type: 'fcKeepWake', show: true }).catch(() => {}); },
+  keepshow: async () => { await api.runtime.sendMessage({ type: 'fcKeepWake', show: true }).catch(() => {}); setTimeout(() => render(true), 1500); },
   keepset: async v => { const [f, x] = v.split('|'); await FC.setKeep({ [f]: x }); render(true); },
   keepnum: async (v, el) => { await FC.setKeep({ [v]: +el.value }); render(true); },
   keepwd: async (v, el) => { await FC.setKeep({ weekdays: el.checked }); },
@@ -543,3 +544,8 @@ Object.assign(ACTS, {
     await RS_JOB.open(job);
   },
 });
+
+// Shown when Keep searching is on but you closed its pinned tab (Ben, 4.4.3).
+function keepClosedBanner() {
+  return `<div class="banner warn" role="alert">${ic('help', 22)}<div style="flex:1 1 260px;min-width:0"><b>Keep searching is stopped</b><div style="font-size:13.5px">Its pinned PageProof tab was closed, so no new photos are being searched.</div></div><button class="btn primary" data-act="keepshow">Start it again</button></div>`;
+}

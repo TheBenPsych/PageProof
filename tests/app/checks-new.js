@@ -201,6 +201,24 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     const t = r === 'searches' && fr ? await fr.evaluate(() => document.body.innerText.length) : await stuck.evaluate(() => document.getElementById('view').textContent.length);
     ok(t > 100, 'Page ' + r + ' opens even when Google Drive never answers');
   }
+  // 4.4.3: Keep searching runs in a pinned tab (no extra window); closing it shows Start it again
+  {
+    const sw = ctx.serviceWorkers()[0];
+    const kv = await page.evaluate(async () => (await chrome.storage.local.get('fcKeep')).fcKeep);
+    await page.evaluate(() => chrome.storage.local.set({ fcKeep: { ...(window.__k = {}), on: true } }));
+    await sw.evaluate(() => keepAlive(false, true)); await page.waitForTimeout(4000);
+    const info = await sw.evaluate(async () => ({ pinned: (await chrome.tabs.query({ pinned: true })).length, popups: (await chrome.windows.getAll({ windowTypes: ['popup'] })).length }));
+    ok(info.pinned >= 1 && info.popups === 0, 'Keep searching opens as a pinned tab, not a separate window');
+    const rp = ctx.pages().find(x => x.url().includes('runner.html'));
+    if (rp) await rp.close();
+    await page.waitForTimeout(1500);
+    await page.goto(url('app.html#keep')); await page.waitForTimeout(2000);
+    ok(await page.evaluate(() => /Keep searching is stopped/.test(document.body.textContent) && !!document.querySelector('.banner [data-act="keepshow"]')), 'Closing the pinned tab shows Keep searching is stopped with Start it again');
+    await page.evaluate(() => document.querySelector('.banner [data-act="keepshow"]').click()); await page.waitForTimeout(4000);
+    ok(ctx.pages().some(x => x.url().includes('runner.html')), 'Start it again opens the pinned tab again');
+    for (const x of ctx.pages()) if (x.url().includes('runner.html')) await x.close();
+    await page.evaluate(k => chrome.storage.local.set({ fcKeep: k || { on: false } }), kv);
+  }
   // 4.3.7: after an update, the folders are checked first
   await page.evaluate(() => chrome.storage.local.set({ ppReconnectVer: '0.0.1' }));
   const rc = await ctx.newPage();
