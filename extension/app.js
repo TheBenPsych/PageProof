@@ -463,6 +463,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Folder list in Connect your photos shows again', 'In step 3 of Connect your photos the list of folders had shrunk to a tiny faint box, so there was nothing to tick. It is back to full size. And choosing the same top folder again (after a reinstall) now keeps the folders you had ticked instead of starting over.'],
   ['One PageProof folder', 'PageProof can now live in the same folder as your saved work: the program goes in Documents › PageProof › Install, and your finds, settings and lists stay in Documents › PageProof. PageProof never writes inside Install, and it refuses that folder if you pick it by mistake. From this version PageProof also keeps the same ID wherever its folder is, so moving or reinstalling it no longer loses what is stored in the browser.'],
   ['Symbols in the right-click menu', 'Every PageProof item in the right-click menu now starts with a small symbol, like 📸 Capture this page or 🔍 Find copies of it, so you can tell them apart at a glance.'],
   ['A red dot instead of a number', 'The PageProof icon in the toolbar now shows a small red dot in its top-right corner when new copies are waiting, so the logo stays visible. Hover the icon to see how many.'],
