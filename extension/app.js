@@ -41,7 +41,7 @@ function showLive(id) {
 
 // Only the newest redraw is put on screen. Drawing a page can take a moment (reading thousands of
 // copies), so a redraw that started earlier, for example one from Keep searching, could finish
-// after the one that follows a click and put old rows back (4.8.5). An older one now waits for the
+// after the one that follows a click and put old rows back (4.9.1). An older one now waits for the
 // newest instead.
 let RENDER_N = 0, RENDER_P = null;
 function render(keep) { const me = ++RENDER_N; const p = render1(keep, me); RENDER_P = p; return p; }
@@ -194,7 +194,7 @@ async function homeFinds() {
   const d = await FC.drive();
   if (!d.done) return { alerts: '', side: '', main: `<section class="card pad row" style="gap:14px"><span class="ic" style="color:var(--accent)">${ic('find', 26)}</span><div style="flex:1 1 260px"><h2>Search all your clients' photos, all day</h2><span class="muted" style="font-size:14px">Connect the shared Google Drive once and PageProof keeps looking for copies by itself.</span></div><a class="btn primary" href="#connect">Connect your photos</a></section>` };
   const [copies, st, k, store] = [await FC.allCopies(), (await api.storage.local.get('fcStatus')).fcStatus, await FC.keep(), await api.storage.local.get(['fcToday', 'fcDriveBack', 'fcDriveOffline', 'fcPause'])];
-  const vis = copies.filter(c => !RS_LISTS.isHidden(c.site, c.url));
+  const vis = copies.filter(c => !FC.hiddenCopy(c, RS_LISTS.hidden));
   const nNew = vis.filter(c => c.status === 'new').length;
   const back = vis.filter(c => c.status !== 'removed' && c.online === 'back');
   const stolen = vis.filter(c => c.status === 'stolen');
@@ -410,12 +410,30 @@ const kindOf = s => s.startsWith('.') ? 'Ending' : s.includes('/') ? 'Account or
 V.hidden = async () => {
   await RS_LISTS.load();
   const tab = state.hidTab, q = state.hidQ.toLowerCase();
+  // 4.9: which sites are social media (their copies go on the Social media tab of Copies found).
+  if (tab === 'social') {
+    await PP_SOCIAL.ready;
+    const mine = Object.entries(PP_SOCIAL.mine()).filter(([k]) => k.includes(q)).sort();
+    const built = [...new Set(Object.values(PP_SOCIAL.SITES).map(x => x[0]))].sort((a, b) => a.localeCompare(b));
+    return `${head('Settings', 'Hidden and approved sites', 'Hidden sites never show up in any search. Approved sites may use the photos: copies found there are marked Licensed by themselves.')}
+    <section class="card" style="overflow:hidden">
+      <div class="toolbar"><div class="tabs" role="tablist">${[['hidden', 'Hidden sites'], ['allowed', 'Approved for every client'], ['client', 'Approved for one client'], ['rejected', 'Rejected links'], ['social', 'Social sites']].map(([k, l]) => `<button role="tab" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}" data-act="hidtab" data-v="${k}">${l}</button>`).join('')}</div></div>
+      <div class="row" style="gap:10px;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--bg)">
+        <input id="hidq" class="chip" style="min-height:38px;padding:0 12px;font-size:14px;flex:1 1 260px" placeholder="Find or add a site, like photoverse.social" value="${esc(state.hidQ)}" aria-label="Find or add a site">
+        <button class="btn primary" data-act="socadd" data-v="social">＋ It's social media</button><button class="btn" data-act="socadd" data-v="web">It's a website</button></div>
+      <div class="scroll"><table><thead><tr><th>Site</th><th>Goes on</th><th></th></tr></thead><tbody>
+        ${mine.map(([k, v]) => `<tr><td><b class="mono" style="font-size:13px">${esc(k)}</b></td><td><span class="tag ${v === 'social' ? 'blue' : 'grey'}">${v === 'social' ? 'Social media' : 'Websites'}</span></td><td style="text-align:right"><button class="btn" style="min-height:30px" data-act="socforget" data-v="${esc(k)}">Forget my choice</button></td></tr>`).join('') || '<tr><td colspan="3" class="faint">You haven\'t marked any sites yet. PageProof asks you about a new social site the first time it sees one.</td></tr>'}
+      </tbody></table></div>
+      <details style="padding:12px 18px;border-top:1px solid var(--line)"><summary><b>${built.length} social sites PageProof already knows</b></summary><p class="muted" style="font-size:13px;margin:8px 0 0">${esc(built.join(', '))}</p></details>
+    </section>
+    <p class="faint" style="margin:0;font-size:12.5px">Copies on social sites go on the Social media tab of Copies found, where Stolen, Hide and Approve work per account. Saved with your settings backup.</p>`;
+  }
   // Approved for one client: kept with each client (site | client).
   const perClient = [];
   for (const c of await FC.DB.all('clients')) for (const s of c.licensed || []) perClient.push(s + ' | ' + c.name);
   const list = tab === 'rejected' ? RS_REJECT.items.map(r => r.url) : tab === 'client' ? perClient.sort().reverse() : RS_LISTS[tab];
   const rows = [...list].reverse().filter(s => s.toLowerCase().includes(q) && (tab === 'rejected' || tab === 'client' || state.hidKind === 'All' || kindOf(s) === state.hidKind));
-  const T = [['hidden', 'Hidden sites', RS_LISTS.hidden.length], ['allowed', 'Approved for every client', RS_LISTS.allowed.length], ['client', 'Approved for one client', perClient.length], ['rejected', 'Rejected links', RS_REJECT.items.length]];
+  const T = [['hidden', 'Hidden sites', RS_LISTS.hidden.length], ['allowed', 'Approved for every client', RS_LISTS.allowed.length], ['client', 'Approved for one client', perClient.length], ['rejected', 'Rejected links', RS_REJECT.items.length], ['social', 'Social sites', Object.keys(PP_SOCIAL.mine()).length]];
   const flat = tab === 'rejected' || tab === 'client';
   const page = rows.slice(0, state.hidMore || 100);
   return `${head('Settings', 'Hidden and approved sites', 'Hidden sites never show up in any search. Approved sites may use the photos: copies found there are marked Licensed by themselves.', `<button class="btn" data-act="hidsave">${ic('down', 18)} Download list</button><button class="btn" data-act="hidload">Add from a file</button>`)}
@@ -436,8 +454,17 @@ V.hidden = async () => {
 V.hidden.after = () => {
   const i = document.getElementById('hidq');
   i.oninput = () => { state.hidQ = i.value; state.hidMore = 0; render(true).then(() => { const j = document.getElementById('hidq'); j.focus(); j.setSelectionRange(j.value.length, j.value.length); }); };
-  i.onkeydown = e => { if (e.key === 'Enter' && !['rejected', 'client'].includes(state.hidTab)) act('hidadd'); };
+  i.onkeydown = e => { if (e.key === 'Enter' && state.hidTab === 'social') act('socadd', 'social'); else if (e.key === 'Enter' && !['rejected', 'client'].includes(state.hidTab)) act('hidadd'); };
 };
+Object.assign(ACTS, {
+  socadd: async v => {
+    const site = RS_SITE.tidy(state.hidQ || '').split('/')[0];
+    if (!site || site.startsWith('.')) return toast('Type a site, like photoverse.social');
+    await PP_SOCIAL.setMine(site, v); FC.backupSoon(); state.hidQ = '';
+    toast(site + (v === 'social' ? ' goes on the Social media tab now.' : ' goes on the Websites tab now.')); render(true);
+  },
+  socforget: async v => { await PP_SOCIAL.setMine(v, ''); FC.backupSoon(); toast('Forgot your choice for ' + v + '.'); render(true); },
+});
 document.getElementById('hidLoad').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (!f) return;
@@ -484,6 +511,12 @@ V.computer.after = () => {
 // =====================================================================================
 const NEWS = [
   ['An answer always takes the copy off the list', 'In Copies found, pressing Stolen, Licensed, Remove, Hide site, "All N stolen" or an answer in the details panel now takes the row off the list straight away, every time. Before, a page redraw that was already under way (for example while Keep searching was running) could put the answered row back. Clicking answers quickly on several rows also works now: none is lost. Undo still brings a row back.'],
+  ['Websites and Social media tabs', 'Copies found now has two tabs. On Social media each copy leads with the account that posted it, with one chip per platform, Group by account and an Accounts list. Each tab keeps its own filters.'],
+  ['Stolen, Hide and Approve work per account', 'Marking a social post Stolen remembers the account: its next posts say "Marked stolen before" and come first. Hide and Approve on social posts are for that one account. Hiding a whole platform comes with a warning.'],
+  ['The account, even when the link hides it', 'For Instagram /p/ links, TikTok short links and Facebook share links, PageProof follows the link, asks the site\'s public post info and reads the post page. Still missing? "Look in your browser" or paste the profile link.'],
+  ['The post instead of the live preview', 'Social sites block the live page preview, so social copies show the caption, date, likes and comments with Open post and Capture buttons.'],
+  ['New social sites caught', 'About 80 social sites are known. A new one (links like /@name/1234) is asked about once. Change any site in Settings › Hidden and approved sites › Social sites.'],
+  ['The same account elsewhere', 'The Account tab shows the same photo posted on other platforms, accounts with the same name elsewhere, and quick links to look for the name. "Same person" joins accounts so stolen counts add up.'],
   ['Big searches keep going in the background', 'A search of many photos (like today\'s 50) slowed to a stop when its page was not on screen, and Keep searching then started its one-photo searches in the middle of it. The search now keeps its own clock, so it carries on while you work in other tabs or pages, and the browser may not put it to sleep. Keep searching waits until it has really finished. If its page is closed or reloaded halfway, opening it again carries on where it stopped.'],
   ['PageProof logo on every search tab', 'Some pinned search tabs showed the Yandex or Bing picture icon instead of the PageProof logo. The logo now goes on as soon as the tab opens and stays on. Search tabs that fail now close too (they used to stay as sleeping tabs, which lost the logo); the tab button on the results page opens that page again.'],
   ['No more matches on the same press wall', 'Two different shots in front of the same sponsor wall (the same logos printed over and over) could line up on the logos and show as a copy. The photo check now looks at what lines up: if it is only logos that repeat elsewhere on the wall, it is a different photo. Compare says "Different photo, same backdrop". Copies already in your list are not changed, so remove the wrong ones once.'],

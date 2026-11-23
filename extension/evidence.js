@@ -147,6 +147,7 @@ const PP_EVIDENCE = (() => {
     y = table(y, 'Where and when', [
       ['Page', { t: copy.url, mono: true, max: 3 }],
       copy.title ? ['Page title', copy.title] : null,
+      copy.acct && copy.acct.handle ? ['Posted by', { t: copy.acct.handle + (copy.acct.url ? '  ' + copy.acct.url : ''), mono: true, max: 2 }] : null,
       reg ? ['Registration', [reg.va ? reg.va + ' (registered)' : '', reg.app ? 'application ' + reg.app : ''].filter(Boolean).join(' · ')] : ['Registration', { t: 'No registration number found in the client\'s folders', color: MUTED }],
       ours.path ? ['Client\'s file', { t: ours.path, mono: true, max: 3 }] : null,
       copy.use ? ['How it\'s used', copy.use] : null,

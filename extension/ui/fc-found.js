@@ -12,7 +12,7 @@ let FCD = null;          // what's loaded from the copies database (cleared when
 // next draw reads it again, but a click in between still finds its copy. (Clearing it outright
 // made a button press do nothing until the page was drawn again, 4.6.4.)
 let FCD_STALE = false;
-api.storage.onChanged.addListener(ch => { if (ch.fcChanged || ch.rsHidden || ch.fcHiddenCountries) FCD_STALE = true; });
+api.storage.onChanged.addListener(ch => { if (ch.fcChanged || ch.rsHidden || ch.rsAllowed || ch.fcHiddenCountries || ch.ppSocialSites) FCD_STALE = true; });
 
 const STATUS = { new: ['New', 'copy'], stolen: ['Stolen', 'bad'], licensed: ['Licensed', 'ok'], removed: ['Removed', 'grey'] };
 const RISK = { ok: ['Looks normal', ''], watch: ['Worth a look', 'warn'], sus: ['Suspicious', 'bad'] };
@@ -34,7 +34,7 @@ function regSync(p, regs) {
 }
 // Reading the copies can take seconds in a big library. Only one read runs at a time, and a read
 // that started before an answer or a hide on this page is thrown away and done again, so it can
-// never put an answered row back on the list (4.8.5). Until then FCD keeps the last copies, so a
+// never put an answered row back on the list (4.9.1). Until then FCD keeps the last copies, so a
 // click in between still finds its copy.
 let FCD_GEN = 0, FCD_P = null;
 function dropFC() { FCD_GEN++; FCD_STALE = true; }
@@ -63,7 +63,7 @@ async function readFC() {
     if (PEND.has(c.id)) c.status = PEND.get(c.id);   // answered a moment ago, still being saved
     if (!STATUS[c.status]) c.status = 'new';     // a line edited by hand in found-copies.txt
     c.risk = FC.riskOf(c, facts.get(c.site));
-    c.use = c.use || FC.useOf(c);
+    c.use = FC.useOf(c);          // 4.9: worked out again each time (your social-site choices can change it)
     if (!c.country) c.country = FC.countryOf(c.site);   // copies brought back from found-copies.txt had none
     const p = photos.get(c.photo);
     c.photoName = p ? p.name : c.photoName || 'Photo';
@@ -88,9 +88,11 @@ async function readFC() {
     c.repeat = Math.max(bySite, byOwner, 0);
     c.repeatWho = byOwner > bySite ? o.name : c.site;
   }
-  return { copies, photos, clients: new Map(clients.map(c => [c.name, c])), countries, facts, owners: ownerList, ownerOf };
+  // 4.9: accounts on social sites (stolen before is counted per account there, not per site).
+  const soc = await socIndex(copies);
+  return { copies, photos, clients: new Map(clients.map(c => [c.name, c])), countries, facts, owners: ownerList, ownerOf, ...soc };
 }
-const siteHidden = c => RS_LISTS.isHidden(c.site, c.url) || (PEND_ARR.length > 0 && !!RS_SITE.entryFor(c.site, c.url, PEND_ARR));
+const siteHidden = c => FC.hiddenCopy(c, RS_LISTS.hidden) || (PEND_ARR.length > 0 && FC.hiddenCopy(c, PEND_ARR));
 const repeatTag = c => c.repeat && c.status === 'new' ? `<span class="tag bad" style="font-size:11.5px" title="You already marked ${c.repeat} ${c.repeat === 1 ? 'copy' : 'copies'} on ${esc(c.repeatWho)} as Stolen">${c.repeat} stolen before</span>` : '';
 const actScore = c => (c.status === 'new' || c.status === 'stolen' ? 40 : 0) + (c.repeat && c.status === 'new' ? 30 : 0) + (c.online === 'back' ? 45 : c.online === 'up' ? 20 : 0) + (c.use === 'shop' ? 20 : 0) + (c.credit === 'removed' ? 12 : 0) + (c.risk.level === 'sus' ? -6 : 0) + (c.pct || 0) / 10;
 const onlineText = c => c.online === 'back' ? 'Back online' + (c.backAt ? ' ' + shortDate(c.backAt) : '') : c.online === 'gone' ? 'Gone' + (c.goneAt ? ' since ' + shortDate(c.goneAt) : '') : 'Still up';
@@ -143,12 +145,13 @@ async function loadOurs(root = document) {
 function passMain(c) {
   return (state.fClient === 'Any' || (c.clientName || 'Client unknown') === state.fClient) && (state.fUse === 'Any' || c.use === state.fUse) &&
     (state.fRisk === 'Any' || c.risk.level === state.fRisk) && (state.fCredit === 'Any' || (c.credit || '') === state.fCredit) && (!state.fShop || c.use === 'shop') && (!state.fRepeat || (c.repeat > 0 && c.status === 'new')) &&
-    (!state.fOwner || (FCD.ownerOf.get(c.site) || {}).key === state.fOwner) && (!state.fFresh || (c.dmg && c.dmg.end && Date.now() <= c.dmg.end.getTime())) && passMore(c);
+    (!state.fOwner || (FCD.ownerOf.get(c.site) || {}).key === state.fOwner) && (state.fPlat === 'Any' || platOf(c).key === state.fPlat) &&
+    (!state.fAcct || (state.fAcct === '~' ? !c.acct : !!c.acct && acctGroup(c.acct.key) === acctGroup(state.fAcct))) && (!state.fFresh || (c.dmg && c.dmg.end && Date.now() <= c.dmg.end.getTime())) && passMore(c);
 }
 // The newer filters: the search box, found when, how strong the match is, photo year and quarter.
 function passMore(c) {
   if (state.fPhoto && c.photo !== state.fPhoto) return false;
-  if (state.fq && !(c.site + ' ' + c.url + ' ' + c.photoName + ' ' + (c.clientName || '') + ' ' + (c.title || '')).toLowerCase().includes(state.fq)) return false;
+  if (state.fq && !(c.site + ' ' + c.url + ' ' + (c.acct ? c.acct.handle : '') + ' ' + c.photoName + ' ' + (c.clientName || '') + ' ' + (c.title || '')).toLowerCase().includes(state.fq)) return false;
   if (state.fWhen !== 'any') {
     const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - (WHEN[state.fWhen][1] - 1));
     if (!c.firstSeen || new Date(c.firstSeen) < d) return false;
@@ -174,6 +177,7 @@ function passStatus(c, f = state.fFilter) {
 // article, by its link ending) on other sites of the same owner.
 const linkEnd = u => { try { const p = new URL(u).pathname.replace(/\/+$/, '').split('/').filter(Boolean); const e = p.slice(-2).join('/'); return e.length >= 14 ? e.toLowerCase() : ''; } catch (e) { return ''; } };
 function sistersOf(c) {
+  if (isSoc(c)) return null;
   const o = FCD.ownerOf.get(c.site);
   if (!o || !o.real || o.sites.length < 2) return null;
   const end = linkEnd(c.url);
@@ -200,6 +204,7 @@ function pathBox(path) {
     <div class="row" style="gap:6px"><button class="btn sm" data-act="copytext" data-v="${esc(path)}">Copy path</button><span class="faint" style="font-size:12.5px">Paste it into File Explorer's address bar to open the folder.</span></div></div>`;
 }
 function hideChoices(c) {
+  if (isSoc(c)) return socHideChoices(c);
   const out = [];
   const part = RS_SITE.part(c.url);
   if (part) out.push([part, 'Only this account', 'Other accounts and pages on ' + c.site + ' still show']);
@@ -225,7 +230,7 @@ async function readTheirPage(c, again) {
     const pf = await PP_CHECKS.readPage(c);
     const cc = await FC.DB.get('copies', c.id);
     if (cc) { cc.pf = pf; await FC.DB.put('copies', cc); }
-    c.pf = pf; dropFC();
+    c.pf = pf; FCD_STALE = true;      // 4.9: never cleared outright (it is also read in the background now)
     return pf;
   } finally { PF_BUSY.delete(c.id); }
 }
@@ -289,7 +294,7 @@ function signals(c) {
   if (c.risk.level === 'sus') s.push(['bad', 'warn', 'Suspicious site' + (c.risk.why.length ? ': ' + c.risk.why.join(', ') : '')]);
   else if (c.risk.level === 'watch') s.push(['warn', 'warn', 'Worth a look' + (c.risk.why.length ? ': ' + c.risk.why.join(', ') : '')]);
   if (c.credit === 'removed') s.push(['copy', 'nocredit', 'Credit removed: your client\'s photo has a copyright line in its hidden data and their copy does not']);
-  if (c.repeat && c.status === 'new') s.push(['bad', 'repeat', `Repeat offender: you already marked ${c.repeat} ${c.repeat === 1 ? 'copy' : 'copies'} on ${c.repeatWho} as Stolen`]);
+  if (c.repeat && c.status === 'new' && !isSoc(c)) s.push(['bad', 'repeat', `Repeat offender: you already marked ${c.repeat} ${c.repeat === 1 ? 'copy' : 'copies'} on ${c.repeatWho} as Stolen`]);
   if (c.status !== 'removed' && c.online === 'back') s.push(['bad', 'back', 'Back online: it was gone and is up again']);
   if (c.status !== 'removed' && c.online === 'gone') s.push(['grey', 'gone', 'Gone: the page no longer shows the photo']);
   if (c.use === 'shop') s.push(['ok', 'shop', 'Selling something: a shop page, product listing or ad']);
@@ -343,7 +348,10 @@ async function drawer(list) {
   if (!state.open) return '';
   const c = FCD.copies.find(x => x.id === state.open);
   if (!c) return '';
-  if (state.dTabFor !== c.id) { state.dTabFor = c.id; state.dTab = 'sum'; }
+  if (state.dTabFor !== c.id) { state.dTabFor = c.id; state.dTab = 'sum'; state.acctEdit = ''; }
+  const soc = isSoc(c);
+  if (!soc && state.dTab === 'acct') state.dTab = 'sum';
+  if (soc && state.dTab === 'site') state.dTab = 'acct';
   const p = FCD.photos.get(c.photo);
   const [reg, path, doubles] = [p ? await FC.regFor(p) : null, p ? await FC.pathOf(p) : '', p ? await FC.doublesOf(p) : []];
   const o = FCD.ownerOf.get(c.site);
@@ -364,10 +372,12 @@ async function drawer(list) {
   if (c.match === 'maybe') look.push(['warn', 'maybe', 'Maybe the same photo', 'The checker is not sure. Compare them closely.', 'compare', 'Compare']);
   if (c.risk.level === 'sus') look.push(['bad', 'warn', 'Suspicious site', c.risk.why.join(' · '), 'dtab', 'Site', 'site']);
   else if (c.risk.level === 'watch') look.push(['warn', 'warn', 'Worth a look', c.risk.why.join(' · '), 'dtab', 'Site', 'site']);
-  else fine.push('Site looks normal');
+  else if (!soc) fine.push('Site looks normal');
   if (c.credit === 'removed') look.push(['copy', 'nocredit', 'Credit removed', 'Your client\'s photo carries a copyright line in its hidden data. Their copy has none.']);
   else if (c.credit === 'kept') fine.push('Credit kept');
-  if (c.repeat && c.status === 'new') look.push(['bad', 'repeat', `Repeat offender (${c.repeat} stolen before)`, `You already marked copies on ${c.repeatWho} as Stolen.`]);
+  if (soc && !c.acct) look.push(['warn', 'who', 'Account not found yet', 'The link doesn\'t show who posted it. Set it in the Account tab.', 'dtab', 'Account', 'acct']);
+  if (soc && c.repeat && c.status === 'new') look.push(['bad', 'repeat', `Known account: marked stolen ${c.repeat === 1 ? 'once' : c.repeat + ' times'} before`, `You marked ${c.acct.handle}'s posts stolen before${c.repeatAt && c.repeatAt.length ? ' (' + c.repeatAt.slice(-3).map(shortDate).join(', ') + ')' : ''}.`, 'dtab', 'Account', 'acct']);
+  else if (c.repeat && c.status === 'new') look.push(['bad', 'repeat', `Repeat offender (${c.repeat} stolen before)`, `You already marked copies on ${c.repeatWho} as Stolen.`]);
   if (c.status !== 'removed' && c.online === 'back') look.push(['bad', 'back', 'Back online', 'It was gone and is up again.']);
   else if (c.status !== 'removed' && c.online === 'gone') look.push(['grey', 'gone', 'Gone', 'The page no longer shows the photo.' + (c.onlineWhy ? ' ' + c.onlineWhy : '')]);
   else fine.push('Still online');
@@ -378,24 +388,29 @@ async function drawer(list) {
   if (!c.clientName) look.push(['warn', 'who', 'Client unknown', 'Set the client in the Summary tab.', 'dtab', 'Summary', 'sum']);
   if (ck.legal && ck.ready < ck.legal.length) look.push(['warn', 'doc', `Ready for legal: ${ck.ready} of ${ck.legal.length}`, ck.legal.filter(x => x[0] !== true).map(x => x[1]).join(' · '), 'dtab', 'Claim', 'claim']);
   const lookN = look.filter(x => x[0] !== 'grey').length;
-  const dot = { page: c.credit === 'removed', claim: hits.some(h => h.lvl !== 'info') || (ck.dmg && ck.dmg.lvl !== 'ok') || (ck.legal && ck.ready < ck.legal.length), site: c.risk.level !== 'ok' || (c.repeat && c.status === 'new') };
+  const dot = { page: c.credit === 'removed', claim: hits.some(h => h.lvl !== 'info') || (ck.dmg && ck.dmg.lvl !== 'ok') || (ck.legal && ck.ready < ck.legal.length), site: c.risk.level !== 'ok' || (c.repeat && c.status === 'new'), acct: !c.acct || (c.repeat && c.status === 'new') };
+  const tabs = soc ? [['sum', 'Summary'], ['page', 'The post'], ['acct', 'Account'], ['claim', 'Claim']] : DTABS;
   const tab = state.dTab, show = k => tab === k ? '' : ' hidden';
   const view = state.dView || 'side';
+  // 4.9: social sites nearly all refuse to show inside PageProof, so "The post" shows instead
+  // of the live page (unless you press "Try the live preview anyway").
+  const livePage = !soc || state.forcePage === c.id;
   const ourSrc = oursImg(p), theirSrc = theirImg(c);
-  const viewer = view === 'page' ? pageBoxHtml(c)
+  const viewer = view === 'page' ? (livePage ? pageBoxHtml(c) : postCard(c))
     : view === 'slide' ? `<div class="dslide" style="--cut:${state.slide}%"><img data-our="${esc(c.photo)}" src="${ourSrc}" alt="Your client's photo"><img class="top" src="${theirSrc}" alt="Their copy" referrerpolicy="no-referrer"><span class="lab l">Your client's</span><span class="lab r">Theirs</span><i class="handle" aria-hidden="true"></i><input type="range" min="0" max="100" value="${state.slide}" data-act="dslide" aria-label="Slide between your client's photo and theirs"></div>`
     : `<div class="pair"><div class="frame ours"><img data-our="${esc(c.photo)}" src="${ourSrc}" alt="Your client's photo"><span class="lab">Your client's</span></div><div class="frame theirs"><img src="${theirSrc}" alt="Their copy" referrerpolicy="no-referrer"><span class="lab">Theirs</span></div></div>`;
+  if (!FCD) await loadFC();        // something cleared it while the panel was being read
   return `<aside class="drawer calm" aria-label="Copy details" id="drawer">
   <div class="dhead"><button class="btn sm icon" data-act="dstep" data-v="-1" aria-label="Previous copy"${idx > 0 ? '' : ' disabled'}>‹</button><button class="btn sm icon" data-act="dstep" data-v="1" aria-label="Next copy"${idx >= 0 && idx < list.length - 1 ? '' : ' disabled'}>›</button><span class="muted num" style="font-size:13px">${idx >= 0 ? `${idx + 1} of ${list.length}` : ''}</span><span style="flex:1"></span>${tagFor(c)}<button class="btn sm icon" data-act="closedrawer" aria-label="Close">✕</button></div>
   <div class="dscroll" id="dscroll">
-  <div class="dsite"><h2>${esc(c.site)}</h2><a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a></div>
+  <div class="dsite">${soc ? `<div class="row" style="gap:10px;flex-wrap:nowrap">${platBadge(c, 30)}<div style="min-width:0"><h2 style="overflow-wrap:anywhere">${c.acct ? esc(c.acct.handle) : '<span style="color:var(--warn)">Account not found yet</span>'}</h2><div class="muted" style="font-size:12.5px">${esc(postWord(c))}${c.acct ? ` · <a href="${safeUrl(c.acct.url)}" target="_blank" rel="noreferrer">Open account ${ic('ext', 12)}</a>` : ` · <a href="#" data-act="dtab" data-v="acct">Set account</a>`}</div></div></div>` : `<h2>${esc(c.site)}</h2>`}<a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a></div>
   <div class="dview">${viewer}</div>
-  <div class="dvbar"><div class="seg sm" role="radiogroup" aria-label="Picture view">${[['side', 'Side by side'], ['slide', 'Slider'], ['page', 'Their page']].map(([k, l]) => `<button role="radio" aria-checked="${view === k}" class="${view === k ? 'on' : ''}" data-act="dview" data-v="${k}">${l}</button>`).join('')}</div><button class="btn ghost sm" data-act="compare">${ic('layers', 15)} Compare closely</button></div>
+  <div class="dvbar"><div class="seg sm" role="radiogroup" aria-label="Picture view">${[['side', 'Side by side'], ['slide', 'Slider'], ['page', soc ? 'The post' : 'Their page']].map(([k, l]) => `<button role="radio" aria-checked="${view === k}" class="${view === k ? 'on' : ''}" data-act="dview" data-v="${k}">${l}</button>`).join('')}</div><button class="btn ghost sm" data-act="compare">${ic('layers', 15)} Compare closely</button></div>
   <div class="dchips">${c.pct >= 0 && c.pct != null ? `<span class="fchip" data-gloss="Lines up"><b style="color:${c.pct >= 80 ? 'var(--bad)' : 'var(--warn)'}">${c.pct}%</b> lines up</span>` : ''}<span class="fchip">${esc(FC.USE[c.use][0])}</span>${c.country ? `<span class="fchip">${esc(c.country)}</span>` : ''}${c.w ? `<span class="fchip">${c.w} × ${c.h}${sz ? ' · ' + sz : ''}</span>` : ''}</div>
   <section class="attn" id="lookbox"><h3>${lookN ? `${ic('warn', 15)} Look at these (${lookN})` : `${ic('check', 15)} Nothing needs a look`}</h3>
     ${look.map(([col, i, t, s, act, b, v]) => `<div class="it"><span class="ico tag ${col}">${ic(i, 15)}</span><div><b>${esc(t)}</b>${s ? `<span>${esc(s)}</span>` : ''}</div>${act ? `<button class="btn sm" data-act="${act}"${v ? ` data-v="${v}"` : ''}>${b}</button>` : ''}</div>`).join('')}
     ${fine.length ? `<div class="okline">${ic('check', 14)} ${fine.map(esc).join(' · ')}</div>` : ''}</section>
-  <div class="dtabs" role="tablist">${DTABS.map(([k, l]) => `<button role="tab" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}" data-act="dtab" data-v="${k}">${l}${dot[k] ? '<span class="dot" title="Something to check here"></span>' : ''}</button>`).join('')}</div>
+  <div class="dtabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}" data-act="dtab" data-v="${k}">${l}${dot[k] ? '<span class="dot" title="Something to check here"></span>' : ''}</button>`).join('')}</div>
   <div class="dpane" data-tab="sum"${show('sum')}>
     <dl class="facts">
       <dt>Client</dt><dd>${c.clientName ? esc(c.clientName) : `<span style="color:var(--warn);font-weight:600">Client unknown</span> <select data-act="setclient" aria-label="Set the client" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:13px;padding:2px 4px"><option value="">Set…</option>${clients.map(n => `<option>${esc(n)}</option>`).join('')}</select>`}</dd>
@@ -414,8 +429,9 @@ async function drawer(list) {
       <dt>Hidden data</dt><dd>${c.credit ? CREDIT[c.credit] : `<button class="btn ghost sm" data-act="checkcredit">Check the hidden data</button>`}</dd>
     </dl>
     ${ck.page}
-    ${view !== 'page' ? `<button class="btn sm" style="align-self:flex-start" data-act="dview" data-v="page">${ic('eye', 15)} See their page above</button>` : ''}
+    ${soc ? (view !== 'page' || livePage ? postCard(c) : '') : view !== 'page' ? `<button class="btn sm" style="align-self:flex-start" data-act="dview" data-v="page">${ic('eye', 15)} See their page above</button>` : ''}
   </div>
+  ${soc ? `<div class="dpane" data-tab="acct"${show('acct')}>${acctPane(c)}</div>` : ''}
   <div class="dpane" data-tab="claim"${show('claim')}>
     ${ck.legalBox}
     ${p && p.rel && reg ? `<section class="dsec"><div class="dsh">Copyright registration</div>${regBox(p, reg)}</section>` : ''}
@@ -423,7 +439,7 @@ async function drawer(list) {
     ${ck.rules}
     ${p && p.rel ? `<section class="dsec"><div class="dsh">Your client's photo in Drive</div>${pathBox(path)}</section>` : ''}
   </div>
-  <div class="dpane" data-tab="site"${show('site')}>
+  ${soc ? '' : `<div class="dpane" data-tab="site"${show('site')}>
     <a class="lookup" href="#who" data-act="gowho" data-v="${esc(c.id)}">${ic('owner', 18)}<span><b>Who's behind this site</b><br><span class="muted" style="font-size:13px">${f ? esc(f.names && f.names[0] ? 'Probably ' + f.names[0] : 'Names, contacts and domain facts') : 'Read names, contacts and domain facts off the site'}</span></span><span style="margin-left:auto">${ic('chev', 16)}</span></a>
     <dl class="facts">
       ${o && o.real ? `<dt>Site owner</dt><dd><a href="#owners" data-act="gowner" data-v="${esc(o.key)}" style="font-weight:600">${esc(o.name)}</a><br><span class="muted" style="font-size:13px">${esc(o.kind)}${o.sites.length > 1 ? ' · ' + FCD.copies.filter(x => o.sites.includes(x.site) && x.status !== 'removed').length + ' copies on their sites' : ''}</span></dd>` : ''}
@@ -438,7 +454,7 @@ async function drawer(list) {
     <details class="hidebox" id="hidebox"><summary><b>Don't want results from this site?</b> <span class="muted" style="font-size:13px">Hide it</span></summary>
       <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">${hideChoices(c).map(([v, l, d]) => `<button class="lookup" style="text-align:left;cursor:pointer" data-act="hidesite" data-v="${esc(v)}"><span style="color:var(--bad);display:inline-flex">${ic('ban', 20)}</span><span><b>${esc(l)}</b><br><span class="muted" style="font-size:12.5px">${esc(d)}</span></span></button>`).join('')}
       <span class="faint" style="font-size:12.5px">Hidden sites never show again in any search. Bring them back from Settings › Hidden and approved sites.</span></div></details>
-  </div>
+  </div>`}
   </div>
   <div class="dacts dfoot">
   ${last ? `<button class="undoline" data-act="undo">↶ Undo: ${esc(last.label)}<span class="kbd" style="margin-left:auto">U</span></button>` : ''}
@@ -478,12 +494,12 @@ function copyRow(c) {
   const p = FCD.photos.get(c.photo), done = c.status !== 'new', K = state.fCols;
   const cell = (k, label, html) => K[k] ? `<span class="cc-${k}"><i>${label}</i>${html}</span>` : '';
   return `<div class="frow crow${state.open === c.id ? ' on' : ''}" data-act="openrow" data-v="${esc(c.id)}">
-    <input type="checkbox" class="cpick" aria-label="Pick ${esc(c.site)}" data-act="pick" data-v="${esc(c.id)}" ${state.picked.includes(c.id) ? 'checked' : ''}>
+    <input type="checkbox" class="cpick" aria-label="Pick ${esc(isSoc(c) && c.acct ? c.acct.handle : c.site)}" data-act="pick" data-v="${esc(c.id)}" ${state.picked.includes(c.id) ? 'checked' : ''}>
     <div class="cpair" data-hover="${esc(c.id)}"><img class="ours" src="${oursImg(p)}" alt="" loading="lazy"><img class="thumb" src="${theirImg(c)}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>
     <div class="cinfo">
-      <div class="l1"><b>${esc(c.site)}</b>${done ? tagFor(c) : ''}${sigIcons(c)}</div>
+      ${isSoc(c) ? socLine(c) : `<div class="l1"><b>${esc(c.site)}</b>${done ? tagFor(c) : ''}${embedTag(c)}${sigIcons(c)}</div>`}
       <a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink" title="Open this page in a new tab"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>
-      <div class="l3">${esc(c.photoName)}<span class="l3x">${c.pct >= 0 && c.pct != null ? ` · <b class="num" data-gloss="Lines up">${c.pct}%</b> lines up` : ''} · ${esc(FC.USE[c.use][0])}${c.country ? ' · ' + esc(c.country) : ''} · found ${shortDate(c.firstSeen).toLowerCase()}</span></div>
+      <div class="l3">${esc(c.photoName)}<span class="l3x">${isSoc(c) && c.acct ? ' · ' + esc(c.site) : ''}${c.pct >= 0 && c.pct != null ? ` · <b class="num" data-gloss="Lines up">${c.pct}%</b> lines up` : ''} · ${esc(FC.USE[c.use][0])}${c.country ? ' · ' + esc(c.country) : ''} · found ${shortDate(c.firstSeen).toLowerCase()}</span></div>
     </div>
     <div class="ccols">${cell('pct', 'Lines up', luBar(c.pct))}${cell('client', 'Client', c.clientName ? `<span title="${esc(c.clientName)}">${esc(c.clientName)}</span>` : '<span style="color:var(--warn);font-weight:600">Unknown</span>')}${K.dmg ? (dmgCell(c) ? `<span class="cc-dmg"><i>Damages</i>${dmgCell(c)}</span>` : '<span class="cc-dmg" aria-hidden="true"></span>') : ''}${cell('use', 'Use', `<span title="${esc(FC.USE[c.use][0])}">${esc(FC.USE[c.use][0])}</span>`)}${cell('country', 'Country', `<span>${esc(c.country || 'Not known')}</span>`)}${cell('found', 'Found', `<span>${esc(shortDate(c.firstSeen))}</span>`)}</div>
     <div class="acts">${c.status === 'removed' ? `<button class="btn sm" data-act="rowans" data-v="new|${esc(c.id)}">Put back</button>` : done ? `<button class="btn sm" data-act="rowans" data-v="new|${esc(c.id)}">Change answer</button>`
@@ -498,13 +514,21 @@ V.found = async () => {
     state.fCols = Object.assign({ pct: true, client: true, dmg: true, use: true, country: true, found: true }, pr.fcCols || {});
     state.dView = pr.fcDView || 'side';
   }
-  if (routeArg('open')) { state.open = routeArg('open'); state.fFilter = 'All'; history.replaceState(null, '', '#found'); }
+  if (routeArg('open')) { const id = routeArg('open'), oc = FCD.copies.find(x => x.id === id); if (oc) switchTab(isSoc(oc) ? 'social' : 'web'); state.open = id; state.fFilter = 'All'; history.replaceState(null, '', '#found'); }
   if (routeArg('client')) { state.fClient = routeArg('client'); state.fFilter = 'All'; history.replaceState(null, '', '#found'); }
   if (routeArg('filter')) { state.fFilter = routeArg('filter'); history.replaceState(null, '', '#found'); }
   if (routeArg('photo')) { state.fPhoto = routeArg('photo'); state.fFilter = 'All'; state.fView = 'list'; history.replaceState(null, '', '#found'); }
-  const everything = FCD.copies;
+  const everyTab = FCD.copies;
+  // 4.9: two tabs, Websites and Social media. Each keeps its own filters.
+  const tabN = t => everyTab.filter(c => (t === 'social') === isSoc(c) && c.status === 'new' && visible(c)).length;
+  const nWeb = tabN('web'), nSoc = tabN('social');
+  if (state.fTab === 'social' && !everyTab.some(isSoc)) switchTab('web');
+  const everything = everyTab.filter(inTab);
   const hiddenN = everything.filter(c => c.status !== 'removed' && !siteHidden(c) && FCD.countries.includes(c.country)).length;
   const all = everything.filter(visible);
+  const social = state.fTab === 'social';
+  if (!social && (state.fView === 'account' || state.sView === 'accounts')) { state.fView = 'client'; state.sView = 'copies'; }
+  if (social && state.fView === 'owner') state.fView = 'account';
   const sorters = { act: (a, b) => actScore(b) - actScore(a), pct: (a, b) => (b.pct || 0) - (a.pct || 0), risk: (a, b) => ({ sus: 2, watch: 1, ok: 0 }[b.risk.level] - { sus: 2, watch: 1, ok: 0 }[a.risk.level]), newest: (a, b) => (b.firstSeen || '').localeCompare(a.firstSeen || '') };
   const rows = all.filter(c => passMain(c) && passStatus(c)).sort(sorters[state.fSort] || sorters.act);
   const main = all.filter(passMain);
@@ -526,6 +550,14 @@ V.found = async () => {
   } else if (state.fView === 'site') {
     const m = by(c => FC.baseOf(c.site));
     for (const [k, xs] of [...m.entries()].sort((a, b) => b[1].length - a[1].length)) groups.push(['s:' + k, siteStrip(k, xs), xs, true]);
+  } else if (state.fView === 'account') {
+    const m = by(c => c.acct ? acctGroup(c.acct.key) : '~');
+    for (const [k, xs] of [...m.entries()].sort((a, b) => (a[0] === '~') - (b[0] === '~') || (b[1].some(x => x.repeat) - a[1].some(x => x.repeat)) || b[1].length - a[1].length)) {
+      const x = xs.find(y => y.acct) || xs[0], st = k === '~' ? 0 : (FCD.stolenBy.get(k) || []).length;
+      const others = k === '~' ? [] : [...new Set(xs.filter(y => y.acct && y.acct.key !== x.acct.key).map(y => y.acct.handle + ' on ' + platOf(y).name))];
+      groups.push(['a:' + k, k === '~' ? `<span class="plat" style="--pc:#6B7280">?</span><b class="gname" style="color:var(--warn)">Account not found yet</b><span class="faint">Open one to set it, or use Accounts › Look up in your browser</span>`
+        : `${platBadge(x)}<b class="gname">${esc(x.acct.handle)}</b>${st ? `<span class="tag bad">Known stolen account · ${st}</span>` : ''}${others.length ? `<span class="faint">also ${esc(others.join(', '))}</span>` : ''}<span class="faint">${plural(new Set(xs.map(y => y.clientName).filter(Boolean)).size, 'client')}</span>`, xs, xs.length > 3]);
+    }
   } else if (state.fView === 'owner') {
     const m = by(c => { const o = FCD.ownerOf.get(c.site); return o && o.real ? o.key : '~'; });
     for (const [k, xs] of [...m.entries()].sort((a, b) => (a[0] === '~') - (b[0] === '~') || b[1].length - a[1].length)) {
@@ -537,7 +569,7 @@ V.found = async () => {
   } else groups.push(['', '', rows, false]);
   const list = [];
   let shown = 0, body = '';
-  const foldSites = state.fView !== 'site' && state.fView !== 'owner';
+  const foldSites = state.fView !== 'site' && state.fView !== 'owner' && state.fView !== 'account';
   for (const [k, html, xs, fold] of groups) {
     if (shown >= state.more) break;
     let open = true;
@@ -549,7 +581,8 @@ V.found = async () => {
     }
     // Copies from one site sit together: the first shows, the rest fold under "N more from this site".
     const clusters = new Map();
-    for (const c of xs) { const b = foldSites ? FC.baseOf(c.site) : c.id; if (!clusters.has(b)) clusters.set(b, []); clusters.get(b).push(c); }
+    // Social posts fold per account (never "N more from instagram.com").
+    for (const c of xs) { const b = !foldSites ? c.id : isSoc(c) ? (c.acct ? c.acct.handle + ' on ' + platOf(c).name : c.id) : FC.baseOf(c.site); if (!clusters.has(b)) clusters.set(b, []); clusters.get(b).push(c); }
     body += '<div class="clist">';
     for (const [b, cs] of clusters) {
       if (shown >= state.more) break;
@@ -572,11 +605,18 @@ V.found = async () => {
   if (state.fOwner) { const o = FCD.owners.find(z => z.key === state.fOwner); active.push(['fOwner', 'Owner: ' + (o ? o.name : '?')]); }
   if (state.fPhoto) { const p = FCD.photos.get(state.fPhoto); active.push(['fPhoto', 'Photo: ' + (p ? p.name : 'one photo')]); }
   if (state.fq) active.push(['fq', 'Search: ' + state.fq]);
+  if (state.fAcct) { const e = FCD.accts.get(state.fAcct); active.push(['fAcct', state.fAcct === '~' ? 'Account not found yet' : 'Account: ' + (e ? e.acct.handle : state.fAcct)]); }
   const sel = (id, label, opts, cur) => `<label>${label}<select data-act="fsel" data-v="${id}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(cur) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`;
   const live = all.filter(c => c.status !== 'removed');
   const countryList = [...new Set([...everything.map(c => c.country).filter(Boolean), 'Russia', 'China', 'Vietnam', 'India', 'Indonesia', 'Turkey', 'Brazil'])].filter(c => !FCD.countries.includes(c)).sort();
   const recent = state.recentHides.filter(h => RS_LISTS.hidden.includes(h));
   const nNew = live.filter(c => c.status === 'new').length;
+  const bigTabs = `<div class="bigtabs" role="tablist" aria-label="Websites or social media">${[['web', 'Websites', nWeb], ['social', 'Social media', nSoc]].map(([k, l, n]) => `<button role="tab" aria-selected="${state.fTab === k}" class="${state.fTab === k ? 'on' : ''}" data-act="ftab" data-v="${k}">${l} <span class="n num">${n}</span></button>`).join('')}</div>`;
+  if (!everything.length && everyTab.length) {
+    return `${head('', 'Copies found', 'Answer right on the row, or click a row to see more.')}
+    ${bigTabs}
+    <section class="card pad" style="text-align:center;padding:48px 22px;display:flex;flex-direction:column;align-items:center;gap:12px"><h2>${social ? 'No social media copies yet' : 'No website copies yet'}</h2><p class="muted" style="margin:0;max-width:56ch">${social ? 'Copies posted on Instagram, TikTok, Facebook, X and other social sites show up here.' : 'Copies on websites show up here.'}</p></section>`;
+  }
   if (!everything.length) {
     return `${head('', 'Copies found', 'Every copy found by every search, Keep searching and today\'s 50.')}
     ${await driveBanner()}
@@ -593,17 +633,20 @@ V.found = async () => {
   const fresh = c => c.dmg && c.dmg.end && Date.now() <= c.dmg.end.getTime();
   return `${head('', 'Copies found', 'Answer right on the row, or click a row to see more.', `<button class="btn" data-act="fcsv">${ic('down', 16)} Download</button>${nNew ? `<a class="btn primary" href="#review">One at a time (${nNew})</a>` : ''}`)}
   ${await driveBanner()}
+  ${bigTabs}
+  ${socAskBanner(everyTab.filter(visible))}
   <div class="ftiles" aria-label="Quick counts">
     ${tile('New, waiting for you', nNew, state.fFilter === 'New' && state.fWhen === 'any' && state.fRisk === 'Any' && !state.fFresh, 'ffilter', 'New', '', true)}
     ${tile('Found today', newL.filter(c => new Date(c.firstSeen).toDateString() === new Date().toDateString()).length, state.fWhen === 'today', 'ftoday', '1', 'accent')}
-    ${tile('Suspicious sites', newL.filter(c => c.risk.level === 'sus').length, state.fRisk === 'sus', 'qtoggle', 'sus', 'bad')}
+    ${social ? tile('Known stolen accounts', newL.filter(c => c.repeat > 0).length, state.fRepeat, 'qtoggle', 'repeat', 'bad') : tile('Suspicious sites', newL.filter(c => c.risk.level === 'sus').length, state.fRisk === 'sus', 'qtoggle', 'sus', 'bad')}
     ${tile('Back online', live.filter(c => c.online === 'back').length, state.fFilter === 'Back online', 'qtoggle', 'back', 'copy')}
     ${tile('Published in the last 3 months', newL.filter(fresh).length, state.fFresh, 'qtoggle', 'fresh', 'ok')}
   </div>
   <section class="card found-card">
     <div class="toolbar tidy">
       <div class="tabs" role="tablist" aria-label="Status">${['New', 'Stolen', 'Licensed', 'Removed', 'All'].map(f => `<button role="tab" aria-selected="${state.fFilter === f}" class="${state.fFilter === f ? 'on' : ''}" data-act="ffilter" data-v="${f}"${f === 'All' ? ' title="Every copy except the removed ones"' : ''}>${f} <span>${cnt(f)}</span></button>`).join('')}${['Still online', 'Back online', 'Gone'].includes(state.fFilter) ? `<button role="tab" aria-selected="true" class="on" data-act="ffilter" data-v="${state.fFilter}">${state.fFilter} <span>${cnt(state.fFilter)}</span></button>` : ''}</div>
-      ${dd('fView', 'Group', [['client', 'Client'], ['photo', 'Photo'], ['site', 'Site'], ['owner', 'Site owner'], ['list', 'None']], state.fView)}
+      ${social ? `<div class="seg sm" role="radiogroup" aria-label="Show">${[['copies', 'Copies'], ['accounts', 'Accounts']].map(([k, l]) => `<button role="radio" aria-checked="${state.sView === k}" class="${state.sView === k ? 'on' : ''}" data-act="sview" data-v="${k}">${l}</button>`).join('')}</div>` : ''}
+      ${dd('fView', 'Group', social ? [['account', 'Account'], ['client', 'Client'], ['photo', 'Photo'], ['site', 'Platform'], ['list', 'None']] : [['client', 'Client'], ['photo', 'Photo'], ['site', 'Site'], ['owner', 'Site owner'], ['list', 'None']], state.fView)}
       ${dd('fWhen', 'Found', Object.entries(WHEN).map(([k, v]) => [k, v[0]]), state.fWhen)}
       ${dd('fMatch', 'Match', [['any', 'All'], ['exact', 'Exact', 'The same photo, 95% or more lines up'], ['strong', 'Strong', '80% or more lines up'], ['loose', 'Loose', 'Less, or only a few details match']], state.fMatch)}
       <button class="ddb${state.showFilters ? ' on' : ''}" data-act="togglefilters" aria-expanded="${state.showFilters}">＋ Filters${active.length ? ` <span class="pill-n" style="background:var(--accent);margin:0">${active.length}</span>` : ''}</button>
@@ -611,6 +654,7 @@ V.found = async () => {
       ${dd('fSort', 'Sort', [['act', 'Best to act on'], ['pct', 'Lines up most'], ['risk', 'Most suspicious'], ['newest', 'Newest']], state.fSort, true)}
       <details class="ddw right" data-dd="cols"><summary class="ddb">Columns <span class="caret" aria-hidden="true">▾</span></summary><div class="ddm">${FCOLS.map(([k, l]) => `<label><input type="checkbox" data-act="fcol" data-v="${k}" ${state.fCols[k] ? 'checked' : ''}> ${esc(l)}</label>`).join('')}<span class="faint" style="font-size:12px;padding:4px 10px 6px">Narrow windows show fewer columns.</span></div></details>
     </div>
+    ${social ? platChips(all.filter(c => passMore(c) && passStatus(c) && passMainNoPlat(c))) : ''}
     ${state.showFilters ? `<div class="filters fpanel">
       <div class="qchips" aria-label="Quick filters"><span style="font-weight:600">Quick filters</span>
       ${chip('Repeat offenders', live.filter(c => c.repeat && c.status === 'new').length, state.fRepeat, 'qtoggle', 'repeat', 'bad')}
@@ -618,7 +662,6 @@ V.found = async () => {
       ${chip('Credit removed', live.filter(c => c.credit === 'removed').length, state.fCredit === 'removed', 'qtoggle', 'credit', 'copy')}
       ${chip('Copied onto their site', live.filter(c => c.use === 'copied').length, state.fUse === 'copied', 'qtoggle', 'copied')}
       ${chip('Shown from another site', live.filter(c => c.use === 'embedded').length, state.fUse === 'embedded', 'qtoggle', 'embedded')}
-      ${chip('Social posts', live.filter(c => c.use === 'social').length, state.fUse === 'social', 'qtoggle', 'social')}
       ${chip('Gone offline', live.filter(c => c.online === 'gone').length, state.fFilter === 'Gone', 'qtoggle', 'gone')}</div>
       <details class="keyfold"><summary>What do the icons mean?</summary><section class="key" aria-label="What the icons mean">
         <div class="kitem"><span class="tag bad">${ic('warn', 13)}</span><div><span><b>Suspicious site</b> (red) or <b>Worth a look</b> (yellow): young site, hidden owner, odd ending like .xyz, or a name copycat sites use.</span></div></div>
@@ -645,7 +688,7 @@ V.found = async () => {
       </div></div>` : ''}
     ${active.length || recent.length ? `<div class="row activebar">${active.map(([k, v]) => `<button class="chip" style="cursor:pointer" data-act="unfilter" data-v="${k}">${esc(v)} ✕</button>`).join('')}${active.length ? `<button class="btn ghost" style="min-height:28px;padding:0 6px;font-size:13px" data-act="unfilter" data-v="all">Clear all</button>` : ''}
       ${recent.length ? `<span class="faint" style="margin-left:auto">Just hidden</span>${recent.map(h => `<button class="chip" style="cursor:pointer;text-decoration:line-through;text-decoration-color:var(--faint)" data-act="showsite" data-v="${esc(h)}" title="Show ${esc(h)} again">${esc(h)} <span style="text-decoration:none">↺</span></button>`).join('')}` : ''}</div>` : ''}
-    <div class="cbody">${body || `<div class="cempty"><b>${state.fFilter === 'New' && !active.length && state.fWhen === 'any' && state.fMatch === 'any' ? 'All caught up' : 'Nothing matches'}</b>${state.fFilter === 'New' && !active.length && state.fWhen === 'any' && state.fMatch === 'any' ? 'Every new copy has an answer. New finds show up here.' : 'Try another tab, or clear a filter.'}</div>`}</div>
+    <div class="cbody">${social && state.sView === 'accounts' ? accountsView(all.filter(c => passMain(c) && passStatus(c))) : body || `<div class="cempty"><b>${state.fFilter === 'New' && !active.length && state.fWhen === 'any' && state.fMatch === 'any' ? 'All caught up' : 'Nothing matches'}</b>${state.fFilter === 'New' && !active.length && state.fWhen === 'any' && state.fMatch === 'any' ? 'Every new copy has an answer. New finds show up here.' : 'Try another tab, or clear a filter.'}</div>`}</div>
     <div class="row faint cfoot"><span>Keys with a copy open: <span class="kbd">Y</span> stolen <span class="kbd">L</span> licensed <span class="kbd">N</span> remove <span class="kbd">→</span> skip <span class="kbd">U</span> undo <span class="kbd">↑</span><span class="kbd">↓</span> move <span class="kbd">?</span> all keys. Also kept in Documents › PageProof › found-copies.txt.</span></div>
   </section>
   ${state.sis ? `<div class="bulk sis"><div style="flex:1 1 300px;min-width:0"><b>Same ${state.sis.same ? 'photo' : 'article'} on ${plural(state.sis.sites.length, 'sister site')} of ${esc(state.sis.owner)}</b><div style="font-size:13px;opacity:.85;overflow-wrap:anywhere">${esc(state.sis.sites.slice(0, 5).join(', '))}${state.sis.sites.length > 5 ? '…' : ''}</div></div><button class="btn" data-act="sisall">Mark ${state.sis.ids.length === 1 ? 'it' : 'all ' + state.sis.ids.length} stolen too</button><button class="btn" data-act="sisno">Not now</button></div>` : ''}
@@ -662,7 +705,7 @@ function siteStrip(base, xs) {
     <div class="sbtns"><a class="btn sm" href="${safeUrl('https://' + base)}" target="_blank" rel="noreferrer" data-act="openlink">Home page</a><button class="btn sm" data-act="stripok" data-v="${esc(c.id)}">Approve site</button><button class="btn sm" data-act="hidesite" data-v="${esc(base)}">Hide site</button><button class="btn sm" data-act="gowho" data-v="${esc(c.id)}">Who's behind it</button></div></div>`;
 }
 V.found.guard = async () => ((await FC.drive()).done ? null : 'connect');
-V.found.after = () => { if (typeof FC_PREV !== 'undefined') FC_PREV.start(); loadOurs(); bindHover(); ppPagePic(); ppKeptLine(); };
+V.found.after = () => { if (typeof FC_PREV !== 'undefined') FC_PREV.start(); loadOurs(); bindHover(); ppPagePic(); ppKeptLine(); socQueue(); };
 
 // Hovering a copy's thumbnail shows it next to your client's photo.
 // Only one card ever exists. It goes away when the mouse leaves the pictures, and also when the
@@ -699,7 +742,7 @@ function bindHover() {
 
 // ---------------------------------------------------------------- answers, with undo
 const VERB = { stolen: 'marked stolen', licensed: 'marked licensed', removed: 'removed', skip: 'skipped', new: 'put back as new' };
-// 4.8.5: an answer or a hide takes the row off the list the moment it's clicked. Saving it can
+// 4.9.1: an answer or a hide takes the row off the list the moment it's clicked. Saving it can
 // take a second or two in a big library, so until it's saved these remember it, and every redraw
 // in between already leaves the row out.
 const PEND = new Map();          // copy id -> its new answer
@@ -783,12 +826,13 @@ async function drawerVerdict2(status, id, c) {
   const i = LIST.indexOf(id), free = x => x !== id && !PEND.has(x);
   const nextId = LIST.slice(i + 1).find(free) || LIST.slice(0, Math.max(0, i)).reverse().find(free) || '';
   const sis = status === 'stolen' ? sistersOf(c) : null;
+  const who = isSoc(c) && c.acct ? c.acct.handle : c.site;
   markNow([id], status);
   await inTurn(async () => {
-    await answerCopies([id], status, c.site + ' ' + VERB[status]);
+    await answerCopies([id], status, who + ' ' + VERB[status]);
     state.sis = sis;
     if (state.open === id) state.open = nextId;
-    toastUndo(c.site + ' ' + VERB[status] + (status === 'stolen' ? '. Save its Evidence report when you\'re ready.' : '.') + (nextId ? ' Next copy opened.' : ''));
+    toastUndo(who + ' ' + VERB[status] + (status === 'stolen' ? (isSoc(c) && c.acct ? '. ' + c.acct.handle + ' is now a known account.' : '. Save its Evidence report when you\'re ready.') : '.') + (nextId ? ' Next copy opened.' : ''));
   });
   await render(true);
 }
@@ -860,7 +904,9 @@ Object.assign(ACTS, {
   },
   bulkhide: async () => {
     if (!FCD) await loadFC();
-    const sites = [...new Set(state.picked.map(id => (FCD.copies.find(c => c.id === id) || {}).site).filter(Boolean))];
+    // Social posts: their accounts are hidden, never the whole platform.
+    const sites = [...new Set(state.picked.map(id => { const c = FCD.copies.find(x => x.id === id) || {}; return isSoc(c) ? (c.acct ? c.acct.key : '') : c.site; }).filter(Boolean))];
+    if (!sites.length) return toast('Those posts have no account yet. Set the account first.');
     state.picked = [];
     pendHide(sites, true); dropRows(null);
     await inTurn(async () => {
@@ -882,8 +928,8 @@ Object.assign(ACTS, {
   qcredit: v => { state.fCredit = v; state.fFilter = 'All'; render(true); },
   togglefilters: () => { state.showFilters = !state.showFilters; render(true); },
   unfilter: v => {
-    if (v === 'all') Object.assign(state, { fFresh: false, fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fOwner: '', fYear: 'Any', fQuarter: 'Any', fPhoto: '', fq: '' });
-    else state[v] = v === 'fShop' || v === 'fRepeat' ? false : ['fOwner', 'fPhoto', 'fq'].includes(v) ? '' : 'Any';
+    if (v === 'all') Object.assign(state, { fAcct: '', fPlat: 'Any', fFresh: false, fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fOwner: '', fYear: 'Any', fQuarter: 'Any', fPhoto: '', fq: '' });
+    else state[v] = v === 'fShop' || v === 'fRepeat' ? false : ['fOwner', 'fPhoto', 'fq', 'fAcct'].includes(v) ? '' : 'Any';
     render(true);
   },
   // Group by, Found, Match: the little switches above the list.
@@ -901,7 +947,7 @@ Object.assign(ACTS, {
   },
   openlink: () => {},                       // a plain link inside a row: just let it open
   // An answer straight from the row.
-  // 4.8.5: the row leaves at once; the answer is saved in turn (a quick click on the next row is never lost).
+  // 4.9.1: the row leaves at once; the answer is saved in turn (a quick click on the next row is never lost).
   rowans: async v => {
     const i = v.indexOf('|'), id = v.slice(i + 1);
     let status = v.slice(0, i);
@@ -910,11 +956,12 @@ Object.assign(ACTS, {
     if (!c || PEND.has(id)) return;
     if (status === 'stolen') { status = await ruleGate(c); if (!status) return; }
     const sis = status === 'stolen' ? sistersOf(c) : null;
+    const who = isSoc(c) && c.acct ? c.acct.handle : c.site;
     markNow([id], status);
     await inTurn(async () => {
-      await answerCopies([id], status, c.site + ' ' + VERB[status]);
+      await answerCopies([id], status, who + ' ' + VERB[status]);
       state.sis = sis;
-      toastUndo(c.site + ' ' + VERB[status] + '.');
+      toastUndo(who + ' ' + VERB[status] + (status === 'stolen' && isSoc(c) && c.acct ? '. ' + who + ' is now a known account.' : '.'));
     });
     await render(true);
   },
@@ -945,11 +992,12 @@ Object.assign(ACTS, {
     if (!c) return;
     const id = esc(c.id), base = FC.baseOf(c.site);
     openRowMenu(el, `${c.status === 'new' ? `<button data-act="mdo" data-v="skip|${id}">${ic('chev', 16)}<span>Skip for now</span><span class="kbd">→</span></button>` : ''}
-      <small>Approve this site</small>
+      ${isSoc(c) && !c.acct ? `<small>Who posted it?</small><button data-act="openacct" data-v="${id}">${ic('who', 16)}<span>Set the account</span></button>` : ''}
+      ${!isSoc(c) || c.acct ? `<small>${isSoc(c) ? 'Approve ' + esc(c.acct.handle) : 'Approve this site'}</small>
       ${c.clientName ? `<button data-act="mdo" data-v="okclient|${id}">${ic('check', 16)}<span>For ${esc(c.clientName)} only</span></button>` : ''}
-      <button data-act="mdo" data-v="okall|${id}">${ic('check', 16)}<span>For every client</span></button>
-      <small>Hide this site</small>
-      ${hideChoices(c).map(([h, l]) => `<button data-act="mhide" data-v="${esc(h)}">${ic('ban', 16)}<span>${esc(l)}</span></button>`).join('')}
+      <button data-act="mdo" data-v="okall|${id}">${ic('check', 16)}<span>For every client</span></button>` : ''}
+      <small>${isSoc(c) ? 'Hide' : 'Hide this site'}</small>
+      ${hideChoices(c).map(([h, l, d, warn]) => `<button data-act="mhide" data-v="${esc(h)}"${warn ? ` title="${esc(d)}" style="color:var(--bad)"` : ''}>${ic('ban', 16)}<span>${esc(l)}${warn ? ' (every account)' : ''}</span></button>`).join('')}
       <hr>
       <button data-act="mdo" data-v="compare|${id}">${ic('layers', 16)}<span>Compare the two photos</span></button>
       <button data-act="mdo" data-v="evidence|${id}">${ic('doc', 16)}<span>Make evidence report</span></button>
@@ -986,6 +1034,7 @@ Object.assign(ACTS, {
   approvesite: async v => {
     const c = FCD.copies.find(x => x.id === state.open);
     if (!c) return;
+    if (isSoc(c)) { if (c.acct) return ACTS.approveacct(v); return toast('Set the account first. Approve works per account on social sites.'); }
     const base = FC.baseOf(c.site), who = v === 'client' ? c.clientName : '';
     const undo = await FC.approveSite(base, who, c.id);
     const i = LIST.indexOf(c.id);
@@ -1194,10 +1243,10 @@ V.review = async () => {
   <div class="split rv">
     <section class="card pad review-cap" style="flex:3 1 560px;display:flex;flex-direction:column;gap:14px" aria-label="Your client's photo and their copy">
       ${pics}
-      <div class="rvsite"><div class="l1"><h2>${esc(c.site)}</h2><span class="tag ${c.match === 'same' ? 'bad' : 'warn'}">${c.match === 'same' ? 'Same photo' : 'Maybe'}${c.pct >= 0 && c.pct != null ? ' · ' + c.pct + '% lines up' : ''}</span>${repeatTag(c)}${flagWords(c)}${onlineTag(c)}</div>
+      <div class="rvsite"><div class="l1">${isSoc(c) ? `${platBadge(c, 26)}<h2>${c.acct ? esc(c.acct.handle) : '<span style="color:var(--warn)">Account not found yet</span>'}</h2><span class="muted">${esc(postWord(c))}</span>` : `<h2>${esc(c.site)}</h2>`}<span class="tag ${c.match === 'same' ? 'bad' : 'warn'}">${c.match === 'same' ? 'Same photo' : 'Maybe'}${c.pct >= 0 && c.pct != null ? ' · ' + c.pct + '% lines up' : ''}</span>${repeatTag(c)}${flagWords(c)}${onlineTag(c)}</div>
         <a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" title="Open this page in a new tab"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>
         <div class="l3">${esc(c.photoName)} · ${esc(c.clientName || 'Client unknown')} · ${esc(FC.USE[c.use][0])} · found ${shortDate(c.firstSeen).toLowerCase()}</div></div>
-      ${c.repeat ? `<div class="banner warn" style="padding:8px 12px;font-size:13.5px"><span><b>Repeat offender.</b> You already marked ${plural(c.repeat, 'copy', 'copies')} on ${esc(c.repeatWho)} as Stolen. These come first.</span></div>` : ''}
+      ${c.repeat ? `<div class="banner warn" style="padding:8px 12px;font-size:13.5px"><span><b>${isSoc(c) ? 'Known account.' : 'Repeat offender.'}</b> You already marked ${plural(c.repeat, 'copy', 'copies')} ${isSoc(c) ? 'by' : 'on'} ${esc(c.repeatWho)} as Stolen. These come first.</span></div>` : ''}
       <div class="rvans" role="group" aria-label="Your answer">
         <button class="stolen" data-act="rverdict" data-v="stolen"><b>Stolen</b><span class="kbd">Y</span></button>
         <button class="licensed" data-act="rverdict" data-v="licensed" title="OK for ${esc(c.clientName || 'this client')} only"><b>Licensed</b><span class="kbd">L</span></button>
@@ -1205,11 +1254,12 @@ V.review = async () => {
         <button data-act="rverdict" data-v="skip" title="Decide later"><b>Skip</b><span class="kbd">→</span></button>
       </div>
       <div class="row rvmore"><button class="btn" data-act="rvcompare">${ic('layers', 16)} Compare</button><button class="btn" data-act="evidence" data-v="${esc(c.id)}">${ic('doc', 16)} Evidence report</button><button class="btn" data-act="rvcapture">${ic('capture', 16)} Capture</button>
-        <details class="rvok"><summary class="btn">${ic('check', 16)} Approve site</summary><div class="tmenu">${c.clientName ? `<button data-act="rvapprove" data-v="client"><b>For ${esc(c.clientName)} only</b><span>${esc(FC.baseOf(c.site))} may use this client's photos</span></button>` : ''}<button data-act="rvapprove" data-v="all"><b>For every client</b><span>${esc(FC.baseOf(c.site))} may use any photo</span></button></div></details>
-        <details class="rvok"><summary class="btn">${ic('ban', 16)} Hide site</summary><div class="tmenu">${hideChoices(c).map(([v, l, d]) => `<button data-act="rvhide" data-v="${esc(v)}"><b>${esc(l)}</b><span>${esc(d)}</span></button>`).join('')}</div></details></div>
+        ${isSoc(c) && !c.acct ? `<a class="btn" href="#found?open=${encodeURIComponent(c.id)}">${ic('who', 16)} Set the account</a>` : ''}
+        <details class="rvok"${isSoc(c) && !c.acct ? ' hidden' : ''}><summary class="btn">${ic('check', 16)} Approve ${isSoc(c) ? 'account' : 'site'}</summary><div class="tmenu">${c.clientName ? `<button data-act="rvapprove" data-v="client"><b>For ${esc(c.clientName)} only</b><span>${esc(FC.baseOf(c.site))} may use this client's photos</span></button>` : ''}<button data-act="rvapprove" data-v="all"><b>For every client</b><span>${esc(FC.baseOf(c.site))} may use any photo</span></button></div></details>
+        <details class="rvok"><summary class="btn">${ic('ban', 16)} Hide ${isSoc(c) ? 'account' : 'site'}</summary><div class="tmenu">${hideChoices(c).map(([v, l, d]) => `<button data-act="rvhide" data-v="${esc(v)}"><b>${esc(l)}</b><span>${esc(d)}</span></button>`).join('')}</div></details></div>
     </section>
     <aside class="card pad" style="flex:2 1 340px;display:flex;flex-direction:column;gap:16px" aria-label="About this copy">
-      ${pageBoxHtml(c)}
+      ${isSoc(c) ? postCard(c) : pageBoxHtml(c)}
       <dl class="facts">
         <dt>Your client's photo</dt><dd>${esc(c.photoName)}<br><span class="muted">${p && p.w ? p.w + ' × ' + p.h + ' · ' : ''}${esc(c.clientName || 'Client unknown')}</span></dd>
         <dt>Their copy</dt><dd>${c.w ? c.w + ' × ' + c.h : 'Size not known'} · ${esc(FC.USE[c.use][0])}</dd>
@@ -1229,6 +1279,7 @@ V.review.after = () => {
   const cut = document.getElementById('cut');
   if (cut) cut.oninput = () => { state.cut = +cut.value; document.getElementById('swipe').style.setProperty('--cut', cut.value + '%'); };
   ppPagePic();
+  socQueue();
 };
 Object.assign(ACTS, {
   rvtab: v => { state.rvTab = v; render(true); },

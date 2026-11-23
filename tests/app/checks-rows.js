@@ -1,7 +1,7 @@
 // Copies found: every answer and hide takes the row off the list straight away, and Undo puts it back.
 // Keep searching is "running" the whole time (it tells the page something changed every
 // 300 ms, and reading the copies is made slow on purpose), because that is when a late redraw
-// used to put an answered row back on screen (4.8.5).
+// used to put an answered row back on screen (4.9.1).
 const { start } = require('./h.js');
 process.env.NP = 3000; process.env.NC = 400;
 const { seed } = require('./seed.js');
@@ -19,6 +19,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     const extra = [1, 2, 3].map(i => ({ ...base, id: base.photo + '|cluster.com/p/' + i, key: 'cluster.com/p/' + i, site: 'cluster.com', url: 'https://cluster.com/p/' + i, status: 'new', pct: 99 }));
     extra.push({ ...base, id: base.photo + '|threads.com/@someone/post/1', key: 'threads.com/@someone/post/1', site: 'threads.com', url: 'https://www.threads.com/@someone/post/Df-QHxB', status: 'new', pct: 99, use: 'social' });
     extra.push({ ...base, id: base.photo + '|threads.com/@other/post/2', key: 'threads.com/@other/post/2', site: 'threads.com', url: 'https://www.threads.com/@other/post/Zz', status: 'new', pct: 98, use: 'social' });
+    for (const c of extra) { c.use = FC.useOf(c); const a = c.use === 'social' && typeof PP_SOCIAL !== 'undefined' && PP_SOCIAL.fromUrl(c.url); if (a) c.acct = { ...a, from: 'link', sure: 'sure' }; }
     await FC.DB.putMany('copies', extra);
     await chrome.storage.local.set({ fcChanged: { what: 'test', at: Date.now() } });
   });
@@ -99,12 +100,15 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok((await Promise.all(cl.map(status))).every(s => s === 'stolen'), 'All 3 stolen: saved');
 
   // 8: Hide site, Only this account (the threads.com case)
+  // (social posts have their own tab since 4.9)
+  await click('.bigtabs [data-act="ftab"][data-v="social"]'); await page.waitForTimeout(1500);
   const th = await page.evaluate(() => FCD.copies.filter(c => c.site === 'threads.com').map(c => c.id).sort((a, b) => !!document.querySelector(`.frow[data-v="${b}"]`) - !!document.querySelector(`.frow[data-v="${a}"]`)));
-  const acct = await page.evaluate(id => RS_SITE.part(FCD.copies.find(c => c.id === id).url), th[0]);
   await click(`${sel(th[0])} button[data-act="rowmenu"]`); await page.waitForTimeout(300);
-  await click(`#rowMenu button[data-act="mhide"][data-v="${acct}"]`);
+  const acct = await page.evaluate(() => document.querySelector('#rowMenu button[data-act="mhide"]').dataset.v);
+  await click('#rowMenu button[data-act="mhide"]');
   await goneNowAndLater([th[0]], 'Hide only this account (' + acct + ')');
   ok(await onScreen(th[1]), 'Hide only this account: the other account on threads.com still shows');
+  await click('.bigtabs [data-act="ftab"][data-v="web"]'); await page.waitForTimeout(1500);
 
   // 9: Hide the whole site from the ⋯ menu
   const [hs] = await fresh(1, used); used.push(hs);

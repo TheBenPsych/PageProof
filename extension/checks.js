@@ -143,11 +143,60 @@ const PP_CHECKS = (() => {
     const yt = !!doc.querySelector('iframe[src*="youtube.com/embed" i], iframe[src*="youtube-nocookie.com/embed" i], iframe[data-src*="youtube.com/embed" i], lite-youtube');
     const embedPost = !!doc.querySelector('blockquote.instagram-media, blockquote.twitter-tweet, blockquote.tiktok-embed, iframe[src*="instagram.com/p/" i], iframe[src*="facebook.com/plugins" i], iframe[src*="platform.twitter.com" i]');
     const am = AGENCY.exec(credit || '');
+    // 4.9: who posted it (for social posts), and whose posts a website shows embedded.
+    const soc = socTags(doc, html, final);
+    const embeds = embedAccounts(doc);
     return {
+      soc, embeds,
       at, ok: true, url: final, imgFound, credit, agency: am ? am[1].replace(/\b\w/g, x => x.toUpperCase()) : '',
       sells: { product, cart, price: price ? String(price).slice(0, 24) : '' }, ads, yt, embedPost,
       siteName: meta('og:site_name'), title: clean(meta('og:title') || (doc.querySelector('title') || {}).textContent || '').slice(0, 160),
     };
+  }
+  // The tags a social post page carries about itself (who posted it, caption, date).
+  function socTags(doc, html, url) {
+    const meta = n => { const m = doc.querySelector(`meta[property="${n}"], meta[name="${n}"]`); return m ? clean(m.getAttribute('content')) : ''; };
+    const link = r => { const l = doc.querySelector(`link[rel="${r}"]`); return l ? l.getAttribute('href') || '' : ''; };
+    const abs = u => { try { return u ? new URL(u, url).href : ''; } catch (e) { return ''; } };
+    let authorUrl = abs(link('author')) || (/^https?:/.test(meta('article:author')) ? meta('article:author') : ''), published = meta('article:published_time') || meta('og:video:release_date') || '';
+    const ld = [];
+    for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) {
+      try {
+        const walk = o => {
+          if (!o || typeof o !== 'object') return;
+          if (Array.isArray(o)) return o.forEach(walk);
+          ld.push([].concat(o['@type'] || []).join(' '));
+          if (/(SocialMediaPosting|VideoObject|ImageObject|Article|BlogPosting|DiscussionForumPosting)/.test(ld[ld.length - 1])) {
+            const a = [].concat(o.author || o.creator || [])[0];
+            if (a && typeof a === 'object' && !authorUrl) authorUrl = abs(a.url || a['@id'] || '');
+            if (!published) published = o.datePublished || o.uploadDate || o.dateCreated || '';
+          }
+          for (const k of ['@graph', 'mainEntity', 'mainEntityOfPage']) if (o[k] && typeof o[k] === 'object') walk(o[k]);
+        };
+        walk(JSON.parse(s.textContent));
+      } catch (e) { /* not readable */ }
+    }
+    const um = /"owner":\{[^{}]{0,200}?"username":"([A-Za-z0-9._]{1,30})"/.exec(html) || /"username":"([A-Za-z0-9._]{1,30})"/.exec(html);
+    return { ogUrl: abs(meta('og:url')), canonical: abs(link('canonical')), authorUrl, ogType: meta('og:type'), title: meta('og:title'), desc: meta('og:description') || meta('description'),
+      published: published && !isNaN(Date.parse(published)) ? new Date(published).toISOString() : '', ld: ld.join(' ').slice(0, 300), generator: meta('generator'), user: um ? um[1] : '' };
+  }
+  // Embedded Instagram, X, TikTok, Threads or Facebook posts on a website, and who posted each.
+  function embedAccounts(doc) {
+    const out = [], seen = new Set();
+    const add = (u, text) => {
+      if (typeof PP_SOCIAL === 'undefined' || !u) return;
+      let a = PP_SOCIAL.fromUrl(u);
+      // Instagram's embed code says "A post shared by Name (@handle)".
+      const m = !a && /\(@([A-Za-z0-9._]{1,30})\)/.exec(text || '');
+      if (!a && m && /instagram\.com/.test(u)) a = { key: ('instagram.com/' + m[1]).toLowerCase(), handle: '@' + m[1], url: 'https://www.instagram.com/' + m[1] + '/', plat: 'instagram.com', kind: 'account' };
+      if (a && !seen.has(a.key)) { seen.add(a.key); out.push({ ...a, post: u.slice(0, 300) }); }
+    };
+    for (const b of doc.querySelectorAll('blockquote.instagram-media, blockquote.text-post-media')) add(b.getAttribute('data-instgrm-permalink') || b.getAttribute('data-text-post-permalink') || (b.querySelector('a[href]') || {}).href, b.textContent);
+    for (const b of doc.querySelectorAll('blockquote.twitter-tweet')) { const ls = [...b.querySelectorAll('a[href*="/status/"]')]; add(ls.length ? ls[ls.length - 1].getAttribute('href') : '', b.textContent); }
+    for (const b of doc.querySelectorAll('blockquote.tiktok-embed')) add(b.getAttribute('cite'), b.textContent);
+    for (const f of doc.querySelectorAll('iframe[src*="facebook.com/plugins/post" i], iframe[src*="facebook.com/plugins/video" i]')) { try { add(new URL(f.getAttribute('src'), 'https://x/').searchParams.get('href'), ''); } catch (e) { /* skip */ } }
+    for (const f of doc.querySelectorAll('iframe[src*="instagram.com/p/" i], iframe[src*="instagram.com/reel/" i]')) add(f.getAttribute('src'), '');
+    return out.slice(0, 6);
   }
   // "Signs it was on purpose": things on their page that show they make money from it.
   function onPurpose(pf) {

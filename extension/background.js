@@ -1,7 +1,7 @@
 // PageProof background script: runs the capture when you click the toolbar icon.
 if (typeof PP_DB === 'undefined' && typeof importScripts === 'function') importScripts('db.js');
 // 4.8.2: the copy store, so the toolbar dot counts new copies the same way Copies found does.
-if (typeof FC === 'undefined' && typeof importScripts === 'function') { try { importScripts('rs-store.js', 'fc-store.js'); } catch (e) { /* old count below */ } }
+if (typeof FC === 'undefined' && typeof importScripts === 'function') { try { importScripts('rs-store.js', 'social.js', 'fc-store.js'); } catch (e) { /* old count below */ } }
 
 const api = globalThis.browser || globalThis.chrome;
 const MAX_PAGE_SHOTS = 60;     // stop after this many screens on very long pages
