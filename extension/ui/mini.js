@@ -1,7 +1,5 @@
 // The toolbar menu (popup.html) and the side panel (sidepanel.html): Capture this page, the
 // photos on this page, new copies, Keep searching, and Open full PageProof.
-// True when version a is newer than version b (the popup must not offer the version already installed).
-const miniNewer = (a, b) => { const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d > 0; } return false; };
 const api = ppApi;
 const SIDE = document.body.classList.contains('sidepane');
 const $ = id => document.getElementById(id);
@@ -32,11 +30,10 @@ async function draw() {
   const [label, dot] = STATE[s] || ['Starting', ''];
   const today = store.fcToday && store.fcToday.day === new Date().toDateString() ? store.fcToday : { searched: 0, found: 0 };
   const site = canUse(tab) && /^https?:/.test(tab.url) ? RS_SITE.of(tab.url) : '';
-  const extra = await api.storage.local.get(['fcNeedsAllow', 'ppUpdate']);
+  const extra = await api.storage.local.get(['fcNeedsAllow']);
   const needAllow = drive.done && (extra.fcNeedsAllow || (alive && st.state === 'allow'));
   $('mini').innerHTML = `
     ${needAllow ? `<div class="msec mfind" role="alert" style="border-color:var(--warn)"><b>One click needed</b><span style="font-size:13.5px">Your browser asks once after it restarts. Press Allow and PageProof can read your photos and start searching.</span><div class="mrow"><button class="btn primary" id="allow">Allow</button></div></div>` : ''}
-    ${extra.ppUpdate && extra.ppUpdate.latest && miniNewer(extra.ppUpdate.latest, api.runtime.getManifest().version) ? `<div class="msec" role="status"><div class="mline"><b>PageProof ${esc(extra.ppUpdate.latest)} is ready</b><button class="btn sm" style="margin-left:auto" data-go="health">Update</button></div></div>` : ''}
     ${here ? `<div class="msec mfind" role="alert"><b>This site is in your finds</b><span style="font-size:13.5px">${here.n} ${here.n === 1 ? 'copy' : 'copies'} of your clients' photos on ${esc(site)}${here.stolen ? ', marked stolen' : ''}.</span><div class="mrow"><button class="btn sm" data-go="found?open=${encodeURIComponent(here.first)}">See ${here.n === 1 ? 'it' : 'them'}</button></div></div>` : ''}
     ${busy ? `<button class="mcap stop" id="stop"><span style="font-size:24px">⏹</span><span><b>Stop the capture</b><small>Keeps what's captured so far</small></span></button>`
       : `<button class="mcap" id="cap"${canUse(tab) ? '' : ' disabled'}><span style="font-size:24px">${ic('capture', 26)}</span><span><b>Capture this page</b><small>${site ? esc(site) + ': PDF, web copy, fingerprints, timestamps' : 'Open a website first'}</small></span></button>`}
@@ -83,5 +80,5 @@ if (SIDE) {
   const soon = () => { clearTimeout(t); t = setTimeout(() => draw().then(() => err(''), e => err('PageProof could not load this panel: ' + (e && e.message || e))), 300); };
   api.tabs.onActivated.addListener(soon);
   api.tabs.onUpdated.addListener((id, ch) => { if (ch.url || ch.status === 'complete') soon(); });
-  api.storage.onChanged.addListener(ch => { if (ch.fcStatus || ch.fcChanged || ch.fcPause || ch.fcKeep || ch.ppTheme || ch.fcNeedsAllow || ch.ppUpdate) soon(); });
+  api.storage.onChanged.addListener(ch => { if (ch.fcStatus || ch.fcChanged || ch.fcPause || ch.fcKeep || ch.ppTheme || ch.fcNeedsAllow) soon(); });
 }

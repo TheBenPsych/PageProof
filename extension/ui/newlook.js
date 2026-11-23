@@ -267,8 +267,6 @@ async function ppStatusLine() {
       if (broken.length) items.push(['bad', broken.map(e => FC.ENGINE_NAME[e]).join(', ') + ' resting', { href: '#health', label: 'Fix it' }]);
       else items.push(['ok', 'Search sites working']);
     }
-    const up = typeof ppUpState === 'function' ? await ppUpState() : null;
-    if (up && up.has) items.push(['info', 'Update ' + up.latest + ' ready', { href: '#health', act: 'upgo', label: 'Update' }]);
   } catch (e) { return; }
   const bad = items.some(i => i[0] === 'bad');
   const html = items.map(([lvl, text, b]) => {
@@ -281,6 +279,6 @@ async function ppStatusLine() {
   el.hidden = !items.length;
 }
 function ppStatusSoon() { clearTimeout(STATUS_T); STATUS_T = setTimeout(ppStatusLine, 800); }
-api.storage.onChanged.addListener(ch => { if (ch.fcStatus || ch.fcPause || ch.fcDriveOffline || ch.fcKeep || ch.fcEngines || ch.ppUpdate || ch.fcNeedsAllow || ch.fcDrive || ch.fcToday) ppStatusSoon(); });
+api.storage.onChanged.addListener(ch => { if (ch.fcStatus || ch.fcPause || ch.fcDriveOffline || ch.fcKeep || ch.fcEngines || ch.fcNeedsAllow || ch.fcDrive || ch.fcToday) ppStatusSoon(); });
 setInterval(ppStatusLine, 30000);
 ppStatusSoon();

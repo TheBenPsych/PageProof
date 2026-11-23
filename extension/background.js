@@ -778,32 +778,11 @@ async function driveNudge(notify) {
       message: 'Your browser asks once after it restarts. Click here, then press Allow, and PageProof starts searching your photos.', priority: 2, requireInteraction: true });
   }
 }
-// ---------- is there a newer PageProof? Asked once a day, on a weekday morning or when the browser starts ----------
-async function updateCheck(force) {
-  try {
-    api.storage.local.remove('ppGhToken'); // left over from 4.1.0, when the code was private
-    const u = (await api.storage.local.get('ppUpdate')).ppUpdate;
-    if (!force && u && Date.now() - u.at < 20 * 3600000) return;
-    const cur = api.runtime.getManifest().version;
-    const st = { at: Date.now(), latest: '', has: false, error: '' };
-    const REPO = 'TheBenPsych/PageProof';
-    let m = null;
-    try { const r = await fetch('https://raw.githubusercontent.com/' + REPO + '/main/extension/manifest.json?t=' + Date.now(), { cache: 'no-store', credentials: 'omit' }); if (r.ok) m = await r.json(); } catch (e) { /* offline */ }
-    if (m && /^\d+(\.\d+){1,3}$/.test(m.version || '')) {
-      const a = m.version.split('.').map(Number), b = cur.split('.').map(Number);
-      for (let i = 0; i < Math.max(a.length, b.length); i++) { const d = (a[i] || 0) - (b[i] || 0); if (d) { st.has = d > 0; break; } }
-      st.latest = m.version;
-    } else st.error = 'PageProof could not reach GitHub just now. It will try again later.';
-    const told = u && u.has && u.latest === st.latest;
-    await api.storage.local.set({ ppUpdate: st });
-    if (st.has && !told && api.notifications) api.notifications.create('ppUpdate', { type: 'basic', iconUrl: api.runtime.getURL('icons/icon128.png'), title: 'PageProof ' + st.latest + ' is ready', message: 'Click here for the download and the three steps. It keeps everything you have.', priority: 1 });
-  } catch (e) { /* tried again tomorrow */ }
-}
 if (api.alarms) {
   api.alarms.create('fcKeep', { periodInMinutes: 1 });
   api.alarms.onAlarm.addListener(async a => {
     if (a.name === 'fcKeep') {
-      newBadge(); driveNudge(false); updateCheck(false);
+      newBadge(); driveNudge(false);
       const st = (await api.storage.local.get('fcStatus')).fcStatus;
       if (!st || Date.now() - st.beat > 90000) keepAlive(false);
     }
@@ -822,13 +801,13 @@ api.storage.onChanged.addListener(ch => {
   if (ch.fcChanged || ch.rsHidden || ch.fcHiddenCountries) { clearTimeout(badgeT); badgeT = setTimeout(newBadge, 2000); }
 });
 let badgeT = null;
-api.runtime.onStartup.addListener(() => { forgetSearchTabs(); fiftySchedule(); keepAlive(false); newBadge(); driveNudge(true); updateCheck(false); });
+api.runtime.onStartup.addListener(() => { forgetSearchTabs(); fiftySchedule(); keepAlive(false); newBadge(); driveNudge(true); });
 api.runtime.onInstalled.addListener(d => {
   fiftySchedule(); newBadge();
   if (d.reason === 'update') freshStart();
   if (d.reason === 'install') api.tabs.create({ url: api.runtime.getURL('app.html#setup') });
-  // After an update the saved "version X is ready" note is old news: forget it and ask GitHub again.
-  if (d.reason === 'update') api.storage.local.remove('ppUpdate').then(() => updateCheck(true)).catch(() => {});
+  // 4.13.1: PageProof no longer asks GitHub for new versions (Ben hands updates out himself). Forget the old notes.
+  if (d.reason === 'update') api.storage.local.remove(['ppUpdate', 'ppGhToken']).catch(() => {});
   try { api.sidePanel && api.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }); } catch (e) { /* no side panel */ }
   if (api.alarms) api.alarms.clear('rsDaily');
 });
@@ -862,6 +841,6 @@ if (api.notifications) {
     // A search site wants a quick check in a big search: show that tab.
     if (id.startsWith('rsCaptcha:')) api.tabs.update(+id.slice(10), { active: true }).then(t => api.windows.update(t.windowId, { focused: true })).catch(() => {});
     if (id === 'fcAllow' || id === 'fcDrive') api.tabs.create({ url: api.runtime.getURL('app.html#keep') });
-    if (id === 'ppUpdate' || id.startsWith('fcEngine:')) api.tabs.create({ url: api.runtime.getURL('app.html#health') });
+    if (id.startsWith('fcEngine:')) api.tabs.create({ url: api.runtime.getURL('app.html#health') });
   });
 }

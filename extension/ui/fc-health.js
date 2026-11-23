@@ -1,22 +1,6 @@
-// Settings › Is everything working? (green and red lights, Copy details for support, updates)
+// Settings › Is everything working? (green and red lights, Copy details for support)
 // and Find copies › Skipped photos (photos that could not be searched, and why).
-// Is there a newer PageProof? This only reads a version number from GitHub. PageProof never downloads
-// or changes its own files: updating is done by you, with the zip.
-const PP_REPO = 'TheBenPsych/PageProof';
-const PP_ZIP = 'https://github.com/' + PP_REPO + '/releases/latest/download/PageProof.zip';
-const ppNewer = (a, b) => { const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d > 0; } return false; };
-async function ppUpState() { const u = (await api.storage.local.get('ppUpdate')).ppUpdate; return u ? { ...u, has: !!u.latest && ppNewer(u.latest, VERSION) } : null; }
-async function ppUpCheck() {
-  const st = { at: Date.now(), latest: '', has: false, error: '' };
-  try {
-    const r = await fetch('https://raw.githubusercontent.com/' + PP_REPO + '/main/extension/manifest.json?t=' + Date.now(), { cache: 'no-store', credentials: 'omit' });
-    const m = r.ok ? await r.json() : null;
-    if (m && /^\d+(\.\d+){1,3}$/.test(m.version || '')) { st.latest = m.version; st.has = ppNewer(m.version, VERSION); } else st.error = 'PageProof could not reach GitHub just now. Try again in a few minutes.';
-  } catch (e) { st.error = 'GitHub could not be reached. Check the internet connection.'; }
-  await api.storage.local.set({ ppUpdate: st });
-  return st;
-}
-Object.assign(state, { skTab: 'All', skMore: 100, support: '', upText: '', upBusy: false });
+Object.assign(state, { skTab: 'All', skMore: 100, support: '' });
 const agoText = t => {
   if (!t) return 'never';
   const m = Math.round((Date.now() - t) / 60000);
@@ -30,7 +14,7 @@ const msText = ms => ms == null ? '' : ms < 1000 ? ms + ' ms' : (ms / 1000).toFi
 // ---------------------------------------------------------------- the lights
 // Each light: [colour, title, what it says, optional button html]
 async function healthLights() {
-  const st = await api.storage.local.get(['fcStatus', 'fcPause', 'fcRest', 'fcLastSearch', 'ppBackupAt', 'fcPerf', 'ppUpdate']);
+  const st = await api.storage.local.get(['fcStatus', 'fcPause', 'fcRest', 'fcLastSearch', 'ppBackupAt', 'fcPerf']);
   const [k, d, ds, docs, eng, rs, skipped, moved] = [await FC.keep(), await FC.drive(), await FC.driveStateSoft(true), await RS_DOCS.state(), await FC.engines(), await RS_JOB.settings(), await FC.skipped(), await FC.meta.get('picsMoved')];
   const perf = st.fcPerf || {}, now = Date.now(), L = [];
   // Google Drive
@@ -68,10 +52,7 @@ async function healthLights() {
   // Preview pictures
   L.push([moved ? 'ok' : 'warn', 'Preview pictures', moved ? 'Kept in their own small store.' : 'Still being tidied after the update. This finishes by itself.']);
   // Version
-  const up = st.ppUpdate ? { ...st.ppUpdate, has: !!st.ppUpdate.latest && ppNewer(st.ppUpdate.latest, VERSION) } : null;
-  if (up && up.has) L.push(['warn', 'PageProof version', 'You have ' + VERSION + '. Version ' + up.latest + ' is ready.', '<a class="btn primary sm" href="#health?update=1" data-act="upgo">Update</a>']);
-  else if (up && up.error) L.push(['grey', 'PageProof version', 'You have ' + VERSION + '. Could not ask GitHub for the newest version: ' + up.error]);
-  else L.push([up ? 'ok' : 'grey', 'PageProof version', 'You have ' + VERSION + (up ? ', the newest. Checked ' + agoText(up.at) + '.' : '. Not checked yet.')]);
+  L.push(['ok', 'PageProof version', 'You have ' + VERSION + '. New versions come from your team lead.']);
   return L;
 }
 const LIGHT = { ok: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--bad)', grey: 'var(--faint)' };
@@ -80,7 +61,7 @@ const LIGHT = { ok: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--bad)', grey: '
 // Numbers and settings only. Never a photo's name, a client's name, a site or a folder path.
 async function supportDetails() {
   const t = async f => { const t0 = performance.now(); const r = await f(); return [Math.round(performance.now() - t0), r]; };
-  const st = await api.storage.local.get(['fcPerf', 'fcToday', 'fcStatus', 'ppUpdate', 'rsHidden', 'rsAllowed']);
+  const st = await api.storage.local.get(['fcPerf', 'fcToday', 'fcStatus', 'rsHidden', 'rsAllowed']);
   const hw = await ppHardware(), k = await FC.keep();
   const [msPhotos, nPhotos] = await t(() => FC.DB.count('photos'));
   const [msCopies, copies] = await t(() => FC.allCopies());
@@ -95,7 +76,7 @@ async function supportDetails() {
   const NAME = { openPhoto: 'Open one photo from Drive (n = its size in KB)', searchLine: 'Work out which photo is next (n = photos)', readCopies: 'Read all copies found (n = copies)', readEveryFolder: 'Read every folder (n = photos)', readNewFolders: 'Read this and last quarter\'s folders (n = photos)', driveAnswer: 'Google Drive answers' };
   const lines = [
     'PageProof details for support', 'Made ' + new Date().toString(), '',
-    'Version: ' + VERSION + (st.ppUpdate && st.ppUpdate.latest ? ' (newest on GitHub: ' + st.ppUpdate.latest + ')' : ''),
+    'Version: ' + VERSION,
     'Browser: ' + navigator.userAgent,
     'Computer: ' + hw.cores + ' cores, ' + hw.memGB + ' GB memory, rated ' + hw.level + ' (' + hw.limits.checks + ' photo checks, ' + hw.limits.tabs + ' search tabs at once)',
     'Page memory in use: ' + (performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) + ' MB' : 'not known'),
@@ -189,7 +170,6 @@ function storageCard() {
 V.health = async () => {
   const lights = await healthLights();
   const bad = lights.filter(l => l[0] === 'bad').length, warn = lights.filter(l => l[0] === 'warn').length;
-  const up = await ppUpState();
   return `${head('Settings', 'Is everything working?', 'A quick look at every part of PageProof. Green is fine, yellow needs a look, red is stopped.', `<button class="btn" data-act="healthagain">${ic('refresh', 18)} Check again</button><button class="btn primary" data-act="supportcopy">${ic('doc', 18)} Copy details for support</button>`)}
   <div class="banner ${bad ? 'bad' : warn ? 'warn' : 'info'}" style="font-size:15px"><b>${bad ? plural(bad, 'thing has', 'things have') + ' stopped' : warn ? plural(warn, 'thing needs', 'things need') + ' a look' : 'Everything is working'}</b>${bad && warn ? `<span class="muted">and ${warn} more ${warn === 1 ? 'needs' : 'need'} a look</span>` : ''}</div>
   <section class="card" style="overflow:hidden">
@@ -198,22 +178,6 @@ V.health = async () => {
       <div style="flex:1;min-width:0"><b>${esc(title)}</b><div class="muted" style="font-size:13.5px">${esc(text)}</div></div>${btn || ''}</div>`).join('')}
   </section>
   ${storageCard()}
-  <section class="card pad" id="updates" style="display:flex;flex-direction:column;gap:12px">
-    <div class="row"><h2>Updates</h2><span class="tag ${up && up.has ? 'warn' : up && !up.error ? 'ok' : 'grey'}" style="margin-left:auto">${up && up.has ? 'Version ' + esc(up.latest) + ' is ready' : up && !up.error ? 'Up to date' : 'Not checked'}</span></div>
-    <p class="muted" style="margin:0;font-size:14px">You have PageProof ${VERSION}. PageProof asks GitHub for a newer version every morning.</p>
-    ${up && up.error ? `<div class="banner warn" style="padding:10px 12px;font-size:13.5px"><span>${esc(up.error)}</span></div>` : ''}
-    ${state.upText ? `<div class="scanbar"><span class="spin"></span>${esc(state.upText)}</div>` : ''}
-    <div class="row" style="gap:8px">
-      <button class="btn" data-act="upcheck"${state.upBusy ? ' disabled' : ''}>Check for an update now</button>
-      ${up && up.has ? `<button class="btn primary" data-act="upzip">Download version ${esc(up.latest)}</button>` : ''}
-    </div>
-    <details class="keyfold"${up && up.has ? ' open' : ''}><summary>How to update</summary>
-      <div class="muted" style="font-size:13.5px;display:flex;flex-direction:column;gap:6px;margin-top:8px">
-        <span><b>1.</b> Press "Download version…". PageProof.zip lands in your Downloads folder.</span>
-        <span><b>2.</b> Unzip it into Documents › PageProof › Install and say yes to replacing the files.</span>
-        <span><b>3.</b> Open the extensions page (edge://extensions or chrome://extensions) and press the reload arrow on PageProof. Your finds, settings and lists are not touched.</span>
-      </div></details>
-  </section>
   ${state.support ? `<section class="card pad" style="display:flex;flex-direction:column;gap:10px"><div class="row"><h2>Details for support</h2><span class="tag ok" style="margin-left:auto">Copied</span></div>
     <p class="muted" style="margin:0;font-size:14px">This is exactly what was copied. Paste it into a message. It has numbers and settings only: no photo names, client names, sites or folder paths.</p>
     <textarea readonly style="width:100%;min-height:260px;font-family:var(--mono,monospace);font-size:12.5px;border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--sunk);color:var(--ink)">${esc(state.support)}</textarea></section>` : ''}`;
@@ -263,7 +227,4 @@ Object.assign(ACTS, {
   sktab: v => { state.skTab = v; state.skMore = 100; render(true); },
   skmore: () => { state.skMore += 200; render(true); },
   skretry: async v => { const n = await FC.retrySkipped(v ? [v] : null); toast(n ? plural(n, 'photo goes', 'photos go') + ' to the front of the line.' : 'Nothing to try again.'); render(true); },
-  upgo: () => { location.hash = 'health'; setTimeout(() => { const u = document.getElementById('updates'); if (u) u.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 300); },
-  upcheck: async () => { state.upBusy = true; state.upText = 'Asking GitHub…'; render(true); const st = await ppUpCheck(); state.upBusy = false; state.upText = ''; toast(st.error ? 'Could not check: ' + st.error : st.has ? 'Version ' + st.latest + ' is ready.' : 'You have the newest version.'); render(true); },
-  upzip: async () => { api.tabs.create({ url: PP_ZIP, active: false }); toast('Downloading PageProof.zip. Unzip it into Documents › PageProof › Install, then press the reload arrow on the extensions page.'); },
 });

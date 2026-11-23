@@ -360,13 +360,9 @@ Everything you find is kept in this browser and also in `Documents\PageProof\fou
 
 **Keyboard keys.** Press **?** anywhere in PageProof (or the **?** button at the top) for the full list. In Copies found: **↑ ↓** move between copies, **Enter** opens one, **Y / L / N / →** answer it, **U** undoes, **/** jumps to the search box, **Esc** closes.
 
-**Updating.** PageProof asks GitHub each morning whether there is a newer version, and says so on Home and on the PageProof icon's menu.
-1. Open **Settings › Is everything working?** and scroll to **Updates**.
-2. Press **Download version…**. PageProof.zip lands in your Downloads folder.
-3. Unzip it into `Documents\PageProof\Install` and say yes to replacing the files.
-4. Open `edge://extensions` (or `chrome://extensions`) and press the reload arrow on PageProof. Your finds, settings and lists are kept.
-
-PageProof never changes its own files, and never writes anything inside the **Install** folder. You always do the update yourself with the zip.
+**Updating.** PageProof does not check for new versions by itself. Your team lead sends you each new PageProof.zip.
+1. Unzip it into `Documents\PageProof\Install` and say yes to replacing the files.
+2. Open `edge://extensions` (or `chrome://extensions`) and press the reload arrow on PageProof. Your finds, settings and lists are kept.
 
 **The red "!" on the PageProof icon** means Google Drive is waiting for its one click on **Allow** after the browser restarted. Click the icon and press **Allow**.
 
