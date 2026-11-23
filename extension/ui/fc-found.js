@@ -239,9 +239,10 @@ function checksHtml(c, reg, kind, hits, pub, capturedAt) {
 // Resolves 'stolen', 'removed' (Remove instead) or null (cancelled).
 async function ruleGate(c) {
   const kinds = await siteKinds();
-  // Only ask when a rule speaks up: for the kind you saved, or else PageProof's guess. Everyday copies go straight through.
+  // Only ask when a Stop rule applies (for the kind you saved, or else PageProof's guess). Warn rules stay
+  // in the details panel, so everyday copies and embeds go straight through.
   const saved = kinds[FC.baseOf(c.site)] || PP_CHECKS.guessKind(c, c.pf) || '';
-  if (!PP_CHECKS.rules(c, saved, c.pf).some(h => h.lvl !== 'info')) return 'stolen';
+  if (!PP_CHECKS.rules(c, saved, c.pf).some(h => h.lvl === 'stop')) return 'stolen';
   if (!c.pf && !PF_BUSY.has(c.id)) readTheirPage(c).then(() => { if (state.open === c.id) render(true); }).catch(() => {});
   return new Promise(resolve => {
     const d = document.createElement('dialog');
