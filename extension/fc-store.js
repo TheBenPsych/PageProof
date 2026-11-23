@@ -982,12 +982,19 @@ const FC = (() => {
   const CDN_SOCIAL = /(fbcdn\.net|cdninstagram\.com|twimg\.com|pinimg\.com|redd\.it|tiktokcdn|vkuserphoto|sinaimg)/;
   const SHOP = /(^|\.)(etsy|amazon|ebay|redbubble|teepublic|zazzle|aliexpress|temu|shein|walmart|society6|cafepress|spreadshirt|teespring|printful|shopify|mercari|poshmark|depop|wish)\./;
   const BAD_END = /\.(xyz|top|shop|online|site|buzz|click|icu|cyou|rest|monster|lol|cfd|sbs|bond|live|fun|space|store|vip|win|loan|work|info|biz|pw|tk|ml|ga|cf|gq)$/;
-  const COUNTRY = { ru: 'Russia', cn: 'China', vn: 'Vietnam', in: 'India', id: 'Indonesia', tr: 'Turkey', br: 'Brazil', uk: 'United Kingdom', ca: 'Canada', au: 'Australia', de: 'Germany', fr: 'France', it: 'Italy', es: 'Spain', nl: 'Netherlands',
+  // Country-code endings (.fr, .lt, .com.tr ...). Endings that many sites use outside their country
+  // (.io, .co, .tv, .me, .ai, .fm, .ly ...) are left out on purpose: they don't say where a site is.
+  const COUNTRY = { ru: 'Russia', su: 'Russia', cn: 'China', vn: 'Vietnam', in: 'India', id: 'Indonesia', tr: 'Turkey', br: 'Brazil', uk: 'United Kingdom', gb: 'United Kingdom', ca: 'Canada', au: 'Australia', de: 'Germany', fr: 'France', it: 'Italy', es: 'Spain', nl: 'Netherlands',
     pl: 'Poland', ua: 'Ukraine', jp: 'Japan', kr: 'South Korea', mx: 'Mexico', ar: 'Argentina', ph: 'Philippines', pk: 'Pakistan', bd: 'Bangladesh', ng: 'Nigeria', za: 'South Africa', ir: 'Iran', th: 'Thailand', my: 'Malaysia', sg: 'Singapore',
     hk: 'Hong Kong', tw: 'Taiwan', ie: 'Ireland', nz: 'New Zealand', se: 'Sweden', no: 'Norway', dk: 'Denmark', fi: 'Finland', be: 'Belgium', ch: 'Switzerland', at: 'Austria', pt: 'Portugal', gr: 'Greece', cz: 'Czechia', ro: 'Romania',
-    hu: 'Hungary', il: 'Israel', ae: 'United Arab Emirates', sa: 'Saudi Arabia', eg: 'Egypt', cl: 'Chile', co: 'Colombia', pe: 'Peru', by: 'Belarus', kz: 'Kazakhstan', rs: 'Serbia', bg: 'Bulgaria', hr: 'Croatia', sk: 'Slovakia', lt: 'Lithuania', lv: 'Latvia', ee: 'Estonia', us: 'United States' };
+    hu: 'Hungary', il: 'Israel', ae: 'United Arab Emirates', sa: 'Saudi Arabia', eg: 'Egypt', cl: 'Chile', pe: 'Peru', by: 'Belarus', kz: 'Kazakhstan', rs: 'Serbia', bg: 'Bulgaria', hr: 'Croatia', sk: 'Slovakia', lt: 'Lithuania', lv: 'Latvia', ee: 'Estonia', us: 'United States',
+    si: 'Slovenia', ba: 'Bosnia and Herzegovina', mk: 'North Macedonia', al: 'Albania', md: 'Moldova', ge: 'Georgia', am: 'Armenia', az: 'Azerbaijan', uz: 'Uzbekistan', kg: 'Kyrgyzstan', tj: 'Tajikistan', tm: 'Turkmenistan',
+    mn: 'Mongolia', lu: 'Luxembourg', is: 'Iceland', mt: 'Malta', cy: 'Cyprus', mc: 'Monaco', li: 'Liechtenstein', ad: 'Andorra', sm: 'San Marino', ve: 'Venezuela', ec: 'Ecuador', bo: 'Bolivia', py: 'Paraguay', uy: 'Uruguay',
+    cr: 'Costa Rica', pa: 'Panama', gt: 'Guatemala', hn: 'Honduras', sv: 'El Salvador', ni: 'Nicaragua', do: 'Dominican Republic', cu: 'Cuba', jm: 'Jamaica', pr: 'Puerto Rico', tt: 'Trinidad and Tobago',
+    ma: 'Morocco', dz: 'Algeria', tn: 'Tunisia', ke: 'Kenya', gh: 'Ghana', et: 'Ethiopia', tz: 'Tanzania', ug: 'Uganda', zw: 'Zimbabwe', zm: 'Zambia', sn: 'Senegal', ci: 'Ivory Coast', cm: 'Cameroon', ao: 'Angola', mz: 'Mozambique', na: 'Namibia', bw: 'Botswana', rw: 'Rwanda',
+    qa: 'Qatar', kw: 'Kuwait', bh: 'Bahrain', om: 'Oman', jo: 'Jordan', lb: 'Lebanon', iq: 'Iraq', sy: 'Syria', ye: 'Yemen', af: 'Afghanistan', np: 'Nepal', lk: 'Sri Lanka', mm: 'Myanmar', kh: 'Cambodia', mo: 'Macau', kp: 'North Korea' };
   const baseOf = site => String(site || '').split('.').slice(/\.(co|com|net|org|gov|edu|ac|ltd|plc|me|or|ne|go)\.[a-z]{2}$/.test(site) ? -3 : -2).join('.');
-  function countryOf(site) { const end = site.split('.').pop(); return COUNTRY[end] || (/^(com|net|org|edu|gov|mil|us)$/.test(end) ? '' : ''); }
+  function countryOf(site) { const end = String(site || '').toLowerCase().replace(/:\d+$/, '').replace(/\.$/, '').split('.').pop(); return COUNTRY[end] || ''; }
   function useOf(c) {
     const site = c.site || '';
     let ih = ''; try { ih = c.img && /^https?:/.test(c.img) ? new URL(c.img).hostname.replace(/^www\./, '') : ''; } catch (e) { /* none */ }
@@ -1529,6 +1536,7 @@ const FC = (() => {
       if (!/^https?:\/\//.test(url || '') || !photo) continue;
       const key = RS_UTIL.key(url);
       out.push({ id: photo + '|' + key, photo, client, url, key, site: RS_SITE.of(url), title: '', thumb: '', img: '', engines: [], pct: pct === '' ? null : +pct, match: 'same', firstSeen: first, lastSeen: last, times: 1, status: status || 'new', online: online || 'up', restored: true, photoName });
+      const r = out[out.length - 1]; r.country = countryOf(r.site); r.use = useOf(r);
     }
     await DB.putMany('copies', out);
     siteIndexSoon();
