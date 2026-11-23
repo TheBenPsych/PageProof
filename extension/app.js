@@ -441,6 +441,7 @@ V.hidden = async () => {
     await PP_SOCIAL.ready;
     const mine = Object.entries(PP_SOCIAL.mine()).filter(([k]) => k.includes(q)).sort();
     const built = [...new Set(Object.values(PP_SOCIAL.SITES).map(x => x[0]))].sort((a, b) => a.localeCompare(b));
+    const readOn = (await api.storage.local.get('ppAcctRead')).ppAcctRead !== false;
     return `${head('Settings', 'Hidden and approved sites', 'Hidden sites never show up in any search. Approved sites may use the photos: copies found there are marked Licensed by themselves.')}
     <section class="card" style="overflow:hidden">
       <div class="toolbar"><div class="tabs" role="tablist">${[['hidden', 'Hidden sites'], ['allowed', 'Approved for every client'], ['client', 'Approved for one client'], ['rejected', 'Rejected links'], ['social', 'Social sites']].map(([k, l]) => `<button role="tab" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}" data-act="hidtab" data-v="${k}">${l}</button>`).join('')}</div></div>
@@ -452,6 +453,7 @@ V.hidden = async () => {
       </tbody></table></div>
       <details style="padding:12px 18px;border-top:1px solid var(--line)"><summary><b>${built.length} social sites PageProof already knows</b></summary><p class="muted" style="font-size:13px;margin:8px 0 0">${esc(built.join(', '))}</p></details>
     </section>
+    <section class="card pad"><label class="row" style="gap:10px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="acctread" data-act="acctread" ${readOn ? 'checked' : ''} style="margin-top:4px"><span><b>Read account details by itself</b><br><span class="muted" style="font-size:13px">Followers, verified, account type, country and owner company. PageProof opens each account's profile in a background tab of your browser for a few seconds, one account at a time, once a month. Off: only when you press "Read again now" on an account.</span></span></label></section>
     <p class="faint" style="margin:0;font-size:12.5px">Copies on social sites go on the Social media tab of Copies found, where Stolen, Hide and Approve work per account. Saved with your settings backup.</p>`;
   }
   // Approved for one client: kept with each client (site | client).
@@ -489,6 +491,7 @@ Object.assign(ACTS, {
     await PP_SOCIAL.setMine(site, v); FC.backupSoon(); state.hidQ = '';
     toast(site + (v === 'social' ? ' goes on the Social media tab now.' : ' goes on the Websites tab now.')); render(true);
   },
+  acctread: async (v, el) => { await api.storage.local.set({ ppAcctRead: !!(el && el.checked) }); toast(el && el.checked ? 'PageProof reads account details by itself.' : 'Account details are only read when you ask.'); },
   socforget: async v => { await PP_SOCIAL.setMine(v, ''); FC.backupSoon(); toast('Forgot your choice for ' + v + '.'); render(true); },
 });
 document.getElementById('hidLoad').addEventListener('change', async e => {
@@ -536,6 +539,8 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Followers, verified and account type on social copies', 'PageProof reads each account\'s profile by itself (in a background tab of your browser, one account at a time, once a month): followers, the check mark, and what kind of account it is. The Social media tab gets Verified, Followers, Account type and Country filters, Sort by Most followers, and the Accounts list shows and sorts by them.'],
+  ['Spots business accounts by itself', 'When a site doesn\'t say what kind of account it is, PageProof adds up the signs: a shop or company word, a Shop now or Contact button, an email or phone number, its own website and whether that site sells things. Two or more signs = Business (guess). A company named on Facebook\'s Page transparency, or the country in Instagram\'s and X\'s About this account, shows on the account, with ready-made business register and trademark searches.'],
   ['Every photo gets searched at least once', 'Before, older photos that were never searched could wait forever behind newer and priority photos. Now 1 in 3 searches (you can pick 1 in 4 or 1 in 2 on Keep searching) goes to a photo that was never searched, until there are none left. ⚑ High priority photos still go first. ★ Priority clients get their first searches first, then the clients take turns, newest photos first. New photos you add to Drive join by themselves.'],
   ['See what has been searched', 'Keep searching shows how many photos were searched at least once (for example 12,400 of 18,000), how many are left, the first searches this week and a "done by" date at your pace, plus a table client by client, lowest first. Photos that can\'t be searched (POOL, TIFF, HEIC, broken) are counted apart. Home has the same bar, and a note when a client reaches 100%. The weekly summary says how many photos had their first search.'],
   ['Today\'s 50 can pick never-searched photos', 'On Keep searching › Today\'s 50, choose "Never searched first" to spend the whole batch on photos that have never been searched.'],

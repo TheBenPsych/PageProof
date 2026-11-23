@@ -148,7 +148,7 @@ function passMain(c) {
   return (state.fClient === 'Any' || (c.clientName || 'Client unknown') === state.fClient) && (state.fUse === 'Any' || c.use === state.fUse) &&
     (state.fRisk === 'Any' || c.risk.level === state.fRisk) && (state.fCredit === 'Any' || (c.credit || '') === state.fCredit) && (!state.fShop || c.use === 'shop') && (!state.fRepeat || (c.repeat > 0 && c.status === 'new')) &&
     (!state.fOwner || (FCD.ownerOf.get(c.site) || {}).key === state.fOwner) && (state.fPlat === 'Any' || platOf(c).key === state.fPlat) &&
-    (!state.fAcct || (state.fAcct === '~' ? !c.acct : !!c.acct && acctGroup(c.acct.key) === acctGroup(state.fAcct))) && (!state.fFresh || (c.dmg && c.dmg.end && Date.now() <= c.dmg.end.getTime())) && passMore(c);
+    (!state.fAcct || (state.fAcct === '~' ? !c.acct : !!c.acct && acctGroup(c.acct.key) === acctGroup(state.fAcct))) && (!state.fFresh || (c.dmg && c.dmg.end && Date.now() <= c.dmg.end.getTime())) && (!isSoc(c) || passAcct(c)) && passMore(c);
 }
 // The newer filters: the search box, found when, how strong the match is, photo year and quarter.
 function passMore(c) {
@@ -531,7 +531,7 @@ V.found = async () => {
   const social = state.fTab === 'social';
   if (!social && (state.fView === 'account' || state.sView === 'accounts')) { state.fView = 'client'; state.sView = 'copies'; }
   if (social && state.fView === 'owner') state.fView = 'account';
-  const sorters = { act: (a, b) => actScore(b) - actScore(a), pct: (a, b) => (b.pct || 0) - (a.pct || 0), risk: (a, b) => ({ sus: 2, watch: 1, ok: 0 }[b.risk.level] - { sus: 2, watch: 1, ok: 0 }[a.risk.level]), newest: (a, b) => (b.firstSeen || '').localeCompare(a.firstSeen || '') };
+  const sorters = { act: (a, b) => actScore(b) - actScore(a), pct: (a, b) => (b.pct || 0) - (a.pct || 0), risk: (a, b) => ({ sus: 2, watch: 1, ok: 0 }[b.risk.level] - { sus: 2, watch: 1, ok: 0 }[a.risk.level]), newest: (a, b) => (b.firstSeen || '').localeCompare(a.firstSeen || ''), fol: (a, b) => (folOf(b) ?? -1) - (folOf(a) ?? -1) || actScore(b) - actScore(a) };
   const rows = all.filter(c => passMain(c) && passStatus(c)).sort(sorters[state.fSort] || sorters.act);
   const main = all.filter(passMain);
   const cnt = f => main.filter(c => passStatus(c, f)).length;
@@ -607,6 +607,7 @@ V.found = async () => {
   if (state.fOwner) { const o = FCD.owners.find(z => z.key === state.fOwner); active.push(['fOwner', 'Owner: ' + (o ? o.name : '?')]); }
   if (state.fPhoto) { const p = FCD.photos.get(state.fPhoto); active.push(['fPhoto', 'Photo: ' + (p ? p.name : 'one photo')]); }
   if (state.fq) active.push(['fq', 'Search: ' + state.fq]);
+  if (social) for (const [k, l] of [['fVer', 'Verified'], ['fFol', 'Followers'], ['fType', 'Type'], ['fCountry', 'Country']]) if (state[k] !== 'Any') active.push([k, l + ': ' + (k === 'fFol' ? (state[k] === 'nk' ? 'Not known' : PP_SOCIAL.FOL_BANDS[+state[k]][2]) : k === 'fVer' ? { yes: 'Yes', blue: 'Blue check', gold: 'Organisation', grey: 'Government', no: 'No', nk: 'Not known' }[state[k]] : state[k] === 'nk' ? 'Not known' : state[k])]);
   if (state.fAcct) { const e = FCD.accts.get(state.fAcct); active.push(['fAcct', state.fAcct === '~' ? 'Account not found yet' : 'Account: ' + (e ? e.acct.handle : state.fAcct)]); }
   const shownOn = [...(state.fWhen !== 'any' ? [['fWhen', 'Found ' + WHEN[state.fWhen][0].toLowerCase()]] : []), ...(state.fMatch !== 'any' ? [['fMatch', state.fMatch[0].toUpperCase() + state.fMatch.slice(1) + ' match']] : []), ...(state.fFresh ? [['fFresh', 'Published in the last 3 months']] : []), ...active];
   const sel = (id, label, opts, cur) => `<label>${label}<select data-act="fsel" data-v="${id}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(cur) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`;
@@ -650,7 +651,7 @@ V.found = async () => {
       ${dd('fMatch', 'Match', [['any', 'All'], ['exact', 'Exact', 'The same photo, 95% or more lines up'], ['strong', 'Strong', '80% or more lines up'], ['loose', 'Loose', 'Less, or only a few details match']], state.fMatch, false, 'any')}
       <button class="ddb${state.showFilters ? ' on' : ''}${active.length ? ' chosen' : ''}" data-act="togglefilters" aria-expanded="${state.showFilters}">＋ More filters${active.length ? ` <b class="num">${active.length}</b>` : ''}</button>
       <span style="flex:1"></span>
-      ${dd('fSort', 'Sort', [['act', 'Best to act on'], ['pct', 'Lines up most'], ['risk', 'Most suspicious'], ['newest', 'Newest']], state.fSort, true)}
+      ${dd('fSort', 'Sort', [['act', 'Best to act on'], ['pct', 'Lines up most'], ...(social ? [['fol', 'Most followers']] : [['risk', 'Most suspicious']]), ['newest', 'Newest']], state.fSort, true)}
       <details class="ddw right" data-dd="cols"><summary class="ddb">Columns <span class="caret" aria-hidden="true">▾</span></summary><div class="ddm">${FCOLS.map(([k, l]) => `<label><input type="checkbox" data-act="fcol" data-v="${k}" ${state.fCols[k] ? 'checked' : ''}> ${esc(l)}</label>`).join('')}<span class="faint" style="font-size:12px;padding:4px 10px 6px">Narrow windows show fewer columns.</span></div></details>
     </div>
     <div class="qfrow" aria-label="Quick filters"><span class="qflabel">Quick filters</span>
@@ -660,6 +661,7 @@ V.found = async () => {
       ${qf('Published in the last 3 months', newL.filter(fresh).length, state.fFresh, 'qtoggle', 'fresh', 'ok')}
     </div>
     ${social ? platChips(all.filter(c => passMore(c) && passStatus(c) && passMainNoPlat(c))) : ''}
+    ${social ? acctFilterLine(dd, all.filter(c => passStatus(c) && passMainNoAcct(c))) : ''}
     ${state.showFilters ? `<div class="filters fpanel">
       <div class="qchips" aria-label="Quick filters"><span style="font-weight:600">Quick filters</span>
       ${chip('Repeat offenders', live.filter(c => c.repeat && c.status === 'new').length, state.fRepeat, 'qtoggle', 'repeat', 'bad')}
@@ -711,7 +713,7 @@ function siteStrip(base, xs) {
     <div class="sbtns"><a class="btn sm" href="${safeUrl('https://' + base)}" target="_blank" rel="noreferrer" data-act="openlink">Home page</a><button class="btn sm" data-act="stripok" data-v="${esc(c.id)}">Approve site</button>${RS_LISTS.wholeSocial(base) ? '' : `<button class="btn sm" data-act="hidesite" data-v="${esc(base)}">Hide site</button>`}<button class="btn sm" data-act="gowho" data-v="${esc(c.id)}">Who's behind it</button></div></div>`;
 }
 V.found.guard = async () => ((await FC.drive()).done ? null : 'connect');
-V.found.after = () => { if (typeof FC_PREV !== 'undefined') FC_PREV.start(); loadOurs(); bindHover(); ppPagePic(); ppKeptLine(); socQueue(); };
+V.found.after = () => { if (typeof FC_PREV !== 'undefined') FC_PREV.start(); loadOurs(); bindHover(); ppPagePic(); ppKeptLine(); socQueue(); infoQueue(); };
 
 // Hovering a copy's thumbnail shows it next to your client's photo.
 // Only one card ever exists. It goes away when the mouse leaves the pictures, and also when the
@@ -937,7 +939,7 @@ Object.assign(ACTS, {
   qcredit: v => { state.fCredit = v; state.fFilter = 'All'; render(true); },
   togglefilters: () => { state.showFilters = !state.showFilters; render(true); },
   unfilter: v => {
-    if (v === 'all') Object.assign(state, { fWhen: 'any', fMatch: 'any', fAcct: '', fPlat: 'Any', fFresh: false, fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fOwner: '', fYear: 'Any', fQuarter: 'Any', fPhoto: '', fq: '' });
+    if (v === 'all') Object.assign(state, { fWhen: 'any', fMatch: 'any', fVer: 'Any', fFol: 'Any', fType: 'Any', fCountry: 'Any', fAcct: '', fPlat: 'Any', fFresh: false, fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fOwner: '', fYear: 'Any', fQuarter: 'Any', fPhoto: '', fq: '' });
     else if (v === 'fWhen' || v === 'fMatch') state[v] = 'any';
     else state[v] = v === 'fShop' || v === 'fRepeat' || v === 'fFresh' ? false : ['fOwner', 'fPhoto', 'fq', 'fAcct'].includes(v) ? '' : 'Any';
     render(true);
@@ -1012,7 +1014,7 @@ Object.assign(ACTS, {
       <button data-act="mdo" data-v="compare|${id}">${ic('layers', 16)}<span>Compare the two photos</span></button>
       <button data-act="mdo" data-v="evidence|${id}">${ic('doc', 16)}<span>Make evidence report</span></button>
       <button data-act="mdo" data-v="capture|${id}">${ic('cam', 16)}<span>Capture their page</span></button>
-      <button data-act="mdo" data-v="who|${id}">${ic('owner', 16)}<span>Who's behind ${esc(base)}</span></button>
+      ${isSoc(c) ? (c.acct ? `<button data-act="openacct" data-v="${id}">${ic('owner', 16)}<span>Who's behind ${esc(c.acct.handle)}</span></button>` : '') : `<button data-act="mdo" data-v="who|${id}">${ic('owner', 16)}<span>Who's behind ${esc(base)}</span></button>`}
       <button data-act="mdo" data-v="copy|${id}">${ic('link', 16)}<span>Copy the link</span></button>`);
   },
   stripok: (v, el) => {
@@ -1175,7 +1177,7 @@ async function matchReport(c, caseNo) {
     const p = FCD.photos.get(c.photo);
     const blob = await ourBlob(p);
     const r = await PP_EVIDENCE.make({ blob, name: c.photoName, w: p && p.w, h: p && p.h, hash: (p && p.hash) || await RS_UTIL.sha256(blob), client: c.clientName, path: await FC.pathOf(p), reg: p ? await FC.regFor(p) : null },
-      { ...c, use: FC.USE[c.use][0] }, { caseNo, collector: await getName(), owner: await ownerSummary(c.site), checks: await reportChecks(c, p) });
+      { ...c, use: FC.USE[c.use][0], acctInfo: infoOf(c) }, { caseNo, collector: await getName(), owner: await ownerSummary(c.site), checks: await reportChecks(c, p) });
     const a = document.createElement('a'); a.href = URL.createObjectURL(r.blob); a.download = r.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
     await FC.logReport({ id: r.id, file: r.name, url: c.url, site: c.site, photo: c.photoName, client: c.clientName, caseNo });
     if (r.credit) { const cc = await FC.DB.get('copies', c.id); if (cc) { cc.credit = r.credit; await FC.DB.put('copies', cc); } }
@@ -1289,7 +1291,7 @@ V.review.after = () => {
   const cut = document.getElementById('cut');
   if (cut) cut.oninput = () => { state.cut = +cut.value; document.getElementById('swipe').style.setProperty('--cut', cut.value + '%'); };
   ppPagePic();
-  socQueue();
+  socQueue(); infoQueue();
 };
 Object.assign(ACTS, {
   rvtab: v => { state.rvTab = v; render(true); },
