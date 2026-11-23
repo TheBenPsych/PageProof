@@ -91,14 +91,18 @@ let redrawT = null;
 // Keep searching writes a heartbeat every 30 seconds. Only what you can see counts as a change.
 const statusLook = s => (s ? [s.state, s.text, s.current && s.current.id].join('|') : '');
 api.storage.onChanged.addListener(ch => {
-  if ((ch.fcEngines || ch.ppUpdate) && ['home', 'health'].includes(route()) && !state.upBusy) { clearTimeout(redrawT); redrawT = setTimeout(() => render(true), 600); return; }
+  if ((ch.fcEngines || ch.ppUpdate) && ['home', 'health'].includes(state.shown) && !state.upBusy) { clearTimeout(redrawT); redrawT = setTimeout(() => render(true), 600); return; }
   if (!ch.fcChanged && !ch.fcStatus) return;
   if (!ch.fcChanged && statusLook(ch.fcStatus.oldValue) === statusLook(ch.fcStatus.newValue)) return;
-  if (ch.fcStatus && !['keep', 'home'].includes(route())) return;
-  if (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  if (ch.fcStatus && !['keep', 'home'].includes(state.shown)) return;
+  // Don't redraw under someone typing. A ticked checkbox or a pressed button keeps focus too, but
+  // must not stop the page from showing what changed (4.6.1).
+  const fe = document.activeElement;
+  if (fe && (fe.tagName === 'TEXTAREA' || fe.tagName === 'SELECT' || (fe.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|range|color|file)$/i.test(fe.type)))) return;
   if (document.querySelector('dialog[open]')) return;
   clearTimeout(redrawT);
-  redrawT = setTimeout(() => { if (!FRAMES[route()] && V[route()] && !V[route()].noAutoRedraw) render(true); }, ch.fcStatus ? 400 : 1500);
+  // state.shown, not route(): a guard can show another page (setup) under this address (see 4.0.10).
+  redrawT = setTimeout(() => { const s = state.shown || route(); if (!FRAMES[route()] && V[s] && !V[s].noAutoRedraw) render(true); }, ch.fcStatus ? 400 : 1500);
 });
 document.getElementById('themeBtn').onclick = () => ppTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
 document.getElementById('menuBtn').onclick = () => document.getElementById('side').classList.toggle('open');
@@ -465,6 +469,8 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Missing pictures come back by themselves', 'After moving or reinstalling PageProof, Copies found showed the logo instead of the pictures. It now rebuilds them quietly in the background while Copies found is open: your client\'s photo from Google Drive, and their copy from its picture address or, if only the page link was kept, from the picture on their page that lines up with your photo. If nothing on their page lines up, the logo stays rather than a wrong picture. found-copies.txt now also keeps each copy\'s picture address, so a future reinstall gets them straight back.'],
+  ['Folder list in Connect your photos shows again', 'In step 3 of Connect your photos the list of folders had shrunk to a tiny faint box, so there was nothing to tick. It is back to full size. And choosing the same top folder again (after a reinstall) now keeps the folders you had ticked instead of starting over. Pages also no longer wait for you to click somewhere else before showing what changed after you tick a box.'],
   ['Compare spots AI edits', 'After lining up, Compare draws a green line round the part that is your photo and tints red what was added or redrawn (a new object, changed faces, a headline). Turn it off with Show changes. Heavily edited copies get their own verdict, "Same photo, heavily edited", and the big number then only judges the part that was not painted over.'],
   ['Compare one face at a time', 'In Compare, click Pick a spot, then click a face or detail (or drag a box round it). PageProof cuts it from both pictures and scores it on its own, and says if it moved. Every spot goes in the PDF.'],
   ['Which shot did they use?', 'Took many shots of one scene? In Compare, click Check nearby shots and pick them all. PageProof lines each one up with the copy and puts the best one in box 1, or says when two are too close to call.'],

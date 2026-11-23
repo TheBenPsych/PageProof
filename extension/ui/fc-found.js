@@ -8,7 +8,11 @@ Object.assign(state, {
 });
 const HIST = [];         // every answer and hide, newest last, so each one can be undone in turn
 let FCD = null;          // what's loaded from the copies database (cleared when anything changes)
-api.storage.onChanged.addListener(ch => { if (ch.fcChanged || ch.rsHidden || ch.fcHiddenCountries) FCD = null; });
+// A change elsewhere (Keep searching, the picture rebuild, another tab) only marks it stale: the
+// next draw reads it again, but a click in between still finds its copy. (Clearing it outright
+// made a button press do nothing until the page was drawn again, 4.6.4.)
+let FCD_STALE = false;
+api.storage.onChanged.addListener(ch => { if (ch.fcChanged || ch.rsHidden || ch.fcHiddenCountries) FCD_STALE = true; });
 
 const STATUS = { new: ['New', 'copy'], stolen: ['Stolen', 'bad'], licensed: ['Licensed', 'ok'], removed: ['Removed', 'grey'] };
 const RISK = { ok: ['Looks normal', ''], watch: ['Worth a look', 'warn'], sus: ['Suspicious', 'bad'] };
@@ -29,7 +33,8 @@ function regSync(p, regs) {
   return va || app ? { va, app } : null;
 }
 async function loadFC() {
-  if (FCD) return FCD;
+  if (FCD && !FCD_STALE) return FCD;
+  FCD_STALE = false;
   const [copies, clients, countries, sites] = [await FC.allCopies(), await FC.DB.all('clients'), await FC.hiddenCountries(), await FC.DB.all('sites')];
   const ids = new Set(copies.map(c => c.photo));
   const photos = new Map();
@@ -639,7 +644,7 @@ function siteStrip(base, xs) {
     <div class="sbtns"><a class="btn sm" href="${safeUrl('https://' + base)}" target="_blank" rel="noreferrer" data-act="openlink">Home page</a><button class="btn sm" data-act="stripok" data-v="${esc(c.id)}">Approve site</button><button class="btn sm" data-act="hidesite" data-v="${esc(base)}">Hide site</button><button class="btn sm" data-act="gowho" data-v="${esc(c.id)}">Who's behind it</button></div></div>`;
 }
 V.found.guard = async () => ((await FC.drive()).done ? null : 'connect');
-V.found.after = () => { loadOurs(); bindHover(); ppPagePic(); ppKeptLine(); };
+V.found.after = () => { if (typeof FC_PREV !== 'undefined') FC_PREV.start(); loadOurs(); bindHover(); ppPagePic(); ppKeptLine(); };
 
 // Hovering a copy's thumbnail shows it next to your client's photo.
 // Only one card ever exists. It goes away when the mouse leaves the pictures, and also when the

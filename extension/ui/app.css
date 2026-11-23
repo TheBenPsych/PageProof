@@ -550,8 +550,9 @@ h2{font-size:16px;font-weight:700;letter-spacing:-.01em}
 .cbody>.clist:not(:last-child){border-bottom:1px solid var(--line)}
 .crow:hover{background:var(--sunk)}
 .crow.on{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
-.cpick{width:16px;height:16px;opacity:.35}
-.crow:hover .cpick,.cpick:checked{opacity:1}
+/* input.cpick only: the Find copies setup folder list is a div.cpick and must keep its size (4.6.1). */
+input.cpick{width:16px;height:16px;opacity:.35}
+.crow:hover input.cpick,input.cpick:checked{opacity:1}
 .cpair{display:flex;gap:3px;border-radius:10px;overflow:hidden;flex-shrink:0;cursor:zoom-in}
 .cpair img{width:62px;height:54px;object-fit:cover;display:block;background:var(--line);border-radius:0}
 .cinfo{min-width:0;display:flex;flex-direction:column;gap:3px}

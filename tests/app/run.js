@@ -3,7 +3,7 @@
 // A check that fails is tried once more, because a slow test computer can make one stumble.
 const { spawnSync } = require('child_process');
 const path = require('path');
-const FILES = ['checks-answers.js', 'checks-previews.js', 'checks-new.js', 'checks-look.js', 'checks-43.js', 'checks-44.js', 'checks-47.js', 'speed.js'];
+const FILES = ['checks-setup.js', 'checks-restore.js', 'checks-answers.js', 'checks-previews.js', 'checks-new.js', 'checks-look.js', 'checks-43.js', 'checks-44.js', 'checks-47.js', 'speed.js'];
 let bad = 0;
 for (const f of FILES) {
   let ok = false;

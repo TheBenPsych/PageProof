@@ -1520,8 +1520,8 @@ const FC = (() => {
       const up = [...new Set(all.map(c => c.photo).filter(id => !String(id).startsWith('d:')))];
       const upNames = new Map((await DB.getMany('photos', up)).map((p, i) => [up[i], p && p.name]));
       const nameOf = c => (String(c.photo).startsWith('d:') ? String(c.photo).slice(2).replace(/^\+/, '') : upNames.get(c.photo) || c.photoName || c.photo);
-      const lines = all.map(c => [c.status, c.online, c.client || '', nameOf(c), c.url, c.pct == null ? '' : c.pct, (c.firstSeen || '').slice(0, 10), (c.lastSeen || '').slice(0, 10), c.photo].map(v => String(v).replace(/[\t\r\n]+/g, ' ')).join('\t'));
-      await RS_DOCS.writeText('found-copies.txt', '# PageProof copies found, one per line (tab separated):\n# status\tonline\tclient\tphoto\tpage\tlines up %\tfirst seen\tlast seen\tphoto id\n' + lines.join('\n') + '\n');
+      const lines = all.map(c => [c.status, c.online, c.client || '', nameOf(c), c.url, c.pct == null ? '' : c.pct, (c.firstSeen || '').slice(0, 10), (c.lastSeen || '').slice(0, 10), c.photo, /^https?:/i.test(c.img || '') ? c.img : ''].map(v => String(v).replace(/[\t\r\n]+/g, ' ')).join('\t'));
+      await RS_DOCS.writeText('found-copies.txt', '# PageProof copies found, one per line (tab separated):\n# status\tonline\tclient\tphoto\tpage\tlines up %\tfirst seen\tlast seen\tphoto id\ttheir picture\n' + lines.join('\n') + '\n');
     } catch (e) { /* folder not set up */ }
   }
   // Bring copies back from found-copies.txt after a reinstall.
@@ -1532,10 +1532,10 @@ const FC = (() => {
     const out = [];
     for (const line of t.split(/\r?\n/)) {
       if (!line || line.startsWith('#')) continue;
-      const [status, online, client, photoName, url, pct, first, last, photo] = line.split('\t');
+      const [status, online, client, photoName, url, pct, first, last, photo, img] = line.split('\t');
       if (!/^https?:\/\//.test(url || '') || !photo) continue;
       const key = RS_UTIL.key(url);
-      out.push({ id: photo + '|' + key, photo, client, url, key, site: RS_SITE.of(url), title: '', thumb: '', img: '', engines: [], pct: pct === '' ? null : +pct, match: 'same', firstSeen: first, lastSeen: last, times: 1, status: status || 'new', online: online || 'up', restored: true, photoName });
+      out.push({ id: photo + '|' + key, photo, client, url, key, site: RS_SITE.of(url), title: '', thumb: '', img: /^https?:\/\//.test(img || '') ? img : '', engines: [], pct: pct === '' ? null : +pct, match: 'same', firstSeen: first, lastSeen: last, times: 1, status: status || 'new', online: online || 'up', restored: true, photoName });
       const r = out[out.length - 1]; r.country = countryOf(r.site); r.use = useOf(r);
     }
     await DB.putMany('copies', out);

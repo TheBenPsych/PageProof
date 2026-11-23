@@ -170,7 +170,13 @@ Object.assign(ACTS, {
     state.cs = Math.max(0, Math.min(3, state.cs + Number(v))); render(true);
   },
   cspick: async () => {
-    try { await FC.pickRoot(); } catch (e) { if (e.name !== 'AbortError') toast('That folder could not be opened.'); return; }
+    // Picking the SAME top folder again (after a reinstall, or when the browser lost it) keeps the
+    // ticked folders and the remembered list. Only a different top folder starts the ticks over.
+    const before = await FC.rootHandle(), label = ((await FC.drive()).label || '').replace(/[\\/]+$/, '');
+    let h;
+    try { h = await FC.pickRoot(); } catch (e) { if (e.name !== 'AbortError') toast('That folder could not be opened.'); return; }
+    const same = before ? before.name === h.name : label.split(/[\\/]/).pop().toLowerCase() === String(h.name).toLowerCase();
+    if (same) { csReset(); toast('Same top folder: your ticked folders are kept.'); render(true); return; }
     await csCacheClear(); csReset(); state.csPick = new Set(); render(true);
   },
   csallow: async () => { if (await FC.allowDrive()) { csReset(); render(true); } },
