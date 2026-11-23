@@ -327,6 +327,9 @@ const FC = (() => {
       const was = driveSeen && driveSeen.st;
       driveSeen = { at: Date.now(), st };
       if (st !== (was || 'granted')) touch('drive');
+      // Drive answers again: clear the red "can't reach" notes at once (4.3.8: they stayed up
+      // after Allow until Keep searching next looked).
+      if (st === 'granted') api.storage.local.get('fcDriveOffline').then(o => { if (o.fcDriveOffline) api.storage.local.set({ fcDriveOffline: 0, fcDriveBack: Date.now(), fcDriveWhy: null }); }).catch(() => {});
       return st;
     }).finally(() => { driveAsk = null; });
     return driveAsk;
@@ -351,6 +354,7 @@ const FC = (() => {
     const h = await rootHandle();
     if (h && (await h.requestPermission({ mode: 'read' })) !== 'granted') return false;
     for (const x of await extraHandles()) { try { await x.h.requestPermission({ mode: 'read' }); } catch (e) { /* skip */ } }
+    if (h) driveAskNow().catch(() => {});      // a fresh check clears any red "can't reach" note
     return !!h;
   }
   // PageProof only ever READS the photos. If the Documents › PageProof folder turns out to be inside a

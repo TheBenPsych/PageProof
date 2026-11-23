@@ -1037,7 +1037,7 @@ async function driveBanner() {
 Object.assign(ACTS, {
   driveallow: async () => {
     const ok = await FC.allowDrive();
-    if (ok) { toast('Thanks. PageProof can read your photos again.'); api.storage.local.set({ fcNeedsAllow: 0 }).catch(() => {}); }
+    if (ok) { toast('Thanks. PageProof can read your photos again.'); api.storage.local.set({ fcNeedsAllow: 0 }).catch(() => {}); await FC.driveStateSoft(true); }
     await render(true);
     // Today's batch was waiting for this click.
     if (ok && state.wantFifty) { state.wantFifty = false; ACTS.fifty(); }
