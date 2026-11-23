@@ -15,6 +15,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const shot = async n => { if (SHOTS) await page.screenshot({ path: SHOTS + '/' + n + '.png' }); };
   const go = async h => { await page.goto(url('app.html#' + h)); await page.waitForTimeout(1300); };
   await go('help'); await seed(page); await page.reload(); await page.waitForTimeout(1000);
+  await page.evaluate(() => api.storage.local.set({ ppAcctRead: false }));   // account details have their own checks (checks-410.js)
 
   // ---- the link reader on its own
   const parsed = await page.evaluate(() => [

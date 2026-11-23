@@ -896,3 +896,15 @@ table.accts tr.arow:hover{background:var(--sunk)}
 .lookup.warnhide{border-color:var(--bad-soft)}
 .socask{align-items:center}
 .socask .plat{width:28px;height:28px;font-size:12px}
+/* 4.10: account details on social rows, the account filter line, Accounts list sorting */
+.vchk{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;font-weight:700;padding:0 7px;border-radius:99px;border:1px solid currentColor;color:var(--accent);line-height:18px;white-space:nowrap}
+.vchk.gold{color:var(--warn)}.vchk.grey{color:var(--muted)}
+.atype{font-size:11.5px;padding:0 8px;border-radius:99px;border:1px solid var(--line);background:var(--sunk);color:var(--muted);line-height:18px;white-space:nowrap}
+.atype.biz{color:var(--ok);border-color:currentColor;background:transparent;font-weight:600}
+.atype.guess{border-style:dashed}
+.afol{font-size:12px;color:var(--muted);white-space:nowrap}
+.aco{font-size:11.5px;color:var(--ink);font-weight:600;overflow-wrap:anywhere}
+.acctfilters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 14px 2px}
+.thsort{font:inherit;text-transform:inherit;letter-spacing:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+.thsort.on{color:var(--accent)}
+.thsort:focus-visible{outline:2px solid var(--accent);outline-offset:2px}

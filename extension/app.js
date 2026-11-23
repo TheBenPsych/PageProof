@@ -415,6 +415,7 @@ V.hidden = async () => {
     await PP_SOCIAL.ready;
     const mine = Object.entries(PP_SOCIAL.mine()).filter(([k]) => k.includes(q)).sort();
     const built = [...new Set(Object.values(PP_SOCIAL.SITES).map(x => x[0]))].sort((a, b) => a.localeCompare(b));
+    const readOn = (await api.storage.local.get('ppAcctRead')).ppAcctRead !== false;
     return `${head('Settings', 'Hidden and approved sites', 'Hidden sites never show up in any search. Approved sites may use the photos: copies found there are marked Licensed by themselves.')}
     <section class="card" style="overflow:hidden">
       <div class="toolbar"><div class="tabs" role="tablist">${[['hidden', 'Hidden sites'], ['allowed', 'Approved for every client'], ['client', 'Approved for one client'], ['rejected', 'Rejected links'], ['social', 'Social sites']].map(([k, l]) => `<button role="tab" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}" data-act="hidtab" data-v="${k}">${l}</button>`).join('')}</div></div>
@@ -426,6 +427,7 @@ V.hidden = async () => {
       </tbody></table></div>
       <details style="padding:12px 18px;border-top:1px solid var(--line)"><summary><b>${built.length} social sites PageProof already knows</b></summary><p class="muted" style="font-size:13px;margin:8px 0 0">${esc(built.join(', '))}</p></details>
     </section>
+    <section class="card pad"><label class="row" style="gap:10px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="acctread" data-act="acctread" ${readOn ? 'checked' : ''} style="margin-top:4px"><span><b>Read account details by itself</b><br><span class="muted" style="font-size:13px">Followers, verified, account type, country and owner company. PageProof opens each account's profile in a background tab of your browser for a few seconds, one account at a time, once a month. Off: only when you press "Read again now" on an account.</span></span></label></section>
     <p class="faint" style="margin:0;font-size:12.5px">Copies on social sites go on the Social media tab of Copies found, where Stolen, Hide and Approve work per account. Saved with your settings backup.</p>`;
   }
   // Approved for one client: kept with each client (site | client).
@@ -463,6 +465,7 @@ Object.assign(ACTS, {
     await PP_SOCIAL.setMine(site, v); FC.backupSoon(); state.hidQ = '';
     toast(site + (v === 'social' ? ' goes on the Social media tab now.' : ' goes on the Websites tab now.')); render(true);
   },
+  acctread: async (v, el) => { await api.storage.local.set({ ppAcctRead: !!(el && el.checked) }); toast(el && el.checked ? 'PageProof reads account details by itself.' : 'Account details are only read when you ask.'); },
   socforget: async v => { await PP_SOCIAL.setMine(v, ''); FC.backupSoon(); toast('Forgot your choice for ' + v + '.'); render(true); },
 });
 document.getElementById('hidLoad').addEventListener('change', async e => {
@@ -510,6 +513,8 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Followers, verified and account type on social copies', 'PageProof reads each account\'s profile by itself (in a background tab of your browser, one account at a time, once a month): followers, the check mark, and what kind of account it is. The Social media tab gets Verified, Followers, Account type and Country filters, Sort by Most followers, and the Accounts list shows and sorts by them.'],
+  ['Spots business accounts by itself', 'When a site doesn\'t say what kind of account it is, PageProof adds up the signs: a shop or company word, a Shop now or Contact button, an email or phone number, its own website and whether that site sells things. Two or more signs = Business (guess). A company named on Facebook\'s Page transparency, or the country in Instagram\'s and X\'s About this account, shows on the account, with ready-made business register and trademark searches.'],
   ['Social sites: only accounts can be hidden', 'A whole social site like x.com or instagram.com can no longer be hidden, only the accounts on it. Any social site you hid before shows again, with a note on Copies found.'],
   ['Keep searching starts fresh after every update', 'After an update (or Reload), the old pinned Keep searching tab could keep running old code and quietly stop searching. Now PageProof closes the old Keep searching tab and any search tabs left over from before, and opens a fresh Keep searching tab by itself. If an old tab is still around, it notices it is out of date and loads itself again.'],
   ['Reloading a big search carries on', 'Reloading the page of a running search (like today\'s 50) no longer leaves its old search tabs frozen in the tab bar and opens new ones on top. The old tabs close, and the search carries on with the photos it had not finished. Photo checks of one search also no longer wait for another open search (or Keep searching) to finish its own checks, so photos move past "Checking matches" sooner.'],

@@ -315,6 +315,192 @@ const PP_SOCIAL = (() => {
   const plainName = a => String((a && a.handle) || '').replace(/^.*\//, '').replace(/^@/, '').toLowerCase().replace(/[._\-]/g, '');
   const bareName = a => String((a && a.handle) || '').replace(/^.*\//, '').replace(/^@/, '');
 
-  return { SITES, ready, listed, isSocial, platform, postKind, fromUrl, fromTyped, isShort, unshort, publicInfo, hasPublic: url => !!OEMBED[listed(host(url))], fromTags, shapeOf, pageSigns, askFor, setMine, mine: () => mine, mineFor, ELSEWHERE, plainName, bareName, host };
+  // ------------------------------------------------------------ the account's own details (4.10)
+  // Followers, verified, what kind of account it is, and the site's transparency info (country,
+  // owner company, date created). Read from the profile page in your own signed-in browser,
+  // once per account, then again every 30 days. Nothing is ever typed in by you.
+  // "12.5K", "1,204", "1.2M", "3 B" -> a number.
+  const big = s => {
+    const m = /^([\d][\d.,\s]*)\s*([KkMmBb]|thousand|million|billion)?$/.exec(String(s || '').trim());
+    if (!m) return null;
+    let t = m[1].replace(/\s/g, '');
+    if (m[2]) t = t.replace(/,(\d{1,2})$/, '.$1').replace(/,/g, ''); else t = t.replace(/[.,](?=\d{3}\b)/g, '');
+    let n = parseFloat(t);
+    if (isNaN(n)) return null;
+    const u = (m[2] || '').toLowerCase();
+    if (u === 'k' || u === 'thousand') n *= 1e3; else if (u === 'm' || u === 'million') n *= 1e6; else if (u === 'b' || u === 'billion') n *= 1e9;
+    return Math.round(n);
+  };
+  // The pages worth reading for an account: the profile, plus the transparency page where the
+  // site has one (Facebook Page transparency, X "About this account"). Instagram's "About this
+  // account" opens from the profile's menu, so the reader clicks it there.
+  function profilePages(acct) {
+    if (!acct || !acct.url) return [];
+    const out = [{ url: acct.url, kind: 'profile', click: acct.plat === 'instagram.com' ? 'ig-about' : '' }];
+    if (acct.plat === 'facebook.com' && !/\/groups\//.test(acct.url)) {
+      const id = /\/id\.(\d+)$/.exec(acct.key || '');
+      out.push({ url: id ? 'https://www.facebook.com/profile.php?id=' + id[1] + '&sk=about_profile_transparency' : acct.url.replace(/\/+$/, '') + '/about_profile_transparency', kind: 'transparency' });
+    }
+    if (acct.plat === 'x.com' || acct.plat === 'twitter.com') out.push({ url: 'https://x.com/' + bareName(acct) + '/about', kind: 'transparency' });
+    return out;
+  }
+  // Runs INSIDE the profile's tab (self-contained). Returns the page's tags, the text, the short
+  // bits of the page's own data that matter, the links and the buttons near the top.
+  async function readProfileInTab(click) {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const meta = n => { const m = document.querySelector(`meta[property="${n}"], meta[name="${n}"]`); return m ? (m.getAttribute('content') || '').trim() : ''; };
+    let about = '';
+    if (click === 'ig-about') {
+      try {
+        const opt = [...document.querySelectorAll('svg[aria-label]')].find(s => /^(options|more options)$/i.test(s.getAttribute('aria-label')));
+        const b = opt && (opt.closest('[role="button"], button') || opt.parentElement);
+        if (b) { b.click(); await wait(1200); const it = [...document.querySelectorAll('[role="dialog"] button, [role="dialog"] [role="button"], [role="dialog"] div')].find(e => /^about this account$/i.test((e.textContent || '').trim())); if (it) { it.click(); await wait(2200); const d = [...document.querySelectorAll('[role="dialog"]')].pop(); about = d ? d.innerText.slice(0, 4000) : ''; } }
+      } catch (e) { /* menu not there */ }
+    }
+    const html = document.documentElement.innerHTML.slice(0, 3e6);
+    const rx = /"((?:[a-z_]*follower[a-z_]*)|(?:[a-z_]*verified[a-z_]*)|(?:edge_followed_by)|(?:subscriberCountText)|(?:category_name)|(?:business_category_name)|(?:category)|(?:is_business_account)|(?:is_professional_account)|(?:business_email)|(?:public_email)|(?:contact_phone_number)|(?:business_phone_number)|(?:external_url)|(?:biography)|(?:full_name)|(?:signature)|(?:verified_type)|(?:is_blue_verified)|(?:commerceUserInfo)|(?:ttSeller))"\s*:\s*("(?:[^"\\]|\\.){0,300}"|true|false|null|-?\d+(?:\.\d+)?|\{[^{}]{0,300}\})/gi;
+    const data = []; let m, n = 0;
+    while ((m = rx.exec(html)) && n++ < 400) data.push([m[1], m[2]]);
+    const top = document.querySelector('header, [role="main"]') || document.body;
+    const near = el => !!el.closest('header, h1, h2, [role="main"] > div:first-child');
+    const badge = [...document.querySelectorAll('[aria-label*="erified" i], [title*="erified" i], [data-testid="icon-verified"]')].filter(near).map(e => e.getAttribute('aria-label') || e.getAttribute('title') || 'verified').slice(0, 4);
+    const links = [...new Set([...top.querySelectorAll('a[href]')].map(a => a.href))].slice(0, 120);
+    const buttons = [...new Set([...top.querySelectorAll('a, button, [role="button"]')].map(e => (e.innerText || e.getAttribute('aria-label') || '').trim()).filter(t => t && t.length <= 30))].slice(0, 120);
+    return { url: location.href, title: document.title, desc: meta('og:description') || meta('description'), ogTitle: meta('og:title'), text: (document.body ? document.body.innerText : '').slice(0, 30000), about, data, badge, links, buttons };
+  }
+  // Opens each page in a background tab of your own browser, reads it, and closes it.
+  async function readProfile(acct) {
+    const out = [];
+    for (const p of profilePages(acct)) {
+      let tab;
+      try {
+        tab = await api.tabs.create({ url: p.url, active: false });
+        await new Promise(res => {
+          const t = setTimeout(done, 25000);
+          function done() { clearTimeout(t); api.tabs.onUpdated.removeListener(on); res(); }
+          function on(id, ch) { if (id === tab.id && ch.status === 'complete') done(); }
+          api.tabs.onUpdated.addListener(on);
+        });
+        await new Promise(r => setTimeout(r, 3000));       // the sites draw the profile after loading
+        const [res] = await api.scripting.executeScript({ target: { tabId: tab.id }, func: readProfileInTab, args: [p.click || ''] });
+        if (res && res.result) out.push({ kind: p.kind, ...res.result });
+      } catch (e) { /* this page couldn't be read */ } finally { if (tab) api.tabs.remove(tab.id).catch(() => {}); }
+    }
+    return out;
+  }
+
+  const unq = s => { try { return JSON.parse(s); } catch (e) { return String(s || '').replace(/^"|"$/g, ''); } };
+  const COMPANY = /\b((?:[A-Z0-9][\w&'’.-]*\s){0,6}[A-Z0-9][\w&'’.-]*,?\s(?:LLC|L\.L\.C\.|Inc\.?|Incorporated|Ltd\.?|Limited|Corp\.?|Corporation|Co\.|Company|GmbH|LLP|PLLC|PLC|S\.A\.|Pty Ltd|B\.V\.))(?![\w])/;
+  const BIZ_WORDS = /\b(shop|store|boutique|llc|inc|co\.|company|studio|agency|salon|spa|restaurant|cafe|café|bakery|bar & grill|official|brand|clothing|apparel|wholesale|realty|real estate|dental|clinic|law firm|marketing|design co|supply|outfitters|market|hotel|resort|tours|travel agency|photography studio)\b/i;
+  const FAN_WORDS = /\b(fans?|fan ?page|fanclub|fan club|lovers|daily|memes?|club|community|appreciation|stan|addicts?|hub|world|vibes|aesthetic|repost|reposts|archive)\b/i;
+  const CAT_CREATOR = /creator|artist|photograph|blogger|influencer|public figure|musician|band|author|writer|athlete|comedian|personal blog|gamer|model|actor|dj\b|video creator|digital creator/i;
+  const CAT_NEWS = /news|media|magazine|newspaper|broadcast|journalist|publisher|tv (network|channel|show)|radio station|media\/news/i;
+  const CAT_FAN = /fan page|fan club|meme|community$/i;
+  const CAT_ORG = /non-?profit|government|charity|organi[sz]ation|school|university|college|church|religious|political|public (&|and) government/i;
+  const WEB_SKIP = /(^|\.)(facebook|fb|instagram|threads|x|twitter|tiktok|youtube|youtu|pinterest|linkedin|snapchat|reddit|tumblr|google|apple|whatsapp|wa|meta|messenger|bit|t|lnkd|about|help|play|apps|microsoft|cdninstagram|fbcdn|twimg|ytimg|gstatic|w3|schema|tiktokcdn)\.[a-z.]+$/i;
+  // Turns what the reader saw into plain facts. Unknown stays empty, never guessed as "no".
+  function profileFacts(acct, pages) {
+    const f = { ok: false, followers: null, fw: 'followers', verified: '', type: '', typeSure: '', category: '', company: '', address: '', country: '', created: '', oldNames: [], website: '', email: '', phone: '', signs: [], name: '' };
+    if (!acct || !Array.isArray(pages) || !pages.length) return f;
+    const plat = acct.plat || '';
+    const prof = pages.find(p => p.kind === 'profile') || pages[0];
+    const tr = pages.filter(p => p.kind === 'transparency').map(p => p.text || '').join('\n') + '\n' + pages.map(p => p.about || '').join('\n');
+    const D = {}; for (const p of pages) for (const [k, v] of (p.data || [])) { const key = k.toLowerCase(); if (!(key in D)) D[key] = v; }
+    const dv = k => k in D ? unq(D[k]) : undefined;
+    const text = String(prof.text || ''), desc = String(prof.desc || ''), top = text.slice(0, 4000);
+    // Followers (or subscribers, or members for groups).
+    const jf = ['follower_count', 'followers_count', 'followercount', 'followers'].map(dv).find(v => typeof v === 'number');
+    const ebf = D.edge_followed_by && /"count"\s*:\s*(\d+)/.exec(D.edge_followed_by);
+    if (typeof jf === 'number') f.followers = jf; else if (ebf) f.followers = +ebf[1];
+    if (f.followers == null) {
+      const sub = dv('subscribercounttext'); const sm = sub && /([\d.,]+\s?[KMB]?)\s*subscribers/i.exec(typeof sub === 'string' ? sub : JSON.stringify(sub));
+      if (sm) { f.followers = big(sm[1]); f.fw = 'subscribers'; }
+    }
+    if (f.followers == null) {
+      for (const [rx, w] of [[/([\d][\d.,]*\s?[KMBkmb]?)\s+(?:Followers|followers)\b/, 'followers'], [/([\d][\d.,]*\s?[KMBkmb]?)\s+subscribers\b/i, 'subscribers'], [/([\d][\d.,]*\s?[KMBkmb]?)\s+(?:total\s+)?members\b/i, 'members']]) {
+        const m = rx.exec(desc) || rx.exec(top);
+        if (m) { f.followers = big(m[1]); f.fw = w; break; }
+      }
+    }
+    if (/\/groups\//.test(acct.url || '')) f.fw = 'members';
+    // Verified: the site's own data first, then a check badge next to the name.
+    const vt = String(dv('verified_type') || ''), anyTrue = ['is_verified', 'verified', 'is_blue_verified'].some(k => dv(k) === true), anyFalse = ['is_verified', 'verified', 'is_blue_verified'].some(k => dv(k) === false);
+    if (/business/i.test(vt)) f.verified = 'gold';
+    else if (/government/i.test(vt)) f.verified = 'grey';
+    else if (anyTrue || (prof.badge || []).length) f.verified = 'blue';
+    else if (anyFalse) f.verified = 'no';
+    // Name, bio, category.
+    f.name = String(dv('full_name') || prof.ogTitle || '').replace(/\s*[(•|].*$/, '').trim().slice(0, 80);
+    const bio = String(dv('biography') || dv('signature') || desc || '').slice(0, 600);
+    f.category = String(dv('business_category_name') || dv('category_name') || '').trim();
+    if (!f.category && plat === 'facebook.com') { const m = /(?:^|\n)\s*(?:Page|Profile)\s*·\s*([^\n·]{2,40})/.exec(text); if (m) f.category = m[1].trim(); }
+    if (!f.category && plat === 'instagram.com') { const c = dv('category'); if (typeof c === 'string' && c.length < 40) f.category = c; }
+    // Transparency: owner company, address, country, date created, old names.
+    const after = (rx, max = 1) => { const m = rx.exec(tr); if (!m) return []; return m[1].split('\n').map(s => s.trim()).filter(Boolean).slice(0, max); };
+    const owner = after(/(?:Confirmed Page owner|Organi[sz]ations? that manages? this Page|Page owner|Owned by)\s*:?\s*\n((?:.*\n){1,4})/i, 3);
+    const co = (owner.join('\n').match(COMPANY) || tr.match(COMPANY) || bio.match(COMPANY) || [])[1] || '';
+    f.company = co ? co.trim() : owner[0] && !/^(see|learn|more)\b/i.test(owner[0]) && /confirmed page owner/i.test(tr) ? owner[0] : '';
+    f.address = owner.slice(1).find(l => /\d/.test(l) && /,/.test(l)) || '';
+    f.country = (after(/(?:Account based in|Based in|Primary country\/region location for people who manage this Page|Country\/region location for people who manage this Page|Country\/region)\s*:?\s*\n?\s*([^\n]{2,60})/i)[0] || '').replace(/\s*\(\d+\)$/, '').trim();
+    if (f.country && !/^[A-Z][A-Za-z .,'()&-]{1,59}$/.test(f.country)) f.country = '';
+    const cm = /(?:Page created|Creation date|Date joined|Joined)\s*[-–:]?\s*\n?\s*([A-Z][a-z]+ \d{1,2}, \d{4}|[A-Z][a-z]+ \d{4})/.exec(tr) || /\bJoined ([A-Z][a-z]+ \d{4})\b/.exec(top);
+    if (cm) f.created = cm[1];
+    const old = /Former usernames?\s*\n((?:.*\n){1,4})/i.exec(tr);
+    if (old) f.oldNames = old[1].split('\n').map(s => s.trim()).filter(s => /^@?[\w.]{2,40}$/.test(s)).slice(0, 5);
+    for (const m of tr.matchAll(/Changed name to ([^\n]{2,60})/g)) if (f.oldNames.length < 5) f.oldNames.push(m[1].trim());
+    // Website, email, phone.
+    const ext = dv('external_url');
+    const fix = u => { try { const x = new URL(u); const r = x.searchParams.get('u') || x.searchParams.get('url') || x.searchParams.get('q'); return r && /^https?:/.test(r) && /^(l\.|lm\.)?(facebook|instagram|youtube|threads)\.|t\.co$|linktr|lnk\.bio/.test(x.hostname) ? r : u; } catch (e) { return ''; } };
+    const webs = [ext, ...(prof.links || [])].filter(u => typeof u === 'string' && /^https?:/.test(u)).map(fix).filter(u => { try { const h = new URL(u).hostname.replace(/^www\./, ''); return h && !WEB_SKIP.test(h) && !listed(h); } catch (e) { return false; } });
+    f.website = webs[0] || '';
+    f.email = String(dv('business_email') || dv('public_email') || (bio.match(/[\w.+-]+@[\w-]+\.[\w.]{2,}/) || [])[0] || '');
+    f.phone = String(dv('contact_phone_number') || dv('business_phone_number') || (bio.match(/\+?\d[\d\s().-]{8,}\d/) || [])[0] || '');
+    f.ok = f.followers != null || !!f.name || !!f.category || !!f.country;
+    // What kind of account: the site says it, or the signs add up.
+    const btn = (prof.buttons || []).join(' | ');
+    const name = f.name + ' ' + bareName(acct);
+    if (/shop now|shop$|view shop|book now|book$|order (now|online)|call now|get directions|directions|send email|email$|contact$|contact us|visit website|buy tickets|start order/i.test(btn)) f.signs.push('a "' + ((btn.match(/shop now|view shop|book now|order now|order online|call now|get directions|send email|contact us|visit website|buy tickets|start order|shop|book|contact|email|directions/i) || ['Contact'])[0]) + '" button');
+    if (BIZ_WORDS.test(name) || BIZ_WORDS.test(bio)) f.signs.push('a business word in the name or bio ("' + ((name.match(BIZ_WORDS) || bio.match(BIZ_WORDS))[0]) + '")');
+    if (f.email) f.signs.push('an email address');
+    if (f.phone) f.signs.push('a phone number');
+    if (f.website) f.signs.push('its own website');
+    if (dv('is_business_account') === true || dv('commerceuserinfo') || dv('ttseller') === true) f.signs.push('the site marks it a business account');
+    if (f.company) f.signs.push('a registered company name');
+    const cat = f.category;
+    const set = (t, s) => { if (!f.type) { f.type = t; f.typeSure = s; } };
+    if (/\/groups\//.test(acct.url || '')) set('Group', 'sure');
+    if (f.verified === 'gold' || f.verified === 'grey') set('Organisation', 'sure');
+    if (f.company) set('Business', 'sure');
+    if (cat) {
+      if (CAT_FAN.test(cat)) set('Fan page', 'sure');
+      else if (CAT_NEWS.test(cat)) set('News or media', 'sure');
+      else if (CAT_ORG.test(cat)) set('Organisation', 'sure');
+      else if (CAT_CREATOR.test(cat)) set('Creator', 'sure');
+      else set('Business', 'sure');
+    }
+    if (dv('is_business_account') === true) set('Business', 'sure');
+    if (f.signs.length >= 2 && !FAN_WORDS.test(name)) set('Business', 'guess');
+    if (FAN_WORDS.test(name)) set('Fan page', 'guess');
+    if (dv('is_professional_account') === true) set('Creator', 'guess');
+    if (f.ok && plat === 'instagram.com' && dv('is_business_account') === false && dv('is_professional_account') === false) set('Person', 'guess');
+    if (f.ok && plat === 'facebook.com' && /profile\.php|\/id\.\d+/.test((acct.url || '') + (acct.key || '')) && !/(?:^|\n)\s*Page\s*·/.test(text)) set('Person', 'guess');
+    return f;
+  }
+  // Does the account's website sell things? (A cart, prices, product pages.) Adds a sign.
+  function addShopSign(f, pf) {
+    if (!f || !pf || !pf.ok || !pf.sells) return f;
+    if (pf.sells.cart || pf.sells.price || pf.sells.product) {
+      f.shop = true;
+      if (!f.signs.includes('its website sells things')) f.signs.push('its website sells things');
+      if (!f.type || (f.typeSure === 'guess' && f.type !== 'Business' && f.signs.length >= 2)) { f.type = 'Business'; f.typeSure = 'guess'; }
+    }
+    return f;
+  }
+  const FOL_BANDS = [[0, 1e3, 'Under 1k'], [1e3, 1e4, '1k–10k'], [1e4, 1e5, '10k–100k'], [1e5, 1e6, '100k–1M'], [1e6, Infinity, 'Over 1M']];
+  const folBand = n => n == null ? 'nk' : String(FOL_BANDS.findIndex(([a, b]) => n >= a && n < b));
+  const shortNum = n => n == null ? '' : n >= 1e9 ? (n / 1e9).toFixed(n >= 1e10 ? 0 : 1).replace(/\.0$/, '') + 'B' : n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e4 ? 0 : 1).replace(/\.0$/, '') + 'k' : String(n);
+
+  return { SITES, ready, listed, isSocial, platform, postKind, fromUrl, fromTyped, isShort, unshort, publicInfo, hasPublic: url => !!OEMBED[listed(host(url))], fromTags, shapeOf, pageSigns, askFor, setMine, mine: () => mine, mineFor, ELSEWHERE, plainName, bareName, host,
+    big, profilePages, readProfileInTab, readProfile, profileFacts, addShopSign, FOL_BANDS, folBand, shortNum };
 })();
 if (typeof self !== 'undefined') self.PP_SOCIAL = PP_SOCIAL;
