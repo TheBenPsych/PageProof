@@ -75,7 +75,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const ap = await page.evaluate(async () => {
     const c = FCD.copies.find(x => x.id === state.open); const base = FC.baseOf(c.site);
     const before = FCD.copies.filter(x => FC.baseOf(x.site) === base && x.status === 'new');
-    document.querySelector('[data-act="openok"]').click();
+    ACTS.openok();
     await new Promise(r => setTimeout(r, 200));
     document.querySelector('[data-act="approvesite"][data-v="client"]').click();
     await new Promise(r => setTimeout(r, 1200));
