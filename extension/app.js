@@ -83,7 +83,7 @@ async function render1(keep, me) {
       if (main) main.scrollTop = my;
       view.querySelectorAll(SCROLLERS).forEach((e, i) => { if (inner[i]) { e.scrollTop = inner[i][0]; e.scrollLeft = inner[i][1]; } });
     }
-    ppAddHelp(view);
+    ppAddHelp(view); ppTidyHead(view);
     if (V[r].after) V[r].after();
   }
   document.getElementById('side').classList.remove('open');
@@ -97,7 +97,8 @@ window.addEventListener('hashchange', () => render());
 async function ppBadges() {
   try {
     const n = await FC.countNew();
-    if (PP_BADGES.newCopies !== n) { PP_BADGES.newCopies = n || 0; ppRenderSide(PP_ROUTES[route()] ? route() : 'home'); }
+    let t = 0; try { t = (await needsCapture()).up.length; } catch (e) { /* none */ }
+    if (PP_BADGES.newCopies !== n || PP_BADGES.toCapture !== t) { PP_BADGES.newCopies = n || 0; PP_BADGES.toCapture = t; ppRenderSide(PP_ROUTES[route()] ? route() : 'home'); }
   } catch (e) { /* no copies yet */ }
 }
 // Another PageProof page (the search window, Keep searching) changed something: redraw.
@@ -142,94 +143,71 @@ async function lastWebTab() {
 // Home
 // =====================================================================================
 V.home = async () => {
-  const [name, log, jobs, seen] = [await getName(), await getLog(), await recentSearches(3), (await api.storage.local.get('ppSeenVersion')).ppSeenVersion];
+  const [name, seen] = [await getName(), (await api.storage.local.get('ppSeenVersion')).ppSeenVersion];
   const hr = new Date().getHours(), hello = hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
   const today = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
-  const caps = [...log].reverse().slice(0, 5);
   const fc = await homeFinds();
   const news = seen !== VERSION ? `<div class="banner info">${ic('ideas', 20)}<div style="flex:1 1 260px;min-width:0"><b>PageProof was updated to ${VERSION}</b> <span class="muted" style="font-size:13.5px">All your captures, settings and lists are still here.</span></div><a class="btn" href="#whatsnew">See what's new</a></div>` : '';
-  return `${news}${fc.alerts}
-  ${head(today, hello + (name ? ', ' + esc(name.split(' ')[0]) : ''), 'Pick up where you left off, or start something new. Your evidence is saved on this computer.', `<button class="btn" data-act="tour">Take the tour</button>`)}
-  <section class="home3" aria-label="Start">
-    <a class="start hero" href="#capture"><span class="ic">${ic('capture', 22)}</span><b>Capture a page</b><span>The whole page as proof: PDF, web copy, fingerprints and three trusted timestamps.</span></a>
-    <a class="start" href="#search"><span class="ic">${ic('find', 22)}</span><b>Find copies of my photos</b><span>Search Google Lens, Yandex and Bing, and check every result against your original.</span></a>
-    <a class="start" href="#inspect"><span class="ic">${ic('tools', 22)}</span><b>Look closer at a photo</b><span>Read its hidden data, lay a copy over the original, or mark it up for a client.</span></a>
+  const todo = fc.jobs.filter(j => j.lvl !== 'ok');
+  return `${news}
+  ${head(today, hello + (name ? ', ' + esc(name.split(' ')[0]) : ''), todo.length ? 'Here is what needs you, most urgent first.' : 'Nothing needs you right now. Searching carries on by itself.', `<button class="btn" data-act="tour">Take the tour</button>`)}
+  <section class="card jobs" id="homeJobs" aria-label="What to do now">
+    <div class="pad row jobhead"><h2>What to do now</h2><span class="faint" style="margin-left:auto;font-size:13px">${todo.length ? todo.length + ' to do' : 'All done'}</span></div>
+    ${fc.jobs.map(jobRow).join('')}
+    ${todo.length ? '' : `<div class="job lvl-ok" id="allDone"><span class="jdot">${ic('check', 16, 3)}</span><div class="jt"><b>All done for today</b><span>New copies will show up here as Keep searching finds them.</span></div></div>`}
   </section>
-  <div class="home3">
-    <div class="homecol">
-      <section class="card pad" style="display:flex;flex-direction:column;gap:10px">
-        <h2>Capture the page you were on</h2>
-        <p class="muted" style="margin:0;font-size:14px">Or click the PageProof icon on any page. The keyboard shortcut is <span class="kbd" id="shortcut">Alt+Shift+P</span>.</p>
-        <button class="btn primary" data-act="capturelast">${ic('capture', 18)} Capture it now</button>
-      </section>
-      <section class="card">
-        <div class="pad row" style="border-bottom:1px solid var(--line)"><h2>Recent evidence</h2><a class="btn ghost" style="margin-left:auto" href="#library">Open the library</a></div>
-        ${caps.length ? `<div class="scroll"><table><thead><tr><th>Site</th><th>Case</th><th>When</th><th style="text-align:right">Open</th></tr></thead><tbody>
-          ${caps.map(e => { const s = (e.saves || [])[e.saves ? e.saves.length - 1 : 0] || {}; return `<tr><td><b>${esc(site(e.url))}</b><div class="faint" style="font-size:12.5px;max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.title || '')}</div></td><td class="mono">${esc(s.caseRef || '—')}</td><td class="muted">${fmtDate(e.time)}</td><td style="text-align:right"><button class="btn" style="min-height:32px;font-size:13px" data-act="opencap" data-v="${esc(e.id)}">Open</button></td></tr>`; }).join('')}
-        </tbody></table></div>` : `<div class="pad muted">Nothing captured yet. Open a web page, click the PageProof icon, then <b>Capture this page</b>.</div>`}
-      </section>
-    </div>
-    <div class="homecol">
-      ${fc.main}
-      <section class="card">
-        <div class="pad row" style="border-bottom:1px solid var(--line)"><h2>Recent searches</h2><a class="btn ghost" style="margin-left:auto" href="#searches">All searches</a><a class="btn primary" href="#search">New search</a></div>
-        ${jobs.length ? jobs.map(j => {
-          const links = j.pics.reduce((a, p) => a + (p.links || []).length, 0), nNew = j.pics.reduce((a, p) => a + (p.links || []).filter(l => l.isNew).length, 0);
-          return `<a class="list-item" href="#searches" style="border-radius:0;padding:12px 22px;border-bottom:1px solid var(--line)"><img class="thumb" src="${esc(j.pics[0] && j.pics[0].thumb)}" width="64" height="44" alt=""><div style="min-width:0;flex:1"><b>${j.pics.length} ${j.pics.length === 1 ? 'photo' : 'photos'}${j.folder ? ' · daily 50' : ''}</b><div class="muted" style="font-size:13.5px">${fmtDate(j.created)} · ${links} links found</div></div>${nNew ? `<span class="tag copy">${nNew} new</span>` : ''}</a>`;
-        }).join('') : `<div class="pad muted">No searches yet. <a href="#search">Search your first photos</a>.</div>`}
-      </section>
-    </div>
-    <div class="homecol">
-      ${fc.side}
-      <section class="card pad" style="display:flex;flex-direction:column;gap:10px">
-        <h2>Keep it handy</h2>
-        <p class="muted" style="margin:0;font-size:14px">Pin the PageProof icon, and open the side panel to keep PageProof beside every website.</p>
-        <a class="btn" href="#browser">${ic('panel', 18)} How to pin it</a>
-      </section>
-    </div>
-  </div>`;
+  <section class="home3" aria-label="Start something new">
+    <a class="start" href="#capture"><span class="ic">${ic('capture', 22)}</span><b>Capture a page</b><span>The whole page as proof: PDF, web copy, fingerprints and trusted timestamps.</span></a>
+    <a class="start" href="#search"><span class="ic">${ic('find', 22)}</span><b>Find copies of a photo</b><span>Search Google Lens, Yandex and Bing for a few photos now.</span></a>
+    <a class="start" href="#tools"><span class="ic">${ic('tools', 22)}</span><b>Look closer at a photo</b><span>Read its hidden data, lay a copy over the original, or mark it up.</span></a>
+  </section>
+  ${fc.more ? `<div class="home3 homemore">${fc.more}</div>` : ''}`;
 };
-// Home's Find copies cards: new copies waiting, Keep searching, still online, by client.
+// One line of Home's "What to do now" list: a coloured dot, what it is, and one button.
+function jobRow(j) {
+  const b = j.btn ? (j.btn.href ? `<a class="btn${j.btn.main ? ' primary' : ''}" href="${j.btn.href}"${j.btn.act ? ` data-act="${j.btn.act}"` : ''}>${j.btn.label}</a>` : `<button class="btn${j.btn.main ? ' primary' : ''}" data-act="${j.btn.act}"${j.btn.v != null ? ` data-v="${esc(j.btn.v)}"` : ''}>${j.btn.label}</button>`) : '';
+  const b2 = j.btn2 ? `<button class="btn ghost" data-act="${j.btn2.act}">${j.btn2.label}</button>` : '';
+  return `<div class="job lvl-${j.lvl}"${j.id ? ` id="${j.id}"` : ''}${j.lvl === 'bad' ? ' role="alert"' : ''}><span class="jdot">${ic(j.icon || (j.lvl === 'ok' ? 'check' : 'warn'), 16, j.lvl === 'ok' ? 3 : 2)}</span><div class="jt"><b>${j.title}</b>${j.sub ? `<span>${j.sub}</span>` : ''}</div><div class="jb">${b}${b2}</div></div>`;
+}
+// Home's jobs (most urgent first) and the small cards under them: Keep searching, every photo
+// searched once, most copied photos.
 async function homeFinds() {
+  const jobs = [];
+  const caps = await needsCapture().catch(() => ({ up: [] }));
   const d = await FC.drive();
-  if (!d.done) return { alerts: '', side: '', main: `<section class="card pad row" style="gap:14px"><span class="ic" style="color:var(--accent)">${ic('find', 26)}</span><div style="flex:1 1 260px"><h2>Search all your clients' photos, all day</h2><span class="muted" style="font-size:14px">Connect the shared Google Drive once and PageProof keeps looking for copies by itself.</span></div><a class="btn primary" href="#connect">Connect your photos</a></section>` };
+  if (!d.done) {
+    jobs.push({ lvl: 'warn', icon: 'find', title: 'Connect your clients\' photos', sub: 'One-time setup so PageProof can search the shared Google Drive all day.', btn: { href: '#connect', label: 'Connect them', main: 1 } });
+    if (caps.up.length) jobs.push(capJob(caps.up));
+    return { jobs, more: '' };
+  }
   const [copies, st, k, store] = [await FC.allCopies(), (await api.storage.local.get('fcStatus')).fcStatus, await FC.keep(), await api.storage.local.get(['fcToday', 'fcDriveBack', 'fcDriveOffline', 'fcPause', 'fcFirst', 'fcFirstSeen'])];
   const hw = await ppHardware();
   const vis = copies.filter(c => !FC.hiddenCopy(c, RS_LISTS.hidden));
   const nNew = vis.filter(c => c.status === 'new').length;
-  const back = vis.filter(c => c.status !== 'removed' && c.online === 'back');
-  const stolen = vis.filter(c => c.status === 'stolen');
-  const up = stolen.filter(c => c.online !== 'gone').length;
   const by = {};
   for (const c of vis) if (c.status === 'new') by[c.client || 'Client unknown'] = (by[c.client || 'Client unknown'] || 0) + 1;
-  const top = Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 6);
-  const max = top.length ? top[0][1] : 1;
+  const top = Object.entries(by).sort((a, b) => b[1] - a[1]);
   const today = store.fcToday && store.fcToday.day === new Date().toDateString() ? store.fcToday : { searched: 0, found: 0 };
   const alive = st && Date.now() - st.beat < 90000;
   const ds = await FC.driveState(false);
-  let alerts = '';
-  if (k.on && !store.fcPause && st && st.state === 'closed' && typeof keepClosedBanner === 'function') alerts += keepClosedBanner();
-  if (store.fcDriveOffline) alerts += `<div class="banner bad" role="alert">${ic('help', 22)}<div style="flex:1 1 260px"><b>Can't reach Google Drive. Searching is paused.</b><div style="font-size:13.5px;color:var(--ink)">Drive for desktop is signed out or not running. It picks up where it left off.</div></div><a class="btn" href="#keep">Keep searching</a></div>`;
-  else if (ds === 'prompt') alerts += `<div class="banner warn" role="alert">${ic('help', 22)}<div style="flex:1 1 260px"><b>One click needed: let PageProof read your photos again</b></div><button class="btn primary" data-act="driveallow">Allow</button></div>`;
-  // A client reached 100%: every one of its photos searched at least once (4.10).
+  // 1. things that are stopped
+  if (store.fcDriveOffline) jobs.push({ lvl: 'bad', title: 'Can\'t reach Google Drive, so searching is paused', sub: 'Drive for desktop is signed out or not running. Searching picks up where it left off.', btn: { href: '#keep', label: 'Keep searching', main: 1 } });
+  else if (ds === 'prompt') jobs.push({ lvl: 'warn', title: 'One click needed: let PageProof read your photos again', sub: 'Your browser asks once after it restarts.', btn: { act: 'driveallow', label: 'Allow', main: 1 } });
+  if (k.on && !store.fcPause && st && st.state === 'closed') jobs.push({ lvl: 'bad', title: 'Keep searching is stopped', sub: 'Its pinned PageProof tab was closed, so no new photos are being searched.', btn: { act: 'keepshow', label: 'Start it again', main: 1 } });
+  for (const [e, until] of Object.entries(await FC.brokenEngines())) jobs.push({ lvl: 'bad', title: `${FC.ENGINE_NAME[e]} may have stopped working`, sub: `It gave nothing for many photos in a row, so it rests until ${new Date(until).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}. The other search sites carry on.`, btn: { href: '#health', label: 'See details' } });
+  // 2. copies that need you
+  if (caps.up.length) jobs.push(capJob(caps.up));
+  if (nNew) jobs.push({ lvl: 'warn', icon: 'copies', id: 'jobNew', title: `${nNew.toLocaleString()} new ${nNew === 1 ? 'copy' : 'copies'} to answer`,
+    sub: top.slice(0, 4).map(([n, v]) => `<a href="#found?client=${encodeURIComponent(n)}">${esc(n)} ${v}</a>`).join(' · ') + (top.length > 4 ? ` · ${top.length - 4} more clients` : ''),
+    btn: { href: '#review', label: 'Start', main: 1 } });
+  // 3. good news and updates
   const fin = (await FC.firstNotes()).filter(n => n.at > (store.fcFirstSeen || '') && Date.now() - Date.parse(n.at) < 14 * 86400000);
-  if (fin.length) alerts += `<div class="banner info" role="status" id="firstDone"><div style="flex:1 1 260px"><b>${fin.length === 1 ? esc(fin[0].name) + ': every photo searched at least once' : fin.length + ' clients now have every photo searched at least once'}</b><div style="font-size:13.5px">${esc(fin.map(n => n.name + ' (' + n.n.toLocaleString() + ' photos)').slice(0, 4).join(', '))}${fin.length > 4 ? ' and more' : ''}. New photos still get their first search when they arrive.</div></div><a class="btn" href="#keep">See progress</a><button class="btn ghost" data-act="firstseen">OK</button></div>`;
-  for (const [e, until] of Object.entries(await FC.brokenEngines())) alerts += `<div class="banner bad" role="alert">${ic('help', 22)}<div style="flex:1 1 260px"><b>${FC.ENGINE_NAME[e]} may have stopped working</b><div style="font-size:13.5px;color:var(--ink)">It gave nothing for many photos in a row, so PageProof is resting it until ${new Date(until).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}. Those empty results are not counted against your photos. The other search sites carry on.</div></div><a class="btn" href="#health">See details</a></div>`;
-  if (back.length) alerts += `<div class="banner bad" role="alert"><div style="flex:1 1 260px"><b>${back.length} ${back.length === 1 ? 'copy is' : 'copies are'} back online</b><div style="font-size:13.5px;color:var(--ink)">They had gone, and came back: ${esc([...new Set(back.map(c => c.site))].slice(0, 3).join(', '))}</div></div><a class="btn primary" href="#found?filter=Back%20online">See them</a></div>`;
-  const main = `<section class="card pad" style="display:flex;flex-direction:column;gap:12px">
-    <div class="row"><h2>New copies by client</h2><a class="btn ghost" style="margin-left:auto" href="#found">Copies found</a>${nNew ? `<a class="btn primary" href="#review">One at a time (${nNew})</a>` : ''}</div>
-    ${top.length ? top.map(([n, v]) => `<a href="#found?client=${encodeURIComponent(n)}" class="row" style="gap:10px;color:inherit;text-decoration:none;flex-wrap:nowrap"><span style="width:160px;flex-shrink:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n)}</span><span class="bar" style="flex:1"><i style="width:${v / max * 100}%;background:var(--copy)"></i></span><span class="num" style="width:40px;text-align:right">${v}</span></a>`).join('') : '<p class="muted" style="margin:0">Nothing new to review. Well done.</p>'}
-  </section>`;
-  const side = `<section class="card pad" style="display:flex;flex-direction:column;gap:8px">
-    <div class="row"><h2>Keep searching</h2><span class="tag ${k.on && !store.fcPause ? 'ok' : 'grey'}" style="margin-left:auto">${!k.on ? 'Off' : store.fcPause ? 'Paused' : alive ? 'On' : st && st.state === 'closed' ? 'Stopped' : 'Starting'}</span></div>
-    <span class="muted" style="font-size:14px">${k.on && alive ? esc(st.text) : k.on && st && st.state === 'closed' ? 'Stopped: its pinned tab was closed.' : k.on ? 'The search tab is starting.' : 'Turn it on to search all day.'}</span>
-    <span class="faint" style="font-size:13px">Today: ${today.searched} ${today.searched === 1 ? 'photo' : 'photos'} searched, ${today.found} new ${today.found === 1 ? 'copy' : 'copies'}</span>
-    <a class="btn" href="#keep">Open Keep searching</a></section>
-    ${homeFirst(store.fcFirst, k, hw)}
-    <section class="card pad" style="display:flex;flex-direction:column;gap:8px"><h2>Still online?</h2>
-    <span class="muted" style="font-size:14px">${stolen.length ? `${up} of ${stolen.length} copies you marked stolen are still up. They're checked every week.` : 'Copies you mark stolen are checked every week.'}</span>
-    <div class="row"><a class="btn" href="#found?filter=Stolen">Stolen copies</a><a class="btn ghost" href="#weekly">Weekly summary</a></div></section>`;
-  // Most copied photos: your photos that turn up on the most pages.
+  if (fin.length) jobs.push({ lvl: 'info', id: 'firstDone', icon: 'check', title: fin.length === 1 ? esc(fin[0].name) + ': every photo searched at least once' : fin.length + ' clients now have every photo searched at least once',
+    sub: esc(fin.map(n => n.name + ' (' + n.n.toLocaleString() + ' photos)').slice(0, 4).join(', ')) + (fin.length > 4 ? ' and more' : '') + '. New photos still get their first search when they arrive.', btn: { href: '#keep', label: 'See progress' }, btn2: { act: 'firstseen', label: 'OK' } });
+  // 4. all is well: one quiet line saying searching is running
+  if (k.on && !store.fcPause && alive) jobs.push({ lvl: 'ok', title: 'Keep searching is running', sub: esc(st.text || '') + ` · today ${today.searched} ${today.searched === 1 ? 'photo' : 'photos'} searched, ${today.found} new`, btn: { href: '#keep', label: 'Open' } });
+  else if (!k.on) jobs.push({ lvl: 'warn', title: 'Keep searching is off', sub: 'Turn it on to search your clients\' photos all day.', btn: { href: '#keep', label: 'Turn it on' } });
+  // The small cards under the jobs.
   const per = new Map();
   for (const c of vis) if (c.status !== 'removed' && c.status !== 'licensed') per.set(c.photo, (per.get(c.photo) || 0) + 1);
   const most = [...per.entries()].filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 5);
@@ -242,8 +220,10 @@ async function homeFinds() {
         return `<a class="toprow" href="#found?photo=${encodeURIComponent(id)}"><img src="${src}" alt=""><span style="min-width:0"><b>${esc(p.name || 'Photo')}</b><span class="faint" style="font-size:12.5px">${esc(p.client || 'Client unknown')}</span></span><span class="bar"><i style="width:${n / mx * 100}%;background:var(--copy)"></i></span><b class="num" style="text-align:right">${n}</b></a>`; }).join('')}
     </section>`;
   }
-  const hero = nNew ? `<a class="homehero" href="#found"><div class="n">${nNew}</div><div style="flex:1;min-width:200px"><h2>new ${nNew === 1 ? 'copy' : 'copies'} to look at</h2><p>${top.length === 1 ? 'One client has' : top.length + ' clients have'} photos found on other sites.</p></div><span class="btn">Review them ›</span></a>` : '';
-  return { alerts, main: hero + main + mostHtml, side };
+  return { jobs, more: homeFirst(store.fcFirst, k, hw) + mostHtml };
+}
+function capJob(up) {
+  return { lvl: 'warn', icon: 'capture', id: 'jobCapture', title: `${up.length} stolen ${up.length === 1 ? 'copy needs' : 'copies need'} a capture`, sub: 'Capture them before the site takes them down. Oldest first: ' + esc([...new Set(up.map(c => c.site))].slice(0, 3).join(', ')), btn: { href: '#tocapture', label: 'Capture them', main: 1 } };
 }
 // Home card: every photo searched once. Uses the small copy saved by the last count, so Home
 // never reads every photo; a count older than an hour is redone after Home has drawn.
@@ -308,28 +288,43 @@ function libRows(log) {
   }
   return rows;
 }
+// 4.14: the library shows a small picture of every capture (cards), or the old table (list).
 V.library = async () => {
-  const rows = libRows(await getLog());
+  const log = await getLog(), rows = libRows(log);
   const q = (state.libQ || '').toLowerCase();
-  const shown = rows.filter(({ e, s }) => !q || [e.url, e.title, s.caseRef, s.collector, e.captureId].join(' ').toLowerCase().includes(q));
+  const view = state.libView || (await api.storage.local.get('ppLibView')).ppLibView || 'cards';
+  const hit = (e, s) => !q || [e.url, e.title, s.caseRef, s.collector, e.captureId].join(' ').toLowerCase().includes(q);
+  const shown = rows.filter(({ e, s }) => hit(e, s));
+  const caps = [...log].reverse().filter(e => (e.saves && e.saves.length ? e.saves : [{}]).some(s => hit(e, s)));
   const reps = ((await api.storage.local.get('fcReports')).fcReports || []).slice().reverse().filter(r => !q || [r.site, r.url, r.caseNo, r.photo, r.client, r.id].join(' ').toLowerCase().includes(q));
-  return `${head('Keep and prove', 'Evidence library', 'Every page you captured on this computer, and every evidence pack saved from it.', `<button class="btn" data-act="libcsv">${ic('down', 18)} Download list (CSV)</button><a class="btn" href="#verify">${ic('verify', 18)} Verify a pack</a>`)}
+  const nCap = (await needsCapture().catch(() => ({ up: [] }))).up.length;
+  const card = e => {
+    const sv = e.saves && e.saves.length ? e.saves[e.saves.length - 1] : null;
+    return `<button class="capcard" data-act="opencap" data-v="${esc(e.id)}" title="${esc(e.url)}">
+      <span class="capimg" data-capthumb="${esc(e.id)}"><b>${esc((site(e.url)[0] || '?').toUpperCase())}</b></span>
+      <span class="capt"><b class="mono">${esc((sv && sv.caseRef) || 'No case number')}</b><span class="capsite">${esc(site(e.url))}</span><span class="faint">${fmtDate(e.time)}</span></span>
+      ${sv ? `<span class="tag ok">${ic('check', 12, 3)} Pack saved</span>` : '<span class="tag grey">Not saved yet</span>'}</button>`;
+  };
+  return `${head('', 'Evidence library', 'Every page you captured on this computer, and every evidence pack saved from it.', `<button class="btn" data-act="libcsv">${ic('down', 18)} Download list (CSV)</button><a class="btn" href="#verify">${ic('verify', 18)} Verify a pack</a><a class="btn primary" href="#capture">${ic('capture', 18)} Capture a page</a>`)}
+  ${nCap ? `<a class="banner warn" href="#tocapture" style="text-decoration:none;color:inherit">${ic('capture', 20)}<div style="flex:1 1 260px"><b>${nCap} stolen ${nCap === 1 ? 'copy needs' : 'copies need'} a capture</b><div style="font-size:13.5px">They have no evidence pack yet.</div></div><span class="btn">See them</span></a>` : ''}
   <section class="card" style="overflow:hidden">
     <div class="row" style="gap:10px;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--bg)">
-      <input id="libq" class="chip" style="min-height:38px;padding:0 12px;font-size:14px;flex:1 1 260px" placeholder="Find by site, case number, name or capture ID" value="${esc(state.libQ || '')}" aria-label="Find evidence">
-      <span class="faint" style="font-size:13px">${shown.length} of ${rows.length}</span></div>
-    <div class="scroll"><table><thead><tr><th>Captured</th><th>Page</th><th>Case</th><th>Collected by</th><th>Evidence pack</th><th style="text-align:right">Open</th></tr></thead><tbody>
+      <input id="libq" class="chip" style="min-height:38px;padding:0 12px;font-size:14px;flex:1 1 260px" placeholder="Find by case number, site, name or capture ID" value="${esc(state.libQ || '')}" aria-label="Find evidence">
+      <span class="faint" style="font-size:13px">${view === 'cards' ? caps.length + ' of ' + log.length : shown.length + ' of ' + rows.length}</span>
+      <div class="seg" role="group" aria-label="Show as"><button class="${view === 'cards' ? 'on' : ''}" data-act="libview" data-v="cards">Pictures</button><button class="${view === 'list' ? 'on' : ''}" data-act="libview" data-v="list">List</button></div></div>
+    ${view === 'cards' ? `<div class="capgrid" id="capGrid">${caps.slice(0, 300).map(card).join('') || `<div class="muted" style="padding:28px;text-align:center;grid-column:1/-1">${log.length ? 'Nothing matches.' : 'Nothing captured yet. Open a web page, click the PageProof icon, then <b>Capture this page</b>.'}</div>`}</div>`
+    : `<div class="scroll"><table><thead><tr><th>Captured</th><th>Page</th><th>Case</th><th>Collected by</th><th>Evidence pack</th><th style="text-align:right">Open</th></tr></thead><tbody>
     ${shown.map(({ e, s }) => `<tr><td class="muted" style="white-space:nowrap">${fmtDate(e.time)}<div class="mono faint" style="font-size:11.5px">${esc(e.captureId || '')}</div></td>
       <td style="max-width:360px"><b>${esc(site(e.url))}</b><div class="faint" style="font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.title || e.url)}</div></td>
       <td class="mono">${esc(s.caseRef || '—')}</td><td>${esc(s.collector || '—')}</td>
       <td>${s.at ? `<span class="tag ok">Saved</span> <span class="faint" style="font-size:12.5px">${fmtDate(s.at)}</span>` : '<span class="tag grey">Not saved</span>'}</td>
       <td style="text-align:right;white-space:nowrap"><button class="btn" style="min-height:32px;font-size:13px" data-act="opencap" data-v="${esc(e.id)}">Open</button></td></tr>`).join('') || `<tr><td colspan="6" class="muted" style="padding:28px;text-align:center">${rows.length ? 'Nothing matches.' : 'Nothing captured yet.'}</td></tr>`}
-    </tbody></table></div>
+    </tbody></table></div>`}
   </section>
   <section class="card" style="overflow:hidden">
     <div class="pad row" style="border-bottom:1px solid var(--line)"><h2>Evidence reports</h2><span class="faint" style="font-size:13px">From Copies found: one report per copy</span><a class="btn ghost" style="margin-left:auto" href="#weekly">Weekly summary</a></div>
     <div class="scroll"><table><thead><tr><th>Made</th><th>Copy</th><th>Client's photo</th><th>Case</th><th>Match ID</th><th style="text-align:right">Open</th></tr></thead><tbody>
-    ${reps.slice(0, 300).map(r => `<tr><td class="muted" style="white-space:nowrap">${fmtDate(r.at)}</td><td style="max-width:300px"><b>${esc(r.site)}</b><div class="faint" style="font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.url)}</div></td><td>${esc(r.photo || '')}<div class="faint" style="font-size:12.5px">${esc(r.client || '')}</div></td><td class="mono">${esc(r.caseNo || '—')}</td><td class="mono">${esc(r.id || '')}</td><td style="text-align:right"><a class="btn" style="min-height:32px;font-size:13px" href="${safeUrl(r.url)}" target="_blank" rel="noreferrer">Page</a></td></tr>`).join('') || '<tr><td colspan="6" class="muted" style="padding:22px;text-align:center">No evidence reports yet. Make one from a copy in All copies found.</td></tr>'}
+    ${reps.slice(0, 300).map(r => `<tr><td class="muted" style="white-space:nowrap">${fmtDate(r.at)}</td><td style="max-width:300px"><b>${esc(r.site)}</b><div class="faint" style="font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.url)}</div></td><td>${esc(r.photo || '')}<div class="faint" style="font-size:12.5px">${esc(r.client || '')}</div></td><td class="mono">${esc(r.caseNo || '—')}</td><td class="mono" style="font-size:12.5px">${esc(r.id || '')}</td><td style="text-align:right"><a class="btn" style="min-height:32px;font-size:13px" href="${safeUrl(r.url)}" target="_blank" rel="noreferrer">Their page</a></td></tr>`).join('') || `<tr><td colspan="6" class="muted" style="padding:28px;text-align:center">No evidence reports yet. Make one from a copy in Copies found.</td></tr>`}
     </tbody></table></div>
     <div class="pad faint" style="font-size:12.5px;border-top:1px solid var(--line)">The PDF files themselves are in your Downloads folder, named PageProof_evidence_….</div>
   </section>
@@ -338,7 +333,57 @@ V.library = async () => {
 V.library.after = () => {
   const i = document.getElementById('libq');
   i.oninput = () => { state.libQ = i.value; render(true).then(() => { const j = document.getElementById('libq'); j.focus(); j.setSelectionRange(j.value.length, j.value.length); }); };
+  capThumbs();
 };
+ACTS.libview = async v => { state.libView = v; try { await api.storage.local.set({ ppLibView: v }); } catch (e) { /* only this time */ } render(true); };
+// Fill in each card's picture: the small picture saved when the capture was opened, or one made
+// now from the capture itself while the browser still holds it (it keeps the last 10).
+async function capThumbs() {
+  for (const el of document.querySelectorAll('[data-capthumb]')) {
+    if (state.shown !== 'library') return;
+    const id = el.dataset.capthumb;
+    try {
+      let t = await PP_DB.get('thumb-' + id);
+      if (!t) { const rec = await PP_DB.get(id); if (rec) t = await PP_DB.makeThumb(rec); }
+      if (t && t.src) el.innerHTML = `<img src="${safeImg(t.src)}" alt="">`;
+    } catch (e) { /* the letter stays */ }
+  }
+}
+
+// =====================================================================================
+// Evidence › Needs a capture (4.14): stolen copies with no evidence pack yet
+// =====================================================================================
+// A copy counts as captured when an evidence pack was saved from a capture of it (Capture on the
+// copy), when a saved pack in the log is of the same page (any of its addresses), or when you
+// said it was captured another way.
+async function needsCapture() {
+  const [copies, log] = await Promise.all([FC.allCopies(), getLog()]);
+  const saved = new Set();
+  for (const e of log) if (e.saves && e.saves.some(s => s.at)) saved.add(FC.pageKey(e.url));
+  const list = copies.filter(c => c.status === 'stolen' && !c.packAt && !FC.hiddenCopy(c, RS_LISTS.hidden) && ![c.url, ...(c.alts || [])].some(u => saved.has(FC.pageKey(u))))
+    .sort((a, b) => String(a.answered || a.firstSeen).localeCompare(String(b.answered || b.firstSeen)));
+  return { up: list.filter(c => c.online !== 'gone'), gone: list.filter(c => c.online === 'gone') };
+}
+V.tocapture = async () => {
+  const { up, gone } = await needsCapture();
+  const ps = new Map((await FC.DB.getMany('photos', [...new Set(up.concat(gone).map(c => c.photo))])).filter(Boolean).map(p => [p.id, p]));
+  const row = (c, can) => { const p = ps.get(c.photo) || {}; return `<div class="caprow" data-id="${esc(c.id)}">
+    <img class="thumb" src="${safeImg(c.thumb || (c.th && FC.pics.seen(c.id)) || 'icons/icon48.png')}" alt="" referrerpolicy="no-referrer">
+    <div style="min-width:0;flex:1"><b>${esc(c.site)}</b><a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>
+      <div class="faint" style="font-size:12.5px">${esc(p.client || c.client || 'Client unknown')} · ${esc(p.name || 'Photo')} · marked stolen ${esc(fmtDate(c.answered || c.firstSeen))}</div></div>
+    <div class="row" style="gap:6px">${can ? `<button class="btn" data-act="capdone" data-v="${esc(c.id)}" title="It was captured another way (another computer, another tool)">Already captured</button><button class="btn primary" data-act="capturecopy" data-v="${esc(c.id)}">${ic('capture', 16)} Capture</button>` : `<button class="btn" data-act="capdone" data-v="${esc(c.id)}">Take off this list</button>`}</div></div>`; };
+  return `${head('', 'Needs a capture', 'Copies you marked Stolen that have no evidence pack yet, oldest first. Capture each one before the site takes it down. When you save its evidence pack, it leaves this list by itself.', `<a class="btn" href="#found?filter=Stolen">All stolen copies</a>`)}
+  <section class="card" id="capList">
+    ${up.length ? up.map(c => row(c, true)).join('') : `<div class="job lvl-ok"><span class="jdot">${ic('check', 16, 3)}</span><div class="jt"><b>Every stolen copy that is still online has an evidence pack</b><span>Copies you mark Stolen show up here until they are captured.</span></div></div>`}
+  </section>
+  ${gone.length ? `<details class="card pad"><summary><b>${gone.length} gone before a capture</b> <span class="faint">The page no longer shows the copy. PageProof kept their picture when it was found, so you can still make an Evidence report from Copies found.</span></summary><div style="margin-top:10px">${gone.map(c => row(c, false)).join('')}</div></details>` : ''}`;
+};
+ACTS.capdone = async v => {
+  const undo = await FC.markCaptured(v, 'hand');
+  render(true);
+  toast('Taken off Needs a capture.', undo ? async () => { await undo(); render(true); } : null);
+};
+
 async function libCsv() {
   const head = ['Captured', 'Capture ID', 'Web address', 'Page title', 'Case / ref', 'Collected by', 'Evidence pack saved', 'Pack SHA-256', 'Trusted timestamps', 'Notes'];
   const rows = libRows(await getLog()).map(({ e, s }) => [fmtDate(e.time), e.captureId || '', e.url, e.title || '', s.caseRef || '', s.collector || '',
@@ -394,6 +439,7 @@ V.settings = async () => {
   const [name, hw, docs] = [await getName(), await ppHardware(), await RS_DOCS.state()];
   await RS_LISTS.load();
   const zoomKey = await ppZoomKey();
+  const pops = (await api.storage.local.get('ppPopups')).ppPopups !== false;
   return `${head('Settings', 'Settings', 'These apply to everything in PageProof and are saved on this computer.')}
   <div class="grid g2">
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>You</h2>
@@ -405,6 +451,8 @@ V.settings = async () => {
       <p class="muted" style="margin:0;font-size:14px">Makes everything in PageProof bigger: words, buttons and pictures. Saved on this computer only.</p>
       <div class="seg" role="group" aria-label="Text size">${TEXT_SIZES.map(([k, l, z]) => `<button class="${zoomKey === k ? 'on' : ''}" aria-pressed="${zoomKey === k}" data-act="textsize" data-v="${k}"><span style="font-size:${Math.round(14 * z)}px">${l}</span></button>`).join('')}</div>
       <span class="faint" style="font-size:12.5px">Ctrl and + or − also works on any PageProof page, and PageProof remembers it.</span></section>
+    <section class="card pad" id="popSet" style="display:flex;flex-direction:column;gap:12px"><h2>Capturing a page</h2>
+      <label class="row" style="gap:10px;flex-wrap:nowrap;cursor:pointer"><input type="checkbox" id="sPopups" ${pops ? 'checked' : ''} style="width:20px;height:20px;accent-color:var(--accent)"><span><b>Close pop-ups before the first screen</b><span class="muted" style="display:block;font-size:13.5px">Cookie notices, newsletter boxes, "allow notifications" and "open in the app" boxes. PageProof presses the site's own close or accept button, and the capture log says what it closed. Log-in walls are left alone.</span></span></label></section>
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>Is everything working?</h2>
       <p class="muted" style="margin:0;font-size:14px">Green and red lights for Google Drive, Keep searching, each search site and your backup. One button copies the details to send for support.</p>
       <a class="btn" style="align-self:flex-start" href="#health">Check now</a></section>
@@ -424,6 +472,8 @@ V.settings = async () => {
 V.settings.after = () => {
   const n = document.getElementById('sName');
   n.onchange = async () => { await setName(n.value.trim()); toast('Saved. New packs say "Collected by ' + (n.value.trim() || '…') + '".'); };
+  const pp = document.getElementById('sPopups');
+  pp.onchange = async () => { await api.storage.local.set({ ppPopups: pp.checked }); toast(pp.checked ? 'Pop-ups will be closed before each capture.' : 'Pop-ups are left as they are.'); };
 };
 
 // =====================================================================================
@@ -536,6 +586,13 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['A shorter menu', 'Five items instead of nine: Home, Copies found, Clients, Evidence and Settings. Keep searching is under Copies found, the photo tools and Verify are under Evidence, and Is everything working, hidden sites and Help are under Settings.'],
+  ['Home is a list of what to do now', 'The most urgent job comes first, each with one button: a stopped search, new copies to answer, stolen copies that need a capture. When nothing needs you, it says All done.'],
+  ['Pop-ups are closed before a capture', 'Cookie notices, newsletter boxes and "allow notifications" boxes are closed with the site\'s own button before the first screen, and the capture log says what was closed. Turn it off in Settings › Capturing a page.'],
+  ['One row for one page', 'A page found under several addresses (its phone version, share links, tracking bits on the end) is now one copy with "+2 addresses", so you answer once.'],
+  ['Needs a capture', 'Evidence › Needs a capture lists every copy you marked Stolen that has no evidence pack yet, oldest first, with a Capture button. Saving its pack takes it off the list.'],
+  ['A status line at the bottom', 'Every page shows whether Drive is connected, Keep searching is running and the search sites are working. Anything stopped turns red with a Fix it button.'],
+  ['Evidence library with pictures', 'Each capture shows a small picture with its case number and site. Switch to List for the old table.'],
   ['No more update notices', 'PageProof no longer checks GitHub for new versions or shows an Update button. New versions now come straight from your team lead.'],
   ['Big searches run quietly in the pinned tab', 'A search you start (New search, Today\'s 50, or photos picked in Your photos) now runs in the small pinned PageProof tab, the same one Keep searching uses. No new tab opens in front of you, and you can close the PageProof page while it works. To see how far it is, open All searches (or the search itself). If a search site wants a quick "are you a robot" check, a small notice pops up instead of jumping to that tab. Today\'s 50 at its set time no longer opens a PageProof page either.'],
   ['Followers, verified and account type on social copies', 'PageProof reads each account\'s profile by itself (in a background tab of your browser, one account at a time, once a month): followers, the check mark, and what kind of account it is. The Social media tab gets Verified, Followers, Account type and Country filters, Sort by Most followers, and the Accounts list shows and sorts by them.'],
@@ -699,12 +756,12 @@ V.setup = async () => `${head('Welcome', 'First-time setup', '')}
 // The tour
 // =====================================================================================
 const TOUR = [
-  ['capture', 'Capture a page', 'Saves the page you are on as proof: PDF, web copy, fingerprints and timestamps. Also the big button in the toolbar menu.'],
-  ['found', 'Copies found', 'Everything PageProof has found for your clients, from the daily 50 and Keep searching. The number shows new ones.'],
-  ['library', 'Evidence library', 'Every capture and evidence report, with case numbers, and the weekly summary.'],
-  ['browser', 'Keep it beside every page', 'Open the side panel and PageProof stays next to every website, showing the search as it runs.'],
-  ['settings', 'Settings', 'Your name, the PageProof folder, hidden sites and your computer\'s limits.'],
-];
+  ['home', 'Home', 'Your jobs for today, most urgent first, each with one button. When nothing needs you, it says All done.'],
+  ['found', 'Copies found', 'Everything PageProof has found for your clients. The number shows new ones. Keep searching lives here too.'],
+  ['clients', 'Clients', 'Pick which clients you search for, star the ones that matter most, and flag photos.'],
+  ['library', 'Evidence', 'Every capture and evidence report, stolen copies that still need a capture, and the photo tools.'],
+  ['settings', 'Settings', 'Your name, pop-ups, hidden sites, Is everything working, and how to keep PageProof beside every page.'],
+]
 function drawTour() {
   document.querySelectorAll('.tourring,.tourtip').forEach(x => x.remove());
   if (state.tour < 0) return;
@@ -840,5 +897,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 4.1 kept a link to PageProof's own folder for the old self-updater. That is gone; forget the folder.
   try { RS_DB.del('handles', 'ppInstall').catch(() => {}); api.storage.local.remove('ppUpdated'); } catch (e) { /* none */ }
   FC.movePics().catch(e => console.warn('PageProof: moving preview pictures', e));
+  FC.mergeSamePages().then(n => { if (n) { toast(plural(n, 'copy was', 'copies were') + ' the same page as another copy (phone version or tracking bits on the address), so they are now one row each.'); render(true); } }).catch(e => console.warn('PageProof: same pages', e));
   FC.dropDotMatches().then(n => { if (n) { toast(plural(n, 'wrong match was', 'wrong matches were') + ' moved to Removed (the photo check had scored them too high). Put back is still there.'); render(true); } }).catch(e => console.warn('PageProof: wrong matches', e));
 });

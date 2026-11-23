@@ -131,6 +131,81 @@
     return n;
   }
 
+  // 4.14: close pop-ups that cover the page before the first screen: cookie notices, newsletter
+  // sign-up boxes, "allow notifications" boxes, "open in the app" banners and ad-blocker messages.
+  // PageProof only presses the site's OWN close / accept button (never a link that leaves the
+  // page, never Subscribe, Sign up, Log in or Settings), and returns what it pressed so the
+  // capture log can say so. Log-in walls are left alone.
+  const POP_KINDS = [
+    ['cookie notice', /cookie|consent|we value your privacy|privacy (choices|settings|preferences)|gdpr|ccpa|your privacy/i],
+    ['sign-up box', /newsletter|subscribe to|sign up for (our|the)|join our (mailing )?list|get (our|the) (latest|daily|weekly)|enter your email/i],
+    ['notifications box', /(allow|turn on|enable|get) (push )?notifications|stay (up to date|updated) with notifications/i],
+    ['app banner', /open in (the )?app|get the app|download (the|our) app|continue in app/i],
+    ['ad-blocker message', /ad ?block(er)?|disable your ad|whitelist (us|our site)/i],
+  ];
+  const POP_KNOWN = ['#onetrust-accept-btn-handler', '#onetrust-close-btn-container button', '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll', '#CybotCookiebotDialogBodyButtonAccept',
+    '#didomi-notice-agree-button', '#truste-consent-button', '.qc-cmp2-summary-buttons button[mode="primary"]', '.fc-cta-consent', '.osano-cm-accept-all', '.cc-window .cc-btn.cc-dismiss', '.cc-window .cc-allow',
+    '#cookie_action_close_header', '.cky-btn-accept', '#wt-cli-accept-all-btn', '.iubenda-cs-accept-btn', '#axeptio_btn_acceptAll', '.cmplz-accept', '#hs-eu-confirmation-button', '.js-cookie-consent-agree', 'button[data-cookiebanner="accept_button"]'];
+  const POP_CLOSE = /^(×|✕|✖|╳|x|close|close this|dismiss|no,? thanks?|no thank you|not now|maybe later|skip|continue without (accepting|agreeing)|i('|’)?ll pass|stay on (the )?(web|site|browser)|not interested|later)$/i;
+  const POP_ACCEPT = /^(accept( all)?( cookies)?|accept (and|&) (close|continue)|i accept|agree( and (close|continue))?|i agree|allow( all)?( cookies)?|got it!?|ok(ay)?!?|understood|continue|i understand|confirm( my)? choices)$/i;
+  const POP_NEVER = /subscribe|sign ?up|submit|log ?in|sign ?in|register|buy|purchase|settings|manage|customi[sz]e|preferences|options|learn more|more info|details|install|download|open app|reject all|turn on|allow notifications|enable/i;
+  function popText(el) { return ((el.getAttribute('aria-label') || '') + ' ' + (el.textContent || '') + ' ' + (el.getAttribute('title') || '') + ' ' + (el.value || '')).replace(/\s+/g, ' ').trim(); }
+  function clickable(el) {
+    if (!isShown(el)) return false;
+    const a = el.closest('a[href]');
+    if (a && !/^(#|javascript:)/i.test(a.getAttribute('href') || '')) return false; // never leave the page
+    return true;
+  }
+  function popButton(box, kind) {
+    const btns = [...box.querySelectorAll('button, [role="button"], a[href^="#"], a[href^="javascript"], a:not([href]), input[type="button"], input[type="submit"], [aria-label*="close" i], [class*="close" i]')].filter(clickable);
+    let best = null, score = 0;
+    for (const b of btns) {
+      const t = popText(b), label = (b.getAttribute('aria-label') || b.getAttribute('title') || '').trim();
+      if (t.length > 60) continue;
+      let sc = 0;
+      if (POP_CLOSE.test(t) || /^(close|dismiss)\b/i.test(label) || (!t && /close|dismiss/i.test(b.className || ''))) sc = 3;
+      else if (kind === 'cookie notice' && POP_ACCEPT.test(t)) sc = 2;
+      if (!sc || (sc < 3 && POP_NEVER.test(t))) continue;
+      if (sc > score) { best = b; score = sc; }
+    }
+    return best;
+  }
+  function closePopups() {
+    const done = [], vw = innerWidth, vh = innerHeight;
+    const press = (b, kind) => {
+      const lab = (b.getAttribute('aria-label') || b.getAttribute('title') || '').trim(), txt = ((b.textContent || b.value || '')).replace(/\s+/g, ' ').trim();
+      const t = (lab || (/^[×✕✖╳xX]$/.test(txt) ? 'close' : txt) || 'close').slice(0, 40);
+      try { b.click(); done.push(kind + ' (pressed "' + t + '")'); return true; } catch (e) { return false; }
+    };
+    for (const sel of POP_KNOWN) {
+      if (done.length >= 4) break;
+      let el = null; try { el = document.querySelector(sel); } catch (e) { /* odd selector */ }
+      if (el && clickable(el)) press(el, 'cookie notice');
+    }
+    const boxes = [];
+    for (const el of document.querySelectorAll('body *')) {
+      const cs = getComputedStyle(el);
+      const modal = el.getAttribute('role') === 'dialog' || el.getAttribute('aria-modal') === 'true' || el.tagName === 'DIALOG';
+      if (!modal && cs.position !== 'fixed' && cs.position !== 'sticky') continue;
+      if (!isShown(el)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width * r.height < vw * vh * 0.02 || r.bottom <= 0 || r.top >= vh) continue;
+      if (boxes.some(b => b.contains(el))) continue;
+      boxes.push(el);
+    }
+    for (const box of boxes) {
+      if (done.length >= 4) break;
+      if (box.querySelector('video, article, main, input[type="password"]')) continue; // the page itself, or a log-in wall
+      const text = (box.innerText || '').slice(0, 1500);
+      if (text.length > 1500 || !text) continue;
+      const kind = (POP_KINDS.find(([, re]) => re.test(text)) || [])[0];
+      if (!kind) continue;
+      const b = popButton(box, kind);
+      if (b) press(b, kind);
+    }
+    return done;
+  }
+
   // Side bars and menus have their own "More" buttons (TikTok's opens a settings panel). Skip them.
   function isMenuButton(el) {
     if (el.closest('nav, aside, header, [role="navigation"], [role="menu"], [role="menubar"], [role="tablist"]')) return true;
@@ -417,5 +492,5 @@
   }
   function ovRemove() { if (ov) ov.remove(); ov = null; }
 
-  window.__pageproof = { expandMore, unclamp, prepare, scrollPage, hideFixed, removeBadges, scrollSection, grewNow, restore, ovShow, ovHide, ovRemove };
+  window.__pageproof = { closePopups, expandMore, unclamp, prepare, scrollPage, hideFixed, removeBadges, scrollSection, grewNow, restore, ovShow, ovHide, ovRemove };
 })();

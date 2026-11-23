@@ -27,7 +27,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
 
   // ---- the menu and top bar
   const menu = await page.evaluate(() => [...document.querySelectorAll('#side a')].map(a => a.textContent.trim()).join(' | '));
-  ok(/Copies found/.test(menu) && /Clients and photos/.test(menu) && /Keep searching/.test(menu) && /Evidence library/.test(menu) && /Tools/.test(menu), 'Menu has the new short list');
+  ok(/Copies found/.test(menu) && /Clients/.test(menu) && /Evidence/.test(menu) && /Settings/.test(menu), 'Menu has the new short list');
   await go('tools');
   const tools = await page.evaluate(() => [...document.querySelectorAll('a.tool')].map(a => a.getAttribute('href')));
   const dead = await page.evaluate(hs => hs.filter(h => !V[h.slice(1)] && !PP_ROUTES[h.slice(1)]), tools);

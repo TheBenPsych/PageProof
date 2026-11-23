@@ -9,27 +9,30 @@ const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&a
 const PP_MENU = [
   { id: 'home', label: 'Home', href: 'home' },
   { id: 'find', label: 'Copies found', href: 'found', badgeKey: 'newCopies', icon: 'copies',
-    subs: [['All copies', 'found'], ['One at a time', 'review'], ['New search', 'search'], ['All searches', 'searches']] },
-  { id: 'clients', label: 'Clients and photos', href: 'clients', icon: 'people', subs: [['Clients', 'clients'], ['Skipped photos', 'skipped'], ['Site owners', 'owners']] },
-  { id: 'keep', label: 'Keep searching', href: 'keep', icon: 'loop' },
-  { id: 'library', label: 'Evidence library', href: 'library', subs: [['All evidence', 'library'], ['Weekly summary', 'weekly']] },
-  { id: 'tools', label: 'Tools', href: 'tools', icon: 'grid' },
-  { id: 'browser', label: 'In your browser', href: 'browser' },
+    subs: [['All copies', 'found'], ['One at a time', 'review'], ['Keep searching', 'keep'], ['New search', 'search'], ['All searches', 'searches']] },
+  { id: 'clients', label: 'Clients', href: 'clients', icon: 'people', subs: [['Clients and photos', 'clients'], ['Skipped photos', 'skipped'], ['Site owners', 'owners']] },
+  { id: 'library', label: 'Evidence', href: 'library', badgeKey: 'toCapture',
+    subs: [['All evidence', 'library'], ['Needs a capture', 'tocapture'], ['Capture a page', 'capture'], ['Verify a pack', 'verify'], ['All tools', 'tools'], ['Weekly summary', 'weekly']] },
+  { id: 'settings', label: 'Settings', href: 'settings',
+    subs: [['Settings', 'settings'], ['Is everything working?', 'health'], ['Hidden and approved sites', 'hidden'], ['In your browser', 'browser'], ['Help and tutorial', 'help']] },
 ];
+// 4.14: the menu went from 9 items to 5. Every older page still has its address and lights up the
+// item it now lives under.
 const PP_ROUTES = {
-  home: ['home'], capture: ['tools'], tools: ['tools'], search: ['find', 'search'], searches: ['find', 'searches'], results: ['find', 'searches'], found: ['find', 'found'], review: ['find', 'review'],
-  clients: ['clients', 'clients'], photos: ['clients', 'clients'], owners: ['clients', 'owners'], who: ['clients', 'owners'], keep: ['keep'], connect: ['find', 'found'], weekly: ['library', 'weekly'],
-  inspect: ['tools'], compare: ['tools'], markup: ['tools'], files: ['tools'], openfiles: ['tools'],
-  library: ['library', 'library'], verify: ['tools'], browser: ['browser'], settings: ['settings'], hidden: ['settings'], computer: ['settings'],
-  whatsnew: ['settings'], health: ['settings'], skipped: ['clients', 'skipped'], bnsave: ['tools'], setup: ['browser'], help: ['help']
+  home: ['home'], search: ['find', 'search'], searches: ['find', 'searches'], results: ['find', 'searches'], found: ['find', 'found'], review: ['find', 'review'], keep: ['find', 'keep'], connect: ['find', 'found'],
+  clients: ['clients', 'clients'], photos: ['clients', 'clients'], owners: ['clients', 'owners'], who: ['clients', 'owners'], skipped: ['clients', 'skipped'],
+  library: ['library', 'library'], tocapture: ['library', 'tocapture'], capture: ['library', 'capture'], verify: ['library', 'verify'], weekly: ['library', 'weekly'],
+  tools: ['library', 'tools'], inspect: ['library', 'tools'], compare: ['library', 'tools'], markup: ['library', 'tools'], files: ['library', 'tools'], openfiles: ['library', 'tools'], bnsave: ['library', 'tools'],
+  settings: ['settings', 'settings'], health: ['settings', 'health'], hidden: ['settings', 'hidden'], browser: ['settings', 'browser'], setup: ['settings', 'browser'], help: ['settings', 'help'],
+  computer: ['settings', 'settings'], whatsnew: ['settings', 'settings'], reconnect: ['settings', 'settings']
 };
 const PP_CRUMBS = {
   results: 'Search results',
-  home: 'Home', tools: 'Tools', capture: 'Capture a page', search: 'New search', searches: 'All searches', found: 'All copies found',
+  home: 'Home', tools: 'All tools', capture: 'Capture a page', search: 'New search', searches: 'All searches', found: 'All copies found',
   review: 'One at a time', clients: 'Clients and photos', photos: 'Clients and photos', owners: 'Site owners',
-  who: 'Who\'s behind this site', keep: 'Keep searching', connect: 'Connect your photos', weekly: 'Evidence library › Weekly summary',
-  inspect: 'Photo tools › Inspect a photo', compare: 'Photo tools › Compare two photos', markup: 'Photo tools › Mark up a copy', files: 'Open files › Convert files',
-  openfiles: 'Open files › Open odd files', library: 'Evidence library › All evidence', verify: 'Verify a pack', browser: 'Toolbar and side panel', settings: 'Settings',
+  who: 'Who\'s behind this site', keep: 'Keep searching', connect: 'Connect your photos', weekly: 'Evidence › Weekly summary', tocapture: 'Evidence › Needs a capture',
+  inspect: 'Photo tools › Inspect a photo', compare: 'Photo tools › Compare two photos', markup: 'Photo tools › Mark up a copy', files: 'Photo tools › Convert files',
+  openfiles: 'Photo tools › Open odd files', library: 'Evidence › All evidence', verify: 'Verify a pack', browser: 'Toolbar and side panel', settings: 'Settings',
   hidden: 'Settings › Hidden and approved sites', computer: 'Settings › Your computer', whatsnew: 'Settings › What\'s new', health: 'Settings › Is everything working?', skipped: 'Skipped photos', bnsave: 'Save a Breaking News photo', setup: 'First-time setup', help: 'Help and tutorial'
 };
 const PP_BADGES = {};
@@ -42,9 +45,7 @@ function ppRenderSide(route) {
     h += `<a class="nav${on ? ' on' : ''}" href="#${it.href}"${on ? ' aria-current="page"' : ''}>${ic(it.icon || it.id)}<span class="t"><b>${it.label}</b></span>${badge ? `<span class="pill-n">${badge}</span>` : ''}</a>`;
     if (on && it.subs) h += `<div class="subs">${it.subs.map(([l, r]) => `<a href="#${r}" class="${r === sub ? 'on' : ''}">${l}</a>`).join('')}</div>`;
   }
-  h += `<div class="grow"></div><div id="sideLive"></div>
-  <a class="nav${sec === 'settings' ? ' on' : ''}" href="#settings">${ic('settings')}<span class="t"><b>Settings</b></span></a>
-  <a class="nav${sec === 'help' ? ' on' : ''}" href="#help">${ic('help')}<span class="t"><b>Help and tutorial</b></span></a>`;
+  h += `<div class="grow"></div>`;
   document.getElementById('side').innerHTML = h;
   if (typeof ppSideLive === 'function') ppSideLive();
 }
@@ -90,6 +91,7 @@ const GLOSS = {
   'Registered': 'The copyright office has registered this photo. This is the VA number.',
   'Application': 'The application (case) number from the copyright office.',
   'Same photo': 'PageProof lined the two up and they are the same picture.',
+  'Same page': 'This page was also found under other addresses (its phone version, share links, tracking bits). They are one copy, so one answer covers them all.',
   'Maybe': 'A few details match. Worth a closer look with Compare.',
   'Light': 'An older or busy computer: PageProof does one thing at a time.',
   'Normal': 'A typical computer: two photo checks and two search tabs at once.',
@@ -128,8 +130,19 @@ function ppAddHelp(root = document) {
 // ---------- small building blocks ----------
 // The small line above a page title says where the page lives in the menu. Old section names
 // (from before the short menu) map to today's, and a line that only repeats the title is left out.
-const EYEBROW = { 'Find copies': '', 'Clients and photos': 'Clients and photos', 'Collect evidence': '', 'Keep and prove': '', 'Library': 'Evidence library', 'Help': '', 'In your browser': '' };
-const head = (eyebrow, title, lede, right = '') => `<div class="head"><div class="l"><div class="eyebrow">${(e => (e === title ? '' : e))(eyebrow in EYEBROW ? EYEBROW[eyebrow] : eyebrow)}</div><h1>${title}</h1>${lede ? `<p class="lede">${lede}</p>` : ''}</div>${right ? `<div class="row">${right}</div>` : ''}</div>`;
+// 4.14: every page starts the same way. The small line above the title is the menu item the page
+// lives under (Home keeps its date), and the buttons on the right have at most ONE blue main
+// button, always last (ppTidyHead, run after each page is drawn).
+const ppSection = () => { const r = (location.hash.slice(1).split('?')[0] || 'home'); const m = PP_MENU.find(x => x.id === (PP_ROUTES[r] || [])[0]); return m && m.id !== 'home' ? m.label : ''; };
+const head = (eyebrow, title, lede, right = '') => { const e = ppSection() || eyebrow; return `<div class="head"><div class="l"><div class="eyebrow">${e === title ? '' : esc(e)}</div><h1>${title}</h1>${lede ? `<p class="lede">${lede}</p>` : ''}</div>${right ? `<div class="row headact">${right}</div>` : ''}</div>`; };
+function ppTidyHead(root) {
+  const r = root.querySelector('.head > .headact'); if (!r) return;
+  const btns = [...r.children].filter(b => b.classList.contains('btn'));
+  const prim = btns.filter(b => b.classList.contains('primary'));
+  prim.slice(0, -1).forEach(b => b.classList.remove('primary'));
+  const main = prim[prim.length - 1];
+  if (main && r.lastElementChild !== main) r.append(main);
+}
 const fmtDate = iso => { try { return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { return iso || ''; } };
 const site = url => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return url || ''; } };
 // Only web links and pictures go into the page (never javascript: or other odd addresses).

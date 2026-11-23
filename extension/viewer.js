@@ -281,6 +281,7 @@ async function start() {
 
   const rec = await PP_DB.get(params.get('id'));
   if (!rec) { setStatus('This capture was not found. It may have been cleared. Please capture the page again.', true); return; }
+  PP_DB.get('thumb-' + rec.id).then(t => t || PP_DB.makeThumb(rec)).catch(() => {}); // picture for the Evidence library (4.14)
 
   const host = new URL(rec.url).hostname || 'page';
   const when = host + '_' + stamp(new Date(rec.time)) + (rec.captureId ? '_' + rec.captureId : '');
