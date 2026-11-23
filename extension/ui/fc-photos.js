@@ -78,7 +78,7 @@ V.connect = async () => {
     const on = list.filter(c => c.searching);
     body = `<h2>4. Check and start</h2>
     <p class="muted" style="margin:0">PageProof expects each client's folder to look like this. Other layouts work too; dates are read from folder names.</p>
-    <div class="tree mono" style="font-size:13px">Photos<br>&nbsp;› <b>Client name</b><br>&nbsp;&nbsp;&nbsp;› Registered images<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;› 2026<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;› Q4 (or 1-11583920471 Q4)<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;› photo.jpg</div>
+    <div class="tree mono" style="font-size:13px">Photos<br>&nbsp;› <b>Client name</b><br>&nbsp;&nbsp;&nbsp;› Registered images<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;› 2026<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;› Q4 (or 1-12345678901 Q4)<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;› photo.jpg</div>
     <dl class="facts"><dt>Searching for</dt><dd>${on.length ? esc(on.map(c => c.name).slice(0, 8).join(', ')) + (on.length > 8 ? ' and ' + (on.length - 8) + ' more' : '') : '<span style="color:var(--warn)">No clients ticked</span>'}</dd><dt>Priority</dt><dd>${esc(on.filter(c => c.priority).map(c => c.name).join(', ') || 'None')}</dd><dt>Then</dt><dd>PageProof reads every folder once (this can take a while with lots of photos), then Keep searching starts. You can change all of this later in Clients and photos.</dd></dl>
     ${nav(true, on.length ? 'csstart' : '', 'Yes, start searching')}`;
   }

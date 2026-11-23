@@ -49,7 +49,7 @@ const RS_SITE = {
     if (!/^[a-z]+:\/\//.test(t)) t = 'http://' + t;
     const h = RS_SITE.of(t);
     if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(h)) return '';
-    // "x.com/nypostsports" or "site.com/forum": only that part of the site.
+    // "x.com/examplesports" or "site.com/forum": only that part of the site.
     let path = '';
     try { path = decodeURIComponent(new URL(t).pathname).replace(/\/+$/, ''); } catch (e) { /* none */ }
     return path && path !== '/' ? h + path : h;
@@ -210,7 +210,7 @@ const RS_LISTS = {
   hidden: [], allowed: [], fileState: 'none',
   FILES: { hidden: 'hidden-sites.txt', allowed: 'allowed-sites.txt' },
   HEAD: {
-    hidden: '# PageProof hidden sites, one per line.\n# Links from these sites never show in reverse search results.\n# Start a line with a dot to hide a whole ending, for example .gov or .edu\n# Add a part after the site to hide only that part, for example x.com/nypostsports or example.com/forum\n# Lines starting with # are notes and are ignored.\n',
+    hidden: '# PageProof hidden sites, one per line.\n# Links from these sites never show in reverse search results.\n# Start a line with a dot to hide a whole ending, for example .gov or .edu\n# Add a part after the site to hide only that part, for example x.com/examplesports or example.com/forum\n# Lines starting with # are notes and are ignored.\n',
     allowed: '# PageProof allowed sites, one per line (your own site, licensees...).\n# Links from these sites still show, with a green "Allowed" label.\n# Lines starting with # are notes and are ignored.\n',
   },
   parse(text) { return [...new Set(String(text || '').split(/\r?\n/).map(RS_SITE.tidy).filter(Boolean))]; },
