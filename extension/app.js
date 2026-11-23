@@ -462,6 +462,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Main page and update notice fixed', 'The main PageProof page could stay blank (only the top bar showed) while your browser was slow to answer a question about your folders. It now always opens within a few seconds. The toolbar menu no longer offers an update to the version you already have.'],
   ['Your Drive photos: read only, double-checked', 'PageProof only ever reads your Google Drive photos. It never changes, moves, renames, deletes or adds anything there. Now it also refuses to use a folder inside your photos for its own lists, and the search sites get a clean copy of each photo with no hidden data and a plain name (photo.jpg).'],
   ['Finding copies is faster and steadier', 'The photo check is about a third faster on copies and almost twice as fast on the many different photos a search turns up, with the same answers. On slower computers, good checks are no longer stopped and shown as "Can\'t check". The hourly look for new photos only opens this and last quarter\'s folders again, also inside a folder that holds several clients. Keep searching no longer tries photos that are not due yet, and its small window no longer opens and closes by itself during the weekly folder check.'],
   ['Capture page: a proof checklist and two clear steps', 'The Capture page shows four green ticks as the proof is made (whole page, pictures, fingerprints, trusted timestamps), then step 1 Case details and step 2 Save. Every button is still there.'],
@@ -670,7 +671,11 @@ document.addEventListener('change', e => {
 // Start once every page file has loaded.
 document.addEventListener('DOMContentLoaded', async () => {
   await ppTheme();
-  await RS_LISTS.load().catch(() => {});
+  // Never let a slow folder keep the page blank: draw after 3 seconds at most, and again once the lists are in.
+  let listsIn = false;
+  const lists = RS_LISTS.load().catch(() => {}).then(() => { listsIn = true; });
+  await Promise.race([lists, new Promise(r => setTimeout(r, 3000))]);
+  if (!listsIn) lists.then(() => render(true));
   const st = await api.storage.local.get(['ppSetupDone']);
   if (!st.ppSetupDone && (!location.hash || location.hash === '#home')) location.hash = 'setup';
   render();
