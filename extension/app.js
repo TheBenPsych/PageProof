@@ -132,20 +132,17 @@ V.home = async () => {
   const news = seen !== VERSION ? `<div class="banner info">${ic('ideas', 20)}<div style="flex:1 1 260px;min-width:0"><b>PageProof was updated to ${VERSION}</b> <span class="muted" style="font-size:13.5px">All your captures, settings and lists are still here.</span></div><a class="btn" href="#whatsnew">See what's new</a></div>` : '';
   return `${news}${fc.alerts}
   ${head(today, hello + (name ? ', ' + esc(name.split(' ')[0]) : ''), 'Pick up where you left off, or start something new. Your evidence is saved on this computer.', `<button class="btn" data-act="tour">Take the tour</button>`)}
-  <section class="grid g3" aria-label="Start">
+  <section class="home3" aria-label="Start">
     <a class="start hero" href="#capture"><span class="ic">${ic('capture', 22)}</span><b>Capture a page</b><span>The whole page as proof: PDF, web copy, fingerprints and three trusted timestamps.</span></a>
     <a class="start" href="#search"><span class="ic">${ic('find', 22)}</span><b>Find copies of my photos</b><span>Search Google Lens, Yandex and Bing, and check every result against your original.</span></a>
     <a class="start" href="#inspect"><span class="ic">${ic('tools', 22)}</span><b>Look closer at a photo</b><span>Read its hidden data, lay a copy over the original, or mark it up for a client.</span></a>
   </section>
-  <div class="split">
-    <div class="homemain">
-      ${fc.main}
-      <section class="card">
-        <div class="pad row" style="border-bottom:1px solid var(--line)"><h2>Recent searches</h2><a class="btn ghost" style="margin-left:auto" href="#searches">All searches</a><a class="btn primary" href="#search">New search</a></div>
-        ${jobs.length ? jobs.map(j => {
-          const links = j.pics.reduce((a, p) => a + (p.links || []).length, 0), nNew = j.pics.reduce((a, p) => a + (p.links || []).filter(l => l.isNew).length, 0);
-          return `<a class="list-item" href="#searches" style="border-radius:0;padding:12px 22px;border-bottom:1px solid var(--line)"><img class="thumb" src="${esc(j.pics[0] && j.pics[0].thumb)}" width="64" height="44" alt=""><div style="min-width:0;flex:1"><b>${j.pics.length} ${j.pics.length === 1 ? 'photo' : 'photos'}${j.folder ? ' · daily 50' : ''}</b><div class="muted" style="font-size:13.5px">${fmtDate(j.created)} · ${links} links found</div></div>${nNew ? `<span class="tag copy">${nNew} new</span>` : ''}</a>`;
-        }).join('') : `<div class="pad muted">No searches yet. <a href="#search">Search your first photos</a>.</div>`}
+  <div class="home3">
+    <div class="homecol">
+      <section class="card pad" style="display:flex;flex-direction:column;gap:10px">
+        <h2>Capture the page you were on</h2>
+        <p class="muted" style="margin:0;font-size:14px">Or click the PageProof icon on any page. The keyboard shortcut is <span class="kbd" id="shortcut">Alt+Shift+P</span>.</p>
+        <button class="btn primary" data-act="capturelast">${ic('capture', 18)} Capture it now</button>
       </section>
       <section class="card">
         <div class="pad row" style="border-bottom:1px solid var(--line)"><h2>Recent evidence</h2><a class="btn ghost" style="margin-left:auto" href="#library">Open the library</a></div>
@@ -154,13 +151,18 @@ V.home = async () => {
         </tbody></table></div>` : `<div class="pad muted">Nothing captured yet. Open a web page, click the PageProof icon, then <b>Capture this page</b>.</div>`}
       </section>
     </div>
-    <div style="flex:1 1 300px;display:flex;flex-direction:column;gap:20px">
-      ${fc.side}
-      <section class="card pad" style="display:flex;flex-direction:column;gap:10px">
-        <h2>Capture the page you were on</h2>
-        <p class="muted" style="margin:0;font-size:14px">Or click the PageProof icon on any page. The keyboard shortcut is <span class="kbd" id="shortcut">Alt+Shift+P</span>.</p>
-        <button class="btn primary" data-act="capturelast">${ic('capture', 18)} Capture it now</button>
+    <div class="homecol">
+      ${fc.main}
+      <section class="card">
+        <div class="pad row" style="border-bottom:1px solid var(--line)"><h2>Recent searches</h2><a class="btn ghost" style="margin-left:auto" href="#searches">All searches</a><a class="btn primary" href="#search">New search</a></div>
+        ${jobs.length ? jobs.map(j => {
+          const links = j.pics.reduce((a, p) => a + (p.links || []).length, 0), nNew = j.pics.reduce((a, p) => a + (p.links || []).filter(l => l.isNew).length, 0);
+          return `<a class="list-item" href="#searches" style="border-radius:0;padding:12px 22px;border-bottom:1px solid var(--line)"><img class="thumb" src="${esc(j.pics[0] && j.pics[0].thumb)}" width="64" height="44" alt=""><div style="min-width:0;flex:1"><b>${j.pics.length} ${j.pics.length === 1 ? 'photo' : 'photos'}${j.folder ? ' · daily 50' : ''}</b><div class="muted" style="font-size:13.5px">${fmtDate(j.created)} · ${links} links found</div></div>${nNew ? `<span class="tag copy">${nNew} new</span>` : ''}</a>`;
+        }).join('') : `<div class="pad muted">No searches yet. <a href="#search">Search your first photos</a>.</div>`}
       </section>
+    </div>
+    <div class="homecol">
+      ${fc.side}
       <section class="card pad" style="display:flex;flex-direction:column;gap:10px">
         <h2>Keep it handy</h2>
         <p class="muted" style="margin:0;font-size:14px">Pin the PageProof icon, and open the side panel to keep PageProof beside every website.</p>
@@ -463,6 +465,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Home lines up', 'The boxes on Home now sit in the same three columns as the three big cards at the top, so every edge lines up. On a narrow window they stack in one column.'],
   ['One PageProof folder', 'PageProof can now live in the same folder as your saved work: the program goes in Documents › PageProof › Install, and your finds, settings and lists stay in Documents › PageProof. PageProof never writes inside Install, and it refuses that folder if you pick it by mistake. From this version PageProof also keeps the same ID wherever its folder is, so moving or reinstalling it no longer loses what is stored in the browser.'],
   ['Symbols in the right-click menu', 'Every PageProof item in the right-click menu now starts with a small symbol, like 📸 Capture this page or 🔍 Find copies of it, so you can tell them apart at a glance.'],
   ['A red dot instead of a number', 'The PageProof icon in the toolbar now shows a small red dot in its top-right corner when new copies are waiting, so the logo stays visible. Hover the icon to see how many.'],
