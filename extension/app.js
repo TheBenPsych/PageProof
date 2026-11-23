@@ -187,6 +187,7 @@ async function homeFinds() {
   const alive = st && Date.now() - st.beat < 90000;
   const ds = await FC.driveState(false);
   let alerts = '';
+  if (k.on && !store.fcPause && st && st.state === 'closed' && typeof keepClosedBanner === 'function') alerts += keepClosedBanner();
   if (store.fcDriveOffline) alerts += `<div class="banner bad" role="alert">${ic('help', 22)}<div style="flex:1 1 260px"><b>Can't reach Google Drive. Searching is paused.</b><div style="font-size:13.5px;color:var(--ink)">Drive for desktop is signed out or not running. It picks up where it left off.</div></div><a class="btn" href="#keep">Keep searching</a></div>`;
   else if (ds === 'prompt') alerts += `<div class="banner warn" role="alert">${ic('help', 22)}<div style="flex:1 1 260px"><b>One click needed: let PageProof read your photos again</b></div><button class="btn primary" data-act="driveallow">Allow</button></div>`;
   const upd = await ppUpState();
@@ -198,8 +199,8 @@ async function homeFinds() {
     ${top.length ? top.map(([n, v]) => `<a href="#found?client=${encodeURIComponent(n)}" class="row" style="gap:10px;color:inherit;text-decoration:none;flex-wrap:nowrap"><span style="width:160px;flex-shrink:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n)}</span><span class="bar" style="flex:1"><i style="width:${v / max * 100}%;background:var(--copy)"></i></span><span class="num" style="width:40px;text-align:right">${v}</span></a>`).join('') : '<p class="muted" style="margin:0">Nothing new to review. Well done.</p>'}
   </section>`;
   const side = `<section class="card pad" style="display:flex;flex-direction:column;gap:8px">
-    <div class="row"><h2>Keep searching</h2><span class="tag ${k.on && !store.fcPause ? 'ok' : 'grey'}" style="margin-left:auto">${!k.on ? 'Off' : store.fcPause ? 'Paused' : alive ? 'On' : 'Starting'}</span></div>
-    <span class="muted" style="font-size:14px">${k.on && alive ? esc(st.text) : k.on ? 'The search window is starting.' : 'Turn it on to search all day.'}</span>
+    <div class="row"><h2>Keep searching</h2><span class="tag ${k.on && !store.fcPause ? 'ok' : 'grey'}" style="margin-left:auto">${!k.on ? 'Off' : store.fcPause ? 'Paused' : alive ? 'On' : st && st.state === 'closed' ? 'Stopped' : 'Starting'}</span></div>
+    <span class="muted" style="font-size:14px">${k.on && alive ? esc(st.text) : k.on && st && st.state === 'closed' ? 'Stopped: its pinned tab was closed.' : k.on ? 'The search tab is starting.' : 'Turn it on to search all day.'}</span>
     <span class="faint" style="font-size:13px">Today: ${today.searched} ${today.searched === 1 ? 'photo' : 'photos'} searched, ${today.found} new ${today.found === 1 ? 'copy' : 'copies'}</span>
     <a class="btn" href="#keep">Open Keep searching</a></section>
     <section class="card pad" style="display:flex;flex-direction:column;gap:8px"><h2>Still online?</h2>
@@ -462,6 +463,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Keep searching lives in a pinned tab', 'No more separate window or taskbar icon: Keep searching now runs in a small pinned PageProof tab that stays awake and closes with the browser. If you close that tab, Home and Keep searching show "Keep searching is stopped" with a Start it again button.'],
   ['The Keep searching window closes with the browser', 'When you close your last browser window, the small Keep searching window closes too, so nothing is left in the taskbar. It opens again, minimised, with your next browser window.'],
   ['Search tabs show the PageProof logo', 'The small pinned Google Lens, Yandex and Bing tabs now show the PageProof logo and name, so they are easy to tell apart from your own tabs. The red Google Drive bar also clears the moment you press Allow.'],
   ['A rule check before you mark Stolen', 'Pick what kind of site it is (company, church, public university, person, user-posted article and more). PageProof stops and asks before marking Stolen on uses that usually can\'t be pursued, like YouTube embeds or embeds from outside the U.S. You can still go ahead, or Remove it instead.'],

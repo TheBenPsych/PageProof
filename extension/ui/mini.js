@@ -8,7 +8,7 @@ const $ = id => document.getElementById(id);
 const appUrl = h => api.runtime.getURL('app.html#' + h);
 const canUse = tab => tab && /^(https?|file):/.test(tab.url || '');
 const NOT_HERE = 'PageProof can\'t work on this page. Browser pages (settings, new tab, the add-on store) are protected. Open a normal website and try again.';
-const STATE = { running: ['Searching', 'on'], waiting: ['Resting between photos', 'on'], idle: ['Nothing due', 'on'], off: ['Off', ''], paused: ['Paused', ''], hours: ['Outside your hours', ''],
+const STATE = { closed: ['Stopped: tab closed', ''], running: ['Searching', 'on'], waiting: ['Resting between photos', 'on'], idle: ['Nothing due', 'on'], off: ['Off', ''], paused: ['Paused', ''], hours: ['Outside your hours', ''],
   fifty: ['Paused for today\'s 50', 'warn'], offline: ['Google Drive offline', 'bad'], allow: ['Needs one click', 'warn'], busy: ['Computer busy', 'warn'], resting: ['Search sites resting', 'warn'], setup: ['Not set up', 'warn'] };
 
 function err(t) { const e = $('err'); e.textContent = t; e.hidden = !t; }
@@ -28,7 +28,7 @@ async function draw() {
     if (canUse(tab) && /^https?:/.test(tab.url)) here = await FC.siteFinds(RS_SITE.of(tab.url));
   } catch (e) { /* nothing found yet */ }
   const st = store.fcStatus, alive = st && Date.now() - st.beat < 90000;
-  const s = !k.on ? 'off' : store.fcPause ? 'paused' : alive ? st.state : 'waiting';
+  const s = !k.on ? 'off' : store.fcPause ? 'paused' : alive ? st.state : st && st.state === 'closed' ? 'closed' : 'waiting';
   const [label, dot] = STATE[s] || ['Starting', ''];
   const today = store.fcToday && store.fcToday.day === new Date().toDateString() ? store.fcToday : { searched: 0, found: 0 };
   const site = canUse(tab) && /^https?:/.test(tab.url) ? RS_SITE.of(tab.url) : '';

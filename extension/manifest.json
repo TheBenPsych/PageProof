@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PageProof",
-  "version": "4.4.2",
+  "version": "4.4.3",
   "description": "Capture web pages as evidence, and find copies of your clients' photos all day from Google Drive with Google Lens, Yandex and Bing. Evidence packs and reports with fingerprints and timestamps.",
   "icons": {
     "16": "icons/icon16.png",
