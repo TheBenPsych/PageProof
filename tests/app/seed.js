@@ -9,7 +9,7 @@ exports.seed = async (page) => {
     await RS_DB.put('handles', 'fcRoot', photosDir);
     const docs = await root.getDirectoryHandle('PageProof', { create: true });
     await RS_DB.put('handles', 'docs', docs);
-    await chrome.storage.local.set({ ppSetupDone: true, ppTourDone: true, ppSeenVersion: chrome.runtime.getManifest().version, fcDrive: { label: 'G:\\Shared drives\\Photos', done: true }, lastCase: { collector: 'Ben Tester' } });
+    await chrome.storage.local.set({ ppSetupDone: true, ppTourDone: true, ppSeenVersion: chrome.runtime.getManifest().version, ppReconnectVer: chrome.runtime.getManifest().version, fcDrive: { label: 'G:\\Shared drives\\Photos', done: true }, lastCase: { collector: 'Ben Tester' } });
     const clients = Array.from({ length: 30 }, (_, i) => 'Client ' + String.fromCharCode(65 + i % 26) + (i > 25 ? i : '') + ' Media');
     // a real small jpeg thumb ~8KB
     const c = new OffscreenCanvas(240, 160), x = c.getContext('2d');

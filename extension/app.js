@@ -462,6 +462,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Reconnect your folders after an update', 'The first time you open PageProof after an update, it checks your Google Drive photos folder and Documents › PageProof first, with an Allow or Pick again button right there if the browser needs one.'],
   ['When Google Drive isn\'t answering, PageProof says why', 'The red bar now shows what Drive actually answered, and has a "Pick the photos folder again" button. Pick the same top folder as before: your ticked folders and photos stay.'],
   ['Pages open fast again', 'Pages no longer wait for Google Drive. PageProof checks Drive in the background by asking for one of your ticked folders (not the whole shared drive list, which can take a minute), and only shows "Google Drive isn\'t answering" when it really doesn\'t answer.'],
   ['Pages open even when Google Drive is stuck', 'When Google Drive for desktop stopped answering, Home, Copies found, Clients and photos, Keep searching and Settings stayed blank while they waited for it. Now they wait 8 seconds at most, then open with a red "Google Drive isn\'t answering" bar and a Try again button.'],
@@ -507,6 +508,36 @@ const NEWS = [
   ['Hover help', 'Hover a word with a dotted underline to see what it means.'],
   ['Batch capture removed', 'It wasn\'t reliable. Capture pages one at a time from the icon or the right-click menu.'],
 ];
+// After every update: reconnect the folders first (the browser can lose its permission or its
+// link to a folder when PageProof is replaced). Ben's idea, 4.3.7.
+V.reconnect = async () => {
+  const rc = state.rc || {};
+  const row = (title, what, st, btns) => {
+    const look = st === 'ok' ? ['ok', 'Connected'] : st === 'checking' ? ['grey', 'Checking…'] : st === 'none' ? ['grey', 'Not set up'] : ['bad', 'Needs you'];
+    return `<div class="row" style="gap:14px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--line)"><div style="flex:1 1 260px;min-width:0"><b>${title}</b><div class="muted" style="font-size:13.5px">${what}</div></div><span class="tag ${look[0]}">${look[1]}</span>${st === 'ok' || st === 'checking' ? '' : btns}</div>`;
+  };
+  const d = rc.drive || 'checking', o = rc.docs || 'checking';
+  const driveRow = row('Your photos on Google Drive', d === 'prompt' ? 'Your browser wants one click before PageProof may read the photos again.' : d === 'offline' ? 'The browser lost its link to the folder. Pick the same top folder as before (for example H:\\Shared drives). Your ticked folders and photos stay.' + (rc.why ? '<br><span class="mono" style="font-size:12.5px">' + esc(rc.why) + '</span>' : '') : 'PageProof only ever reads this folder.',
+    d, d === 'prompt' ? '<button class="btn primary" data-act="driveallow">Allow</button>' : '<button class="btn primary" data-act="drivepick">Pick the folder again</button>');
+  const docsRow = row('Documents › PageProof', o === 'prompt' ? 'Your browser wants one click before PageProof may save its lists and backup there.' : o === 'none' ? 'Where PageProof keeps its lists and a backup of your settings. Pick (or make) a PageProof folder in Documents.' : 'Lists of hidden and approved sites, and a backup of your settings.',
+    o, o === 'prompt' ? '<button class="btn primary" data-act="docsallow">Allow</button>' : '<button class="btn primary" data-act="docschoose">Pick folder</button>');
+  const done = d === 'ok' && (o === 'ok' || o === 'none');
+  return `${head('Settings', 'Reconnect your folders', 'PageProof was updated to ' + VERSION + '. Browsers sometimes need you to allow the folders again after an update, so this is checked first.')}
+  <section class="card pad">${driveRow}${docsRow}
+    <div class="row" style="margin-top:16px;gap:10px">${done ? `<b style="color:var(--ok)">All connected.</b>` : ''}<button class="btn${done ? ' primary' : ''}" style="margin-left:auto" data-act="rcdone">${done ? 'Continue' : 'Skip for now'}</button></div></section>`;
+};
+V.reconnect.after = async () => {
+  if (state.rcBusy) return;
+  state.rcBusy = true;
+  try {
+    const was = JSON.stringify(state.rc || {});
+    const dr = (await FC.drive()).done ? await FC.driveStateSoft(true) : 'none';
+    const docs = await RS_DOCS.state();
+    const why = dr === 'offline' ? (((await api.storage.local.get('fcDriveWhy')).fcDriveWhy || {}).why || '') : '';
+    state.rc = { drive: dr === 'granted' ? 'ok' : dr, docs: docs === 'granted' ? 'ok' : docs, why };
+    if (JSON.stringify(state.rc) !== was && state.shown === 'reconnect') render(true);
+  } finally { state.rcBusy = false; }
+};
 V.whatsnew = async () => `${head('Settings', 'What\'s new in PageProof ' + VERSION, 'Shown once after each update. Your captures, settings and lists carry over.')}
   <section class="card" style="overflow:hidden">${NEWS.map(([t, d]) => `<div class="row" style="padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:nowrap;gap:14px"><span class="newbadge" style="margin:0">New</span><span><b>${t}</b><br><span class="muted" style="font-size:14px">${d}</span></span></div>`).join('')}</section>
   <button class="btn primary" style="align-self:flex-start" data-act="newsseen">Got it</button>`;
@@ -646,11 +677,12 @@ async function act(a, v, el) {
     toast('Your settings are back. Connect your photos again in Clients and photos to pick up where you left off.');
     render(true);
   }
+  else if (a === 'rcdone') { await api.storage.local.set({ ppReconnectVer: VERSION }); state.rc = null; location.hash = 'home'; }
   else if (a === 'newsseen') { await api.storage.local.set({ ppSeenVersion: VERSION }); location.hash = 'home'; }
   else if (a === 'setup') {
     const n = document.getElementById('suName');
     if (n) await setName(n.value.trim());
-    if (v === 'done') { await api.storage.local.set({ ppSetupDone: true, ppSeenVersion: VERSION }); state.setup = 0; location.hash = 'home'; if (!(await api.storage.local.get('ppTourDone')).ppTourDone) setTimeout(() => act('tour'), 300); return; }
+    if (v === 'done') { await api.storage.local.set({ ppSetupDone: true, ppSeenVersion: VERSION, ppReconnectVer: VERSION }); state.setup = 0; location.hash = 'home'; if (!(await api.storage.local.get('ppTourDone')).ppTourDone) setTimeout(() => act('tour'), 300); return; }
     state.setup = Math.max(0, Math.min(SETUP.length - 1, state.setup + Number(v)));
     render(true);
   }
@@ -679,8 +711,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const lists = RS_LISTS.load().catch(() => {}).then(() => { listsIn = true; });
   await Promise.race([lists, new Promise(r => setTimeout(r, 3000))]);
   if (!listsIn) lists.then(() => render(true));
-  const st = await api.storage.local.get(['ppSetupDone']);
+  const st = await api.storage.local.get(['ppSetupDone', 'ppReconnectVer', 'fcDrive']);
   if (!st.ppSetupDone && (!location.hash || location.hash === '#home')) location.hash = 'setup';
+  // First time the full page opens after an update: check the folders before anything else.
+  else if (st.ppSetupDone && st.ppReconnectVer !== VERSION && st.fcDrive && st.fcDrive.done && !/^#(setup|reconnect)/.test(location.hash)) location.hash = 'reconnect';
   render();
   // One time after an update: preview pictures move to their own small database.
   // 4.1 kept a link to PageProof's own folder for the old self-updater. That is gone; forget the folder.
