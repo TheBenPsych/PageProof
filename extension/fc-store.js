@@ -998,7 +998,10 @@ const FC = (() => {
   function useOf(c) {
     const site = c.site || '';
     let ih = ''; try { ih = c.img && /^https?:/.test(c.img) ? new URL(c.img).hostname.replace(/^www\./, '') : ''; } catch (e) { /* none */ }
-    if (SOCIAL.test(site) || CDN_SOCIAL.test(ih)) return 'social';
+    // 4.9: social = the page itself is on a social site. A website showing an Instagram or X post
+    // stays a website copy (Websites tab); its embedded post's account is read from its page.
+    if (typeof PP_SOCIAL !== 'undefined' ? PP_SOCIAL.isSocial(site) : SOCIAL.test(site)) return 'social';
+    if (CDN_SOCIAL.test(ih) && typeof PP_SOCIAL === 'undefined') return 'social';
     if (SHOP.test(site) || /\/(products?|shop|store|item|listing|buy)\//i.test(c.url || '') || /\.shop$|\.store$/.test(site)) return 'shop';
     if (!ih) return 'unknown';
     if (baseOf(ih) === baseOf(site) || /(wp\.com|cloudfront\.net|akamaized\.net|cloudinary\.com|imgix\.net|squarespace-cdn\.com|wixstatic\.com|shopify\.com|ggpht\.com|googleusercontent\.com|bp\.blogspot\.com|amazonaws\.com|fastly|cdn\.)/.test(ih)) return 'copied';
@@ -1033,7 +1036,67 @@ const FC = (() => {
     const hidden = st.rsHidden || [], countries = st.fcHiddenCountries || [];
     const fresh = (await allCopies()).filter(c => c.status === 'new');
     if (!hidden.length && !countries.length) return fresh.length;
-    return fresh.filter(c => !(typeof RS_SITE !== 'undefined' && RS_SITE.entryFor(c.site, c.url, hidden)) && !countries.includes(c.country || countryOf(c.site))).length;
+    return fresh.filter(c => !hiddenCopy(c, hidden) && !countries.includes(c.country || countryOf(c.site))).length;
+  }
+  // Is this copy on a hidden site, or posted by a hidden account? (4.9: an Instagram /p/ link has
+  // no account in it, so "Hide this account" is matched against the account PageProof found.)
+  function hiddenCopy(c, list) {
+    if (typeof RS_SITE === 'undefined') return false;
+    list = list || (typeof RS_LISTS !== 'undefined' ? RS_LISTS.hidden : []);
+    if (RS_SITE.entryFor(c.site, c.url, list)) return true;
+    const k = c.acct && c.acct.key;
+    return !!k && (list.includes(k) || list.includes(RS_SITE.tidy(k)));
+  }
+  // Is this account approved (for every client, or for this copy's client)?
+  function acctApproved(acct, client) {
+    if (!acct || !acct.key) return '';
+    try { if (RS_LISTS.allowed.includes(acct.key)) return 'all'; } catch (e) { /* lists not loaded */ }
+    if (client && (client.licensedAcc || []).includes(acct.key)) return 'client';
+    return '';
+  }
+  // Approve one account (4.9): like Approve site, but only that account's posts.
+  async function approveAccount(acct, client, alsoId) {
+    let had = false;
+    if (client) {
+      const c = (await DB.get('clients', client)) || { name: client, searching: null, priority: false, photos: 0 };
+      const s = new Set(c.licensedAcc || []); had = s.has(acct.key); s.add(acct.key); c.licensedAcc = [...s];
+      await DB.put('clients', c); backupSoon();
+    } else { await RS_LISTS.load(); had = RS_LISTS.allowed.includes(acct.key); await RS_LISTS.add('allowed', acct.key); }
+    const ids = (await DB.by('copies', 'status', 'new')).filter(c => c.acct && c.acct.key === acct.key && (!client || c.client === client)).map(c => c.id);
+    if (alsoId && !ids.includes(alsoId)) ids.push(alsoId);
+    const undoAns = ids.length ? await answer(ids, 'licensed', { auto: client ? 'Approved account for this client' : 'Approved account for every client' }) : null;
+    touch('approved');
+    return async () => {
+      if (undoAns) await undoAns();
+      if (!had) {
+        if (client) { const c = await DB.get('clients', client); if (c) { c.licensedAcc = (c.licensedAcc || []).filter(k => k !== acct.key); await DB.put('clients', c); backupSoon(); } }
+        else { await RS_LISTS.load(); await RS_LISTS.remove('allowed', acct.key); }
+      }
+      touch('approved');
+    };
+  }
+  // Save the account found for a copy (and, when you typed it, keep it for the backup too).
+  async function setAcct(id, acct, post) {
+    const c = await DB.get('copies', id);
+    if (!c) return null;
+    const before = { acct: c.acct, post: c.post, acctTry: c.acctTry };
+    if (acct) c.acct = acct; else if (acct === null) delete c.acct;
+    if (post) c.post = { ...(c.post || {}), ...post };
+    c.acctTry = Date.now();
+    // An account you already approved: its copy is licensed straight away.
+    if (c.acct && c.status === 'new') {
+      const cl = c.client ? await DB.get('clients', c.client) : null;
+      const ok = acctApproved(c.acct, cl);
+      if (ok) { c.status = 'licensed'; c.answered = new Date().toISOString(); c.auto = ok === 'all' ? 'Approved account for every client' : 'Approved account for this client'; }
+    }
+    await DB.put('copies', c);
+    if (acct && (acct.from === 'you' || acct.from === 'browser')) {
+      const m = (await meta.get('acctKept')) || {};
+      m[c.key || c.url] = { key: acct.key, handle: acct.handle, url: acct.url, plat: acct.plat, from: acct.from };
+      await meta.set('acctKept', m); backupSoon();
+    }
+    touch('acct');
+    return async () => { const x = await DB.get('copies', id); if (!x) return; for (const k of Object.keys(before)) { if (before[k] === undefined) delete x[k]; else x[k] = before[k]; } await DB.put('copies', x); touch('acct'); };
   }
   // Is this website in your finds? Read from a small list (site -> how many copies), so the
   // toolbar menu and side panel never have to read every copy.
@@ -1087,6 +1150,10 @@ const FC = (() => {
         if (lic.has(baseOf(l.site)) || lic.has(l.site)) { n.status = 'licensed'; n.auto = 'Approved site for this client'; }
         else if (approvedForAll(l.site)) { n.status = 'licensed'; n.auto = 'Approved site for every client'; }
         n.country = countryOf(l.site); n.use = useOf(n);
+        if (n.use === 'social' && typeof PP_SOCIAL !== 'undefined') {
+          const a = PP_SOCIAL.fromUrl(n.url);
+          if (a) { n.acct = { ...a, from: 'link', sure: 'sure' }; if (n.status === 'new') { const ok = acctApproved(n.acct, client); if (ok) { n.status = 'licensed'; n.auto = ok === 'all' ? 'Approved account for every client' : 'Approved account for this client'; } } }
+        }
         out.push(n); fresh++;
       }
     }
@@ -1538,6 +1605,7 @@ const FC = (() => {
     if ((await DB.count('copies')) > 0) return 0;
     const t = await RS_DOCS.readText('found-copies.txt');
     if (!t) return 0;
+    const acctKept = await meta.get('acctKept');
     const out = [];
     for (const line of t.split(/\r?\n/)) {
       if (!line || line.startsWith('#')) continue;
@@ -1546,6 +1614,10 @@ const FC = (() => {
       const key = RS_UTIL.key(url);
       out.push({ id: photo + '|' + key, photo, client, url, key, site: RS_SITE.of(url), title: '', thumb: '', img: /^https?:\/\//.test(img || '') ? img : '', engines: [], pct: pct === '' ? null : +pct, match: 'same', firstSeen: first, lastSeen: last, times: 1, status: status || 'new', online: online || 'up', restored: true, photoName });
       const r = out[out.length - 1]; r.country = countryOf(r.site); r.use = useOf(r);
+      // 4.9: the account comes back from the link, or from the accounts you typed or found in your browser.
+      const kept = (acctKept || {})[key];
+      const a = kept ? { ...kept, sure: 'sure' } : (r.use === 'social' && typeof PP_SOCIAL !== 'undefined' ? PP_SOCIAL.fromUrl(url) : null);
+      if (a) r.acct = kept ? a : { ...a, from: 'link', sure: 'sure' };
     }
     await DB.putMany('copies', out);
     siteIndexSoon();
@@ -1565,13 +1637,14 @@ const FC = (() => {
     return list;
   }
   async function settingsSnapshot() {
-    const st = await api.storage.local.get(['lastCase', 'ppTheme', 'rsSettings', 'fcKeep', 'fcDrive', 'fcHiddenCountries', 'ppHw']);
+    const st = await api.storage.local.get(['lastCase', 'ppTheme', 'rsSettings', 'fcKeep', 'fcDrive', 'fcHiddenCountries', 'ppHw', 'ppSocialSites']);
     const clients = await DB.all('clients');
     const flags = await flagList();
     const regs = Object.fromEntries(Object.entries((await meta.get('regs')) || {}).filter(([, v]) => v.manual));
     return { app: 'PageProof', version: api.runtime.getManifest().version, saved: new Date().toISOString(), name: (st.lastCase || {}).collector || '', theme: st.ppTheme || 'light',
       search: st.rsSettings || null, keep: st.fcKeep || null, drive: st.fcDrive || null, hiddenCountries: st.fcHiddenCountries || [], hardware: st.ppHw || null,
-      clients: clients.map(c => ({ name: c.name, searching: c.searching, priority: !!c.priority, licensed: c.licensed || [] })), flags, regs, picked: await picked() };
+      clients: clients.map(c => ({ name: c.name, searching: c.searching, priority: !!c.priority, licensed: c.licensed || [], licensedAcc: c.licensedAcc || [] })), flags, regs, picked: await picked(),
+      socialSites: st.ppSocialSites || {}, accounts: (await meta.get('acctKept')) || {}, acctLinks: (await meta.get('acctLinks')) || [] };
   }
   async function writeSettings() {
     try { await RS_DOCS.writeText('pageproof-settings.json', JSON.stringify(await settingsSnapshot(), null, 1)); await api.storage.local.set({ ppBackupAt: new Date().toISOString() }); } catch (e) { /* folder not set up */ }
@@ -1595,9 +1668,12 @@ const FC = (() => {
     }
     if (j.drive && typeof j.drive === 'object') set.fcDrive = { label: str(j.drive.label) || 'G:\\Shared drives\\Photos', done: false };
     if (Array.isArray(j.hiddenCountries)) set.fcHiddenCountries = j.hiddenCountries.map(str).filter(Boolean);
+    if (j.socialSites && typeof j.socialSites === 'object') set.ppSocialSites = Object.fromEntries(Object.entries(j.socialSites).filter(([k, v]) => typeof k === 'string' && (v === 'social' || v === 'web')).map(([k, v]) => [k.slice(0, 200), v]));
     if (j.hardware && typeof j.hardware === 'object') set.ppHw = { choice: ['auto', 'Light', 'Normal', 'Strong'].includes(j.hardware.choice) ? j.hardware.choice : 'auto' };
     await api.storage.local.set(set);
-    if (Array.isArray(j.clients)) await DB.putMany('clients', j.clients.filter(c => c && typeof c.name === 'string').map(c => ({ name: tidyClient(c.name), searching: c.searching === true ? true : c.searching === false ? false : null, priority: !!c.priority, licensed: Array.isArray(c.licensed) ? c.licensed.map(str) : [], photos: 0 })));
+    if (Array.isArray(j.clients)) await DB.putMany('clients', j.clients.filter(c => c && typeof c.name === 'string').map(c => ({ name: tidyClient(c.name), searching: c.searching === true ? true : c.searching === false ? false : null, priority: !!c.priority, licensed: Array.isArray(c.licensed) ? c.licensed.map(str) : [], licensedAcc: Array.isArray(c.licensedAcc) ? c.licensedAcc.map(str) : [], photos: 0 })));
+    if (j.accounts && typeof j.accounts === 'object') { const a = {}; for (const [k, v] of Object.entries(j.accounts)) if (v && typeof v.key === 'string') a[str(k)] = { key: str(v.key), handle: str(v.handle), url: /^https?:\/\//.test(v.url || '') ? str(v.url) : '', plat: str(v.plat), from: v.from === 'browser' ? 'browser' : 'you' }; await meta.set('acctKept', a); }
+    if (Array.isArray(j.acctLinks)) await meta.set('acctLinks', j.acctLinks.filter(Array.isArray).map(g => g.filter(k => typeof k === 'string').map(str)).filter(g => g.length > 1));
     if (Array.isArray(j.picked)) await meta.set('picked', j.picked.filter(r => typeof r === 'string' && r && !r.split('/').includes('..')).map(r => r.slice(0, 1000)));
     if (Array.isArray(j.flags)) await meta.set('pendingFlags', j.flags.filter(f => Array.isArray(f) && typeof f[0] === 'string').map(f => [f[0].slice(0, 2000), ['hi', 'pop'].includes(f[1]) ? f[1] : '', f[2] ? 1 : 0]));
     if (j.regs && typeof j.regs === 'object') { const regs = (await meta.get('regs')) || {}; for (const [k, v] of Object.entries(j.regs)) if (v && typeof v === 'object') regs[str(k)] = { va: str(v.va), app: str(v.app), from: 'Typed in by you for this folder', manual: true }; await meta.set('regs', regs); }
@@ -1615,7 +1691,7 @@ const FC = (() => {
 
   return { DB, meta, open, touch, pics, dropDotMatches, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, setPicked, pickInside, SCAN, applyPendingFlags, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
-    photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, setClientOf, setFlag, setClients, checkOnline, logWeek, week, weekKey,
+    photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setClients, checkOnline, logWeek, week, weekKey,
     isPool, hiddenCountries, setHiddenCountries, ownerFor, pathOf, logReport, USE, useOf, riskOf, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
     backupSoon, backupCopiesSoon, writeSettings, writeCopies, readBackup, restore, restoreCopies, settingsSnapshot, monthsOld, newness, yearOf, quarterOf, dayOf };
 })();
