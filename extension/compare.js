@@ -9,6 +9,11 @@ const BLUE = '#2563eb', ORANGE = '#f59e0b';
 let WS = 1;                                 // working scale (big photos are drawn smaller)
 let PADX = 0, PADY = 0;                     // room around the original to slide the copy aside
 let scoreInfo = null, fading = false, busyAnim = false;
+let CH = null;                              // which parts are the same photo / changed (PP_ALIGN.changes)
+let showChg = true;                         // "Show changes" switch
+let spots = [];                             // spots compared on their own: { box, res }
+let spotMode = false, spotFrom = null, spotNow = null;
+let nearby = null;                          // nearby shots checked: [{ name, blob, lines, strength, same }]
 
 const setStatus = (t, err) => { $('status').textContent = t || ''; $('status').className = err ? 'error' : ''; };
 const pad2 = n => String(n).padStart(2, '0');
@@ -32,7 +37,8 @@ async function setPicture(k, blob, name, src) {
   const img = document.createElement('img'); img.src = URL.createObjectURL(blob); slot.querySelector('.th').append(img);
   slot.querySelector('.nm').textContent = P[k].name + ' · ' + bitmap.width + ' × ' + bitmap.height;
   slot.querySelector('.nm').title = (src || name || '') + '\nSHA-256 ' + P[k].sha;
-  scoreInfo = null; $('score').hidden = true;
+  scoreInfo = null; CH = null; spots = []; renderSpots(); $('score').hidden = true;
+  if (nearby) renderNearby();
   if (P.A && P.B) start(); else setStatus(k === 'A' ? 'Now add the copy (box 2).' : 'Now add the original (box 1).');
 }
 for (const k of ['A', 'B']) {
@@ -69,7 +75,7 @@ function start() {
   // Start with the copy stretched to the original's width, at the top left.
   T = PP_ALIGN.place({ s: A.width / B.width });
   $('empty').hidden = true; view.hidden = false; $('hint').hidden = false;
-  for (const id of ['auto', 'opacity', 'aside', 'fade', 'smaller', 'bigger', 'sPdf', 'sPng', 'sVid', 'shSize', 'shW', 'shH', 'shR', 'shFlip', 'shReset']) $(id).disabled = false;
+  for (const id of ['auto', 'showChg', 'spotBtn', 'opacity', 'aside', 'fade', 'smaller', 'bigger', 'sPdf', 'sPng', 'sVid', 'shSize', 'shW', 'shH', 'shR', 'shFlip', 'shReset']) $(id).disabled = false;
   if (!window.MediaRecorder || !view.captureStream) { $('sVid').disabled = true; $('sVid').title = 'This browser cannot record video'; }
   setStatus('Click "Line them up automatically", or drag the copy into place yourself.');
   draw();
@@ -143,6 +149,8 @@ function paint(ctx, W, H, k, o, m, opts = {}) {
     PP_ALIGN.drawCopy(ctx, B, T, k, ox, oy);
     ctx.globalAlpha = 1;
   }
+  if (opts.changes !== false && showChg && CH) drawChanges(ctx, k, ox, oy);
+  if (opts.spots !== false && spots.length) drawSpots(ctx, k, ox, oy);
   if (opts.edges !== false) {
     // The original gets a solid blue edge, the copy a dashed orange one, matching their labels.
     ctx.lineWidth = Math.max(2, 3 * k * 1.5);
@@ -156,6 +164,36 @@ function paint(ctx, W, H, k, o, m, opts = {}) {
     const bl = PP_ALIGN.mapPoint(T, B, T.flip ? B.width : 0, B.height);   // the copy's bottom-left corner as shown
     if (m !== 'diff') label(ctx, m === 'tint' ? 'COPY' : 'COPY ' + Math.round(o * 100) + '%', (ox + bl.x) * k + 6, (oy + bl.y) * k - 6 - Math.max(18, 26 * k * 1.5), ORANGE, k);
   }
+  ctx.restore();
+}
+// Red tint over the parts that were added or redrawn, and a green line round the part that
+// is the same photo (see changes() in align.js).
+function drawChanges(ctx, k, ox, oy) {
+  const { gw, gh, cell, reg } = CH, u = cell * k, at = (i, j) => (i < 0 || j < 0 || i >= gw || j >= gh) ? 0 : reg[j * gw + i];
+  ctx.save();
+  ctx.beginPath();
+  for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) if (at(i, j) === 2) ctx.rect((ox * k + i * u), (oy * k + j * u), u + 0.6, u + 0.6);
+  ctx.fillStyle = 'rgba(252,66,74,0.30)'; ctx.fill();
+  ctx.beginPath();
+  for (let j = 0; j <= gh; j++) for (let i = 0; i <= gw; i++) for (const [di, dj] of [[1, 0], [0, 1]]) {
+    if ((at(i, j) === 1) === (at(i - di, j - dj) === 1)) continue;
+    const x = ox * k + i * u, y = oy * k + j * u;
+    ctx.moveTo(x, y); if (di) ctx.lineTo(x, y + u); else ctx.lineTo(x + u, y);
+  }
+  ctx.lineCap = 'round';
+  ctx.lineWidth = Math.max(3, 6 * k * 1.4); ctx.strokeStyle = '#ffffff'; ctx.stroke();
+  ctx.lineWidth = Math.max(2, 3 * k * 1.4); ctx.strokeStyle = '#00B84F'; ctx.stroke();
+  ctx.restore();
+}
+function drawSpots(ctx, k, ox, oy) {
+  ctx.save();
+  spots.forEach((sp, n) => {
+    const b = sp.box, x = (ox + b.x) * k, y = (oy + b.y) * k;
+    ctx.lineWidth = Math.max(3, 5 * k * 1.4); ctx.strokeStyle = '#ffffff'; ctx.strokeRect(x, y, b.w * k, b.h * k);
+    ctx.lineWidth = Math.max(2, 3 * k * 1.4); ctx.strokeStyle = '#f59e0b'; ctx.strokeRect(x, y, b.w * k, b.h * k);
+    label(ctx, String(n + 1), x, y - Math.max(18, 26 * k * 1.5) - 2, '#f59e0b', k);
+  });
+  if (spotNow) { const b = spotNow; ctx.setLineDash([6, 4]); ctx.lineWidth = 2; ctx.strokeStyle = '#f59e0b'; ctx.strokeRect((ox + b.x) * k, (oy + b.y) * k, b.w * k, b.h * k); }
   ctx.restore();
 }
 function label(ctx, text, x, y, color, k) {
@@ -186,18 +224,46 @@ function describeShape() {
 
 // ---------- moving the copy by hand ----------
 let dragFrom = null;
+// Where a pointer event lands on the original, in the original's pixels.
+function toOrig(e) {
+  const r = view.getBoundingClientRect(), k = view.width / r.width;
+  return { x: (e.clientX - r.left) * k / WS - PADX, y: (e.clientY - r.top) * k / WS - PADY };
+}
 view.addEventListener('pointerdown', e => {
   if (mode === 'side') return;
+  if (spotMode) { view.setPointerCapture(e.pointerId); spotFrom = toOrig(e); return; }
   view.setPointerCapture(e.pointerId); view.classList.add('drag');
   dragFrom = { x: e.clientX, y: e.clientY, tx: T.x, ty: T.y };
 });
 view.addEventListener('pointermove', e => {
+  if (spotFrom) {
+    const q = toOrig(e);
+    spotNow = { x: Math.min(spotFrom.x, q.x), y: Math.min(spotFrom.y, q.y), w: Math.abs(q.x - spotFrom.x), h: Math.abs(q.y - spotFrom.y) };
+    draw(); return;
+  }
   if (!dragFrom) return;
   const k = view.width / view.getBoundingClientRect().width / WS;   // screen pixels -> original's pixels
   T.x = dragFrom.tx + (e.clientX - dragFrom.x) * k;
   T.y = dragFrom.ty + (e.clientY - dragFrom.y) * k;
   draw();
 });
+function endSpot(e) {
+  const A = P.A.bitmap, q = toOrig(e), from = spotFrom; spotFrom = null; spotNow = null;
+  let box = { x: Math.min(from.x, q.x), y: Math.min(from.y, q.y), w: Math.abs(q.x - from.x), h: Math.abs(q.y - from.y) };
+  const minSide = Math.max(A.width, A.height) * 0.02;
+  if (box.w < minSide || box.h < minSide) {          // a click: a square about a tenth of the picture
+    const s = Math.round(Math.max(A.width, A.height) * 0.1);
+    box = { x: q.x - s / 2, y: q.y - s / 2, w: s, h: s };
+  }
+  box.x = Math.max(0, Math.min(A.width - 8, box.x)); box.y = Math.max(0, Math.min(A.height - 8, box.y));
+  box.w = Math.min(box.w, A.width - box.x); box.h = Math.min(box.h, A.height - box.y);
+  for (const key of ['x', 'y', 'w', 'h']) box[key] = Math.round(box[key]);
+  setSpotMode(false);
+  if (box.w < 8 || box.h < 8) { draw(); return setStatus('Pick a spot on the original (inside the blue edge).', true); }
+  const sp = { box }; spots.push(sp); measureSpot(sp); renderSpots(); draw();
+  setStatus('Spot ' + spots.length + ' added. It is cut from both pictures and compared on its own (see "Compare a spot" on the left). It goes in the PDF too.');
+}
+view.addEventListener('pointerup', e => { if (spotFrom) endSpot(e); });
 const endDrag = () => { if (dragFrom) { dragFrom = null; view.classList.remove('drag'); rescore(); } };
 view.addEventListener('pointerup', endDrag);
 view.addEventListener('pointercancel', endDrag);
@@ -231,6 +297,7 @@ $('shFlip').onchange = () => reshape({ flip: $('shFlip').checked });
 $('shReset').onclick = () => reshape({ w: 1, h: 1, r: 0, k: 0, flip: false });
 $('smaller').onclick = () => resize(1 / 1.01);
 $('bigger').onclick = () => resize(1.01);
+$('showChg').onchange = () => { showChg = $('showChg').checked; draw(); };
 $('opacity').oninput = () => { opacity = $('opacity').value / 100; if (mode === 'diff' || mode === 'tint') setMode('overlay'); draw(); };
 function setMode(m) { mode = m; for (const b of $('modes').children) b.classList.toggle('on', b.dataset.mode === m); draw(); }
 for (const b of $('modes').children) b.onclick = () => setMode(b.dataset.mode);
@@ -261,6 +328,98 @@ $('fade').onclick = async () => {
   }
   opacity = keep; $('opacity').value = Math.round(keep * 100); draw();
 };
+
+// ---------- comparing one spot (a face, a logo) on its own ----------
+function setSpotMode(on) {
+  spotMode = on; $('spotBtn').classList.toggle('on', on); view.classList.toggle('spotting', on);
+  $('spotBtn').textContent = on ? '✖ Cancel picking' : '🔍 Pick a spot';
+  if (on) { if (mode === 'side') setMode('overlay'); setStatus('Click a face or detail on the picture, or drag a box round it.'); }
+}
+$('spotBtn').onclick = () => setSpotMode(!spotMode);
+addEventListener('keydown', e => { if (e.key === 'Escape' && spotMode) { setSpotMode(false); spotFrom = null; spotNow = null; draw(); } });
+// 90%+ unchanged, 75-90% the same with small changes (expression, small move), below 75% redrawn.
+function spotWords(res) {
+  if (!res || res.outside) return { cls: 'mid', pct: '–', word: 'The copy doesn\'t cover this spot' };
+  if (res.flat) return { cls: 'mid', pct: '–', word: 'Too plain to judge' };
+  const pct = Math.round(res.r * 100), px = Math.round(Math.hypot(res.dx, res.dy));
+  const moved = px <= Math.max(3, Math.max(P.A.bitmap.width, P.A.bitmap.height) * 0.004) ? 'Not moved' : 'Moved about ' + px + ' px (' + (px / P.A.bitmap.width * 100).toFixed(1) + '% of the width)';
+  return res.r >= 0.9 ? { cls: 'ok', pct: pct + '%', word: 'Unchanged', moved }
+    : res.r >= 0.75 ? { cls: 'mid', pct: pct + '%', word: 'Same, small changes', moved }
+    : { cls: 'bad', pct: pct + '%', word: 'Redrawn or different', moved };
+}
+function measureSpot(sp) { sp.res = P.A && P.B ? PP_ALIGN.spot(P.A.bitmap, P.B.bitmap, T, sp.box) : null; }
+// A cut-out of one spot: from the original, or from the lined-up copy (where it moved to).
+function spotCrop(sp, which, size) {
+  const b = sp.box, k = size / Math.max(b.w, b.h);
+  const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(b.w * k)); c.height = Math.max(1, Math.round(b.h * k));
+  const ctx = c.getContext('2d'); ctx.imageSmoothingQuality = 'high';
+  ctx.fillStyle = '#e5e7eb'; ctx.fillRect(0, 0, c.width, c.height);
+  if (which === 'A') ctx.drawImage(P.A.bitmap, -b.x * k, -b.y * k, P.A.bitmap.width * k, P.A.bitmap.height * k);
+  else { const r = sp.res || {}; PP_ALIGN.drawCopy(ctx, P.B.bitmap, T, k, -(b.x + (r.dx || 0)), -(b.y + (r.dy || 0))); }
+  return c;
+}
+function renderSpots() {
+  const list = $('spotList'); list.innerHTML = '';
+  spots.forEach((sp, n) => {
+    const w = spotWords(sp.res), row = document.createElement('div'); row.className = 'spot';
+    const no = document.createElement('span'); no.className = 'no'; no.textContent = n + 1;
+    const ca = spotCrop(sp, 'A', 92), cb = spotCrop(sp, 'B', 92); ca.title = 'Original'; cb.title = 'Copy';
+    const t = document.createElement('div'); t.innerHTML = '<b></b><span></span><br><small></small>';
+    t.querySelector('b').textContent = w.pct; t.querySelector('b').className = w.cls;
+    t.querySelector('span').textContent = w.word; t.querySelector('span').className = w.cls;
+    t.querySelector('small').textContent = w.moved || '';
+    const x = document.createElement('button'); x.className = 'x'; x.textContent = '✕'; x.title = 'Remove this spot';
+    x.onclick = () => { spots.splice(n, 1); renderSpots(); draw(); };
+    row.append(no, ca, cb, t, x); list.append(row);
+  });
+}
+
+// ---------- nearby shots: which of several originals did the copy come from? ----------
+// Photographers often take many shots of one scene a second apart. Each one is lined up with the
+// copy; the one that lines up best is the source, but only if it is clearly ahead of the rest.
+$('nearBtn').querySelector('input').onchange = async e => {
+  const files = [...e.target.files]; e.target.value = '';
+  if (!files.length) return;
+  if (!P.B) return setStatus('Add the copy first (box 2), then check nearby shots.', true);
+  $('nearBtn').classList.add('busy');
+  nearby = [];
+  for (let i = 0; i < files.length; i++) {
+    setStatus('Checking shot ' + (i + 1) + ' of ' + files.length + ': ' + files[i].name + '...');
+    let bm; try { bm = await createImageBitmap(files[i]); } catch (err) { nearby.push({ name: files[i].name, blob: files[i], bad: true }); continue; }
+    const best = await PP_ALIGN.align(bm, P.B.bitmap);
+    const C = best ? PP_ALIGN.changes(bm, P.B.bitmap, best) : null;
+    nearby.push({ name: files[i].name, blob: files[i], lines: best ? best.sc.lines : 0, strength: best ? best.sc.strength : 0, same: C ? C.sameShare : 0, untouched: C ? C.untouchedLines : 0 });
+    try { bm.close(); } catch (err) { /* freed */ }
+  }
+  nearby.sort((a, b) => (b.lines || 0) - (a.lines || 0));
+  $('nearBtn').classList.remove('busy');
+  const w = nearby[0];
+  if (!w || !w.lines || w.lines < 0.15) { renderNearby(); return setStatus('None of these shots lines up with the copy.', true); }
+  await setPicture('A', w.blob, w.name);
+  renderNearby();
+  setTimeout(() => { if (!$('auto').disabled) $('auto').click(); }, 200);
+};
+function nearbyVerdict() {
+  const [a, b] = nearby;
+  if (!a || !a.lines || a.lines < 0.15) return 'None of these shots lines up with the copy.';
+  if (!b || b.bad || a.lines - (b.lines || 0) >= 0.05) return 'The copy most likely came from ' + a.name + '.';
+  return 'Too close to call between ' + a.name + ' and ' + b.name + '. Compare a spot (a face) on each to decide.';
+}
+function renderNearby() {
+  const box = $('nearby'); box.hidden = !nearby; if (!nearby) return;
+  box.innerHTML = '<h3>Nearby shots</h3><div class="say"></div>';
+  box.querySelector('.say').textContent = nearbyVerdict();
+  nearby.forEach((r, n) => {
+    const row = document.createElement('div'); row.className = 'nr' + (n === 0 && r.lines >= 0.15 ? ' win' : '');
+    const nm = document.createElement('span'); nm.textContent = r.name; nm.title = r.name;
+    const pc = document.createElement('b'); pc.textContent = r.bad ? 'not a picture' : Math.round(r.lines * 100) + '%';
+    const use = document.createElement('button'); use.className = 'pickbtn';
+    const cur = P.A && P.A.name === r.name;
+    use.textContent = cur ? 'In box 1' : 'Use'; use.disabled = cur || r.bad;
+    use.onclick = async () => { await setPicture('A', r.blob, r.name); setTimeout(() => { if (!$('auto').disabled) $('auto').click(); }, 200); };
+    row.append(nm, pc, use); box.append(row);
+  });
+}
 
 // ---------- lining up automatically ----------
 // The work is done in align.js (PP_ALIGN): it finds matching details in both pictures,
@@ -300,26 +459,54 @@ async function rescore() {
   const S = PP_ALIGN.score(P.A.bitmap, P.B.bitmap, T);
   const pct = Math.round(S.lines * 100), strength = Math.round(S.strength * 100);
   const enough = S.matched >= 25;
-  const verdict = (S.overlap < 0.1 && S.overlapA < 0.05) || S.textured + S.flat < 6 ? ['bad', 'The copy is mostly off the original', 'Line them up first.']
+  const off = (S.overlap < 0.1 && S.overlapA < 0.05) || S.textured + S.flat < 6;
+  // Which parts are the same photo and which were added or redrawn (green / red on the picture).
+  // Different photos get (almost) no green, so this never turns a non-match into a match.
+  CH = off ? null : PP_ALIGN.changes(P.A.bitmap, P.B.bitmap, T);
+  const same = CH ? Math.round(CH.sameShare * 100) : 0, unt = CH ? Math.round(CH.untouchedLines * 100) : 0;
+  // Heavily edited: a solid part is clearly the same photo (strong, many matching squares), and a
+  // big part was painted over or redrawn (an added object, redrawn faces, a headline band).
+  const heavy = CH && enough && S.strength >= 0.75 && CH.sameShare >= 0.2 && CH.untouchedLines >= 0.6 && CH.changedShare >= 0.25;
+  const verdict = off ? ['bad', 'The copy is mostly off the original', 'Line them up first.']
     : pct >= 85 && S.strength >= 0.8 ? ['good', 'Very likely the same photo', 'They match detail for detail wherever they overlap.']
-    : pct >= 25 && enough && S.strength >= 0.75 ? ['good', 'Very likely the same photo, with things added on top', pct + '% of the area they share lines up detail for detail. The rest differs, usually a headline, logo, caption or crop added to the copy. The Difference view shows those parts in bright.']
+    : heavy ? ['good', 'Same photo, heavily edited (things added or redrawn)', 'Inside the green part the copy lines up with the original detail for detail. The red parts were painted over, added or redrawn (for example a new object, changed faces or a headline).']
+    : pct >= 25 && enough && S.strength >= 0.75 ? ['good', 'Very likely the same photo, with things added on top', pct + '% of the area they share lines up detail for detail. The rest differs, usually a headline, logo, caption or crop added to the copy. The red parts on the picture show where.']
     : pct >= 15 ? ['mid', 'Partly lines up', 'Check the overlay by eye. They may not be lined up exactly yet, or only part of the photo was used.']
     : ['bad', 'Probably not lined up, or not the same photo', 'Try "Line them up automatically", or drag the copy into place.'];
-  scoreInfo = { pct, strength, verdict, overlap: S.overlap, overlapA: S.overlapA };
+  if (verdict[0] === 'bad') CH = null;
+  scoreInfo = { pct, strength, verdict, overlap: S.overlap, overlapA: S.overlapA, heavy: !!heavy, same, unt, changed: CH ? 100 - same : 0 };
   const box = $('score');
   box.hidden = false; box.className = 'card ' + verdict[0];
   box.innerHTML = '';
   const b1 = document.createElement('b'); b1.textContent = verdict[1];
-  const p = document.createElement('div'); p.className = 'pct'; p.textContent = pct + '% lines up';
-  const sm = document.createElement('small'); sm.textContent = verdict[2] + ' The copy covers ' + Math.round(Math.min(1, S.overlapA) * 100) + '% of the original. The score is a guide; the overlay is what to show.';
-  box.append(b1, p, sm);
+  const p = document.createElement('div'); p.className = 'pct';
+  box.append(b1, p);
+  if (heavy) {
+    // The headline number only judges the part that wasn't painted over; the overall one stays below.
+    p.textContent = unt + '% lines up';
+    const u = document.createElement('div'); u.className = 'under'; u.textContent = 'in the part that wasn\'t painted over'; box.append(u);
+  } else p.textContent = pct + '% lines up';
+  if (CH && verdict[0] === 'good') {
+    const bar = document.createElement('div'); bar.className = 'split';
+    const g = document.createElement('i'); g.style.width = same + '%'; bar.append(g);
+    const key = document.createElement('div'); key.className = 'splitKey';
+    key.innerHTML = '<span></span><span class="r"></span>';
+    key.children[0].textContent = same + '% same photo'; key.children[1].textContent = (100 - same) + '% added or redrawn';
+    box.append(bar, key);
+  }
+  const sm = document.createElement('small');
+  sm.textContent = verdict[2] + (heavy ? ' Over everything they share: ' + pct + '%.' : '') + ' The copy covers ' + Math.round(Math.min(1, S.overlapA) * 100) + '% of the original. The score is a guide; the overlay is what to show.';
+  box.append(sm);
+  for (const sp of spots) measureSpot(sp);
+  if (spots.length) renderSpots();
+  draw();
 }
 let rescoreTimer = 0;
 const rescoreSoon = () => { clearTimeout(rescoreTimer); rescoreTimer = setTimeout(rescore, 400); };
 
 // ---------- saving ----------
 // One frame, cropped to the original plus wherever the copy sits.
-function frame(o, m, maxSide = 1600, labels = true) {
+function frame(o, m, maxSide = 1600, labels = true, extra = {}) {
   const A = P.A.bitmap, B = P.B.bitmap;
   const bb = PP_ALIGN.bounds(T, B);
   const L = Math.min(0, bb.x0), Tp = Math.min(0, bb.y0);
@@ -328,7 +515,7 @@ function frame(o, m, maxSide = 1600, labels = true) {
   const w = R - L + m2 * 2, h = Bt - Tp + m2 * 2;
   const k = Math.min(1, maxSide / Math.max(w, h));
   const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
-  paint(c.getContext('2d'), c.width, c.height, k, o, m, { ox: m2 - L, oy: m2 - Tp, labels });
+  paint(c.getContext('2d'), c.width, c.height, k, o, m, { ox: m2 - L, oy: m2 - Tp, labels, ...extra });
   return c;
 }
 function sideBySide(maxSide = 1600) {
@@ -350,29 +537,61 @@ $('sPdf').onclick = async () => {
   try {
     if (!scoreInfo) await rescore();
     const A = P.A, B = P.B, now = new Date();
+    const PLAIN = { changes: false, spots: false };
+    // Changed areas (green = same photo, red = added or redrawn) and the spots compared one by one.
+    const chgItems = !CH ? [] : [
+      { h: 'Which parts are the same photo' },
+      { p: 'The copy is shown on top of the original. Inside the green line it is the same photo and lines up detail for detail. The red parts were added, painted over or redrawn in the copy (for example a new object, changed faces or a headline).', color: '#475569' },
+      { image: frame(1, 'overlay', 1400, true, { changes: true, spots: false }), maxH: 700, caption: 'Green line = same photo (' + scoreInfo.same + '% of the shared area). Red = added or redrawn (' + scoreInfo.changed + '%)' }
+    ];
+    const pair = sp => {
+      const ca = spotCrop(sp, 'A', 420), cb = spotCrop(sp, 'B', 420), gap = 30;
+      const c = document.createElement('canvas'); c.width = ca.width + cb.width + gap; c.height = Math.max(ca.height, cb.height) + 44;
+      const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+      x.drawImage(ca, 0, 44); x.drawImage(cb, ca.width + gap, 44);
+      x.lineWidth = 4; x.strokeStyle = BLUE; x.strokeRect(2, 46, ca.width - 4, ca.height - 4);
+      x.setLineDash([12, 7]); x.strokeStyle = ORANGE; x.strokeRect(ca.width + gap + 2, 46, cb.width - 4, cb.height - 4);
+      x.font = 'bold 26px system-ui, sans-serif'; x.fillStyle = BLUE; x.fillText('ORIGINAL', 0, 30); x.fillStyle = '#b45309'; x.fillText('COPY', ca.width + gap, 30);
+      return c;
+    };
+    const spotItems = !spots.length ? [] : [
+      { h: 'Spots compared one by one' },
+      { p: 'Each numbered spot (a face, logo or detail) is cut from both pictures and compared on its own. The copy\'s cut-out is taken from where that spot sits in the copy, which may have moved a little. 90% and up = unchanged; 75 to 90% = the same with small changes (an expression, a small move); below 75% = redrawn or different.', color: '#475569' },
+      { image: frame(1, 'overlay', 1400, true, { changes: false, spots: true }), maxH: 560, caption: 'Where the numbered spots are' },
+      ...spots.flatMap((sp, n) => { const w = spotWords(sp.res); return [{ image: pair(sp), maxH: 380, caption: 'Spot ' + (n + 1) + ': ' + w.pct + ' match, ' + w.word.toLowerCase() + (w.moved ? '. ' + w.moved : '') }]; })
+    ];
+    const nearItems = !nearby ? [] : [
+      { h: 'Nearby shots checked' },
+      { p: nearbyVerdict(), box: '#f0fdf4', color: '#14532d' },
+      { kv: nearby.map(r => [r.name, r.bad ? 'could not be opened as a picture' : Math.round(r.lines * 100) + '% of the shared area lines up' + (r.same ? ' (' + Math.round(r.same * 100) + '% same photo)' : ''), P.A && r.name === P.A.name]) }
+    ];
     const items = [
-      { p: 'In short: ' + scoreInfo.verdict[1] + ' (' + scoreInfo.pct + '% of the shared area lines up). ' + scoreInfo.verdict[2], box: '#eff6ff', color: '#1e3a8a' },
+      { p: 'In short: ' + scoreInfo.verdict[1] + ' (' + (scoreInfo.heavy ? scoreInfo.unt + '% lines up in the part that wasn\'t painted over; ' + scoreInfo.pct + '% over everything they share' : scoreInfo.pct + '% of the shared area lines up') + '). ' + scoreInfo.verdict[2], box: '#eff6ff', color: '#1e3a8a' },
       { h: 'The two pictures' }, { image: sideBySide(1400), maxH: 520 },
       { kv: [
         ['Original', A.name + '  (' + A.bitmap.width + ' x ' + A.bitmap.height + ')'], ['Original from', A.src], ['Original SHA-256', A.sha],
         ['Copy', B.name + '  (' + B.bitmap.width + ' x ' + B.bitmap.height + ')'], ['Copy from', B.src], ['Copy SHA-256', B.sha],
         ['How the copy was placed', describeShape().replace(/^./, c => c.toUpperCase()) + ', and moved ' + Math.round(T.x) + ', ' + Math.round(T.y) + ' pixels (in the original\'s pixels), so it sits on top of the original'],
         ['Lines up', scoreInfo.pct + '% of the area the two pictures share (split into small squares, each compared on its own; parts covered by headlines or logos count as not lining up)'],
+        ...(CH ? [['Same photo', scoreInfo.same + '% of the shared area (green on the picture: most small squares around each spot line up)'],
+          ['Added or redrawn', scoreInfo.changed + '% of the shared area (red on the picture)'],
+          ['Lines up in the same-photo part', scoreInfo.unt + '% of the small squares inside the green part']] : []),
         ['Match where it lines up', scoreInfo.strength + '% (average correlation of brightness in the squares that line up; 100% = identical)'],
         ['Copy covers', Math.round(Math.min(1, scoreInfo.overlapA) * 100) + '% of the original'],
         ['Made', now.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'long' }) + ' with PageProof ' + api.runtime.getManifest().version]
       ] },
+      ...chgItems, ...spotItems, ...nearItems,
       { h: 'Overlay: the copy laid on top of the original' },
       { p: 'Like superimposing in Photoshop: the copy (orange dashed edge) sits on the original and is made more see-through in steps. If it is the same photo, every detail lines up at every step.', color: '#475569' },
-      { image: frame(0, 'overlay', 1400), maxH: 600, caption: 'Copy at 0%: the original only' },
-      { image: frame(0.5, 'overlay', 1400), maxH: 600, caption: 'Copy at 50%: both at once. Same photo = no doubled edges' },
-      { image: frame(1, 'overlay', 1400), maxH: 600, caption: 'Copy at 100%: the copy only, in the same place' },
+      { image: frame(0, 'overlay', 1400, true, PLAIN), maxH: 600, caption: 'Copy at 0%: the original only' },
+      { image: frame(0.5, 'overlay', 1400, true, PLAIN), maxH: 600, caption: 'Copy at 50%: both at once. Same photo = no doubled edges' },
+      { image: frame(1, 'overlay', 1400, true, PLAIN), maxH: 600, caption: 'Copy at 100%: the copy only, in the same place' },
       { h: 'Difference view' },
       { p: 'The copy is subtracted from the original. Where the two pictures are the same the result is black; anything different shows up bright.', color: '#475569' },
-      { image: frame(1, 'diff', 1400), maxH: 700, caption: 'Black = identical. Bright = different (edits, added logos, cropping edges)' },
+      { image: frame(1, 'diff', 1400, true, PLAIN), maxH: 700, caption: 'Black = identical. Bright = different (edits, added logos, cropping edges)' },
       { h: 'Colour check' },
       { p: 'The original is shown in blue tones and the copy in orange tones, added together. Where the two pictures line up they cancel out to plain grey; anything that is off or different shows up blue or orange.', color: '#475569' },
-      { image: frame(1, 'tint', 1400), maxH: 700, caption: 'Grey = the same. Blue = only in the original. Orange = only in the copy' },
+      { image: frame(1, 'tint', 1400, true, PLAIN), maxH: 700, caption: 'Grey = the same. Blue = only in the original. Orange = only in the copy' },
       { p: 'The score is a guide worked out by PageProof. The overlay pictures are what to show.', color: '#64748b' }
     ];
     const pages = PP_REPORT.render({ title: 'Picture comparison', subtitle: ['Original: ' + A.name + '   ·   Copy: ' + B.name, now.toLocaleString(), 'PageProof Compare'],
@@ -398,7 +617,7 @@ $('sVid').onclick = async () => {
     const c = document.createElement('canvas'); c.width = Math.round(w * k / 2) * 2; c.height = Math.round(h * k / 2) * 2;
     const ctx = c.getContext('2d');
     const at = { ox: m2 - L, oy: m2 - Tp };
-    const show = (o, m) => paint(ctx, c.width, c.height, k, o, m, at);
+    const show = (o, m) => paint(ctx, c.width, c.height, k, o, m, { ...at, changes: false, spots: false });
     show(0, 'overlay');
     const stream = c.captureStream(30);
     // MP4 plays everywhere (Windows, Mac, phones, PowerPoint). Older browsers can only make WebM.

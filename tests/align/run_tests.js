@@ -29,17 +29,21 @@ const DIR = process.argv[2], filter = process.argv[3] || '';
         }
       }
       errs.sort((x, y) => x - y);
-      return { ms, how: T.how, inl: T.inliers, s: T.s, w: T.w, r: T.r, k: T.k, flip: T.flip, lines: T.sc.lines, str: T.sc.strength, med: errs[errs.length >> 1], max: errs[errs.length - 1], n: errs.length };
+      const C = PP_ALIGN.changes(A, B, T);
+      return { ms, how: T.how, inl: T.inliers, s: T.s, w: T.w, r: T.r, k: T.k, flip: T.flip, lines: T.sc.lines, str: T.sc.strength, same: C.sameShare, untouched: C.untouchedLines, med: errs[errs.length >> 1], max: errs[errs.length - 1], n: errs.length };
     }, [da, dc, m.G]);
     tms += r.ms;
     const tol = 0.012 * Math.max(...[800]);
     let ok, verdict;
     const lines = r.lines || 0;
-    if (!m.G) { ok = !r.lines || r.lines < 0.25; verdict = 'negative'; }
+    // Different photos: low score and (almost) no area marked as the same photo.
+    if (!m.G) { ok = (!r.lines || r.lines < 0.25) && !(r.same > 0.1); verdict = 'negative'; }
+    // AI-edited post (big added object + caption band): the untouched part must show as the same photo.
+    else if (m.copy.includes('ai-added')) ok = !r.none && r.n > 0 && r.max < 8 && r.same >= 0.3 && r.same <= 0.9 && r.untouched >= 0.6;
     else if (m.copy.includes('perspective')) ok = !r.none && lines >= 0.5;
     else ok = !r.none && r.n > 0 && r.max < 8 && lines >= 0.25;
     if (ok) pass++; else fail.push(m.copy);
-    console.log((ok ? 'PASS ' : 'FAIL ') + m.copy.padEnd(42) + ' ' + JSON.stringify({ how: r.how, inl: r.inl, s: r.s && +r.s.toFixed(3), w: r.w && +r.w.toFixed(3), r: r.r && +r.r.toFixed(2), k: r.k && +r.k.toFixed(3), flip: r.flip, lines: +(lines).toFixed(2), str: r.str && +r.str.toFixed(2), med: r.med && +r.med.toFixed(1), max: r.max && +r.max.toFixed(1), ms: Math.round(r.ms) }));
+    console.log((ok ? 'PASS ' : 'FAIL ') + m.copy.padEnd(42) + ' ' + JSON.stringify({ how: r.how, inl: r.inl, s: r.s && +r.s.toFixed(3), w: r.w && +r.w.toFixed(3), r: r.r && +r.r.toFixed(2), k: r.k && +r.k.toFixed(3), flip: r.flip, lines: +(lines).toFixed(2), same: r.same != null ? +r.same.toFixed(2) : undefined, untouched: r.untouched != null ? +r.untouched.toFixed(2) : undefined, str: r.str && +r.str.toFixed(2), med: r.med && +r.med.toFixed(1), max: r.max && +r.max.toFixed(1), ms: Math.round(r.ms) }));
   }
   console.log(`\n${pass}/${man.length} passed, avg ${Math.round(tms / man.length)} ms`); if (fail.length) console.log('failed:', fail.join(', '));
   await b.close();

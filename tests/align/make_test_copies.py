@@ -116,6 +116,25 @@ def variants(A):
     add('hard-turn-15', centre(A, R(15) @ S(1.2), W, H), (W, H))
     add('hard-thumb-tiny', S(0.15), (int(W * 0.15), int(H * 0.15)), lambda i: jpeg(i, 40))
     add('hard-stretch-1.3-blur-grade', S(1.3, 1), (int(W * 1.3), H), lambda i: grade(i.filter(ImageFilter.GaussianBlur(1.5))))
+    def ai_post(i):
+        # Like an AI-edited social post: a big new object painted over the lower left, the
+        # photo softened (AI upscale), and a black caption band with a headline at the bottom.
+        a = i.filter(ImageFilter.MedianFilter(5)); w, h = a.size
+        # a few small parts "redrawn" (like AI-changed faces): softened, nudged and brightened
+        for k in range(5):
+            x, y, s = random.randint(int(w * 0.35), int(w * 0.85)), random.randint(int(h * 0.05), int(h * 0.45)), int(w * 0.09)
+            reg = a.crop((x, y, x + s, y + s)).filter(ImageFilter.GaussianBlur(4)).rotate(12)
+            a.paste(ImageEnhance.Brightness(reg).enhance(1.15), (x + 3, y + 2))
+        other = Image.open(os.path.join(D, 'coffee.png' if CUR == 'chelsea' else 'chelsea.png')).convert('RGB')
+        ob = other.resize((int(w * 0.55), int(h * 0.45)))
+        mk = Image.new('L', ob.size, 0); ImageDraw.Draw(mk).ellipse((0, 0, ob.width, ob.height), fill=255)
+        a.paste(ob, (int(-w * 0.05), int(h * 0.33)), mk.filter(ImageFilter.GaussianBlur(12)))
+        d = ImageDraw.Draw(a); d.rectangle((0, int(h * 0.76), w, h), fill=(12, 12, 12))
+        f = ImageFont.truetype(FONT, int(w * 0.075))
+        for k, line in enumerate(['PET OWNERS COULD', 'FACE JAIL UNDER', 'NEW LAW']):
+            d.text((w * 0.05, h * 0.78 + k * w * 0.085), line, fill=(255, 190, 90) if k == 1 else 'white', font=f)
+        return a
+    add('ai-added-object-caption', R(-0.8) @ S(1.31, 1.35) @ T(-W * 0.08, -H * 0.06), (int(W * 0.95), int(H * 1.5)), ai_post, fill=(20, 20, 20))
     def persp(i):
         w, h = i.size; return i.transform((w, h), Image.PERSPECTIVE, (1, 0.03, -10, 0.01, 1, -5, 0.00003, 0.00002), Image.BICUBIC)
     add('hard-slight-perspective', S(1), (W, H), persp)
@@ -126,8 +145,8 @@ for sname, A in srcs.items():
     if max(A.size) < 700 and sname != 'mine':
         f = 700 / max(A.size); A = A.resize((round(A.width * f), round(A.height * f)), Image.LANCZOS)
     A.save(f'{OUT}/{sname}.png')
-    V = variants(A)
-    if sname != 'mine' and len(srcs) > 5: V = random.sample(V[:-5], 8) + V[-5:]
+    CUR = sname; V = variants(A)
+    if sname != 'mine' and len(srcs) > 5: V = random.sample(V[:-6], 8) + V[-6:]
     for name, img, G in V:
         fn = f'{OUT}/{sname}__{name}.png'; img.save(fn)
         manifest.append({'orig': f'{sname}.png', 'copy': os.path.basename(fn), 'G': G[:2].tolist(), 'cw': img.width, 'ch': img.height})

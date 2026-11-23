@@ -30,6 +30,9 @@
         <label class="pickbtn">Choose…<input type="file" accept="image/*,.tif,.tiff,.avif" hidden></label></div>
     </div>
 
+    <div class="nearRow"><label class="pickbtn" id="nearBtn" title="Your client took several shots of the same scene? Add them all and PageProof finds the one the copy came from">＋ Check nearby shots…<input type="file" accept="image/*,.tif,.tiff,.avif" multiple hidden></label></div>
+    <section class="card" id="nearby" hidden></section>
+
     <button id="auto" class="main save" disabled title="Resize and move the copy so it sits exactly on the original">✨ Line them up automatically</button>
     <div id="score" class="card" hidden></div>
 
@@ -40,6 +43,7 @@
       <div class="seg" id="modes">
         <button data-mode="overlay" class="on">Overlay</button><button data-mode="diff" title="Black where the two pictures are the same">Difference</button><button data-mode="tint" title="Original in blue, copy in orange: grey where they line up">Colour check</button><button data-mode="side">Side by side</button>
       </div>
+      <label class="chgRow" title="Green line = the part that is the same photo. Red = added, painted over or redrawn in the copy"><input type="checkbox" id="showChg" checked disabled> Show changes <span class="chgKey"><i class="g"></i>same <i class="r"></i>changed</span></label>
       <div class="grid">
         <button id="aside" class="tile small" disabled title="Slide the copy off to the side, then back into place">↔ Slide aside and back</button>
         <button id="fade" class="tile small" disabled title="Fade between the original and the copy, over and over">▶ Play fade</button>
@@ -60,6 +64,13 @@
         <label class="shFlip"><input type="checkbox" id="shFlip" disabled> Mirrored</label>
         <button id="shReset" class="pickbtn" disabled title="Undo any stretch, turn, slant or mirror (keeps the size)">Reset shape</button>
       </div>
+    </section>
+
+    <section class="card ctl" id="spots">
+      <h3>Compare a spot</h3>
+      <p class="shHint">Compare one face, logo or detail on its own. Click the button, then click it on the picture (or drag a box round it).</p>
+      <button id="spotBtn" class="tile small" disabled title="Pick a face or detail to compare on its own">🔍 Pick a spot</button>
+      <div id="spotList"></div>
     </section>
 
     <section class="card">
