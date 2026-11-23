@@ -262,15 +262,17 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 // Right-click the PageProof icon for its other pages.
-const MENU = { openApp: ['Open full PageProof', 'app.html#home'], found: ['Copies found', 'app.html#found'], keep: ['Keep searching', 'app.html#keep'], library: ['Evidence library', 'app.html#library'], verify: ['Verify a pack', 'app.html#verify'] };
+// 4.5.1 (Ben): every item starts with a small symbol so it is easy to tell apart at a glance
+// (Chrome and Edge do not allow a real icon on each menu item).
+const MENU = { openApp: ['🏠 Open full PageProof', 'app.html#home'], found: ['🖼️ Copies found', 'app.html#found'], keep: ['🔄 Keep searching', 'app.html#keep'], library: ['📚 Evidence library', 'app.html#library'], verify: ['✅ Verify a pack', 'app.html#verify'] };
 // Right-click on a website: the browser groups these under its own "PageProof" entry.
 // Picture choices show only when there is a picture under the mouse:
 //  - a normal picture: the browser knows ("image"), so the first set shows by itself;
 //  - a picture hidden under a see-through cover (Instagram): rclick.js spots it the moment you
 //    right-click and asks for the second set ("h_" ids) to be shown.
 const NOT_IMG = ['page', 'selection', 'link', 'video', 'audio', 'frame', 'editable'];
-const PIC_ITEMS = [['inspectImage', 'Inspect this photo'], ['reverse', 'Find copies of it'], ['jpgImage', 'Save biggest copy…'], ['bnSave', 'Save as Breaking News photo…'], ['openImage', 'Open biggest copy in a tab']];
-const REV_ITEMS = [['revGoogle', 'Google Lens'], ['revYandex', 'Yandex'], ['revBing', 'Bing'], ['revAll', 'All three']];
+const PIC_ITEMS = [['inspectImage', '🔬 Inspect this photo'], ['reverse', '🔍 Find copies of it'], ['jpgImage', '💾 Save biggest copy…'], ['bnSave', '📰 Save as Breaking News photo…'], ['openImage', '↗️ Open biggest copy in a tab']];
+const REV_ITEMS = [['revGoogle', '🟢 Google Lens'], ['revYandex', '🔴 Yandex'], ['revBing', '🔵 Bing'], ['revAll', '🌐 All three']];
 api.runtime.onInstalled.addListener(() => {
   try {
     api.contextMenus.removeAll(() => {
@@ -280,8 +282,8 @@ api.runtime.onInstalled.addListener(() => {
         for (const [id, title] of REV_ITEMS) api.contextMenus.create({ id: pre + id, parentId: pre + 'reverse', title, contexts });
         api.contextMenus.create({ id: pre + 'webSep', type: 'separator', contexts, visible });
       }
-      api.contextMenus.create({ id: 'savePage', title: 'Capture this page', contexts: ['page', 'selection', 'video', 'audio', 'frame', 'editable', 'image'] });
-      api.contextMenus.create({ id: 'saveLink', title: 'Capture the linked page', contexts: ['link'] });
+      api.contextMenus.create({ id: 'savePage', title: '📸 Capture this page', contexts: ['page', 'selection', 'video', 'audio', 'frame', 'editable', 'image'] });
+      api.contextMenus.create({ id: 'saveLink', title: '🔗 Capture the linked page', contexts: ['link'] });
     });
   } catch (e) { /* menus not available */ }
 });
