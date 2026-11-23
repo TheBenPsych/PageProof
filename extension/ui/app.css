@@ -397,7 +397,7 @@ dialog.pp-ask::backdrop{background:rgba(8,12,20,.5)}
 .cpick .crow { display: flex; gap: 8px; align-items: center; }
 /* With the copy details panel open, the page makes room for it, so the list's tabs, Group, Sort
    and Filters are never hidden underneath (narrow windows keep the panel on top). */
-@media (min-width:1180px){.content:has(> .drawer){padding-right:clamp(16px,calc(1992px - 100vw),484px)}}
+@media (min-width:1180px){.content:has(> .drawer){padding-right:484px}}
 /* A client's photos: room inside each card, and the tick box sits on top of the picture. */
 .pcard{padding:8px;gap:6px}
 .pcard .tick{z-index:2;display:grid;place-items:center;width:26px;height:26px;left:12px;top:12px;background:var(--surface);border-radius:7px;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:pointer}
@@ -620,7 +620,7 @@ h2{font-size:16px;font-weight:700;letter-spacing:-.01em}
 
 .segbar .seggrp{display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap}
 /* With the details panel open the list is narrow: the answers are in the panel, so the row keeps only its ⋯. */
-@media (min-width:1180px){.content:has(> .drawer) .crow .acts .btn:not(.icon){display:none}}
+@media (min-width:1180px) and (max-width:1699px){.content:has(> .drawer) .crow .acts .btn:not(.icon){display:none}}
 
 /* =====================================================================================
    4.2.3 polish: one brand blue (matches the shield), narrow windows, calmer tables
@@ -724,3 +724,33 @@ dd q{quotes:"“" "”";font-style:italic}
 .rstep label .muted{font-size:12.5px}
 .rstep.done label b{text-decoration:line-through;color:var(--muted)}
 .bnname{font-size:14.5px;padding:10px 12px;border-radius:10px;background:var(--sunk);border:1px solid var(--line);overflow-wrap:anywhere}
+
+/* =====================================================================================
+   4.5 wide screens (Ben's picks 1, 2, 4, 5, 6): pages fill the window; on big windows the
+   details panel is wider, row pictures are bigger, row facts sit in lined-up columns and
+   Home spreads into three columns. Sizes follow the page's own width (container "pg").
+   ===================================================================================== */
+.content{max-width:none;container:pg/inline-size}
+@media (min-width:1700px){
+  .drawer{width:620px}
+  .content:has(> .drawer){padding-right:654px}
+}
+.ccols{display:none}
+@container pg (min-width:1250px){
+  .cpair img{width:96px;height:78px}
+  .crow{padding:12px 18px}
+}
+@container pg (min-width:1350px){
+  .crow{grid-template-columns:auto auto minmax(0,1fr) auto auto}
+  .ccols{display:grid;grid-template-columns:78px 170px 120px 82px;gap:14px;align-items:center;font-size:13px;color:var(--muted)}
+  .ccols>span{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .ccols>span>i{font-style:normal;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint)}
+  .ccols b{font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+  .ccols>span>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cinfo .l3 .l3x{display:none}
+}
+.homemain{flex:2 1 520px;display:flex;flex-direction:column;gap:20px;min-width:0}
+@container pg (min-width:1500px){
+  .homemain{display:block;columns:2;column-gap:20px;flex:3 1 900px}
+  .homemain>*{break-inside:avoid;margin-bottom:20px}
+}

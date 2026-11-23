@@ -138,7 +138,7 @@ V.home = async () => {
     <a class="start" href="#inspect"><span class="ic">${ic('tools', 22)}</span><b>Look closer at a photo</b><span>Read its hidden data, lay a copy over the original, or mark it up for a client.</span></a>
   </section>
   <div class="split">
-    <div style="flex:2 1 520px;display:flex;flex-direction:column;gap:20px;min-width:0">
+    <div class="homemain">
       ${fc.main}
       <section class="card">
         <div class="pad row" style="border-bottom:1px solid var(--line)"><h2>Recent searches</h2><a class="btn ghost" style="margin-left:auto" href="#searches">All searches</a><a class="btn primary" href="#search">New search</a></div>
@@ -463,6 +463,10 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['A red dot instead of a number', 'The PageProof icon in the toolbar now shows a small red dot in its top-right corner when new copies are waiting, so the logo stays visible. Hover the icon to see how many.'],
+  ['PageProof fills wide screens', 'Every page now uses the whole window. On a big screen the copy details panel is wider, the pictures on each Copies found row are bigger, each row shows Lines up, Use, Country and Found in lined-up columns, and Home spreads into three columns.'],
+  ['Capture a copy, get the match report too', 'When you capture a copy\'s page from Copies found and save the evidence pack, the Evidence report PDF (the match PageProof found, side by side, with its Match ID) is saved next to it as its own file, with the same case number.'],
+  ['Hover preview no longer gets stuck', 'The picture that pops up when you hover a row now always goes away when you move off it, scroll, click or change page.'],
   ['Keep searching lives in a pinned tab', 'No more separate window or taskbar icon: Keep searching now runs in a small pinned PageProof tab that stays awake and closes with the browser. If you close that tab, Home and Keep searching show "Keep searching is stopped" with a Start it again button.'],
   ['The Keep searching window closes with the browser', 'When you close your last browser window, the small Keep searching window closes too, so nothing is left in the taskbar. It opens again, minimised, with your next browser window.'],
   ['Search tabs show the PageProof logo', 'The small pinned Google Lens, Yandex and Bing tabs now show the PageProof logo and name, so they are easy to tell apart from your own tabs. The red Google Drive bar also clears the moment you press Allow.'],

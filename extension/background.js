@@ -646,9 +646,31 @@ async function newBadge() {
     });
     // A red "!" wins: Google Drive is waiting for its one click (see driveNudge).
     if ((await api.storage.local.get('fcNeedsAllow')).fcNeedsAllow) { api.action.setBadgeBackgroundColor({ color: '#E11D48' }); api.action.setBadgeText({ text: '!' }); return; }
-    api.action.setBadgeBackgroundColor({ color: '#FF8F4B' });
-    api.action.setBadgeText({ text: n ? (n > 999 ? '999+' : String(n)) : '' });
+    // 4.5 (Ben): a small red dot in the top-right corner of the logo instead of a number, so the
+    // logo stays visible. The count is in the icon's tooltip.
+    api.action.setBadgeText({ text: '' });
+    await dotIcon(n > 0);
+    api.action.setTitle({ title: n ? 'PageProof: ' + n + ' new ' + (n === 1 ? 'copy' : 'copies') + ' found' : 'PageProof' });
   } catch (e) { /* nothing found yet */ }
+}
+// The toolbar icon, with or without the red "new copies found" dot (top right, white ring).
+let dotNow = null;
+async function dotIcon(on) {
+  if (dotNow === on) return;
+  const imageData = {};
+  for (const size of [16, 32]) {
+    const bmp = await createImageBitmap(await (await fetch(api.runtime.getURL('icons/icon' + size + '.png'))).blob());
+    const c = new OffscreenCanvas(size, size), x = c.getContext('2d');
+    x.drawImage(bmp, 0, 0, size, size);
+    if (on) {
+      const r = size * 0.16, cx = size - r - size * 0.04, cy = r + size * 0.04;
+      x.beginPath(); x.arc(cx, cy, r + size * 0.06, 0, 7); x.fillStyle = '#fff'; x.fill();
+      x.beginPath(); x.arc(cx, cy, r, 0, 7); x.fillStyle = '#E11D48'; x.fill();
+    }
+    imageData[size] = x.getImageData(0, 0, size, size);
+  }
+  await api.action.setIcon({ imageData });
+  dotNow = on;
 }
 // ---------- the morning nudge: Google Drive needs one click after the browser restarts ----------
 // The browser forgets PageProof's permission to read the photos folder when it closes. Until

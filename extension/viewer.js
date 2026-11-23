@@ -588,7 +588,8 @@ async function start() {
         timestamps: good.map(t => t.service + ' ' + (t.time || '')).join('; ') });
       await api.storage.local.set({ log });
     } catch (e) { /* log is a convenience */ }
-    setStatus('Saved ' + zipName + '. Its fingerprint (' + zipHash.slice(0, 16) + '...) is in your capture log.');
+    const rep = auto ? false : await askMatchReport(c.caseRef, rec);
+    setStatus('Saved ' + zipName + '. Its fingerprint (' + zipHash.slice(0, 16) + '...) is in your capture log.' + (rep ? ' The match report PDF (the copy PageProof found) is being saved as its own file.' : ''));
     return zipName;
   };
   $('pack').onclick = () => savePack(false);
@@ -618,3 +619,21 @@ start().catch(err => {
   setStatus('Something went wrong: ' + err.message, true);
   reportBatch({ ok: false, error: err.message });
 });
+
+// 4.5: this page was captured from a copy in Copies found. After its pack is saved, ask PageProof
+// to save that copy's Evidence report (the match PageProof found) as its own PDF, with the same
+// case number. An open PageProof tab makes it; if none is open, one is opened.
+async function askMatchReport(caseNo, rec) {
+  try {
+    const api = globalThis.browser || globalThis.chrome;
+    const { fcCapFor: f } = await api.storage.local.get('fcCapFor');
+    const same = (a, b) => String(a || '').replace(/[#].*$/, '').replace(/\/$/, '') === String(b || '').replace(/[#].*$/, '').replace(/\/$/, '');
+    if (!f || Date.now() - f.at > 6 * 3600000) return false;
+    // the same address, or a capture started within 3 minutes of clicking Capture (sites redirect)
+    if (!same(f.url, rec.url) && !(Math.abs(new Date(rec.time) - f.at) < 180000)) return false;
+    await api.storage.local.set({ fcReportReq: { id: f.id, caseNo: caseNo || '', at: Date.now() } });
+    const open = await api.runtime.sendMessage({ type: 'ppAppHere' }).catch(() => false);
+    if (!open) await api.tabs.create({ url: api.runtime.getURL('app.html#found'), active: false });
+    return true;
+  } catch (e) { return false; }
+}

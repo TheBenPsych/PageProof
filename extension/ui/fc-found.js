@@ -367,8 +367,9 @@ function copyRow(c) {
     <div class="cinfo">
       <div class="l1"><b>${esc(c.site)}</b>${done ? tagFor(c) : ''}${c.match === 'maybe' ? '<span class="tag warn" data-gloss="Maybe">Maybe</span>' : ''}${repeatTag(c)}${flagWords(c)}${onlineTag(c)}</div>
       <a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink" title="Open this page in a new tab"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>
-      <div class="l3">${esc(c.photoName)}${c.pct >= 0 && c.pct != null ? ` · <b class="num" data-gloss="Lines up">${c.pct}%</b> lines up` : ''} · ${esc(FC.USE[c.use][0])}${c.country ? ' · ' + esc(c.country) : ''} · found ${shortDate(c.firstSeen).toLowerCase()}</div>
+      <div class="l3">${esc(c.photoName)}<span class="l3x">${c.pct >= 0 && c.pct != null ? ` · <b class="num" data-gloss="Lines up">${c.pct}%</b> lines up` : ''} · ${esc(FC.USE[c.use][0])}${c.country ? ' · ' + esc(c.country) : ''} · found ${shortDate(c.firstSeen).toLowerCase()}</span></div>
     </div>
+    <div class="ccols"><span><i>Lines up</i><b>${c.pct >= 0 && c.pct != null ? c.pct + '%' : '–'}</b></span><span><i>Use</i><span title="${esc(FC.USE[c.use][0])}">${esc(FC.USE[c.use][0])}</span></span><span><i>Country</i><span>${esc(c.country || 'Not known')}</span></span><span><i>Found</i><span>${esc(shortDate(c.firstSeen))}</span></span></div>
     <div class="acts">${c.status === 'removed' ? `<button class="btn sm" data-act="rowans" data-v="new|${esc(c.id)}">Put back</button>` : done ? `<button class="btn sm" data-act="rowans" data-v="new|${esc(c.id)}">Change answer</button>`
       : `<button class="btn sm stolen" data-act="rowans" data-v="stolen|${esc(c.id)}">Stolen</button><button class="btn sm licensed" data-act="rowans" data-v="licensed|${esc(c.id)}">Licensed</button><button class="btn sm" data-act="rowans" data-v="removed|${esc(c.id)}">Remove</button>`}
       <button class="btn sm icon" data-act="rowmenu" data-v="${esc(c.id)}" aria-label="More choices for ${esc(c.site)}">${ic('dots', 18)}</button></div></div>`;
@@ -535,14 +536,26 @@ V.found.guard = async () => ((await FC.drive()).done ? null : 'connect');
 V.found.after = () => { loadOurs(); bindHover(); ppPagePic(); ppKeptLine(); };
 
 // Hovering a copy's thumbnail shows it next to your client's photo.
+// Only one card ever exists. It goes away when the mouse leaves the pictures, and also when the
+// page redraws, changes, scrolls, is clicked or is hidden (4.5: a redraw under the mouse used to
+// leave the card stuck on screen for good, on every page).
+let hovCard = null;
+const hovGone = () => { if (hovCard) hovCard.remove(); hovCard = null; };
+addEventListener('hashchange', hovGone);
+addEventListener('scroll', hovGone, true);
+addEventListener('mousedown', hovGone, true);
+addEventListener('blur', hovGone);
+document.addEventListener('visibilitychange', hovGone);
+document.addEventListener('mousemove', e => { if (hovCard && !(e.target.closest && e.target.closest('[data-hover]'))) hovGone(); }, { passive: true });
 function bindHover() {
-  let card = null;
+  hovGone();
   view.querySelectorAll('[data-hover]').forEach(img => {
     img.addEventListener('mouseenter', () => {
+      hovGone();
       const c = FCD && FCD.copies.find(x => x.id === img.dataset.hover);
       if (!c) return;
       const p = FCD.photos.get(c.photo);
-      card = document.createElement('div'); card.className = 'hovcard';
+      const card = hovCard = document.createElement('div'); card.className = 'hovcard';
       card.innerHTML = `<div class="pair"><div class="frame ours"><img src="${oursImg(p)}" alt=""><span class="lab">Your client's</span></div><div class="frame theirs"><img src="${theirImg(c)}" alt="" referrerpolicy="no-referrer"><span class="lab">Theirs</span></div></div>
         <div class="row" style="gap:8px;font-size:13px"><b>${esc(c.site)}</b>${c.pct >= 0 && c.pct != null ? `<span class="muted">${c.pct}% lines up</span>` : ''}${c.w ? `<span class="faint" style="margin-left:auto">${c.w} × ${c.h}</span>` : ''}</div>`;
       document.body.appendChild(card);
@@ -551,7 +564,7 @@ function bindHover() {
       card.style.left = Math.min(innerWidth - card.offsetWidth - 12, b.right + 12) + 'px';
       card.style.top = Math.max(12, Math.min(innerHeight - card.offsetHeight - 12, b.top - 40)) + 'px';
     });
-    img.addEventListener('mouseleave', () => { if (card) card.remove(); card = null; });
+    img.addEventListener('mouseleave', hovGone);
   });
 }
 
@@ -863,23 +876,14 @@ Object.assign(ACTS, {
       api.tabs.create({ url: api.runtime.getURL('compare.html?from=revsearch') });
     } catch (e) { toast(String(e.message || e)); }
   },
-  capturecopy: async () => { const c = FCD.copies.find(x => x.id === state.open); if (c) { await api.runtime.sendMessage({ type: 'captureUrl', url: c.url }).catch(() => {}); toast('Opening ' + c.site + ' to capture it…'); } },
+  capturecopy: async v => { await loadFC(); const c = FCD.copies.find(x => x.id === (v || state.open)); if (c) await captureCopy(c); },
   evidence: async v => {
+    await loadFC();
     const c = FCD.copies.find(x => x.id === (v || state.open));
     if (!c) return;
     const caseNo = await PP_EVIDENCE.ask();
     if (caseNo === null) return;
-    toast('Making the evidence report…');
-    try {
-      const p = FCD.photos.get(c.photo);
-      const blob = await ourBlob(p);
-      const r = await PP_EVIDENCE.make({ blob, name: c.photoName, w: p && p.w, h: p && p.h, hash: (p && p.hash) || await RS_UTIL.sha256(blob), client: c.clientName, path: await FC.pathOf(p), reg: p ? await FC.regFor(p) : null },
-        { ...c, use: FC.USE[c.use][0] }, { caseNo, collector: await getName(), owner: await ownerSummary(c.site), checks: await reportChecks(c, p) });
-      const a = document.createElement('a'); a.href = URL.createObjectURL(r.blob); a.download = r.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
-      await FC.logReport({ id: r.id, file: r.name, url: c.url, site: c.site, photo: c.photoName, client: c.clientName, caseNo });
-      if (r.credit) { const cc = await FC.DB.get('copies', c.id); if (cc) { cc.credit = r.credit; await FC.DB.put('copies', cc); } }
-      toast('Saved ' + r.name);
-    } catch (e) { toast('The report could not be made: ' + (e.message || e)); }
+    await matchReport(c, caseNo);
   },
   fsel: (v, el) => { state[v] = el.value; state.more = 250; render(true); },
   fshop: (v, el) => { state.fShop = el.checked; render(true); },
@@ -897,6 +901,44 @@ Object.assign(ACTS, {
     a.download = 'PageProof_copies_found.csv'; a.click();
   },
 });
+// The Evidence report PDF for one copy (the match PageProof found), saved as its own file.
+async function matchReport(c, caseNo) {
+  toast('Making the evidence report…');
+  try {
+    const p = FCD.photos.get(c.photo);
+    const blob = await ourBlob(p);
+    const r = await PP_EVIDENCE.make({ blob, name: c.photoName, w: p && p.w, h: p && p.h, hash: (p && p.hash) || await RS_UTIL.sha256(blob), client: c.clientName, path: await FC.pathOf(p), reg: p ? await FC.regFor(p) : null },
+      { ...c, use: FC.USE[c.use][0] }, { caseNo, collector: await getName(), owner: await ownerSummary(c.site), checks: await reportChecks(c, p) });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(r.blob); a.download = r.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    await FC.logReport({ id: r.id, file: r.name, url: c.url, site: c.site, photo: c.photoName, client: c.clientName, caseNo });
+    if (r.credit) { const cc = await FC.DB.get('copies', c.id); if (cc) { cc.credit = r.credit; await FC.DB.put('copies', cc); } }
+    toast('Saved ' + r.name);
+    return r.name;
+  } catch (e) { toast('The report could not be made: ' + (e.message || e)); }
+}
+// Capture a copy's page. PageProof remembers which copy it was, so when the evidence pack (zip)
+// is saved on the capture page, the match report PDF is saved next to it as its own file (4.5).
+async function captureCopy(c) {
+  await api.storage.local.set({ fcCapFor: { url: c.url, id: c.id, at: Date.now() } });
+  await api.runtime.sendMessage({ type: 'captureUrl', url: c.url }).catch(() => {});
+  toast('Opening ' + c.site + ' to capture it. When you save the evidence pack, the match report PDF is saved too.');
+}
+// The capture page asks for the match report after saving a pack (fcReportReq). Only one open
+// PageProof tab makes it (a lock), and it uses the case number typed on the capture page.
+async function takeReportReq() {
+  const run = async () => {
+    const { fcReportReq: q } = await api.storage.local.get('fcReportReq');
+    if (!q || Date.now() - q.at > 10 * 60000) return;
+    await api.storage.local.remove('fcReportReq');
+    await loadFC();
+    const c = FCD.copies.find(x => x.id === q.id);
+    if (c) await matchReport(c, q.caseNo || '');
+  };
+  if (navigator.locks) await navigator.locks.request('pp-report-req', run); else await run();
+}
+api.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch.fcReportReq && ch.fcReportReq.newValue) takeReportReq(); });
+api.runtime.onMessage.addListener((m, s, reply) => { if (m && m.type === 'ppAppHere' && s.id === api.runtime.id) { reply(true); return false; } return false; });
+takeReportReq();
 async function ownerSummary(site) {
   const o = FCD && FCD.ownerOf.get(site);
   const f = FCD && FCD.facts.get(site);
