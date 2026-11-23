@@ -14,8 +14,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.evaluate(async () => {
     const root = await navigator.storage.getDirectory();
     const top = await root.getDirectoryHandle('Shared drives', { create: true });
-    for (const a of ['10. Every Other - G-H', '11. Others - I-J']) { const d = await top.getDirectoryHandle(a, { create: true }); for (const b of ['Alpha Media', 'Beta News']) await d.getDirectoryHandle(b, { create: true }); }
-    await FC.meta.set('picked', ['10. Every Other - G-H/Alpha Media']);
+    for (const a of ['10. Group G-H', '11. Group I-J']) { const d = await top.getDirectoryHandle(a, { create: true }); for (const b of ['Alpha Media', 'Beta News']) await d.getDirectoryHandle(b, { create: true }); }
+    await FC.meta.set('picked', ['10. Group G-H/Alpha Media']);
     await chrome.storage.local.set({ ppSetupDone: true, ppTourDone: true, ppSeenVersion: chrome.runtime.getManifest().version, ppReconnectVer: chrome.runtime.getManifest().version, fcDrive: { label: 'H:\\Shared drives', done: false } });
   });
   await page.reload(); await page.waitForTimeout(1200);
@@ -30,9 +30,9 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(a.rows >= 2, 'The top folders show right after choosing the top folder, without leaving the tab (' + a.rows + ' rows)');
   ok(/1 folder ticked/.test(a.text) && /Alpha Media/.test(a.text), 'Choosing the same top folder keeps the ticked folder from the backup');
   // Open a folder: its folders appear by themselves.
-  await page.click('[data-act="csopen"][data-v="11. Others - I-J"]'); await page.waitForTimeout(1200);
-  ok(await page.evaluate(() => !!document.querySelector('[data-act="cspk"][data-v="11. Others - I-J/Beta News"]')), 'Opening a folder shows the folders inside it straight away');
-  await page.click('[data-act="cspk"][data-v="11. Others - I-J/Beta News"]'); await page.waitForTimeout(600);
+  await page.click('[data-act="csopen"][data-v="11. Group I-J"]'); await page.waitForTimeout(1200);
+  ok(await page.evaluate(() => !!document.querySelector('[data-act="cspk"][data-v="11. Group I-J/Beta News"]')), 'Opening a folder shows the folders inside it straight away');
+  await page.click('[data-act="cspk"][data-v="11. Group I-J/Beta News"]'); await page.waitForTimeout(600);
   ok(await page.evaluate(() => /2 folders ticked/.test(document.getElementById('view').textContent) && !!document.querySelector('[data-act="cssave"]')), 'Ticking a folder updates the count and the Next button at once');
   await page.click('[data-act="cssave"]'); await page.waitForTimeout(1500);
   ok(await page.evaluate(() => /Check and start/.test(document.querySelector('.wiz').textContent) && /Searching for/.test(document.getElementById('view').textContent)), 'Next moves to step 4 at once');
