@@ -462,6 +462,11 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['A rule check before you mark Stolen', 'Pick what kind of site it is (company, church, public university, person, user-posted article and more). PageProof stops and asks before marking Stolen on uses that usually can\'t be pursued, like YouTube embeds or embeds from outside the U.S. You can still go ahead, or Remove it instead.'],
+  ['Their page, read for you', 'The copy details now show the photo credit next to the picture on their page, signs it was on purpose (prices, Add to cart, ads), the date first published (from the photo\'s file name), a damages hint, and a Ready for legal checklist. The Evidence report gets a new "About this use" box.'],
+  ['Research steps on Who\'s behind this site', 'A 12-step tick list (their pages, site owners, Justia, USPTO, OpenCorporates, state and Delaware business search, WHOIS, the Wayback Machine, court records, Google, LinkedIn). Your ticks are kept per site.'],
+  ['Save as Breaking News photo', 'Right-click a newspaper photo › PageProof › Save as Breaking News photo. It names the file the firm\'s way (11.23.26_Subject_Lastname.jpg, with POOL for pool photos) and checks it against that photographer\'s photos first: New, or Recycled with the earlier file name.'],
+  ['POOL photos are not searched', 'Photos with _POOL_ in their name are shared with other papers, so Keep searching skips them. They show a "POOL, not searched" tag.'],
   ['Reconnect your folders after an update', 'The first time you open PageProof after an update, it checks your Google Drive photos folder and Documents › PageProof first, with an Allow or Pick again button right there if the browser needs one.'],
   ['When Google Drive isn\'t answering, PageProof says why', 'The red bar now shows what Drive actually answered, and has a "Pick the photos folder again" button. Pick the same top folder as before: your ticked folders and photos stay.'],
   ['Pages open fast again', 'Pages no longer wait for Google Drive. PageProof checks Drive in the background by asking for one of your ticked folders (not the whole shared drive list, which can take a minute), and only shows "Google Drive isn\'t answering" when it really doesn\'t answer.'],

@@ -68,7 +68,7 @@ const PP_EVIDENCE = (() => {
     // A table: label column + one or two value columns. Returns the new y.
     const table = (y, title, rows, cols) => {
       rows = rows.filter(r => r && r[1]);
-      if (!rows.length) return y;
+      if (!rows.length || y > H - 180) return y;      // never runs into the footer
       font(21, true); x.fillStyle = INK; x.fillText(title, M, y); y += 14;
       x.strokeStyle = LINE; x.lineWidth = 1.5; x.beginPath(); x.moveTo(M, y); x.lineTo(W - M, y); x.stroke(); y += 26;
       const LW = 230;
@@ -154,6 +154,19 @@ const PP_EVIDENCE = (() => {
       ['Seen again', seen],
       copy.online === 'gone' ? ['Online now', { t: 'Gone when last checked. This report still shows it was there.', color: ORANGE }] : null,
     ]);
+    // About this use: dates, damages, the credit line on their page and signs it was on purpose.
+    const ck = opts.checks;
+    if (ck) {
+      const pf = ck.pf && ck.pf.ok ? ck.pf : null, dm = ck.damages;
+      const dmCol = dm && dm.lvl === 'bad' ? RED : dm && dm.lvl === 'warn' ? ORANGE : dm && dm.lvl === 'ok' ? GREEN : MUTED;
+      y = table(y, 'About this use', [
+        ck.pub ? ['First published', dayText(ck.pub.date) + ' (from ' + ck.pub.from + ')'] : null,
+        dm && dm.lvl ? ['Damages', { t: dm.title + '. ' + dm.text, color: dmCol }] : null,
+        pf ? ['Credit on their page', pf.credit ? '"' + pf.credit + '"' : { t: 'No credit line next to the photo', color: MUTED }] : null,
+        ck.purpose && ck.purpose.length ? ['Signs it was on purpose', { t: ck.purpose.join(' · '), color: RED }] : null,
+        ck.kind ? ['Kind of site', ck.kind] : null,
+      ]);
+    }
     if (om || cm) {
       const rm = { t: 'Removed', color: RED, bold: true };
       const pair = (k, a, b) => a || b ? [k, a || '—', b || (a ? rm : '—')] : null;

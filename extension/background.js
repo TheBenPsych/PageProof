@@ -269,7 +269,7 @@ const MENU = { openApp: ['Open full PageProof', 'app.html#home'], found: ['Copie
 //  - a picture hidden under a see-through cover (Instagram): rclick.js spots it the moment you
 //    right-click and asks for the second set ("h_" ids) to be shown.
 const NOT_IMG = ['page', 'selection', 'link', 'video', 'audio', 'frame', 'editable'];
-const PIC_ITEMS = [['inspectImage', 'Inspect this photo'], ['reverse', 'Find copies of it'], ['jpgImage', 'Save biggest copy…'], ['openImage', 'Open biggest copy in a tab']];
+const PIC_ITEMS = [['inspectImage', 'Inspect this photo'], ['reverse', 'Find copies of it'], ['jpgImage', 'Save biggest copy…'], ['bnSave', 'Save as Breaking News photo…'], ['openImage', 'Open biggest copy in a tab']];
 const REV_ITEMS = [['revGoogle', 'Google Lens'], ['revYandex', 'Yandex'], ['revBing', 'Bing'], ['revAll', 'All three']];
 api.runtime.onInstalled.addListener(() => {
   try {
@@ -287,7 +287,7 @@ api.runtime.onInstalled.addListener(() => {
 });
 
 function showHiddenPictureItems(show) {
-  for (const id of ['inspectImage', 'reverse', 'jpgImage', 'openImage', 'webSep']) {
+  for (const id of ['inspectImage', 'reverse', 'jpgImage', 'bnSave', 'openImage', 'webSep']) {
     try { api.contextMenus.update('h_' + id, { visible: show }, () => void api.runtime.lastError); } catch (e) { /* old browser */ }
   }
   try { api.contextMenus.refresh && api.contextMenus.refresh(); } catch (e) { /* Chrome has no refresh */ }
@@ -483,7 +483,7 @@ try {
       if (/^https?:\/\//i.test(info.linkUrl || '')) captureUrl(info.linkUrl, tab);
       return;
     }
-    if (['inspectImage', 'jpgImage', 'openImage', 'revGoogle', 'revYandex', 'revBing', 'revAll'].includes(id)) {
+    if (['inspectImage', 'jpgImage', 'bnSave', 'openImage', 'revGoogle', 'revYandex', 'revBing', 'revAll'].includes(id)) {
       if (!tab) return;
       const found = await rightClickedPicture(info, tab);
       if (!found.item) {
@@ -500,6 +500,7 @@ try {
       delete item.others;
       if (big && id !== 'jpgImage' && big.bmp.close) big.bmp.close();
       if (id === 'inspectImage') return openInspector({ mode: 'one', page: info.pageUrl, title: tab.title, items: [item] }, tab);
+      if (id === 'bnSave') return openBreakingNews(item, info, tab);
       if (id === 'openImage') {
         const url = item.best || item.src;
         if (url.startsWith('blob:')) return openInspector({ mode: 'one', page: info.pageUrl, title: tab.title, items: [item] }, tab);
@@ -527,6 +528,38 @@ try {
     if (m) api.tabs.create({ url: api.runtime.getURL(m[1]) });
   });
 } catch (e) { /* menus not available */ }
+
+// ---------- Save as Breaking News photo ----------
+// Reads the article's date and the credit line under the picture, then opens PageProof's
+// "Save a Breaking News photo" page, which names the file the firm's way and checks it first.
+async function openBreakingNews(item, info, tab) {
+  let facts = {};
+  try {
+    facts = await inFrame(tab, info.frameId || 0, null, src => {
+      const clean = s => String(s || '').replace(/\s+/g, ' ').trim();
+      const key = (() => { try { return decodeURIComponent(new URL(src, location.href).pathname.split('/').pop() || '').toLowerCase(); } catch (e) { return ''; } })();
+      const img = [...document.images].find(i => i.currentSrc === src || i.src === src) || (key.length > 4 ? [...document.images].find(i => (i.currentSrc || i.src || '').toLowerCase().includes(key)) : null);
+      let credit = '';
+      if (img) {
+        const fig = img.closest('figure');
+        const cands = [...(fig ? fig.querySelectorAll('figcaption, [class*="credit" i], [class*="caption" i]') : [])];
+        let up = img.parentElement;
+        for (let i = 0; up && i < 4; i++, up = up.parentElement) cands.push(...up.querySelectorAll('[class*="credit" i], [class*="caption" i], small, cite'));
+        for (const c of cands) { const t = clean(c.textContent); if (t && t.length < 300 && /(photo|image|credit|courtesy|©)/i.test(t)) { credit = t; break; } }
+        if (!credit && fig) { const fc = fig.querySelector('figcaption'); if (fc) credit = clean(fc.textContent).slice(0, 300); }
+      }
+      const meta = n => { const m = document.querySelector(`meta[property="${n}"], meta[name="${n}"], meta[itemprop="${n}"]`); return m ? m.getAttribute('content') || '' : ''; };
+      let date = meta('article:published_time') || meta('datePublished') || meta('og:article:published_time') || meta('parsely-pub-date') || meta('pubdate') || '';
+      if (!date) for (const s of document.querySelectorAll('script[type="application/ld+json"]')) { const m = /"datePublished"\s*:\s*"([^"]+)"/.exec(s.textContent || ''); if (m) { date = m[1]; break; } }
+      if (!date) { const t = document.querySelector('time[datetime]'); if (t) date = t.getAttribute('datetime'); }
+      if (!date) { const m = /\/(20\d\d)\/(\d{1,2})\/(\d{1,2})\//.exec(location.pathname); if (m) date = m[1] + '-' + m[2].padStart(2, '0') + '-' + m[3].padStart(2, '0'); }
+      return { credit: credit.slice(0, 300), date, alt: img ? clean(img.alt).slice(0, 200) : '', headline: clean(meta('og:title') || document.title).slice(0, 200) };
+    }, [item.src]) || {};
+  } catch (e) { /* the page would not answer: the date and credit stay empty */ }
+  await api.storage.local.set({ bnPending: { src: item.src, best: item.best || '', page: info.pageUrl || '', title: tab.title || '', at: new Date().toISOString(), ...facts } });
+  inFrame(tab, 0, null, () => window.__ppRC && window.__ppRC.hide()).catch(() => {});
+  return api.tabs.create({ url: api.runtime.getURL('app.html#bnsave'), index: tab.index + 1, windowId: tab.windowId, openerTabId: tab.id });
+}
 
 // ---------- Capture a link: open it in a new tab, wait for it to load, then capture ----------
 async function captureUrl(url, near) {

@@ -175,6 +175,106 @@ function hideChoices(c) {
   out.push([base, 'All of ' + base, part ? 'Every account and page on it' : 'Every page and sub-site']);
   return out;
 }
+// ---------------------------------------------------------------- firm checks (checks.js)
+const PF_BUSY = new Set();       // copies whose page is being read right now
+async function siteKinds() { return (await FC.meta.get('siteKinds')) || {}; }
+// The kind of site is saved once per site (all of example.com), so it is only asked once.
+async function setKind(site, k) {
+  const m = await siteKinds(), b = FC.baseOf(site), was = m[b] || '';
+  if (k) m[b] = k; else delete m[b];
+  await FC.meta.set('siteKinds', m);
+  return was;
+}
+async function readTheirPage(c, again) {
+  if (PF_BUSY.has(c.id) || (c.pf && !again)) return c.pf;
+  PF_BUSY.add(c.id);
+  try {
+    const pf = await PP_CHECKS.readPage(c);
+    const cc = await FC.DB.get('copies', c.id);
+    if (cc) { cc.pf = pf; await FC.DB.put('copies', cc); }
+    c.pf = pf; FCD = null;
+    return pf;
+  } finally { PF_BUSY.delete(c.id); }
+}
+const ruleRow = h => `<div class="rrow ${h.lvl}"><span class="tag ${PP_CHECKS.LVL[h.lvl][1]}">${PP_CHECKS.LVL[h.lvl][0]}</span><span>${esc(h.text)}</span></div>`;
+function kindSelect(c, kind, id) {
+  const guess = kind ? '' : PP_CHECKS.guessKind(c, c.pf, FCD && FCD.facts.get(c.site));
+  return `<select ${id ? `id="${id}"` : 'data-act="setkind"'} class="kindsel" aria-label="Kind of site">
+    <option value="">${kind ? 'Not picked' : 'Pick one…'}</option>${PP_CHECKS.KINDS.map(([k, n]) => `<option value="${k}"${k === (kind || (id ? guess : '')) ? ' selected' : ''}>${esc(n)}${!kind && k === guess ? ' (best guess)' : ''}</option>`).join('')}</select>`;
+}
+function checksHtml(c, reg, kind, hits, pub, capturedAt) {
+  const pf = c.pf, busy = PF_BUSY.has(c.id) || !pf;
+  const purpose = PP_CHECKS.onPurpose(pf);
+  const dmg = PP_CHECKS.damages(pub, reg);
+  const tagFor2 = { ok: 'ok', warn: 'warn', bad: 'bad', '': 'grey' };
+  const legal = c.status === 'stolen' ? PP_CHECKS.legal({ c, reg, pub, kind, hits, pf, capturedAt }) : null;
+  const ready = legal ? legal.filter(x => x[0] === true).length : 0;
+  const fix = { capture: 'Capture', kind: 'Pick', readpage: 'Read it' };
+  return `
+  <section class="dsec" id="rulesbox"><div class="dsh">Firm rules</div>
+    <div class="row" style="gap:8px;font-size:13.5px"><span>Kind of site</span>${kindSelect(c, kind)}${kind ? '' : '<span class="faint" style="font-size:12.5px">asked once per site</span>'}</div>
+    ${hits.length ? hits.map(ruleRow).join('') : `<span class="faint" style="font-size:13px">${kind ? 'No firm rule stops this copy.' : 'Pick the kind of site to see the firm\'s rules for it.'}</span>`}
+  </section>
+  <section class="dsec"><div class="dsh">Their page</div>
+    ${busy ? '<span class="muted" style="font-size:13.5px">Reading their page (without your cookies)…</span>'
+      : !pf.ok ? `<div class="row" style="gap:8px;font-size:13.5px"><span class="muted">Could not read their page: ${esc(pf.why || '')}</span><button class="btn ghost sm" data-act="readpage">Try again</button></div>`
+      : `<dl class="facts" style="margin:0">
+        <dt>Credit line</dt><dd>${pf.credit ? `<q>${esc(pf.credit)}</q>${pf.agency ? ` <span class="tag blue">${esc(pf.agency)}</span>` : ''}` : `<span class="muted">${pf.imgFound ? 'No credit line next to the photo' : 'The photo was not found in their page\'s code, so no credit line was read'}</span>`}</dd>
+        <dt>On purpose?</dt><dd>${purpose.length ? purpose.map(t => `<div>${esc(t)}</div>`).join('') : '<span class="muted">No selling or ads found</span>'}</dd>
+        ${pf.yt || pf.embedPost ? `<dt>Embeds</dt><dd>${[pf.yt ? 'YouTube video' : '', pf.embedPost ? 'Social media post' : ''].filter(Boolean).join(', ')} on the page${pf.imgFound ? ' (the photo itself is on the page too)' : ''}</dd>` : ''}
+      </dl><span class="faint" style="font-size:12px">Read ${shortDate(pf.at).toLowerCase()} · <a href="#" data-act="readpage">Read again</a></span>`}
+  </section>
+  <section class="dsec"><div class="dsh">Dates and damages</div>
+    <dl class="facts" style="margin:0">
+      <dt>Published</dt><dd>${pub ? `<b>${PP_CHECKS.fmt(pub.date)}</b><br><span class="muted" style="font-size:12.5px">From ${esc(pub.from)}</span>` : '<span class="muted">Not known</span>'}</dd>
+      ${dmg.end ? `<dt>3 months</dt><dd>${PP_CHECKS.fmt(dmg.end)}</dd>` : ''}
+    </dl>
+    <div class="regbox ${dmg.lvl === 'ok' ? '' : 'none'}" style="${dmg.lvl === 'bad' ? 'border-left-color:var(--bad);background:var(--bad-soft)' : dmg.lvl === '' ? 'border-left-color:var(--line);background:var(--surface)' : ''}"><span><span class="tag ${tagFor2[dmg.lvl]}">${esc(dmg.title)}</span></span><span class="muted" style="font-size:13px">${esc(dmg.text)}</span></div>
+  </section>
+  ${legal ? `<section class="dsec" id="legalbox"><div class="dsh">Ready for legal? <span class="tag ${ready === legal.length ? 'ok' : 'warn'}" style="margin-left:6px;letter-spacing:0;text-transform:none">${ready} of ${legal.length} ready</span></div>
+    ${legal.map(([ok, label, act]) => `<div class="lrow ${ok === true ? 'y' : ok === false ? 'n' : 'q'}"><span class="lbox" aria-hidden="true">${ok === true ? '✓' : ok === false ? '!' : '?'}</span><span style="flex:1;min-width:0">${esc(label)}</span>${act ? `<button class="btn ghost sm" data-act="legalfix" data-v="${act}">${fix[act]}</button>` : ''}</div>`).join('')}
+    <span class="faint" style="font-size:12.5px">The Evidence report can still be made at any time.</span></section>` : ''}`;
+}
+// Before a copy is marked Stolen: the kind of site (once per site) and the rules that apply.
+// Resolves 'stolen', 'removed' (Remove instead) or null (cancelled).
+async function ruleGate(c) {
+  const kinds = await siteKinds();
+  // Only ask when a Stop rule applies (for the kind you saved, or else PageProof's guess). Warn rules stay
+  // in the details panel, so everyday copies and embeds go straight through.
+  const saved = kinds[FC.baseOf(c.site)] || PP_CHECKS.guessKind(c, c.pf) || '';
+  if (!PP_CHECKS.rules(c, saved, c.pf).some(h => h.lvl === 'stop')) return 'stolen';
+  if (!c.pf && !PF_BUSY.has(c.id)) readTheirPage(c).then(() => { if (state.open === c.id) render(true); }).catch(() => {});
+  return new Promise(resolve => {
+    const d = document.createElement('dialog');
+    d.className = 'pp-ask rulegate';
+    d.innerHTML = `<form method="dialog" style="display:flex;flex-direction:column;gap:12px;width:min(480px,86vw)">
+      <b style="font-size:18px">Before you mark it Stolen</b>
+      <span class="muted" style="font-size:13.5px;overflow-wrap:anywhere">${esc(c.site)}</span>
+      <label style="display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:600">What kind of site is this? ${kindSelect(c, saved, 'gateKind')}<span class="faint" style="font-weight:400;font-size:12.5px">Saved for every copy on ${esc(FC.baseOf(c.site))}.</span></label>
+      <div id="gateRules" style="display:flex;flex-direction:column;gap:6px"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button value="cancel" type="submit" class="btn">Cancel</button><button value="removed" type="submit" class="btn" id="gateRemove">Remove instead</button><button value="stolen" type="submit" class="btn stolen" id="gateStolen">Mark Stolen</button></div></form>`;
+    d.style.cssText = 'border:1px solid var(--line);border-radius:16px;padding:22px;background:var(--surface);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.35)';
+    document.body.appendChild(d);
+    const sel = d.querySelector('#gateKind');
+    const draw = () => {
+      const hs = PP_CHECKS.rules(c, sel.value, c.pf);
+      const stop = hs.some(h => h.lvl === 'stop');
+      d.querySelector('#gateRules').innerHTML = hs.length ? hs.map(ruleRow).join('') : '<span class="faint" style="font-size:13px">No firm rule stops this copy.</span>';
+      d.querySelector('#gateRemove').hidden = !stop;
+      d.querySelector('#gateStolen').textContent = stop ? 'Mark Stolen anyway' : 'Mark Stolen';
+      d.querySelector('#gateStolen').className = stop ? 'btn' : 'btn stolen';
+      d.querySelector('#gateRemove').className = stop ? 'btn primary' : 'btn';
+    };
+    sel.addEventListener('change', draw); draw();
+    d.addEventListener('keydown', e => e.stopPropagation());
+    d.addEventListener('close', async () => {
+      const v = d.returnValue, k = sel.value;
+      d.remove();
+      if (v === 'stolen' || v === 'removed') { if (k && k !== kinds[FC.baseOf(c.site)]) await setKind(c.site, k); resolve(v); } else resolve(null);
+    });
+    d.showModal(); sel.focus();
+  });
+}
 async function drawer(list) {
   if (!state.open) return '';
   const c = FCD.copies.find(x => x.id === state.open);
@@ -184,6 +284,13 @@ async function drawer(list) {
   const o = FCD.ownerOf.get(c.site);
   const f = FCD.facts.get(c.site);
   const clients = [...FCD.clients.keys()].sort();
+  // Firm checks (checks.js): kind of site, their page read without cookies, dates, Ready for legal.
+  const [kinds, logR] = await Promise.all([siteKinds(), api.storage.local.get('log').catch(() => ({}))]);
+  const kind = kinds[FC.baseOf(c.site)] || '';
+  const pub = PP_CHECKS.pubDate(p);
+  const hits = PP_CHECKS.rules(c, kind, c.pf);
+  const capturedAt = PP_CHECKS.captureOf(logR.log, c.url);
+  if (!c.pf && !PF_BUSY.has(c.id)) readTheirPage(c).then(() => { if (state.open === c.id) render(true); }).catch(() => {});
   const sz = c.w && p && p.w ? (Math.abs(c.w / c.h - p.w / p.h) / (p.w / p.h) > 0.06 ? 'cropped' : (c.w * c.h) / (p.w * p.h) > 1.15 ? 'bigger than your client\'s' : (c.w * c.h) / (p.w * p.h) < 0.85 ? 'smaller' : 'same size') : '';
   const idx = list.indexOf(c.id);
   const last = HIST[HIST.length - 1];
@@ -196,6 +303,7 @@ async function drawer(list) {
   ${keptBoxHtml(c)}
   ${pageBoxHtml(c)}
   ${p && p.rel ? `${reg ? `<section class="dsec"><div class="dsh">Copyright registration</div>${regBox(p, reg)}</section>` : ''}<section class="dsec"><div class="dsh">Your client's photo in Drive</div>${pathBox(path)}</section>` : ''}
+  ${checksHtml(c, reg, kind, hits, pub, capturedAt)}
   <dl class="facts">
     <dt>Page</dt><dd class="mono" style="font-size:12px;overflow-wrap:anywhere"><a href="${safeUrl(c.url)}" target="_blank" rel="noreferrer">${esc(c.url)}</a></dd>
     ${c.title ? `<dt>Title</dt><dd>${esc(c.title)}</dd>` : ''}
@@ -496,6 +604,7 @@ async function drawerVerdict(status) {
   try { await drawerVerdict2(status, id, c); } finally { answering = false; }
 }
 async function drawerVerdict2(status, id, c) {
+  if (status === 'stolen') { status = await ruleGate(c); if (!status) return; }
   const i = LIST.indexOf(id);
   const nextId = LIST.slice(i + 1).find(x => x !== id) || LIST.slice(0, Math.max(0, i)).reverse().find(x => x !== id) || '';
   const sis = status === 'stolen' ? sistersOf(c) : null;
@@ -514,6 +623,13 @@ async function hideSite(entry, label) {
   toastUndo(entry + ' hidden. It never shows again in any search.');
 }
 
+// What the Evidence report says about the use: dates, damages, credit line, signs it was on purpose.
+async function reportChecks(c, p) {
+  const pf = c.pf || await readTheirPage(c).catch(() => null);
+  const pub = PP_CHECKS.pubDate(p), reg = p ? await FC.regFor(p) : null;
+  const kind = (await siteKinds())[FC.baseOf(c.site)] || '';
+  return { pub, damages: PP_CHECKS.damages(pub, reg), pf, purpose: PP_CHECKS.onPurpose(pf), kind: kind ? PP_CHECKS.KIND_NAME[kind] : '' };
+}
 // The current copy's photo file (from Drive), or the small copy if Drive can't be reached.
 async function ourBlob(p) {
   try { if (p && p.rel) return await FC.fileFor(p); } catch (e) { /* not reachable */ }
@@ -575,12 +691,14 @@ Object.assign(ACTS, {
   openlink: () => {},                       // a plain link inside a row: just let it open
   // An answer straight from the row.
   rowans: async v => {
-    const i = v.indexOf('|'), status = v.slice(0, i), id = v.slice(i + 1);
+    const i = v.indexOf('|'), id = v.slice(i + 1);
+    let status = v.slice(0, i);
     if (state.open === id && status !== 'new') return drawerVerdict(status);
     const c = FCD && FCD.copies.find(x => x.id === id);
     if (!c || answering) return;
     answering = true;
     try {
+      if (status === 'stolen') { status = await ruleGate(c); if (!status) return; }
       const sis = status === 'stolen' ? sistersOf(c) : null;
       await answerCopies([id], status, c.site + ' ' + VERB[status]);
       state.sis = sis;
@@ -705,6 +823,27 @@ Object.assign(ACTS, {
       toast(res === 'removed' ? 'Credit removed: their copy has no copyright line.' : 'Their copy still credits your client.'); render(true);
     } catch (e) { toast(String(e.message || e)); }
   },
+  setkind: async (v, el) => {
+    const c = FCD.copies.find(x => x.id === state.open);
+    if (!c) return;
+    const k = el.value, was = await setKind(c.site, k);
+    HIST.push({ label: 'kind of site set for ' + FC.baseOf(c.site), undo: () => setKind(c.site, was), open: c.id });
+    toastUndo(k ? FC.baseOf(c.site) + ' is a ' + PP_CHECKS.KIND_NAME[k].toLowerCase() + '. Saved for every copy there.' : 'Kind of site cleared.');
+    render(true);
+  },
+  readpage: async () => {
+    const c = FCD.copies.find(x => x.id === state.open);
+    if (!c) return;
+    const p = readTheirPage(c, true); render(true);
+    await p.catch(() => {});
+    if (state.open === c.id) render(true);
+  },
+  legalfix: async v => {
+    if (v === 'capture') return ACTS.capturecopy();
+    if (v === 'readpage') return ACTS.readpage();
+    const s = document.querySelector('#rulesbox .kindsel');
+    if (s) { s.scrollIntoView({ block: 'center', behavior: 'smooth' }); s.focus(); }
+  },
   setclient: async (v, el) => {
     const name = el.value; if (!name) return;
     const c = FCD.copies.find(x => x.id === state.open);
@@ -735,7 +874,7 @@ Object.assign(ACTS, {
       const p = FCD.photos.get(c.photo);
       const blob = await ourBlob(p);
       const r = await PP_EVIDENCE.make({ blob, name: c.photoName, w: p && p.w, h: p && p.h, hash: (p && p.hash) || await RS_UTIL.sha256(blob), client: c.clientName, path: await FC.pathOf(p), reg: p ? await FC.regFor(p) : null },
-        { ...c, use: FC.USE[c.use][0] }, { caseNo, collector: await getName(), owner: await ownerSummary(c.site) });
+        { ...c, use: FC.USE[c.use][0] }, { caseNo, collector: await getName(), owner: await ownerSummary(c.site), checks: await reportChecks(c, p) });
       const a = document.createElement('a'); a.href = URL.createObjectURL(r.blob); a.download = r.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
       await FC.logReport({ id: r.id, file: r.name, url: c.url, site: c.site, photo: c.photoName, client: c.clientName, caseNo });
       if (r.credit) { const cc = await FC.DB.get('copies', c.id); if (cc) { cc.credit = r.credit; await FC.DB.put('copies', cc); } }
@@ -848,6 +987,7 @@ Object.assign(ACTS, {
     if (!c || answering) return;
     answering = true;
     try {
+      if (v === 'stolen') { v = await ruleGate(c); if (!v) return; }
       await answerCopies([c.id], v, c.site + ' ' + VERB[v]);
       toastUndo(c.site + ' ' + VERB[v] + '.');
       await render(true);

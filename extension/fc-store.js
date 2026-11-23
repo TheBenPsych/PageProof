@@ -746,7 +746,11 @@ const FC = (() => {
     const m = (now.getFullYear() - p.year) * 12 + now.getMonth() - ((p.quarter || 4) * 3 - 1);
     return Math.max(0, m);
   }
+  // POOL photos (court photos shared with other papers, named like 10.29.26_POOL_Subject_Name.jpg)
+  // may be used by others on purpose, so they are never searched. Rename without POOL to search.
+  const isPool = name => /(^|[_\s.-])POOL([_\s.-]|$)/.test(String(name || ''));
   function plan(p, client) {
+    if (isPool(p.name)) return { tier: 7, due: false, pool: true };
     const since = ageDays(p.lastSearched);
     if (p.retry) return { tier: 0, due: true };                       // "Try again" on the Skipped photos page
     // A photo that could not be opened is tried again every 3 months (never, if it is a kind
@@ -1591,6 +1595,6 @@ const FC = (() => {
   return { DB, meta, open, touch, pics, dropDotMatches, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, setPicked, pickInside, SCAN, applyPendingFlags, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, setClientOf, setFlag, setClients, checkOnline, logWeek, week, weekKey,
-    hiddenCountries, setHiddenCountries, ownerFor, pathOf, logReport, USE, useOf, riskOf, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
+    isPool, hiddenCountries, setHiddenCountries, ownerFor, pathOf, logReport, USE, useOf, riskOf, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
     backupSoon, backupCopiesSoon, writeSettings, writeCopies, readBackup, restore, restoreCopies, settingsSnapshot, monthsOld, newness, yearOf, quarterOf, dayOf };
 })();
