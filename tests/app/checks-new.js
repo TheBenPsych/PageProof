@@ -201,6 +201,14 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     const t = r === 'searches' && fr ? await fr.evaluate(() => document.body.innerText.length) : await stuck.evaluate(() => document.getElementById('view').textContent.length);
     ok(t > 100, 'Page ' + r + ' opens even when Google Drive never answers');
   }
+  // 4.3.7: after an update, the folders are checked first
+  await page.evaluate(() => chrome.storage.local.set({ ppReconnectVer: '0.0.1' }));
+  const rc = await ctx.newPage();
+  await rc.goto(url('app.html#found')); await rc.waitForTimeout(4000);
+  ok(await rc.evaluate(() => location.hash === '#reconnect' && /Reconnect your folders/.test(document.body.textContent) && /Connected/.test(document.getElementById('view').textContent)), 'After an update PageProof opens Reconnect your folders and shows Drive connected');
+  await rc.evaluate(() => document.querySelector('[data-act="rcdone"]').click()); await rc.waitForTimeout(1500);
+  ok(await rc.evaluate(async () => location.hash === '#home' && (await chrome.storage.local.get('ppReconnectVer')).ppReconnectVer === chrome.runtime.getManifest().version), 'Continue goes Home and is not asked again for this version');
+  await rc.close();
   // 4.3.6: when Drive answers with an error, the red bar says what it was
   const bad = await ctx.newPage();
   await bad.addInitScript(() => {
