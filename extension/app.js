@@ -465,6 +465,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Hidden countries work again', 'Copies from countries you hide (like France or Lithuania) are hidden again, and the Country column shows the country from the web address ending (.fr, .lt, .com.tr). Endings used all over the world, like .com, .io, .co, .tv, .me and .ai, never count as a country.'],
   ['The side panel shows again', 'The PageProof side panel (beside the page in Chrome and Edge) opened empty, because it borrowed a name from the main page\'s left menu and was slid out of sight on narrow screens. It now shows Capture this page, Photos on this page and Copies found again. If it ever can\'t load, it says why instead of staying blank.'],
   ['Home lines up', 'The boxes on Home now sit in the same three columns as the three big cards at the top, so every edge lines up. On a narrow window they stack in one column.'],
   ['One PageProof folder', 'PageProof can now live in the same folder as your saved work: the program goes in Documents › PageProof › Install, and your finds, settings and lists stay in Documents › PageProof. PageProof never writes inside Install, and it refuses that folder if you pick it by mistake. From this version PageProof also keeps the same ID wherever its folder is, so moving or reinstalling it no longer loses what is stored in the browser.'],
