@@ -233,6 +233,14 @@ const RS_LISTS = {
       await api.storage.local.set({ rsHidden: RS_LISTS.hidden, rsAllowed: RS_LISTS.allowed });
       RS_LISTS.wrote = wrote;
     }
+    // 4.9.4: social sites hidden whole before are shown again (only accounts can be hidden now).
+    const whole = RS_LISTS.hidden.filter(d => RS_LISTS.wholeSocial(d));
+    if (whole.length) {
+      RS_LISTS.hidden = RS_LISTS.hidden.filter(d => !whole.includes(d));
+      const old = (await api.storage.local.get('ppSocialUnhid')).ppSocialUnhid || [];
+      await api.storage.local.set({ ppSocialUnhid: [...new Set(old.concat(whole))] });
+      await RS_LISTS.save();
+    }
     await RS_REJECT.load();
     return RS_LISTS;
   },
@@ -244,9 +252,20 @@ const RS_LISTS = {
       RS_LISTS.fileState = 'granted';
     }
   },
+  // 4.9.4: a whole social site (x.com, instagram.com...) can never be hidden, only its accounts.
+  wholeSocial(entry) {
+    const e = String(entry || '');
+    const S = globalThis.PP_SOCIAL;
+    if (!S || !e || e.includes('/') || e.startsWith('.')) return false;
+    if (S.mineFor(e) === 'web') return false;
+    const L = S.listed(e);
+    if (L) return e === L || !S.fromUrl('https://' + e + '/');
+    return S.mineFor(e) === 'social';
+  },
   async add(kind, site) {
     site = RS_SITE.tidy(site);
     if (!site) return false;
+    if (kind === 'hidden' && RS_LISTS.wholeSocial(site)) return false;
     const other = kind === 'hidden' ? 'allowed' : 'hidden';
     RS_LISTS[other] = RS_LISTS[other].filter(d => d !== site);
     if (!RS_LISTS[kind].includes(site)) RS_LISTS[kind].push(site);

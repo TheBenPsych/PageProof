@@ -90,7 +90,9 @@ async function readFC() {
   }
   // 4.9: accounts on social sites (stolen before is counted per account there, not per site).
   const soc = await socIndex(copies);
-  return { copies, photos, clients: new Map(clients.map(c => [c.name, c])), countries, facts, owners: ownerList, ownerOf, ...soc };
+  let unhid = [];
+  try { unhid = (await (globalThis.browser || chrome).storage.local.get('ppSocialUnhid')).ppSocialUnhid || []; } catch (e) { /* none */ }
+  return { unhid, copies, photos, clients: new Map(clients.map(c => [c.name, c])), countries, facts, owners: ownerList, ownerOf, ...soc };
 }
 const siteHidden = c => FC.hiddenCopy(c, RS_LISTS.hidden) || (PEND_ARR.length > 0 && FC.hiddenCopy(c, PEND_ARR));
 const repeatTag = c => c.repeat && c.status === 'new' ? `<span class="tag bad" style="font-size:11.5px" title="You already marked ${c.repeat} ${c.repeat === 1 ? 'copy' : 'copies'} on ${esc(c.repeatWho)} as Stolen">${c.repeat} stolen before</span>` : '';
@@ -635,6 +637,7 @@ V.found = async () => {
   ${await driveBanner()}
   ${bigTabs}
   ${socAskBanner(everyTab.filter(visible))}
+  ${FCD.unhid && FCD.unhid.length ? `<div class="banner info" role="status"><div style="flex:1 1 260px;min-width:0"><b>${esc(FCD.unhid.join(', '))} ${FCD.unhid.length === 1 ? 'shows' : 'show'} again</b><div style="font-size:13px">A whole social site can no longer be hidden, only its accounts. Its posts are back on the Social media tab. Hide the accounts you don't want from there.</div></div><button class="btn sm" data-act="unhidok">Got it</button></div>` : ''}
   <div class="ftiles" aria-label="Quick counts">
     ${tile('New, waiting for you', nNew, state.fFilter === 'New' && state.fWhen === 'any' && state.fRisk === 'Any' && !state.fFresh, 'ffilter', 'New', '', true)}
     ${tile('Found today', newL.filter(c => new Date(c.firstSeen).toDateString() === new Date().toDateString()).length, state.fWhen === 'today', 'ftoday', '1', 'accent')}
@@ -692,7 +695,7 @@ V.found = async () => {
     <div class="row faint cfoot"><span>Keys with a copy open: <span class="kbd">Y</span> stolen <span class="kbd">L</span> licensed <span class="kbd">N</span> remove <span class="kbd">→</span> skip <span class="kbd">U</span> undo <span class="kbd">↑</span><span class="kbd">↓</span> move <span class="kbd">?</span> all keys. Also kept in Documents › PageProof › found-copies.txt.</span></div>
   </section>
   ${state.sis ? `<div class="bulk sis"><div style="flex:1 1 300px;min-width:0"><b>Same ${state.sis.same ? 'photo' : 'article'} on ${plural(state.sis.sites.length, 'sister site')} of ${esc(state.sis.owner)}</b><div style="font-size:13px;opacity:.85;overflow-wrap:anywhere">${esc(state.sis.sites.slice(0, 5).join(', '))}${state.sis.sites.length > 5 ? '…' : ''}</div></div><button class="btn" data-act="sisall">Mark ${state.sis.ids.length === 1 ? 'it' : 'all ' + state.sis.ids.length} stolen too</button><button class="btn" data-act="sisno">Not now</button></div>` : ''}
-  ${state.picked.length ? `<div class="bulk"><b>${state.picked.length} picked</b><button class="btn" style="margin-left:auto" data-act="bulkhide">Hide these sites</button><button class="btn" data-act="bulk" data-v="removed">Remove</button><button class="btn" data-act="bulk" data-v="licensed">Mark licensed</button><button class="btn" data-act="bulk" data-v="stolen">Mark stolen</button><button class="btn" data-act="clearpick">Clear</button></div>` : ''}
+  ${state.picked.length ? `<div class="bulk"><b>${state.picked.length} picked</b><button class="btn" style="margin-left:auto" data-act="bulkhide">${state.fTab === 'social' ? 'Hide these accounts' : 'Hide these sites'}</button><button class="btn" data-act="bulk" data-v="removed">Remove</button><button class="btn" data-act="bulk" data-v="licensed">Mark licensed</button><button class="btn" data-act="bulk" data-v="stolen">Mark stolen</button><button class="btn" data-act="clearpick">Clear</button></div>` : ''}
   ${await drawer(me === RENDER_N ? (LIST = list) : list)}`;
 };
 // Grouped by site, each site gets one strip: where it is, what PageProof knows, and buttons
@@ -702,7 +705,7 @@ function siteStrip(base, xs) {
   const worst = xs.some(x => x.risk.level === 'sus') ? 'sus' : xs.some(x => x.risk.level === 'watch') ? 'watch' : 'ok';
   const uses = [...new Set(xs.map(x => FC.USE[x.use][0]))].slice(0, 2).join(', ');
   return `<div class="strip"><div class="sname"><b class="gname">${esc(base)}</b>${c.country ? `<span class="tag grey">${esc(c.country)}</span>` : ''}${worst !== 'ok' ? `<span class="tag ${worst === 'sus' ? 'bad' : 'warn'}">${RISK[worst][0]}</span>` : ''}${o && o.real ? `<span class="tag blue" title="Site owner">${esc(o.name)}</span>` : ''}<span class="faint">${esc(uses)} · ${plural(new Set(xs.map(x => x.photo)).size, 'of your photos', 'of your photos')}</span></div>
-    <div class="sbtns"><a class="btn sm" href="${safeUrl('https://' + base)}" target="_blank" rel="noreferrer" data-act="openlink">Home page</a><button class="btn sm" data-act="stripok" data-v="${esc(c.id)}">Approve site</button><button class="btn sm" data-act="hidesite" data-v="${esc(base)}">Hide site</button><button class="btn sm" data-act="gowho" data-v="${esc(c.id)}">Who's behind it</button></div></div>`;
+    <div class="sbtns"><a class="btn sm" href="${safeUrl('https://' + base)}" target="_blank" rel="noreferrer" data-act="openlink">Home page</a><button class="btn sm" data-act="stripok" data-v="${esc(c.id)}">Approve site</button>${RS_LISTS.wholeSocial(base) ? '' : `<button class="btn sm" data-act="hidesite" data-v="${esc(base)}">Hide site</button>`}<button class="btn sm" data-act="gowho" data-v="${esc(c.id)}">Who's behind it</button></div></div>`;
 }
 V.found.guard = async () => ((await FC.drive()).done ? null : 'connect');
 V.found.after = () => { if (typeof FC_PREV !== 'undefined') FC_PREV.start(); loadOurs(); bindHover(); ppPagePic(); ppKeptLine(); socQueue(); };
@@ -848,7 +851,10 @@ async function hideSite(entry, label) {
   await inTurn(async () => {
     try { await RS_LISTS.load(); await RS_LISTS.add('hidden', entry); } finally { pendHide([e], false); dropFC(); }
   });
-  if (!RS_LISTS.hidden.includes(e)) return;           // not saved (the message says why)
+  if (!RS_LISTS.hidden.includes(e)) {                 // not saved
+    if (RS_LISTS.wholeSocial(e)) toast('A whole social site can\'t be hidden, only its accounts. Open a post and hide its account.');
+    return;
+  }
   if (!state.recentHides.includes(e)) state.recentHides.push(e);
   HIST.push({ label: (label || entry) + ' hidden', undo: async () => { await RS_LISTS.load(); await RS_LISTS.remove('hidden', e); }, open: was || undefined });
   toastUndo(entry + ' hidden. It never shows again in any search.');
@@ -905,7 +911,7 @@ Object.assign(ACTS, {
   bulkhide: async () => {
     if (!FCD) await loadFC();
     // Social posts: their accounts are hidden, never the whole platform.
-    const sites = [...new Set(state.picked.map(id => { const c = FCD.copies.find(x => x.id === id) || {}; return isSoc(c) ? (c.acct ? c.acct.key : '') : c.site; }).filter(Boolean))];
+    const sites = [...new Set(state.picked.map(id => { const c = FCD.copies.find(x => x.id === id) || {}; return isSoc(c) ? (c.acct ? c.acct.key : '') : c.site; }).filter(s => s && !RS_LISTS.wholeSocial(s)))];
     if (!sites.length) return toast('Those posts have no account yet. Set the account first.');
     state.picked = [];
     pendHide(sites, true); dropRows(null);
@@ -997,7 +1003,7 @@ Object.assign(ACTS, {
       ${c.clientName ? `<button data-act="mdo" data-v="okclient|${id}">${ic('check', 16)}<span>For ${esc(c.clientName)} only</span></button>` : ''}
       <button data-act="mdo" data-v="okall|${id}">${ic('check', 16)}<span>For every client</span></button>` : ''}
       <small>${isSoc(c) ? 'Hide' : 'Hide this site'}</small>
-      ${hideChoices(c).map(([h, l, d, warn]) => `<button data-act="mhide" data-v="${esc(h)}"${warn ? ` title="${esc(d)}" style="color:var(--bad)"` : ''}>${ic('ban', 16)}<span>${esc(l)}${warn ? ' (every account)' : ''}</span></button>`).join('')}
+      ${hideChoices(c).map(([h, l, d, warn]) => `<button data-act="mhide" data-v="${esc(h)}"${warn ? ` title="${esc(d)}" style="color:var(--bad)"` : ''}>${ic('ban', 16)}<span>${esc(l)}</span></button>`).join('')}
       <hr>
       <button data-act="mdo" data-v="compare|${id}">${ic('layers', 16)}<span>Compare the two photos</span></button>
       <button data-act="mdo" data-v="evidence|${id}">${ic('doc', 16)}<span>Make evidence report</span></button>
