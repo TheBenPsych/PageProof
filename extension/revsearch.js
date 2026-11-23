@@ -125,7 +125,7 @@ async function docsBanner(after) {
       h('span', { class: 'sp' }), h('button', { text: 'Allow', onclick: async () => { if (await RS_DOCS.allow()) done(); } })]);
   } else {
     banner([h('span', {}, h('b', { text: 'Keep your site lists safe: ' }), 'PageProof saves your hidden and approved sites (and your pictures folder) in Documents\\PageProof, so updates and reinstalls never lose them. ' + SETUP_STEPS),
-      h('span', { class: 'sp' }), h('button', { text: '📂 Set up PageProof folder', onclick: async () => { try { await RS_DOCS.choose(); done(); } catch (e) { if (e.name === 'PhotosFolder') banner([h('span', { text: e.message })], 'info'); /* else: closed the picker */ } } }),
+      h('span', { class: 'sp' }), h('button', { text: '📂 Set up PageProof folder', onclick: async () => { try { await RS_DOCS.choose(); done(); } catch (e) { if (e.name === 'PhotosFolder' || e.name === 'InstallFolder') banner([h('span', { text: e.message })], 'info'); /* else: closed the picker */ } } }),
       VIEW !== 'lists' && VIEW !== 'folder' ? h('button', { class: 'btn', text: 'Not now', onclick: () => { sessionStorage.setItem('rsDocsLater', '1'); banner(null); } }) : null], 'info');
   }
   return true;

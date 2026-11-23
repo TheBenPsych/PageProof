@@ -136,10 +136,19 @@ const RS_DOCS = {
     const picked = await window.showDirectoryPicker({ id: 'pageproof-docs', mode: 'readwrite', startIn: 'documents' });
     // Never inside (or around) the photos folders: PageProof only ever READS those.
     if (await RS_DOCS.touchesPhotos(picked)) { const e = new Error('That folder is part of your photos folder. PageProof never writes there. Pick a folder in Documents instead.'); e.name = 'PhotosFolder'; throw e; }
+    // Never inside PageProof's own program files (Documents\PageProof\Install). Windows Defender
+    // flagged PageProof once when it wrote into its own folder, so the data stays next to it, not in it.
+    if (await RS_DOCS.isInstall(picked)) { const e = new Error('That is the folder PageProof is installed in. PageProof never writes there. Pick the PageProof folder one level up (Documents › PageProof) instead.'); e.name = 'InstallFolder'; throw e; }
     const dir = /^pageproof$/i.test(picked.name) ? picked : await picked.getDirectoryHandle('PageProof', { create: true });
     try { await dir.getDirectoryHandle('My pictures', { create: true }); } catch (e) { /* made later instead */ }
     await RS_DB.put('handles', 'docs', dir);
     return dir;
+  },
+  // True for PageProof's own program folder: it is named Install, or it holds a manifest.json.
+  async isInstall(d) {
+    if (!d) return false;
+    if (/^install$/i.test(d.name)) return true;
+    try { return !!(await RS_LATE(d.getFileHandle('manifest.json'), 3000, null)); } catch (e) { return false; }
   },
   async dir() {
     if ((await RS_DOCS.state()) !== 'granted') return null;

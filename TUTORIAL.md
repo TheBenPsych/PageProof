@@ -287,6 +287,8 @@ Click the PageProof icon and choose **Reverse image search**.
 
 PageProof then makes everything inside it by itself: `hidden-sites.txt`, `allowed-sites.txt` (one site per line, you can edit them in Notepad) and the **My pictures** folder. After an update nothing changes. After a full reinstall, press **Set up PageProof folder** again and just pick your existing PageProof folder: your lists come straight back. Chrome may also ask you to press **Allow** once after it restarts.
 
+Pick **PageProof** itself, never the **Install** folder inside it. Install holds the program, and PageProof refuses to write there.
+
 **What PageProof remembers.** For every picture you search, PageProof remembers each link it found, when it first saw it, and how well that link's picture matched. A later search of the same picture only downloads and checks links it has not seen before, so repeat searches are much faster. This memory is kept in the browser and also as small files in `Documents\PageProof\Memory`, so updating PageProof never loses it, and even after a full reinstall it comes back once you pick the PageProof folder again.
 
 **Your clients' photos in Google Drive.** The old *My pictures folder* is replaced by **Find copies** (section 17), which reads the photos straight from the shared Google Drive and searches them all day.
@@ -356,10 +358,10 @@ Everything you find is kept in this browser and also in `Documents\PageProof\fou
 **Updating.** PageProof asks GitHub each morning whether there is a newer version, and says so on Home and on the PageProof icon's menu.
 1. Open **Settings › Is everything working?** and scroll to **Updates**.
 2. Press **Download version…**. PageProof.zip lands in your Downloads folder.
-3. Unzip it over your PageProof folder and say yes to replacing the files.
+3. Unzip it into `Documents\PageProof\Install` and say yes to replacing the files.
 4. Open `edge://extensions` (or `chrome://extensions`) and press the reload arrow on PageProof. Your finds, settings and lists are kept.
 
-PageProof never changes its own files. You always do the update yourself with the zip.
+PageProof never changes its own files, and never writes anything inside the **Install** folder. You always do the update yourself with the zip.
 
 **The red "!" on the PageProof icon** means Google Drive is waiting for its one click on **Allow** after the browser restarted. Click the icon and press **Allow**.
 

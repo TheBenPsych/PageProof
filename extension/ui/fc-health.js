@@ -210,7 +210,7 @@ V.health = async () => {
     <details class="keyfold"${up && up.has ? ' open' : ''}><summary>How to update</summary>
       <div class="muted" style="font-size:13.5px;display:flex;flex-direction:column;gap:6px;margin-top:8px">
         <span><b>1.</b> Press "Download version…". PageProof.zip lands in your Downloads folder.</span>
-        <span><b>2.</b> Unzip it over your PageProof folder and say yes to replacing the files.</span>
+        <span><b>2.</b> Unzip it into Documents › PageProof › Install and say yes to replacing the files.</span>
         <span><b>3.</b> Open the extensions page (edge://extensions or chrome://extensions) and press the reload arrow on PageProof. Your finds, settings and lists are not touched.</span>
       </div></details>
   </section>
@@ -265,5 +265,5 @@ Object.assign(ACTS, {
   skretry: async v => { const n = await FC.retrySkipped(v ? [v] : null); toast(n ? plural(n, 'photo goes', 'photos go') + ' to the front of the line.' : 'Nothing to try again.'); render(true); },
   upgo: () => { location.hash = 'health'; setTimeout(() => { const u = document.getElementById('updates'); if (u) u.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 300); },
   upcheck: async () => { state.upBusy = true; state.upText = 'Asking GitHub…'; render(true); const st = await ppUpCheck(); state.upBusy = false; state.upText = ''; toast(st.error ? 'Could not check: ' + st.error : st.has ? 'Version ' + st.latest + ' is ready.' : 'You have the newest version.'); render(true); },
-  upzip: async () => { api.tabs.create({ url: PP_ZIP, active: false }); toast('Downloading PageProof.zip. Unzip it over your PageProof folder, then press the reload arrow on the extensions page.'); },
+  upzip: async () => { api.tabs.create({ url: PP_ZIP, active: false }); toast('Downloading PageProof.zip. Unzip it into Documents › PageProof › Install, then press the reload arrow on the extensions page.'); },
 });

@@ -463,6 +463,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['One PageProof folder', 'PageProof can now live in the same folder as your saved work: the program goes in Documents › PageProof › Install, and your finds, settings and lists stay in Documents › PageProof. PageProof never writes inside Install, and it refuses that folder if you pick it by mistake. From this version PageProof also keeps the same ID wherever its folder is, so moving or reinstalling it no longer loses what is stored in the browser.'],
   ['Symbols in the right-click menu', 'Every PageProof item in the right-click menu now starts with a small symbol, like 📸 Capture this page or 🔍 Find copies of it, so you can tell them apart at a glance.'],
   ['A red dot instead of a number', 'The PageProof icon in the toolbar now shows a small red dot in its top-right corner when new copies are waiting, so the logo stays visible. Hover the icon to see how many.'],
   ['PageProof fills wide screens', 'Every page now uses the whole window. On a big screen the copy details panel is wider, the pictures on each Copies found row are bigger, each row shows Lines up, Use, Country and Found in lined-up columns, and Home spreads into three columns.'],
@@ -646,7 +647,7 @@ async function act(a, v, el) {
     try { const w = await api.windows.getCurrent(); await api.sidePanel.open({ windowId: w.id }); } catch (e) { toast('Your browser has no side panel. Use Chrome or Edge.'); }
   }
   else if (a === 'shortcuts') api.tabs.create({ url: /Edg\//.test(navigator.userAgent) ? 'edge://extensions/shortcuts' : 'chrome://extensions/shortcuts' });
-  else if (a === 'docschoose') { try { await RS_DOCS.choose(); await RS_LISTS.load(); await RS_LISTS.save(); toast('PageProof folder ready'); } catch (e) { if (e.name === 'PhotosFolder') toast(e.message); else if (e.name !== 'AbortError') toast('Chrome refused that folder. Make a new folder called PageProof inside Documents and pick that.'); } render(true); }
+  else if (a === 'docschoose') { try { await RS_DOCS.choose(); await RS_LISTS.load(); await RS_LISTS.save(); toast('PageProof folder ready'); } catch (e) { if (e.name === 'PhotosFolder' || e.name === 'InstallFolder') toast(e.message); else if (e.name !== 'AbortError') toast('Chrome refused that folder. Make a new folder called PageProof inside Documents and pick that.'); } render(true); }
   else if (a === 'docsallow') { await RS_DOCS.allow(); render(true); }
   else if (a === 'hidtab') { state.hidTab = v; state.hidQ = ''; state.hidMore = 0; render(true); }
   else if (a === 'hidkind') { state.hidKind = v; render(true); }
