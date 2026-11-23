@@ -186,6 +186,22 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await hang.goto(url('app.html#home')); await hang.waitForTimeout(6000);
   ok(await hang.evaluate(() => document.getElementById('side').textContent.length > 20 && document.getElementById('view').textContent.length > 100), 'Main page draws even when the browser never answers a folder question');
   await hang.close();
+  // 4.3.4: Google Drive (or the Documents folder) stops answering every question: every page still opens
+  const stuck = await ctx.newPage();
+  await stuck.addInitScript(() => {
+    const never = () => new Promise(() => {});
+    const H = FileSystemHandle.prototype, D = FileSystemDirectoryHandle.prototype;
+    H.isSameEntry = never; H.queryPermission = never; D.resolve = never; D.getFileHandle = never; D.getDirectoryHandle = never;
+    D.entries = function () { return { next: never, [Symbol.asyncIterator]() { return this; } }; };
+    D.values = D.entries; D.keys = D.entries;
+  });
+  for (const r of ['home', 'found', 'review', 'searches', 'clients', 'skipped', 'keep', 'settings', 'health']) {
+    await stuck.goto(url('app.html#' + r)); await stuck.waitForTimeout(r === 'home' ? 14000 : 10000);
+    const fr = stuck.frames().find(x => /revsearch\.html/.test(x.url()));
+    const t = r === 'searches' && fr ? await fr.evaluate(() => document.body.innerText.length) : await stuck.evaluate(() => document.getElementById('view').textContent.length);
+    ok(t > 100, 'Page ' + r + ' opens even when Google Drive never answers');
+  }
+  await stuck.close();
   await page.evaluate(async () => { await RS_DB.del('handles', 'docs'); await RS_DB.del('handles', 'fcExtra:Hang test'); });
   console.log(fails ? fails + ' FAILED' : 'ALL PASSED');
   await ctx.close(); process.exit(fails ? 1 : 0);

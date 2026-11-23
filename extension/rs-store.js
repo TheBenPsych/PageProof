@@ -105,15 +105,24 @@ const RS_SITE = {
   _ix: new WeakMap(),
 };
 
+// A folder or drive that never answers must not freeze PageProof: give up after ms and use the fallback.
+const RS_LATE = (p, ms, fallback) => Promise.race([Promise.resolve(p), new Promise(r => setTimeout(() => r(fallback), ms))]);
+
 // ---------- the Documents\PageProof folder ----------
 const RS_DOCS = {
   supported: typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function',
+  _slowUntil: 0, // the folder stopped answering: leave it alone until then
   async handle() { try { return await RS_DB.get('handles', 'docs'); } catch (e) { return null; } },
   // 'granted', 'prompt' (needs one click on Allow), or 'none' (never linked, or reinstalled)
   async state() {
     const h = await RS_DOCS.handle();
     if (!h) return 'none';
-    try { return await h.queryPermission({ mode: 'readwrite' }); } catch (e) { return 'none'; }
+    if (Date.now() < RS_DOCS._slowUntil) return 'none';
+    try {
+      const p = await RS_LATE(h.queryPermission({ mode: 'readwrite' }), 4000, 'slow');
+      if (p === 'slow') { RS_DOCS._slowUntil = Date.now() + 120000; return 'none'; }
+      return p;
+    } catch (e) { return 'none'; }
   },
   // Must be called from a click.
   async allow() {
@@ -127,7 +136,6 @@ const RS_DOCS = {
     const picked = await window.showDirectoryPicker({ id: 'pageproof-docs', mode: 'readwrite', startIn: 'documents' });
     // Never inside (or around) the photos folders: PageProof only ever READS those.
     if (await RS_DOCS.touchesPhotos(picked)) { const e = new Error('That folder is part of your photos folder. PageProof never writes there. Pick a folder in Documents instead.'); e.name = 'PhotosFolder'; throw e; }
-    RS_DOCS._safe = null;
     const dir = /^pageproof$/i.test(picked.name) ? picked : await picked.getDirectoryHandle('PageProof', { create: true });
     try { await dir.getDirectoryHandle('My pictures', { create: true }); } catch (e) { /* made later instead */ }
     await RS_DB.put('handles', 'docs', dir);
@@ -135,17 +143,10 @@ const RS_DOCS = {
   },
   async dir() {
     if ((await RS_DOCS.state()) !== 'granted') return null;
-    const d = await RS_DOCS.handle();
-    // Safety net: if this folder is the photos folder, inside it, or holds it (for example the
-    // photos folder was picked later), PageProof writes nothing at all. Checked every 10 minutes.
-    // The check is shared by every caller and never waits more than a few seconds.
-    if (!RS_DOCS._safe || Date.now() - RS_DOCS._safe.at > 600000) {
-      if (!RS_DOCS._checking) RS_DOCS._checking = RS_DOCS.touchesPhotos(d).then(t => { RS_DOCS._safe = { at: Date.now(), ok: !t }; }).finally(() => { RS_DOCS._checking = null; });
-      await RS_DOCS._checking;
-    }
-    return RS_DOCS._safe.ok ? d : null;
+    // The "not inside the photos" check runs only when a folder is picked (here and in Find copies
+    // setup). Running it again and again (4.3.2) asked Google Drive questions it could get stuck on.
+    return RS_DOCS.handle();
   },
-  _safe: null, _checking: null,
   // True when a folder is one of the picked photos folders, sits inside one, or contains one.
   async photoHandles() {
     const out = [];
@@ -176,14 +177,22 @@ const RS_DOCS = {
   async readText(name) {
     const d = await RS_DOCS.dir();
     if (!d) return null;
-    try { return await (await (await d.getFileHandle(name)).getFile()).text(); } catch (e) { return null; }
+    // null = the file is not there; undefined = the folder did not answer in time (leave the file alone).
+    if (Date.now() < RS_DOCS._slowUntil) return undefined;
+    try {
+      const t = await RS_LATE((async () => (await (await d.getFileHandle(name)).getFile()).text())(), 8000, undefined);
+      if (t === undefined) RS_DOCS._slowUntil = Date.now() + 120000;   // skip the folder for 2 minutes
+      return t;
+    } catch (e) { return null; }
   },
   async writeText(name, text) {
     const d = await RS_DOCS.dir();
-    if (!d) return false;
-    const w = await (await d.getFileHandle(name, { create: true })).createWritable();
-    await w.write(text); await w.close();
-    return true;
+    if (!d || Date.now() < RS_DOCS._slowUntil) return false;
+    return RS_LATE((async () => {
+      const w = await (await d.getFileHandle(name, { create: true })).createWritable();
+      await w.write(text); await w.close();
+      return true;
+    })(), 15000, false);
   },
 };
 
@@ -208,6 +217,7 @@ const RS_LISTS = {
       let wrote = false;
       for (const kind of ['hidden', 'allowed']) {
         const t = await RS_DOCS.readText(RS_LISTS.FILES[kind]);
+        if (t === undefined) continue;                              // folder too slow: keep the browser's copy
         if (t !== null) RS_LISTS[kind] = RS_LISTS.parse(t);       // the file wins
         else { await RS_DOCS.writeText(RS_LISTS.FILES[kind], RS_LISTS.text(kind)); wrote = true; }
       }
@@ -264,7 +274,8 @@ const RS_REJECT = {
     RS_REJECT.items = (await api.storage.local.get('rsRejected')).rsRejected || [];
     if ((await RS_DOCS.state()) === 'granted') {
       const t = await RS_DOCS.readText(RS_REJECT.FILE);
-      if (t !== null) RS_REJECT.items = RS_REJECT.parse(t);
+      if (t === undefined) { /* folder too slow: keep the browser's copy */ }
+      else if (t !== null) RS_REJECT.items = RS_REJECT.parse(t);
       else await RS_DOCS.writeText(RS_REJECT.FILE, RS_REJECT.text());
       await api.storage.local.set({ rsRejected: RS_REJECT.items });
     }
