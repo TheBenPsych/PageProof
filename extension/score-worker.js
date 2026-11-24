@@ -21,5 +21,5 @@ self.onmessage = async e => {
     if (best && best.sc.lines >= 0.3) { const R = PP_ALIGN.repeats(A, m.bmp, best); out.uniq = R.unique; out.rep = R.repeated; out.backdrop = R.backdropOnly; }
   } catch (x) { err = String(x && x.message || x); }
   try { m.bmp.close && m.bmp.close(); } catch (x) { /* already freed */ }
-  self.postMessage({ id: m.id, out, err, fast: PP_ALIGN.fast() });
+  self.postMessage({ id: m.id, out, err, fast: PP_ALIGN.fast(), gpu: PP_ALIGN.gpu(), gpuWhy: PP_ALIGN.gpuWhy() });
 };

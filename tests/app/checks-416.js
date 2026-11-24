@@ -34,6 +34,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(r.identical, 'It finds exactly the same details and fingerprints as the JavaScript checker');
   ok(r.lines > 0.8, 'A resized copy still lines up (' + Math.round((r.lines || 0) * 100) + '%)');
   ok(r.worker && r.worker.fast === true && r.worker.out && r.worker.out.lines > 0.8, 'The background photo-check worker uses it too and gives the same answer');
+  // 4.17: without a graphics card (as on this test computer) the checks still work and say so.
+  ok(r.worker && 'gpu' in r.worker && r.worker.gpu !== true, 'No graphics card here: the worker carries on the normal way (graphics card: ' + (r.worker && r.worker.gpu) + ')');
 
   // 2. Where the time goes, on Is everything working.
   await page.goto(url('app.html#help')); await page.waitForTimeout(800);
