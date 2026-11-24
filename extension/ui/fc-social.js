@@ -236,18 +236,12 @@ function socRedrawSoon() {
     FCD_STALE = true; render(true);
   }, 2500);
 }
-// Step D: open the post in your own browser (signed in, like a Capture sees it), read who
-// posted it, and close the tab again.
+// Step D: open the post in your own browser (signed in, like a Capture sees it) in a quiet pinned
+// PageProof tab, read who posted it, and close the tab again.
 async function findInBrowser(c) {
   let tab;
   try {
-    tab = await api.tabs.create({ url: c.url, active: false });
-    await new Promise(res => {
-      const t = setTimeout(done, 25000);
-      function done() { clearTimeout(t); api.tabs.onUpdated.removeListener(on); res(); }
-      function on(id, ch) { if (id === tab.id && ch.status === 'complete') done(); }
-      api.tabs.onUpdated.addListener(on);
-    });
+    tab = await PP_SOCIAL.openQuiet(c.url);
     await new Promise(r => setTimeout(r, 2500));      // social sites draw the post after loading
     const [res] = await api.scripting.executeScript({ target: { tabId: tab.id }, func: readPostInTab });
     const now = await api.tabs.get(tab.id).catch(() => tab);
@@ -257,7 +251,7 @@ async function findInBrowser(c) {
     await FC.setAcct(c.id, acct || undefined, r && r.post || undefined);
     FCD_STALE = true;
     return acct;
-  } catch (e) { return null; } finally { if (tab) api.tabs.remove(tab.id).catch(() => {}); }
+  } catch (e) { return null; } finally { PP_SOCIAL.closeQuiet(tab); }
 }
 // Runs inside the post's tab: the page's tags and the profile links near the post.
 function readPostInTab() {
