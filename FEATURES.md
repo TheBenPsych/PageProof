@@ -54,7 +54,7 @@ Last updated: version **4.25.0** (24 Nov 2026).
 - **Automatic line-up** handles resized, cropped, zoomed, stretched, tilted and mirrored copies, and copies with headlines or logos on top. Checked by a built-in test set of 200+ distorted copies. (3.3.1, 3.4)
 - **Shows what an AI edit changed:** green for untouched, red for redrawn, "Same photo, heavily edited" verdict, Pick a spot for a close-up score, and Check nearby shots to see which of several similar frames the copy came from. (4.8)
 - **No false matches** from tiny shrunk guesses or press walls (sponsor backdrops with repeating logos). (4.2.2, 4.8.3)
-- **Logos and buildings no longer count as copies:** PageProof checks whether only logos match (sponsor walls, red carpets, signs) or whether it is another shot of the same place, and unanswered copies are re-checked once. (next version, waiting to be merged)
+- **Logos and buildings no longer count as copies:** PageProof checks whether only logos match (sponsor walls, red carpets, signs) or whether it is another shot of the same place, and unanswered copies are re-checked once. (4.26, waiting to be merged)
 - **Mark up a copy:** highlight, box, circle, arrow, text, pick an area; copy to clipboard or save as PNG/PDF. Labelled "Marked-up copy" and never added to the pack. (3.0)
 
 ## 4. Find copies of client photos
