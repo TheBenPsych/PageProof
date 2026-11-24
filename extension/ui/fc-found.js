@@ -311,6 +311,9 @@ async function readPostPicsInTab() {
       const lk = el.closest('a[href]'); const other = lk && idOf(lk.href);
       if (other && me && other !== me && !/\/photo/i.test(lk.href)) continue;
       if (el.closest('a[href*="l.facebook.com"], a[href*="l.instagram.com"], a[href*="lm.facebook.com"], [role="complementary"], header, [role="banner"]')) continue;
+      // 4.35: link preview cards (a shared article's picture) on X, LinkedIn and Facebook.
+      if (el.closest('[data-testid="card.wrapper"], [data-testid="card.layoutLarge.media"], .feed-shared-article, .update-components-article, [class*="article-card" i], a[href*="lnkd.in"], a[href*="/redir/redirect"], a[href*="t.co/"]')) continue;
+      if (/articleshare-|\/card_img\/|safe_image\.php|\/emg1\//.test(el.currentSrc || el.src || '')) continue;
       const u = el.tagName === 'VIDEO' ? el.poster : (el.currentSrc || el.src);
       const w = el.naturalWidth || el.videoWidth || el.width || 0, h = el.naturalHeight || el.videoHeight || el.height || 0;
       if (!/^https?:/.test(u || '') || (el.tagName !== 'VIDEO' && (w < 200 || h < 150)) || out.includes(u)) continue;
@@ -363,11 +366,13 @@ async function postCheck(c, opts = {}) {
       res.pic = pf.pic;
       const m = await lineUpWith(ours, pf.pic);
       if (m) { res.pct = m.pct; res.state = m.state; }
+      // 4.35 (Ben): the main picture is a link preview of another site's article: not a copy.
+      if (res.state === 'seen' && (PP_SOCIAL.cardPic(pf.pic) || (pf.card && pf.card.pic === pf.pic))) { res.state = 'card'; res.cardSite = (pf.card && pf.card.site) || ''; }
     }
     // Not the main picture (or no picture readable): look at every picture of the post.
     // (TikTok photo posts are read slide by slide by slidesInto below instead.)
     const tiktokSlides = typeof PP_TIKTOK !== 'undefined' && PP_TIKTOK.isPhotoPost(c.url);
-    if (ours && res.state !== 'seen' && opts.browser !== false && !tiktokSlides) {
+    if (ours && res.state !== 'seen' && res.state !== 'card' && opts.browser !== false && !tiktokSlides) {
       const b = await postInBrowser(c, ours);
       // Paused, off or outside the hours: nothing is saved, so the post is checked after Resume.
       if (b && b.held) { POST_HELD.set(c.id, Date.now()); return null; }
@@ -384,7 +389,8 @@ async function postCheck(c, opts = {}) {
     c.postChk = res; FCD_STALE = true;
     // Ben (4.30): only the post's own pictures count, never a picture in its comments or links.
     // Removed by itself only when every picture of the post was looked at and none is the photo.
-    if (res.state === 'notSeen' && res.browser === 'notSeen' && notInPost(c) && c.status === 'new' && !/by hand/.test(c.by || '')) {
+    if (res.state === 'card' && c.status === 'new' && !c.cardV && !/by hand/.test(c.by || '')) await cardRemove(c);
+    else if (res.state === 'notSeen' && res.browser === 'notSeen' && notInPost(c) && c.status === 'new' && !/by hand/.test(c.by || '')) {
       await FC.answer([c.id], 'removed', { removedBy: 'postcheck' });
       c.status = 'removed'; c.removedBy = 'postcheck';
     }
@@ -393,6 +399,25 @@ async function postCheck(c, opts = {}) {
     if (ours) try { ours.close(); } catch (e) { /* freed */ }
     POST_BUSY.delete(c.id);
   }
+}
+// 4.35 (Ben): only a link preview card of another site's article (LinkedIn, X, Facebook shares).
+const cardSiteOf = c => (c.postChk && c.postChk.cardSite) || (c.pf && c.pf.card && c.pf.card.site) || '';
+const linkCardOf = c => isSoc(c) && (PP_SOCIAL.cardPic(c.img) || (c.postChk && c.postChk.state === 'card') || (c.pf && c.pf.card && c.pf.card.only && c.pf.card.pic && c.pf.card.pic === c.img) ? (PP_SOCIAL.cardPic(c.img) || PP_SOCIAL.cardPic(c.postChk && c.postChk.pic) || 'link preview') : '');
+const LINK_CARD = c => `The photo is only in a link preview: the post shares ${cardSiteOf(c) ? 'an article from ' + cardSiteOf(c) : 'another site\'s article'}, and ${platOf(c).name} shows that article's picture in a card. The account didn't post the photo itself.${c.removedBy === 'linkcard' ? ' So PageProof moved it to Removed. Put it back if the photo is also posted in the post.' : ''}`;
+async function cardRemove(c) {
+  const cc = await FC.DB.get('copies', c.id);
+  if (cc) { cc.cardV = 1; await FC.DB.put('copies', cc); }
+  c.cardV = 1;
+  await FC.answer([c.id], 'removed', { removedBy: 'linkcard' });
+  c.status = 'removed'; c.removedBy = 'linkcard'; FCD_STALE = true;
+}
+// New social copies whose picture is a link preview card go to Removed by themselves, once each
+// (cardV), so a copy you Put back stays put back.
+async function cardSweep() {
+  if (!FCD) return 0;
+  const xs = FCD.copies.filter(c => c.status === 'new' && !c.cardV && !/by hand/.test(c.by || '') && linkCardOf(c));
+  for (const c of xs) await cardRemove(c).catch(() => {});
+  return xs.length;
 }
 const notInPost = c => isSoc(c) && !acctPageLink(c) && c.postChk && c.postChk.state === 'notSeen' && !/^https?:/i.test(c.img || '');
 const NOT_IN_POST = c => `${c.postChk.browser === 'notSeen' ? `None of the post's ${c.postChk.n > 1 ? c.postChk.n + ' pictures' : 'pictures'} is your client's photo` : `The post's own ${c.postChk.video ? 'video cover' : 'picture'} is a different photo`}. Google matched a picture somewhere else on that page (a comment, a link preview, a suggested post), and only the post's own pictures count.${c.removedBy === 'postcheck' ? ' So PageProof moved it to Removed. Put it back if you see the photo in the post.' : ' Open the post and look before marking Stolen.'}`;
@@ -452,7 +477,8 @@ function dmgCell(c) {
 // Small warning icons for a row (4.7): the words show when you hover.
 function signals(c) {
   const s = [];
-  if (notInPost(c)) s.push(['bad', 'warn', 'Not seen in the post: ' + NOT_IN_POST(c)]);
+  if (linkCardOf(c)) s.push(['bad', 'warn', 'Only in a link preview: ' + LINK_CARD(c)]);
+  else if (notInPost(c)) s.push(['bad', 'warn', 'Not seen in the post: ' + NOT_IN_POST(c)]);
   if (c.match === 'maybe') s.push(['warn', 'maybe', 'Maybe the same photo. Look closely.']);
   if (c.risk.level === 'sus') s.push(['bad', 'warn', 'Suspicious site' + (c.risk.why.length ? ': ' + c.risk.why.join(', ') : '')]);
   else if (c.risk.level === 'watch') s.push(['warn', 'warn', 'Worth a look' + (c.risk.why.length ? ': ' + c.risk.why.join(', ') : '')]);
@@ -534,7 +560,8 @@ async function drawer(list) {
   const last = HIST[HIST.length - 1];
   // "Look at these": only problems, each with where to go next. The rest folds into one green line.
   const look = [], fine = [];
-  if (notInPost(c)) look.push(['bad', 'warn', 'Not seen in the post', NOT_IN_POST(c), 'openpost', 'Open post']);
+  if (linkCardOf(c)) look.push(['bad', 'warn', 'Only in a link preview', LINK_CARD(c), 'openpost', 'Open post']);
+  else if (notInPost(c)) look.push(['bad', 'warn', 'Not seen in the post', NOT_IN_POST(c), 'openpost', 'Open post']);
   if (c.match === 'maybe') look.push(['warn', 'maybe', 'Maybe the same photo', 'The checker is not sure. Compare them closely.', 'compare', 'Compare']);
   if (c.risk.level === 'sus') look.push(['bad', 'warn', 'Suspicious site', c.risk.why.join(' · '), 'dtab', 'Site', 'site']);
   else if (c.risk.level === 'watch') look.push(['warn', 'warn', 'Worth a look', c.risk.why.join(' · '), 'dtab', 'Site', 'site']);
@@ -647,7 +674,8 @@ const MATCH = { any: 'All', exact: 'Exact', strong: 'Strong', loose: 'Loose' };
 const matchKind = c => (c.pct >= 95 && c.match === 'same' ? 'exact' : c.pct >= 80 ? 'strong' : 'loose');
 const flagWords = c => {
   const f = [];
-  if (notInPost(c)) f.push(['bad', 'Not seen in the post', NOT_IN_POST(c)]);
+  if (linkCardOf(c)) f.push(['bad', 'Only in a link preview', LINK_CARD(c)]);
+  else if (notInPost(c)) f.push(['bad', 'Not seen in the post', NOT_IN_POST(c)]);
   if (c.risk.level === 'sus') f.push(['bad', 'Suspicious site', c.risk.why.join(', ')]);
   if (c.risk.level === 'watch') f.push(['warn', 'Worth a look', c.risk.why.join(', ')]);
   if (c.credit === 'removed') f.push(['copy', 'Credit removed', 'Your client\'s photo has a copyright line in its hidden data and their copy does not']);

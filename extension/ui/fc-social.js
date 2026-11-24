@@ -2,9 +2,9 @@
 // them. Stolen, Hide, Approve and "stolen before" all work per account, the account is found
 // even when the link doesn't show it, and the live page preview gives way to "The post".
 // Loaded after ui/fc-found.js (uses its state, FCD, LIST, HIST, answers and toasts).
-Object.assign(state, { fTab: 'web', tabSaved: {}, fPlat: 'Any', fAcct: '', sView: 'copies', acctEdit: '', fVer: 'Any', fFol: 'Any', fType: 'Any', fCountry: 'Any', aSort: 'stolen', fGov: false });
+Object.assign(state, { fTab: 'web', tabSaved: {}, fPlat: 'Any', fAcct: '', sView: 'copies', acctEdit: '', fVer: 'Any', fFol: 'Any', fType: 'Any', fCountry: 'Any', aSort: 'stolen', fGov: false, fPerson: false });
 // 4.24 (Ben): government accounts are hidden unless "Show government" is on (remembered).
-api.storage.local.get('ppShowGov').then(st => { if (st && st.ppShowGov) state.fGov = true; }).catch(() => {});
+api.storage.local.get(['ppShowGov', 'ppShowPerson']).then(st => { if (st && st.ppShowGov) state.fGov = true; if (st && st.ppShowPerson) state.fPerson = true; }).catch(() => {});
 
 const isSoc = c => c.use === 'social';
 const isXAcct = a => !!a && /^(x|twitter)\.com$/.test(a.plat || '');
@@ -82,7 +82,8 @@ async function socIndex(copies) {
   const byName = new Map();
   for (const e of accts.values()) { const n = PP_SOCIAL.plainName(e.acct); if (n.length < 4) continue; if (!byName.has(n)) byName.set(n, []); byName.get(n).push(e); }
   const acctInfo = (await FC.meta.get('acctInfo')) || {};
-  return { accts, acctLinkOf: linkOf, acctLinks: links, byName, stolenBy, acctInfo };
+  const acctType = (await FC.meta.get('acctType')) || {};     // 4.35: types set by hand
+  return { accts, acctLinkOf: linkOf, acctLinks: links, byName, stolenBy, acctInfo, acctType };
 }
 
 // ---------------------------------------------------------------- the account's details (4.10)
@@ -117,7 +118,8 @@ async function readAcctInfo(acct) {
     return all[acct.key];
   } finally { INFO_BUSY.delete(acct.key); }
 }
-const infoDue = (i, a) => !i || (i.ok && !i.v) || staleInfo(i, a) || (i.ok ? Date.now() - Date.parse(i.at) > 90 * 864e5 && (!i.failAt || Date.now() - Date.parse(i.failAt) > 3 * 864e5) : Date.now() - Date.parse(i.failAt || i.at || 0) > 3 * 864e5);
+// 4.35: Facebook accounts read before 4.35 are read once more (a person's profile shows a friends count).
+const infoDue = (i, a) => !i || (i.ok && !i.v) || staleInfo(i, a) || (i.ok && (i.v || 0) < 5 && !i.type && a && a.plat === 'facebook.com') || (i.ok ? Date.now() - Date.parse(i.at) > 90 * 864e5 && (!i.failAt || Date.now() - Date.parse(i.failAt) > 3 * 864e5) : Date.now() - Date.parse(i.failAt || i.at || 0) > 3 * 864e5);
 let infoQueueOn = false;
 // 4.30.2 (Ben): the reader only works while Keep searching is on, not paused, and inside its hours,
 // one account a minute. Pause or Off closes its tab at once; Resume carries on with the next account.
@@ -234,13 +236,18 @@ const V_KIND = {
 };
 const vIcon = (k, size = 15) => { const v = V_KIND[k]; if (!v) return ''; return `<svg class="vseal" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true"><path d="${SEAL}" fill="${v[0]}"/><path d="M7.6 12.3l3 3 5.8-6.4" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`; };
 const vBadge = k => V_KIND[k] ? `<span class="vchk v-${k}" title="${esc(V_KIND[k][2])}">${vIcon(k)}${esc(V_KIND[k][1])}</span>` : '';
-const typeOf = c => { const i = infoOf(c); return i && i.ok && i.type ? i.type : 'nk'; };
+// 4.35: the type from everything known (PP_SOCIAL.kindOf): set by hand, government from the link or
+// name even before the profile is read, the profile read, "just a person's name", LinkedIn /in/.
+const kindOfC = c => c && c.acct ? PP_SOCIAL.kindOf(c.acct, infoOf(c), c.title, FCD && FCD.acctType && FCD.acctType[acctGroup(c.acct.key)]) : null;
+const typeOf = c => { const k = kindOfC(c); return k && k.type ? k.type : 'nk'; };
 const countryOfAcct = c => { const i = infoOf(c); return i && i.country ? i.country : 'nk'; };
 const folOf = c => { const i = infoOf(c); return i && i.ok ? i.followers : null; };
 function passAcct(c) {
   if (state.fVer !== 'Any') { const v = verOf(c); if (state.fVer === 'real' ? !REAL_V.includes(v) : v !== state.fVer) return false; }
   if (!state.fGov && state.fType !== 'Government' && typeOf(c) === 'Government') return false;
   if (!state.fRepost && c.rp && c.rp.state === 'repost') return false;
+  // 4.35 (Ben): a person's own account (just a name, no company or contact) is hidden too.
+  if (!state.fPerson && state.fType !== 'Person' && typeOf(c) === 'Person' && c.status !== 'stolen') return false;
   if (state.fFol !== 'Any' && PP_SOCIAL.folBand(folOf(c)) !== state.fFol) return false;
   if (state.fType !== 'Any' && typeOf(c) !== state.fType) return false;
   if (state.fCountry !== 'Any' && countryOfAcct(c) !== state.fCountry) return false;
@@ -261,14 +268,17 @@ function acctFilterLine(dd, xsAll) {
     ${dd('fCountry', 'Country', [['Any', 'Any'], ...countries.map(t => [t, t, n('fCountry', c => countryOfAcct(c) === t) + '']), ['nk', 'Not known', n('fCountry', c => countryOfAcct(c) === 'nk') + '']], state.fCountry, false, 'Any')}
     ${(() => { const g = xs.filter(c => typeOf(c) === 'Government').length; return state.fType === 'Government' ? '' : `<label class="chip" style="cursor:pointer;gap:6px" title="People and offices in government, and anyone running for office. Hidden unless you tick this."><input type="checkbox" data-act="fgov" ${state.fGov ? 'checked' : ''}> Show government${g ? ` <span class="faint">(${g} ${state.fGov ? 'shown' : 'hidden'})</span>` : ''}</label>`; })()}
     ${(() => { const r = xsAll.filter(c => c.rp && c.rp.state === 'repost').length; return `<label class="chip" style="cursor:pointer;gap:6px" title="Posts that only share, repost or quote someone else's post. The original poster is the lead. Hidden unless you tick this."><input type="checkbox" data-act="frepost" ${state.fRepost ? 'checked' : ''}> Show reposts and shares${r ? ` <span class="faint">(${r} ${state.fRepost ? 'shown' : 'hidden'})</span>` : ''}</label>`; })()}
+    ${(() => { const g = xs.filter(c => typeOf(c) === 'Person' && c.status !== 'stolen').length; return state.fType === 'Person' ? '' : `<label class="chip" style="cursor:pointer;gap:6px" title="Someone's own account: just a person's name, with no company, website or contact details (a Facebook profile with friends, a LinkedIn /in/ profile). Hidden unless you tick this."><input type="checkbox" data-act="fperson" ${state.fPerson ? 'checked' : ''}> Show personal accounts${g ? ` <span class="faint">(${g} ${state.fPerson ? 'shown' : 'hidden'})</span>` : ''}</label>`; })()}
     ${busy ? `<span class="faint" style="font-size:12.5px">${plural(busy, 'account')} still being read</span>` : ''}</div>`;
 }
 // The little badges on a row: check mark, followers, type, company.
 function acctBadges(c) {
-  const i = infoOf(c);
-  if (!i || !i.ok) return '';
+  const k = kindOfC(c);
+  const i0 = infoOf(c);
+  if ((!i0 || !i0.ok) && !k) return '';
+  const i = { ...(i0 && i0.ok ? i0 : { signs: [] }), type: k ? k.type : '', typeSure: k ? k.sure : '', gov: k && k.type === 'Government' ? k.why : (i0 || {}).gov };
   const vk = verOf(c), v = vBadge(vk);
-  const t = i.type && !(i.type === 'Organisation' && vk === 'gold') && !(i.type === 'Government' && vk === 'grey') ? `<span class="atype${i.type === 'Business' || i.type === 'Organisation' ? ' biz' : i.type === 'Government' ? ' gov' : ''}${i.typeSure === 'guess' ? ' guess' : ''}" title="${esc(i.type === 'Government' && i.gov ? 'Government, going by ' + i.gov + '. Hidden unless Show government is on.' : i.typeSure === 'guess' ? 'A guess from: ' + (i.signs || []).join(', ') : 'Read from the profile' + (i.category ? ': ' + i.category : ''))}">${esc(i.type)}${i.typeSure === 'guess' ? ' (guess)' : ''}</span>` : '';
+  const t = i.type && !(i.type === 'Organisation' && vk === 'gold') && !(i.type === 'Government' && vk === 'grey') ? `<span class="atype${i.type === 'Business' || i.type === 'Organisation' ? ' biz' : i.type === 'Government' ? ' gov' : ''}${i.typeSure === 'guess' ? ' guess' : ''}" title="${esc(i.type === 'Government' && i.gov ? 'Government, going by ' + i.gov + '. Hidden unless Show government is on.' : i.type === 'Person' ? 'A person\'s own account, going by ' + (k && k.why || 'the profile') + '. Hidden unless Show personal accounts is on.' : i.typeSure === 'you' ? 'Set by hand' : i.typeSure === 'guess' ? 'A guess from: ' + (i.signs || []).join(', ') : 'Read from the profile' + (i.category ? ': ' + i.category : ''))}">${esc(i.type)}${i.typeSure === 'guess' ? ' (guess)' : ''}</span>` : '';
   const f = i.followers != null ? `<span class="afol num" title="${esc(i.followers.toLocaleString() + ' ' + i.fw + ' on ' + shortDate(i.at))}">${PP_SOCIAL.shortNum(i.followers)} ${esc(i.fw)}</span>` : '';
   const co = i.company ? `<span class="aco" title="Company named on the account">${esc(i.company)}</span>` : '';
   return v + t + f + co;
@@ -277,15 +287,17 @@ function acctBadges(c) {
 function acctAbout(c) {
   const a = c.acct; if (!a) return '';
   const i = infoOf(c), busy = INFO_BUSY.has(a.key);
-  if (!i) return `<section class="dsec"><div class="dsh">About this account</div><span class="faint" style="font-size:13px">${busy ? 'Reading the profile in your browser…' : 'Not read yet. PageProof reads every account\'s profile by itself, one at a time.'}</span></section>`;
+  if (!i) { const k = kindOfC(c); return `<section class="dsec" id="acctabout"><div class="dsh">About this account</div><span class="faint" style="font-size:13px">${busy ? 'Reading the profile in your browser…' : 'Not read yet. PageProof reads every account\'s profile by itself, one at a time.'}</span>${k && k.type ? `<div style="font-size:13px;margin-top:6px">Account type: <b>${esc(k.type)}</b>${k.why ? ' <span class="muted">(going by ' + esc(k.why) + ')</span>' : ''}</div>` : ''}<div class="row" style="gap:8px;margin-top:6px">${typeSetter(c)}</div></section>`; }
   const enc = encodeURIComponent;
   const rows = [];
   if (i.name) rows.push(['Name', i.name]);
   if (i.followers != null) rows.push(['Followers', i.followers.toLocaleString() + ' ' + i.fw]);
   const vk = verOf(c);
   rows.push(['Verified', vk === 'no' ? 'No check' : vk === 'nk' ? 'Not known' : V_KIND[vk][1] + '. ' + V_KIND[vk][2], vk]);
-  rows.push(['Account type', i.type ? i.type + (i.typeSure === 'guess' ? ' (a guess)' : '') + (i.category ? ' · ' + i.category : '') : 'Not known']);
-  if (i.type === 'Government' && i.gov) rows.push(['Why government', 'Going by ' + i.gov]);
+  const k = kindOfC(c);
+  rows.push(['Account type', k && k.type ? k.type + (k.sure === 'guess' ? ' (a guess)' : k.sure === 'you' ? ' (set by hand)' : '') + (i.category ? ' · ' + i.category : '') : 'Not known']);
+  if (k && k.type === 'Government' && k.why) rows.push(['Why government', 'Going by ' + k.why]);
+  if (k && k.type === 'Person' && k.why) rows.push(['Why personal', 'Going by ' + k.why]);
   if (i.signs && i.signs.length) rows.push(['Business signs', i.signs.join(', ')]);
   if (i.company) rows.push(['Company', i.company + (i.address ? '\n' + i.address : '')]);
   if (i.country) rows.push(['Based in', i.place && i.place !== i.country ? i.place : i.country]);
@@ -299,7 +311,14 @@ function acctAbout(c) {
   return `<section class="dsec" id="acctabout"><div class="row" style="justify-content:space-between;gap:8px"><div class="dsh" style="margin:0">About this account</div><span class="faint" style="font-size:12px">${i.ok ? 'Read ' + esc(shortDate(i.at)) : 'Couldn\'t read the profile'}${i.failAt && i.ok ? ' · last try failed' : ''}</span></div>
     ${i.ok ? `<dl class="facts">${rows.map(([k, v, ic]) => `<dt>${esc(k)}</dt><dd style="white-space:pre-line;overflow-wrap:anywhere">${ic ? vIcon(ic, 16) + ' ' : ''}${esc(v)}</dd>`).join('')}</dl>` : `<span class="faint" style="font-size:13px">${esc(platOf(c).name)} didn't show the profile. PageProof tries again by itself in 3 days.</span>`}
     ${look.length ? `<div class="row" style="gap:6px;flex-wrap:wrap"><span class="muted" style="font-size:12.5px">Who's behind ${esc(i.company)}:</span>${look.map(([l, u]) => `<a class="chip" href="${safeUrl(u)}" target="_blank" rel="noreferrer">${esc(l)}</a>`).join('')}</div>` : ''}
-    <div><button class="btn ghost sm" data-act="readinfo" data-v="${esc(c.id)}"${busy ? ' disabled data-why="Already reading this account. Wait a moment."' : ''}>${busy ? 'Reading…' : 'Read again now'}</button></div></section>`;
+    <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost sm" data-act="readinfo" data-v="${esc(c.id)}"${busy ? ' disabled data-why="Already reading this account. Wait a moment."' : ''}>${busy ? 'Reading…' : 'Read again now'}</button>${typeSetter(c)}</div></section>`;
+}
+
+// 4.35: the account type can be changed by hand (never needed: PageProof works it out by itself).
+// It is kept for the account and its linked accounts, in the settings backup with the rest.
+function typeSetter(c) {
+  const cur = (FCD && FCD.acctType && FCD.acctType[acctGroup(c.acct.key)]) || '';
+  return `<label class="muted" style="font-size:12.5px;display:inline-flex;gap:6px;align-items:center">Type is wrong? <select data-act="settype" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font-size:12.5px;padding:2px 4px" data-v="${esc(c.acct.key)}" aria-label="Set the account type by hand"><option value="">Work it out (${esc(cur ? 'automatic' : typeOf(c) === 'nk' ? 'not known yet' : typeOf(c))})</option>${TYPES.map(t => `<option value="${esc(t)}"${cur === t ? ' selected' : ''}>${esc(t === 'Person' ? 'Person (personal account)' : t)}</option>`).join('')}</select></label>`;
 }
 
 // ---------------------------------------------------------------- finding the account
@@ -343,6 +362,7 @@ async function socQueue() {
   if (socQueueOn || !FCD) return;
   socQueueOn = true;
   try {
+    if (await cardSweep().catch(() => 0)) socRedrawSoon();     // 4.35: link preview cards out first
     for (;;) {
       if (route() !== 'found' && route() !== 'review') break;
       // Pause stops these page checks too (4.30.2); Resume starts them again.
@@ -514,6 +534,17 @@ function socAskBanner(copies) {
 }
 
 Object.assign(ACTS, {
+  fperson: async (v, el) => { state.fPerson = !!(el && el.checked); await api.storage.local.set({ ppShowPerson: state.fPerson }).catch(() => {}); render(true); },
+  settype: async (v, el) => {
+    const t = el ? el.value : '';
+    const all = (await FC.meta.get('acctType')) || {};
+    const g = acctGroup(v);
+    if (t) all[g] = t; else delete all[g];
+    await FC.meta.set('acctType', all);
+    if (FCD) FCD.acctType = all;
+    toast(t ? 'Set to ' + t + '.' + (t === 'Person' && !state.fPerson ? ' Its copies are hidden with the other personal accounts.' : t === 'Government' && !state.fGov ? ' Its copies are hidden with the other government accounts.' : '') : 'PageProof works the type out by itself again.');
+    render(true);
+  },
   fgov: async (v, el) => { state.fGov = !!(el && el.checked); await api.storage.local.set({ ppShowGov: state.fGov }).catch(() => {}); render(true); },
   ftab: v => { switchTab(v); render(true); },
   readinfo: async v => {
@@ -609,7 +640,7 @@ function platChips(xs) {
   return `<div class="platchips" role="group" aria-label="Platforms"><button class="pchip${state.fPlat === 'Any' ? ' on' : ''}" data-act="fplat" data-v="Any" aria-pressed="${state.fPlat === 'Any'}">All platforms <i class="num">${xs.length}</i></button>
     ${list.map(e => `<button class="pchip${state.fPlat === e.p.key ? ' on' : ''}" data-act="fplat" data-v="${esc(e.p.key)}" aria-pressed="${state.fPlat === e.p.key}">${platBadge({ site: e.site }, 18)}${esc(e.p.name)} <i class="num">${e.n}</i></button>`).join('')}</div>`;
 }
-function passMainNoAcct(c) { const k = ['fVer', 'fFol', 'fType', 'fCountry', 'fRepost'], was = k.map(x => state[x]); k.forEach(x => { state[x] = x === 'fRepost' ? true : 'Any'; }); try { return passMain(c); } finally { k.forEach((x, i) => { state[x] = was[i]; }); } }
+function passMainNoAcct(c) { const k = ['fVer', 'fFol', 'fType', 'fCountry', 'fRepost'], was = k.map(x => state[x]), g = [state.fGov, state.fPerson]; k.forEach(x => { state[x] = x === 'fRepost' ? true : 'Any'; }); state.fGov = true; state.fPerson = true; try { return passMain(c); } finally { k.forEach((x, i) => { state[x] = was[i]; }); [state.fGov, state.fPerson] = g; } }
 
 // ---------------------------------------------------------------- reposts and shares (4.32, Ben)
 // A copy found on an account page is checked in your browser: PageProof finds the exact post, and

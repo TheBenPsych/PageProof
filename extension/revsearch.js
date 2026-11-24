@@ -794,11 +794,15 @@ function baseVerdict(l) {
 //   unknown  the page could not be read (login wall, blocked): kept, but only as Maybe
 const PV = 1;
 const needsPage = l => l.from === 'preview' && l.pv !== PV && !l.rescued && ['same', 'maybe'].includes(baseVerdict(l));
+// 4.35 (Ben): on LinkedIn, X and Facebook a shared article shows as a link preview card with the
+// article's picture. That picture is not posted by the account, so it never counts as a copy.
+const cardOf = l => !l.rescued && globalThis.PP_SOCIAL && PP_SOCIAL.cardPic ? PP_SOCIAL.cardPic(l.img) : '';
 function verdict(l) {
   const v = baseVerdict(l);
+  if (['same', 'maybe'].includes(v) && cardOf(l)) return 'no';
   if (l.rescued || l.from !== 'preview' || !['same', 'maybe'].includes(v)) return v;
   if (l.pv !== PV) return 'pending';
-  if (l.onPage === 'notSeen') return 'no';
+  if (l.onPage === 'notSeen' || l.onPage === 'card') return 'no';
   if (l.onPage === 'seen') return v;
   return 'maybe';
 }
@@ -849,12 +853,12 @@ async function pageCheck(l) {
         const w = pic.w, h = pic.h;
         freePic(pic);
         if (['same', 'maybe'].includes(baseVerdict({ ...m }))) {
-          state = 'seen'; l.img = u; if (!l.w) { l.w = w; l.h = h; }
+          state = social && PP_SOCIAL.cardPic(u) ? 'card' : 'seen'; l.img = u; if (!l.w) { l.w = w; l.h = h; }
           if (m.pct > l.pct) Object.assign(l, m);
           break;
         }
       }
-      if (state !== 'seen' && tried) state = social ? 'postOnly' : 'notSeen';
+      if (state !== 'seen' && state !== 'card' && tried) state = social ? 'postOnly' : 'notSeen';
       TIMES.pages = (TIMES.pages || 0) + 1;
     }
   } catch (e) { /* their page did not answer: unknown */ }
@@ -1148,7 +1152,7 @@ function resultsSide() {
 // found; "It is a copy" rescues one that really is your photo.
 function rowFor(p, l) {
   const v = verdict(l);
-  const why = userNo(l) ? 'You: not a match' : v === 'cant' ? (l.pct === null ? 'Not checked' : 'Picture blocked') : 'Different photo';
+  const why = userNo(l) ? 'You: not a match' : cardOf(l) ? 'Only in a link preview' : v === 'cant' ? (l.pct === null ? 'Not checked' : 'Picture blocked') : 'Different photo';
   return h('div', { class: 'row' },
     (l.thumb || l.img) ? h('img', { class: 'th', src: l.thumb || l.img, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer', onerror: e => e.target.replaceWith(h('div', { class: 'th' })) }) : h('div', { class: 'th' }),
     h('div', { class: 't' }, h('a', { href: l.url, target: '_blank', rel: 'noreferrer', text: l.title || l.url, title: l.title || l.url }),

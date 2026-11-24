@@ -476,6 +476,68 @@ const PP_SOCIAL = (() => {
   // wants these, so they are hidden from Copies found unless "Show government" is on.
   const GOV_WORDS = /\b(congress(?:wo)?man|congressperson|member of congress|(?:u\.?s\.?|state) (?:senator|representative|rep\.?)|senator|assembly(?:wo)?man|assembly ?member|council(?:wo)?man|council ?member|councilmember|councillor|councilor|city council|county (?:commissioner|executive|legislator|clerk)|board of supervisors|alder(?:man|woman|person)|(?:deputy )?mayor|(?:lt\.? |lieutenant )?governor|attorney general|district attorney|comptroller|state treasurer|secretary of state|sheriff|legislator|state rep(?:resentative)?|selectman|freeholder|borough president|public advocate|school board member|candidate|running for|campaign (?:for|account|page)|for (?:congress|senate|state senate|state house|council|city council|mayor|governor|assembly|sheriff|district attorney|da|judge|school board|president|comptroller|public advocate|borough president|treasurer|state rep)|paid for by|elected official|government (?:official|organi[sz]ation|agency|account)|politician|political candidate|official (?:account|page) of the (?:city|county|state|town|office)|white house|house of representatives|state legislature)\b/i;
   const GOV_NAME = /^(?:rep|sen|gov|mayor|senator|congress(?:wo)?man|council(?:wo)?man|councilmember|assembly(?:wo)?man|cm|commissioner|judge|sheriff)\.?\s/i;
+  // 4.35 (Ben: "Politicians we always want filtered out"): more ways an office shows. Rep. Jim
+  // Jordan's bio says "Proudly serving Ohio's beautiful Fourth District. Chairman @JudiciaryGOP".
+  const GOV_MORE = /(?:\b(?:proudly )?(?:serving|represent(?:ing|s)?)\b[^.\n]{0,50}\b(?:district|county|ward|parish|constituents)\b|\b(?:\d{1,2}(?:st|nd|rd|th)|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|at-large) (?:congressional |senate |assembly |council |house |legislative )?district\b|\((?:R|D|I)[-–‑]\s?[A-Z][A-Za-z.]{1,13}\)|\b(?:R|D)[-–‑](?:A[LKZR]|C[AOT]|DE|FL|GA|HI|I[DLNA]|K[SY]|LA|M[EDAINSOT]|N[EVHJMYCD]|O[HKR]|PA|RI|S[CD]|T[NX]|UT|V[TA]|W[AVIY])\b|@\w+(?:GOP|Dems)\b|\bchair(?:man|woman)? of the (?:house|senate)\b|\b(?:house|senate) (?:judiciary|appropriations|armed services|oversight|intelligence|foreign affairs|budget|finance) committee\b|\bu\.?s\.? (?:house|senate)\b)/i;
+  // Handles that start with an office: @RepJimJordan, @SenSchumer, @GovKathyHochul, @MayorAdams.
+  const GOV_HANDLE = /^@?(?:Rep|Sen|Senator|Gov|Governor|LtGov|Mayor|Congressman|Congresswoman|Councilman|Councilwoman|Councilmember|CM|Assemblyman|Assemblywoman|AsmMember|Comptroller|AG)[A-Z_]/;
+  const isGovText = t => GOV_WORDS.test(t || '') || GOV_MORE.test(t || '');
+  const govMatch = t => ((String(t || '').match(GOV_WORDS) || String(t || '').match(GOV_MORE) || [''])[0]);
+  // 4.35 (Ben): a person's own account: just a name, no company, no contact, no website.
+  // "Fredric U. Dicker", "Claire Langoulant ⚜️♛", "Fredia Wright (Ernst)". Not "Brooklyn Paper".
+  const NOT_PERSON = /\b(news|paper|times|post|daily|weekly|tribune|journal|media|tv|radio|magazine|press|gazette|herald|report|official|team|group|club|society|association|foundation|church|school|university|college|city|county|state|department|dept|office|center|centre|museum|gallery|studio|studios|photos?|photography|pics|images|films?|records|music|band|shop|store|inc|llc|ltd|co|company|agency|network|channel|show|podcast|fans?|world|hub|nation|united|america|american|usa|nyc|ny|la|official)\b/i;
+  function personName(n) {
+    const t = String(n || '').replace(/\s*\(.*?\)\s*/g, ' ').replace(/[^\p{L}\s.'’-]/gu, ' ').replace(/\s+/g, ' ').trim();
+    if (!t || /\d/.test(n || '') || NOT_PERSON.test(t)) return false;
+    const w = t.split(' ');
+    if (w.length < 2 || w.length > 4) return false;
+    return w.every(x => /^\p{Lu}[\p{Ll}'’-]+$/u.test(x) || /^\p{Lu}\.?$/u.test(x) || /^\p{Lu}[\p{Ll}]*[-'’]\p{Lu}[\p{Ll}]+$/u.test(x) || /^(?:Mc|Mac|O'|De|Di|Van|Von|Le|La)\p{Lu}[\p{Ll}]+$/u.test(x)) && w.filter(x => x.replace(/\.$/, '').length > 1).length >= 2;
+  }
+  // What can be told about an account BEFORE its profile is read (or when the site won't show it):
+  // the link (LinkedIn /in/ is always a person, /company/ a company), the handle and the name the
+  // site gave the post ("Rep. Jim Jordan"). Returns { type, sure, why } or null.
+  function quickType(acct, title) {
+    if (!acct) return null;
+    const key = String(acct.key || '').replace(/^[a-z0-9.-]+\.[a-z]+\//i, ''), name = String(acct.name || ''), handle = String(acct.handle || '').replace(/^@/, '');
+    const head = String(title || '').split(/\s+(?:on X|on Twitter|on Instagram|on Facebook|on LinkedIn|on TikTok|\||-|–|\(@)/)[0].trim().slice(0, 80);
+    for (const t of [name, head]) {
+      if (t && GOV_NAME.test(t)) return { type: 'Government', sure: 'sure', why: 'the name "' + t + '"' };
+    }
+    if (GOV_HANDLE.test(handle)) return { type: 'Government', sure: 'sure', why: 'the handle "@' + handle + '"' };
+    for (const t of [name, head]) if (t && isGovText(t)) return { type: 'Government', sure: 'sure', why: 'the name ("' + govMatch(t) + '")' };
+    if (/^in\//.test(key) && /linkedin\.com$/.test(acct.plat || 'linkedin.com')) return { type: 'Person', sure: 'sure', why: 'a LinkedIn personal profile (linkedin.com/in/…)' };
+    if (/^company\//.test(key) && /linkedin\.com$/.test(acct.plat || 'linkedin.com')) return { type: 'Business', sure: 'sure', why: 'a LinkedIn company page' };
+    return null;
+  }
+  // The account's type, all things known put together (4.35). Order: what you set by hand, then
+  // government (from the link, name or profile; Ben never wants them), then what the profile
+  // read found, then "just a person's name" worked out again from the details already read (so
+  // accounts read before 4.35 need no new read), then what the link alone says.
+  function kindOf(acct, info, title, mine) {
+    if (mine) return { type: mine, sure: 'you', why: 'set by you' };
+    const q = quickType(acct, title);
+    if (q && q.type === 'Government') return q;
+    const i = info && info.ok ? info : null;
+    if (i) {
+      const qi = i.name ? quickType({ ...acct, name: i.name }) : null;
+      if (i.type === 'Government') return { type: 'Government', sure: 'sure', why: i.gov || 'the profile' };
+      if (qi && qi.type === 'Government') return qi;
+      if (i.type) return { type: i.type, sure: i.typeSure || 'sure', why: i.type === 'Person' ? i.personWhy || 'the profile' : '' };
+      if (!i.category && !i.company && !(i.signs || []).length && i.verified !== 'gold' && i.verified !== 'grey' && (i.followers == null || i.followers < 1e5) && personName(i.name)) return { type: 'Person', sure: 'guess', why: 'only a person\'s name, with no company, website or contact details' };
+    }
+    return q;
+  }
+  // 4.35 (Ben): a link preview is not a posted picture. When someone shares an article, LinkedIn,
+  // X and Facebook show a card with the article's picture; that picture lives at its own kind of
+  // address. Returns the platform's word for it, or ''.
+  function cardPic(u) {
+    const s = String(u || '');
+    if (/media\.licdn\.com\/[^?#]*\/articleshare-/i.test(s)) return 'LinkedIn link preview';
+    if (/pbs\.twimg\.com\/card_img\//i.test(s)) return 'X link card';
+    if (/(?:^https?:\/\/|\.)external[.-][^/]*fbcdn\.net\//i.test(s) || /\/safe_image\.php/i.test(s) || /fbcdn\.net\/emg1\//i.test(s)) return 'Facebook link preview';
+    if (/cdn\.bsky\.app\/img\/feed_thumbnail\/[^?#]*\/bafk/i.test(s) && /external/i.test(s)) return 'Bluesky link card';
+    return '';
+  }
   const GOV_SITE = /(?:for|4)(?:congress|senate|council|citycouncil|mayor|governor|assembly|sheriff|judge|delegate|schoolboard|statehouse|staterep|comptroller|president)(?:[0-9-]*)\.[a-z]+$|(?:^|\.)[a-z0-9-]+\.gov(?:\.[a-z]{2})?$|\.(?:house|senate)\.gov$|^(?:www\.)?(?:house|senate|whitehouse)\.gov$/i;
   const CAT_GOV = /politician|political candidate|government official|government organi[sz]ation|government (?:agency|building|service)|public (?:&|and) government|elected official|political organi[sz]ation|political party|campaign/i;
   // The site's own copyright line ("© 2026 X Corp.", "© 2026 Meta") is never the account's company.
@@ -588,7 +650,7 @@ const PP_SOCIAL = (() => {
     f.ok = f.followers != null || !!f.name || !!f.category || !!f.country;
     // What kind of account: the site says it, or the signs add up.
     const btn = (prof.buttons || []).join(' | ');
-    f.v = 4;   // 4.24: read with the X fixes and government check; 4 (4.30.1): viewer's own data left out
+    f.v = 5;   // 4.24: X fixes and government; 4 (4.30.1): viewer's own data left out; 5 (4.35): person and more government signs
     const name = f.name + ' ' + bareName(acct);
     if (/shop now|shop$|view shop|book now|book$|order (now|online)|call now|get directions|directions|send email|email$|contact$|contact us|visit website|buy tickets|start order/i.test(btn)) f.signs.push('a "' + ((btn.match(/shop now|view shop|book now|order now|order online|call now|get directions|send email|contact us|visit website|buy tickets|start order|shop|book|contact|email|directions/i) || ['Contact'])[0]) + '" button');
     if (BIZ_WORDS.test(name) || BIZ_WORDS.test(bio)) f.signs.push('a business word in the name or bio ("' + ((name.match(BIZ_WORDS) || bio.match(BIZ_WORDS))[0]) + '")');
@@ -611,9 +673,17 @@ const PP_SOCIAL = (() => {
       : GOV_NAME.test(f.name) ? 'the name "' + f.name + '"'
       : GOV_WORDS.test(bio) ? 'the bio ("' + bio.match(GOV_WORDS)[0] + '")'
       : GOV_WORDS.test(f.name) ? 'the name ("' + f.name.match(GOV_WORDS)[0] + '")'
+      : GOV_MORE.test(bio) ? 'the bio ("' + bio.match(GOV_MORE)[0] + '")'
+      : X && X.affiliate && GOV_MORE.test(X.affiliate) ? 'a government badge (' + X.affiliate.split(' · ')[0] + ')'
+      : GOV_HANDLE.test(bareName(acct)) ? 'the handle "@' + bareName(acct) + '"'
       : webHost && GOV_SITE.test(webHost) ? 'a campaign or government website (' + webHost + ')'
       : '';
     if (govWhy) { f.gov = govWhy; set('Government', 'sure'); }
+    // 4.35 (Ben): a person's own account. Facebook shows "162 friends" and "Personal details" only
+    // on a person's profile (Pages show likes and followers); LinkedIn /in/ is always a person.
+    const qt = quickType(acct);
+    if (qt && qt.type !== 'Government') { f.personWhy = qt.type === 'Person' ? qt.why : ''; set(qt.type, qt.sure); }
+    if (plat === 'facebook.com' && !/(?:^|\n)\s*Page\s*·/.test(text) && (/(?:^|\n)\s*[\d.,]+\s?[KkMm]?\s+(?:mutual\s+)?friends\b/.test(top) || /(?:^|\n)\s*Personal details\s*(?:\n|$)/.test(text))) { f.personWhy = /friends/.test(top) ? 'a friends count (only personal profiles have friends)' : '"Personal details" (only personal profiles have them)'; set('Person', 'sure'); }
     if (f.verified === 'gold' || f.verified === 'grey') set('Organisation', 'sure');
     if (f.company) set('Business', 'sure');
     if (cat) {
@@ -627,6 +697,9 @@ const PP_SOCIAL = (() => {
     if (f.signs.length >= 2 && !FAN_WORDS.test(name)) set('Business', 'guess');
     if (FAN_WORDS.test(name)) set('Fan page', 'guess');
     if (dv('is_professional_account') === true) set('Creator', 'guess');
+    // Just a person's name, nothing else: no category, company, website, email, phone, shop
+    // button or business word, no organisation or government check, under 100k followers.
+    if (f.ok && !f.type && !cat && !f.company && !f.signs.length && f.verified !== 'gold' && f.verified !== 'grey' && (f.followers == null || f.followers < 1e5) && personName(f.name) && !FAN_WORDS.test(name)) { f.personWhy = 'only a person\'s name, with no company, website or contact details'; set('Person', 'guess'); }
     if (f.ok && plat === 'instagram.com' && dv('is_business_account') === false && dv('is_professional_account') === false) set('Person', 'guess');
     if (f.ok && plat === 'facebook.com' && /profile\.php|\/id\.\d+/.test((acct.url || '') + (acct.key || '')) && !/(?:^|\n)\s*Page\s*·/.test(text)) set('Person', 'guess');
     return f;
@@ -646,6 +719,6 @@ const PP_SOCIAL = (() => {
   const shortNum = n => n == null ? '' : n >= 1e9 ? (n / 1e9).toFixed(n >= 1e10 ? 0 : 1).replace(/\.0$/, '') + 'B' : n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e4 ? 0 : 1).replace(/\.0$/, '') + 'k' : String(n);
 
   return { SITES, ready, listed, isSocial, platform, postKind, fromUrl, fromTyped, isShort, unshort, publicInfo, hasPublic: url => !!OEMBED[listed(host(url))], fromTags, shapeOf, pageSigns, askFor, setMine, mine: () => mine, mineFor, ELSEWHERE, plainName, bareName, host,
-    big, profilePages, readProfileInTab, readProfile, openQuiet, closeQuiet, stopQuiet, halt, profileFacts, addShopSign, FOL_BANDS, folBand, shortNum };
+    big, quickType, kindOf, cardPic, personName, isGovText, profilePages, readProfileInTab, readProfile, openQuiet, closeQuiet, stopQuiet, halt, profileFacts, addShopSign, FOL_BANDS, folBand, shortNum };
 })();
 if (typeof self !== 'undefined') self.PP_SOCIAL = PP_SOCIAL;
