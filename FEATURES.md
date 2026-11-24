@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.31.0** (24 Nov 2026).
+Last updated: version **4.31.1** (24 Nov 2026).
 
 ---
 
@@ -149,6 +149,7 @@ Last updated: version **4.31.0** (24 Nov 2026).
 - **Folder name warnings** when a photo folder looks wrong. (4.15)
 - **Automatic tests** run before every release. (4.1)
 - **Nothing writes into its own program folder** (after Windows Defender flagged a self-updater, it was removed). (4.2.1)
+- **New versions in about a minute:** the download link is updated a minute after each change, and the automatic checks run side by side before it. (4.31.1)
 
 ---
 
@@ -212,3 +213,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.30.1 | 24 Nov | Fix: Instagram accounts showed your own name; viewer's details left out, accounts read again |
 | 4.30.2 | 24 Nov | Pause and Off stop everything at once (big searches, account reader, their tabs); Resume picks up where it stopped |
 | 4.31 | 24 Nov | Logos and buildings no longer count as copies (only-logos and same-place checks) |
+| 4.31.1 | 24 Nov | Fix: New versions reach the download page in about a minute |
