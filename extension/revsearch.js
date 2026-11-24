@@ -1323,7 +1323,10 @@ async function initResults() {
   scoreAll();
   for (const p of job.pics) maybeIngest(p);
   if (mine && (!job.started || unfinished)) runJob();
-  if (!BG) window.addEventListener('beforeunload', e => { if (R.running) { e.preventDefault(); e.returnValue = ''; } });
+  // 4.30.2: the browser only shows "Leave site?" after someone clicked in the tab, and logs an error
+  // (shown on edge://extensions) when a page asks without that click. So it only asks after one.
+  const clicked = () => !navigator.userActivation || navigator.userActivation.hasBeenActive;
+  if (!BG) window.addEventListener('beforeunload', e => { if (R.running && clicked()) { e.preventDefault(); e.returnValue = ''; } });
   if (BG) api.runtime.onMessage.addListener(msg => {
     if (msg && msg.type === 'ppBgStop' && msg.job === job.id && R.running) { R.stop = true; for (const t of [...R.tasks.values()]) finishTask(t, 'skip', 'Stopped'); }
     return false;

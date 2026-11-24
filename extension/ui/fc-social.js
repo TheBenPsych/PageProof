@@ -97,7 +97,10 @@ async function readAcctInfo(acct) {
   if (!acct || INFO_BUSY.has(acct.key)) return null;
   INFO_BUSY.add(acct.key);
   try {
+    PP_SOCIAL.halt.on = false;
     const pages = await PP_SOCIAL.readProfile(acct);
+    // Paused or switched off half way: nothing is saved, so this account is read again after Resume.
+    if (PP_SOCIAL.halt.on) return null;
     const f = PP_SOCIAL.profileFacts(acct, pages);
     if (f.website && !f.shop) {
       const pf = await PP_CHECKS.readPage({ url: f.website, site: RS_SITE.of(f.website) }).catch(() => null);
@@ -114,27 +117,105 @@ async function readAcctInfo(acct) {
     return all[acct.key];
   } finally { INFO_BUSY.delete(acct.key); }
 }
-const infoDue = (i, a) => !i || (i.ok && !i.v) || staleInfo(i, a) || (i.ok ? Date.now() - Date.parse(i.at) > 30 * 864e5 && (!i.failAt || Date.now() - Date.parse(i.failAt) > 3 * 864e5) : Date.now() - Date.parse(i.failAt || i.at || 0) > 3 * 864e5);
+const infoDue = (i, a) => !i || (i.ok && !i.v) || staleInfo(i, a) || (i.ok ? Date.now() - Date.parse(i.at) > 90 * 864e5 && (!i.failAt || Date.now() - Date.parse(i.failAt) > 3 * 864e5) : Date.now() - Date.parse(i.failAt || i.at || 0) > 3 * 864e5);
 let infoQueueOn = false;
+// 4.30.2 (Ben): the reader only works while Keep searching is on, not paused, and inside its hours,
+// one account a minute. Pause or Off closes its tab at once; Resume carries on with the next account.
+// Keep searching's status shows how far it is ("Reading account details 12 of 80").
+const INFO_GAP = () => globalThis.PP_INFO_GAP ?? 60000;   // the checks make it shorter
+// Hard limits per site (4.30.2, Ben: X stopped loading after many profiles in a row). X at most one
+// profile every 2 minutes and 30 a day; other sites one a minute and 150 a day. Two empty pages in a
+// row from a site (a block, a login wall, a page stuck on its logo) = that site is left alone for 6 hours.
+const SITE_LIMIT = { x: { gap: 2 * 60000, day: 30 }, other: { gap: 60000, day: 150 } };
+const acctSite = a => isXAcct(a) ? 'x' : String(a.plat || (a.key || '').split('/')[0] || 'other').replace(/^www\./, '');
+const limitOf = site => SITE_LIMIT[site] || SITE_LIMIT.other;
+async function siteLimits() {
+  const L = (await api.storage.local.get('fcAcctLimits')).fcAcctLimits || {};
+  const today = new Date().toDateString();
+  for (const v of Object.values(L)) if (v.day !== today) { v.day = today; v.n = 0; }
+  return L;
+}
+// When may this site be read next? 0 = now.
+function siteWait(L, site) {
+  const v = L[site]; if (!v) return 0;
+  const lim = limitOf(site), now = Date.now();
+  if (v.restUntil && v.restUntil > now) return v.restUntil;
+  if (v.n >= lim.day) { const t = new Date(); t.setHours(24, 0, 0, 0); return +t; }
+  const gap = globalThis.PP_SITE_GAP ?? lim.gap;
+  return v.last && now - v.last < gap ? v.last + gap : 0;
+}
+async function siteNote(site, ok) {
+  const L = await siteLimits();
+  const v = L[site] || (L[site] = { day: new Date().toDateString(), n: 0 });
+  v.n++; v.last = Date.now();
+  v.empty = ok ? 0 : (v.empty || 0) + 1;
+  if (v.empty >= 2) { v.restUntil = Date.now() + 6 * 3600000; v.empty = 0; }
+  await api.storage.local.set({ fcAcctLimits: L });
+}
+// Opening a copy whose account has no details yet reads them then (inside the site's limits).
+async function acctOnOpen(c) {
+  if (!c || !c.acct || INFO_BUSY.has(c.acct.key)) return null;
+  const i = FCD && FCD.acctInfo && FCD.acctInfo[c.acct.key];
+  if (i && !infoDue(i, c.acct)) return null;
+  if ((await api.storage.local.get('ppAcctRead')).ppAcctRead === false) return null;
+  const site = acctSite(c.acct);
+  if (siteWait(await siteLimits(), site)) return null;
+  const r = await readAcctInfo(c.acct).catch(() => null);
+  if (r) await siteNote(site, !!r.ok);
+  return r;
+}
+const infoSay = v => api.storage.local.set({ fcAcctRead: { ...v, beat: Date.now() } }).catch(() => {});
 async function infoQueue() {
   if (infoQueueOn || !FCD) return;
-  const st = await api.storage.local.get('ppAcctRead').catch(() => ({}));
-  if (st.ppAcctRead === false) return;
   infoQueueOn = true;
+  let done = 0;
   try {
     for (;;) {
+      const st = await api.storage.local.get('ppAcctRead').catch(() => ({}));
+      if (st.ppAcctRead === false) { await infoSay({ state: 'off' }); break; }
       if (!FCD) await loadFC();
       const info = FCD.acctInfo || {};
       // Accounts with new copies first, then the rest; each account once.
-      const todo = [...FCD.accts.values()].filter(e => e.copies.length && !INFO_BUSY.has(e.key) && infoDue(info[e.key], e.acct))
-        .sort((a, b) => (staleInfo(info[b.key], b.acct) ? 1 : 0) - (staleInfo(info[a.key], a.acct) ? 1 : 0) || b.copies.filter(x => x.status === 'new').length - a.copies.filter(x => x.status === 'new').length)[0];
-      if (!todo) break;
-      await readAcctInfo(todo.acct).catch(() => null);
+      // Only accounts with a copy still waiting for your answer (answered and removed ones are skipped;
+      // opening a copy reads its account then, see acctOnOpen).
+      const due = [...FCD.accts.values()].filter(e => e.copies.some(x => x.status === 'new') && !INFO_BUSY.has(e.key) && infoDue(info[e.key], e.acct));
+      if (!due.length) { await infoSay({ state: 'done', done }); break; }
+      const ok = await FC.quietOK();
+      if (!ok.ok) { infoHeld = true; await infoSay({ state: 'held', why: ok.why, done, total: done + due.length }); await infoWait(); continue; }
+      // Sites that are resting or have had enough for today wait (their accounts stay due).
+      const L = await siteLimits();
+      const ready = due.filter(e => !siteWait(L, acctSite(e.acct)));
+      if (!ready.length) {
+        const until = Math.min(...due.map(e => siteWait(L, acctSite(e.acct))));
+        const resting = [...new Set(due.map(e => acctSite(e.acct)).filter(x => L[x] && L[x].restUntil > Date.now()))];
+        infoHeld = true;
+        await infoSay({ state: 'held', why: resting.length ? 'site' : 'limit', sites: resting, until: resting.length ? Math.min(...resting.map(x => L[x].restUntil)) : until, done, total: done + due.length });
+        await infoWait(Math.max(5000, Math.min(until - Date.now(), 30 * 60000)));
+        continue;
+      }
+      const todo = ready.sort((a, b) => (staleInfo(info[b.key], b.acct) ? 1 : 0) - (staleInfo(info[a.key], a.acct) ? 1 : 0) || b.copies.filter(x => x.status === 'new').length - a.copies.filter(x => x.status === 'new').length)[0];
+      infoHeld = false;
+      await infoSay({ state: 'reading', done, total: done + due.length, who: todo.acct.handle || '' });
+      const r = await readAcctInfo(todo.acct).catch(() => null);
+      if (r) { done++; await siteNote(acctSite(todo.acct), !!r.ok); }
       socRedrawSoon();
-      await new Promise(r => setTimeout(r, 4000));
+      await infoSay({ state: 'resting', done, total: done + due.length - (r ? 1 : 0), next: Date.now() + INFO_GAP() });
+      await infoWait(INFO_GAP());
     }
   } finally { infoQueueOn = false; }
 }
+// Waits (at most ms), and wakes early when Pause, Off or the hours change.
+let infoWake = null, infoHeld = false;
+const infoWait = (ms = 5 * 60000) => new Promise(r => { const t = setTimeout(go, ms); function go() { clearTimeout(t); infoWake = null; r(); } infoWake = go; });
+api.storage.onChanged.addListener(ch => {
+  if (!ch.fcPause && !ch.fcKeep && !ch.ppAcctRead) return;
+  FC.quietOK().then(async ok => {
+    const off = (await api.storage.local.get('ppAcctRead')).ppAcctRead === false;
+    if (!ok.ok || off) PP_SOCIAL.stopQuiet();
+    if (infoWake && infoHeld) infoWake();
+    if (ok.ok && FCD) { infoQueue(); socQueue(); }
+  }).catch(() => {});
+});
 // The filters on the Social media tab: Verified, Followers, Account type, Country.
 const TYPES = ['Business', 'Creator', 'Organisation', 'Government', 'News or media', 'Fan page', 'Group', 'Person'];
 // Kinds of check (4.24, Ben): paid = X blue / Meta Verified; gold = organisation X verified;
@@ -260,6 +341,8 @@ async function socQueue() {
   try {
     for (;;) {
       if (route() !== 'found' && route() !== 'review') break;
+      // Pause stops these page checks too (4.30.2); Resume starts them again.
+      if ((await api.storage.local.get('fcPause')).fcPause) break;
       if (!FCD) await loadFC();
       const todo = FCD.copies.filter(c => isSoc(c) && !c.acct && c.status !== 'removed' && !FIND_BUSY.has(c.id) && (!c.acctTry || Date.now() - c.acctTry > 3 * 864e5)).slice(0, 2);
       if (!todo.length) {
@@ -433,6 +516,7 @@ Object.assign(ACTS, {
     if (!c || !c.acct) return;
     const p = readAcctInfo(c.acct); render(true);
     const i = await p;
+    if (i) await siteNote(acctSite(c.acct), !!i.ok);
     toast(i && i.ok ? 'Read ' + c.acct.handle + '\'s profile.' : platOf(c).name + ' didn\'t show the profile. PageProof tries again in 3 days.');
     render(true);
   },
