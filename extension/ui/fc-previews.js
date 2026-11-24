@@ -7,7 +7,7 @@
 //    looks at its pictures and keeps the one that lines up with your photo (the same check as
 //    "Same photo"). If none lines up well enough, the placeholder stays: a wrong picture is worse.
 // Each copy is tried at most once a week. Nothing is uploaded anywhere.
-// Then (4.23) copies still waiting for an answer get the newer photo check once (recheck below).
+// Then (4.25) copies still waiting for an answer get the newer photo check once (recheck below).
 const FC_PREV = (() => {
   let running = false, worker = null, wid = 1;
   const waits = new Map();
@@ -127,7 +127,7 @@ const FC_PREV = (() => {
     return changed;
   }
 
-  // 4.23: copies found before the "only logos / same place" check are checked once more, with
+  // 4.25: copies found before the "only logos / same place" check are checked once more, with
   // the same check as new searches. Another photo of the same place moves to Removed (Put back
   // works). Copies you already answered or added by hand are never touched.
   const SHOT_CHECK = 6;

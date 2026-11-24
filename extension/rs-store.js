@@ -323,35 +323,37 @@ const RS_STOLEN = {
   text() { return RS_STOLEN.HEAD + RS_STOLEN.items.join('\n') + '\n'; },
   async load() {
     const api = globalThis.browser || globalThis.chrome;
+    const old = RS_STOLEN.items;
     RS_STOLEN.items = (await api.storage.local.get('rsStolen')).rsStolen || [];
     if ((await RS_DOCS.state()) === 'granted') {
       const t = await RS_DOCS.readText(RS_STOLEN.FILE);
       if (t === undefined) { /* folder too slow: keep the browser's copy */ }
-      else if (t !== null) RS_STOLEN.items = RS_STOLEN.parse(t);
+      else if (t !== null && t === RS_STOLEN._t) { RS_STOLEN.items = RS_STOLEN._a; return RS_STOLEN; }   // unchanged: nothing to do
+      else if (t !== null) { RS_STOLEN.items = RS_STOLEN._a = RS_STOLEN.parse(t); RS_STOLEN._t = t; await api.storage.local.set({ rsStolen: RS_STOLEN.items }); }
       else if (RS_STOLEN.items.length) await RS_DOCS.writeText(RS_STOLEN.FILE, RS_STOLEN.text());
-      await api.storage.local.set({ rsStolen: RS_STOLEN.items });
     }
-    RS_STOLEN._ix = null;
+    if (old.length !== RS_STOLEN.items.length || old.some((x, i) => x !== RS_STOLEN.items[i])) RS_STOLEN._ix = null;
     return RS_STOLEN;
   },
   async save() {
     const api = globalThis.browser || globalThis.chrome;
-    await api.storage.local.set({ rsStolen: RS_STOLEN.items, fcChanged: { what: 'stolen', at: Date.now() } });
-    if ((await RS_DOCS.state()) === 'granted') await RS_DOCS.writeText(RS_STOLEN.FILE, RS_STOLEN.text());
+    await api.storage.local.set({ rsStolen: RS_STOLEN.items });
+    if ((await RS_DOCS.state()) === 'granted') { const t = RS_STOLEN.text(); await RS_DOCS.writeText(RS_STOLEN.FILE, t); RS_STOLEN._t = t; RS_STOLEN._a = RS_STOLEN.items; }
     RS_STOLEN._ix = null;
   },
   // pages: exact pages (same page key Copies found uses). sites: links per website.
   // accts: links per social account (a whole social site never counts, only its accounts).
   index() {
     if (RS_STOLEN._ix) return RS_STOLEN._ix;
-    const FCx = globalThis.FC, S = globalThis.PP_SOCIAL;
+    const FCx = typeof FC !== 'undefined' ? FC : globalThis.FC, S = typeof PP_SOCIAL !== 'undefined' ? PP_SOCIAL : globalThis.PP_SOCIAL;
     const pages = new Set(), sites = new Map(), accts = new Map();
     for (const u of RS_STOLEN.items) {
       pages.add(FCx && FCx.pageKey ? FCx.pageKey(u) : u.toLowerCase());
       const site = RS_SITE.of(u);
-      const a = S && S.fromUrl ? S.fromUrl(u) : null;
+      const social = !!(S && S.isSocial && S.isSocial(site));
+      const a = social && S.fromUrl ? S.fromUrl(u) : null;
       if (a && a.key) accts.set(a.key, (accts.get(a.key) || 0) + 1);
-      else if (site && !(S && S.listed && S.listed(site))) sites.set(site, (sites.get(site) || 0) + 1);
+      else if (site && !social) sites.set(site, (sites.get(site) || 0) + 1);
     }
     return (RS_STOLEN._ix = { pages, sites, accts });
   },
@@ -406,25 +408,16 @@ const RS_IMPORTS = {
     return n;
   },
   // For a file added before 4.22 (nothing was remembered then): which sites in the list did that file add?
-  // "Add from a file" put the new sites at the END of the list, in the file's order, and skipped sites
-  // already there. So the import is the last run of the list made of the file's sites in the file's order.
-  // Sites from the file that sit earlier in the list were there before, and stay.
+  // 4.23.1: every entry that came from the file comes out, except whole sites and endings
+  // (patch.com, .gov) that were on the list before the file's first page: those are the kind you
+  // hide by hand, so they stay. (4.22 guessed from the order of the list, and on a real list that
+  // had been synced and backed up the order was no longer the file's, so most entries stayed.)
   fromFile(text, list) {
-    let best = { added: [], before: [] };
-    for (const parsed of [RS_LISTS.parse(text), RS_IMPORTS.parseFile(text)]) {
-      const pos = new Map(parsed.map((s, i) => [s, i]));
-      let i = list.length - 1, seen = false, last = Infinity;
-      const added = [];
-      for (; i >= 0; i--) {
-        const p = pos.get(list[i]);
-        if (p === undefined) { if (seen) break; continue; }   // sites added after the import are skipped
-        if (p > last) break;                                  // out of file order: was there before
-        last = p; seen = true; added.push(list[i]);
-      }
-      const before = list.slice(0, i + 1).filter(s => pos.has(s));
-      if (added.length > best.added.length) best = { added: added.reverse(), before };
-    }
-    return best;
+    const inFile = new Set([...RS_LISTS.parse(text), ...RS_IMPORTS.parseFile(text), ...RS_STOLEN.parse(text)]);
+    const firstPage = list.findIndex(s => inFile.has(s) && s.includes('/'));
+    const added = [], before = [];
+    list.forEach((s, i) => { if (!inFile.has(s)) return; if (!s.includes('/') && (firstPage < 0 || i < firstPage)) before.push(s); else added.push(s); });
+    return { added, before };
   },
 };
 

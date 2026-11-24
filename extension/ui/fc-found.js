@@ -3,7 +3,7 @@
 // (Stolen, Licensed, Remove, Skip), undo for every answer, hiding sites and countries, and
 // grouping by client, photo, site or site owner.
 Object.assign(state, {
-  open: '', picked: [], fFilter: 'New', fq: '', fWhen: 'any', fMatch: 'any', fYear: 'Any', fQuarter: 'Any', fPhoto: '', sis: null, fView: 'client', fSort: 'act', fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fOwner: '',
+  open: '', picked: [], fFilter: 'New', fq: '', fWhen: 'any', fMatch: 'any', fYear: 'Any', fQuarter: 'Any', fPhoto: '', sis: null, fView: 'client', fSort: 'act', fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fKnown: '', fSpam: 'hide', fOwner: '',
   showFilters: false, fFresh: false, dTab: 'sum', dTabFor: '', dView: '', slide: 50, fCols: null, exp: [], more: 250, qi: 0, cmpMode: 'side', cut: 50, rvTab: 'review', recentHides: [],
 });
 const HIST = [];         // every answer and hide, newest last, so each one can be undone in turn
@@ -12,7 +12,7 @@ let FCD = null;          // what's loaded from the copies database (cleared when
 // next draw reads it again, but a click in between still finds its copy. (Clearing it outright
 // made a button press do nothing until the page was drawn again, 4.6.4.)
 let FCD_STALE = false;
-api.storage.onChanged.addListener(ch => { if (ch.fcChanged || ch.rsHidden || ch.rsAllowed || ch.fcHiddenCountries || ch.ppSocialSites) FCD_STALE = true; });
+api.storage.onChanged.addListener(ch => { if (ch.fcChanged || ch.rsHidden || ch.rsAllowed || ch.rsStolen || ch.fcHiddenCountries || ch.ppSocialSites) FCD_STALE = true; });
 
 const STATUS = { new: ['New', 'copy'], stolen: ['Stolen', 'bad'], licensed: ['Licensed', 'ok'], removed: ['Removed', 'grey'] };
 const RISK = { ok: ['Looks normal', ''], watch: ['Worth a look', 'warn'], sus: ['Suspicious', 'bad'] };
@@ -90,6 +90,19 @@ async function readFC() {
   }
   // 4.9: accounts on social sites (stolen before is counted per account there, not per site).
   const soc = await socIndex(copies);
+  // 4.23: your list of links stolen before. The exact page gets a "Stolen before" tag, and other
+  // pages on the same website (or by the same social account) count as a repeat offender.
+  try { await RS_STOLEN.load(); } catch (e) { /* folder not reachable: the browser's copy */ }
+  const K = RS_STOLEN.index();
+  for (const c of copies) {
+    c.known = K.pages.size > 0 && [c.url, ...(c.alts || [])].some(u => K.pages.has(FC.pageKey(u)));
+    const n = (isSoc(c) ? (c.acct ? K.accts.get(c.acct.key) || 0 : 0) : K.sites.get(c.site) || 0) - (c.known ? 1 : 0);
+    c.knownN = Math.max(n, 0);
+    if (c.knownN) { if (!c.repeat) c.repeatWho = isSoc(c) && c.acct ? c.acct.handle : c.site; c.repeat = (c.repeat || 0) + c.knownN; }
+  }
+  // 4.24: spam blog farms (random addresses on throwaway sites). Tagged, and hidden until you show them.
+  const spam = FC.spamMarks(copies);
+  for (const c of copies) c.spam = spam.get(c.id) || null;
   let unhid = [];
   try { unhid = (await (globalThis.browser || chrome).storage.local.get('ppSocialUnhid')).ppSocialUnhid || []; } catch (e) { /* none */ }
   return { unhid, copies, photos, clients: new Map(clients.map(c => [c.name, c])), countries, facts, owners: ownerList, ownerOf, ...soc };
@@ -143,7 +156,7 @@ async function loadOurs(root = document) {
 // ---------------------------------------------------------------- the filters
 function passMain(c) {
   return (state.fClient === 'Any' || (c.clientName || 'Client unknown') === state.fClient) && (state.fUse === 'Any' || c.use === state.fUse) &&
-    (state.fRisk === 'Any' || c.risk.level === state.fRisk) && (state.fCredit === 'Any' || (c.credit || '') === state.fCredit) && (!state.fShop || c.use === 'shop') && (!state.fRepeat || (c.repeat > 0 && c.status === 'new')) &&
+    (state.fRisk === 'Any' || c.risk.level === state.fRisk) && (state.fCredit === 'Any' || (c.credit || '') === state.fCredit) && (!state.fShop || c.use === 'shop') && (!state.fRepeat || (c.repeat > 0 && c.status === 'new')) && (!state.fKnown || (state.fKnown === 'only' ? c.known : !c.known)) && (state.fSpam !== 'only' || !!c.spam) &&
     (!state.fOwner || (FCD.ownerOf.get(c.site) || {}).key === state.fOwner) && (state.fPlat === 'Any' || platOf(c).key === state.fPlat) &&
     (!state.fAcct || (state.fAcct === '~' ? !c.acct : !!c.acct && acctGroup(c.acct.key) === acctGroup(state.fAcct))) && (!state.fFresh || (c.dmg && c.dmg.end && Date.now() <= c.dmg.end.getTime())) && (!isSoc(c) || passAcct(c)) && passMore(c);
 }
@@ -181,7 +194,9 @@ function sistersOf(c) {
   if (!xs.length) return null;
   return { owner: o.name, ids: xs.map(x => x.id), sites: [...new Set(xs.map(x => x.site))], same: xs.every(x => x.photo === c.photo) };
 }
-const visible = c => !siteHidden(c) && !FCD.countries.includes(c.country);
+// 4.24: new copies on spam blogs stay out of every list (and One at a time) until you show them.
+const spamOut = c => !!c.spam && c.status === 'new' && state.fSpam === 'hide';
+const visible = c => !siteHidden(c) && !FCD.countries.includes(c.country) && !spamOut(c);
 
 // ---------------------------------------------------------------- the copy details panel
 function regBox(p, reg) {
@@ -294,7 +309,9 @@ function signals(c) {
   if (c.use === 'shop') s.push(['ok', 'shop', 'Selling something: a shop page, product listing or ad']);
   return s;
 }
-const sigIcons = c => { const s = signals(c); return s.length ? `<span class="sig">${s.map(([col, i, t]) => `<span class="tag ${col}" title="${esc(t)}" aria-label="${esc(t)}">${ic(i, 13)}</span>`).join('')}</span>` : ''; };
+const knownTag = c => c.known ? '<span class="tag bad" style="font-size:11.5px" title="This exact page is on your list of links stolen before (Settings › Hidden and approved sites › Stolen before links)">Stolen before</span>' : '';
+const spamTag = c => c.spam ? `<span class="tag grey" style="font-size:11.5px" title="${esc('Looks like a spam blog: ' + c.spam.join(', '))}">Spam blog</span>` : '';
+const sigIcons = c => { const s = signals(c); return knownTag(c) + spamTag(c) + (s.length ? `<span class="sig">${s.map(([col, i, t]) => `<span class="tag ${col}" title="${esc(t)}" aria-label="${esc(t)}">${ic(i, 13)}</span>`).join('')}</span>` : ''); };
 // Before a copy is marked Stolen: the kind of site (once per site) and the rules that apply.
 // Resolves 'stolen', 'removed' (Remove instead) or null (cancelled).
 async function ruleGate(c) {
@@ -370,8 +387,10 @@ async function drawer(list) {
   if (c.credit === 'removed') look.push(['copy', 'nocredit', 'Credit removed', 'Your client\'s photo carries a copyright line in its hidden data. Their copy has none.']);
   else if (c.credit === 'kept') fine.push('Credit kept');
   if (soc && !c.acct) look.push(['warn', 'who', 'Account not found yet', 'The link doesn\'t show who posted it. Set it in the Account tab.', 'dtab', 'Account', 'acct']);
+  if (c.spam) look.push(['warn', 'warn', 'Looks like a spam blog', c.spam.join(' · ') + '. Nothing was answered for you.', 'spamhide', 'Hide all of ' + esc(FC.baseOf(c.site)), esc(FC.baseOf(c.site))]);
+  if (c.known) look.push(['bad', 'repeat', 'On your stolen-before list', 'This exact page is on your list of links stolen before.']);
   if (soc && c.repeat && c.status === 'new') look.push(['bad', 'repeat', `Known account: marked stolen ${c.repeat === 1 ? 'once' : c.repeat + ' times'} before`, `You marked ${c.acct.handle}'s posts stolen before${c.repeatAt && c.repeatAt.length ? ' (' + c.repeatAt.slice(-3).map(shortDate).join(', ') + ')' : ''}.`, 'dtab', 'Account', 'acct']);
-  else if (c.repeat && c.status === 'new') look.push(['bad', 'repeat', `Repeat offender (${c.repeat} stolen before)`, `You already marked copies on ${c.repeatWho} as Stolen.`]);
+  else if (c.repeat && c.status === 'new') look.push(['bad', 'repeat', `Repeat offender (${c.repeat} stolen before)`, `${c.knownN ? `${c.repeatWho} has ${c.knownN === 1 ? 'a link' : c.knownN + ' links'} on your stolen-before list.` : `You already marked copies on ${c.repeatWho} as Stolen.`}`]);
   for (const h of hits.filter(h => h.lvl === 'stop' || h.lvl === 'warn')) look.push([h.lvl === 'stop' ? 'bad' : 'warn', 'warn', 'Firm rule: ' + PP_CHECKS.LVL[h.lvl][0], h.text, 'dtab', 'Claim', 'claim']);
   if (ck.dmg && ck.dmg.lvl === 'warn') look.push(['warn', 'clock', ck.dmg.title, ck.dmg.text, 'dtab', 'Claim', 'claim']);
   else if (ck.dmg && ck.dmg.lvl === 'bad') look.push(['bad', 'clock', ck.dmg.title, ck.dmg.text, 'dtab', 'Claim', 'claim']);
@@ -592,6 +611,8 @@ V.found = async () => {
     ['fYear', state.fYear === 'Any' ? 'Any' : 'Year ' + state.fYear], ['fQuarter', state.fQuarter === 'Any' ? 'Any' : 'Quarter ' + state.fQuarter]].filter(([, v]) => v !== 'Any');
   if (state.fShop) active.push(['fShop', 'Selling something']);
   if (state.fRepeat) active.push(['fRepeat', 'Repeat offenders']);
+  if (state.fSpam === 'only') active.push(['fSpam', 'Spam blogs only']);
+  if (state.fKnown) active.push(['fKnown', state.fKnown === 'only' ? 'Stolen before links only' : 'Without stolen before links']);
   if (state.fOwner) { const o = FCD.owners.find(z => z.key === state.fOwner); active.push(['fOwner', 'Owner: ' + (o ? o.name : '?')]); }
   if (state.fPhoto) { const p = FCD.photos.get(state.fPhoto); active.push(['fPhoto', 'Photo: ' + (p ? p.name : 'one photo')]); }
   if (state.fq) active.push(['fq', 'Search: ' + state.fq]);
@@ -622,6 +643,8 @@ V.found = async () => {
   // 4.11: a dropdown set away from its normal choice (def) turns blue, with an ✕ that puts it back.
   const dd = (id, label, opts, cur, right, def) => { const chosen = def != null && cur !== def; return `<details class="ddw${right ? ' right' : ''}" data-dd="${id}"><summary class="ddb${chosen ? ' chosen' : ''}">${label}${cur != null ? ` <b>${esc((opts.find(o => o[0] === cur) || opts[0])[1])}</b>` : ''} ${chosen ? `<span class="ddx" role="button" tabindex="0" data-act="fset" data-v="${id}|${def}" title="Back to ${esc((opts.find(o => o[0] === def) || opts[0])[1])}" aria-label="Clear ${label}">✕</span>` : '<span class="caret" aria-hidden="true">▾</span>'}</summary><div class="ddm" role="menu">${opts.map(([k, l, s]) => `<button role="menuitemradio" aria-checked="${cur === k}" class="${cur === k ? 'on' : ''}" data-act="fset" data-v="${id}|${k}">${esc(l)}${s ? `<span class="sub">${esc(s)}</span>` : ''}</button>`).join('')}</div></details>`; };
   const newL = live.filter(c => c.status === 'new');
+  // 4.24: new spam blog copies (counted whether they are hidden or showing).
+  const spamCs = everything.filter(c => c.spam && c.status === 'new' && !siteHidden(c) && !FCD.countries.includes(c.country)), spamN = spamCs.length;
   // 4.11: the old big number cards are now small Quick filter buttons. Solid blue with a tick = on.
   const qf = (label, n, on, act, v, col) => `<button class="qf${on ? ' on' : ''}" data-act="${act}" data-v="${v}" aria-pressed="${on}">${on ? '<span class="tick" aria-hidden="true">✓</span>' : col ? `<i style="background:var(--${col})"></i>` : ''}${label} <span class="num">${n}</span></button>`;
   const fresh = c => c.dmg && c.dmg.end && Date.now() <= c.dmg.end.getTime();
@@ -646,12 +669,16 @@ V.found = async () => {
       ${qf('Found today', newL.filter(c => new Date(c.firstSeen).toDateString() === new Date().toDateString()).length, state.fWhen === 'today', 'ftoday', '1', 'accent')}
       ${social ? qf('Known stolen accounts', newL.filter(c => c.repeat > 0).length, state.fRepeat, 'qtoggle', 'repeat', 'bad') : qf('Suspicious sites', newL.filter(c => c.risk.level === 'sus').length, state.fRisk === 'sus', 'qtoggle', 'sus', 'bad')}
       ${qf('Published in the last 3 months', newL.filter(fresh).length, state.fFresh, 'qtoggle', 'fresh', 'ok')}
+      ${!social && spamN ? qf('Spam blogs', spamN, state.fSpam === 'only', 'qtoggle', 'spam', 'faint') : ''}
+      ${RS_STOLEN.items.length ? qf('Stolen before', all.filter(c => c.known && c.status !== 'removed').length, state.fKnown === 'only', 'qtoggle', 'known', 'bad') : ''}
     </div>
+    ${!social ? spamLine(spamCs) : ''}
     ${social ? platChips(all.filter(c => passMore(c) && passStatus(c) && passMainNoPlat(c))) : ''}
     ${social ? acctFilterLine(dd, all.filter(c => passStatus(c) && passMainNoAcct(c))) : ''}
     ${state.showFilters ? `<div class="filters fpanel">
       <div class="qchips" aria-label="Quick filters"><span style="font-weight:600">Quick filters</span>
       ${chip('Repeat offenders', live.filter(c => c.repeat && c.status === 'new').length, state.fRepeat, 'qtoggle', 'repeat', 'bad')}
+      ${RS_STOLEN.items.length ? chip('On my stolen before list', live.filter(c => c.known).length, state.fKnown === 'only', 'qtoggle', 'known', 'bad') + chip('Hide ones on my stolen before list', live.filter(c => c.known).length, state.fKnown === 'hide', 'qtoggle', 'knownhide') : ''}
       ${chip('Selling something', live.filter(c => c.use === 'shop').length, state.fShop, 'qtoggle', 'shop', 'ok')}
       ${chip('Credit removed', live.filter(c => c.credit === 'removed').length, state.fCredit === 'removed', 'qtoggle', 'credit', 'copy')}
       ${chip('Copied onto their site', live.filter(c => c.use === 'copied').length, state.fUse === 'copied', 'qtoggle', 'copied')}
@@ -659,7 +686,8 @@ V.found = async () => {
       <details class="keyfold"><summary>What do the icons mean?</summary><section class="key" aria-label="What the icons mean">
         <div class="kitem"><span class="tag bad">${ic('warn', 13)}</span><div><span><b>Suspicious site</b> (red) or <b>Worth a look</b> (yellow): young site, hidden owner, odd ending like .xyz, or a name copycat sites use.</span></div></div>
         <div class="kitem"><span class="tag copy">${ic('nocredit', 13)}</span><div><span><b>Credit removed</b>: your client's photo has a copyright line in its hidden data. Their copy doesn't.</span></div></div>
-        <div class="kitem"><span class="tag bad">${ic('repeat', 13)}</span><div><span><b>Repeat offender</b>: you already marked copies on this site, or another site of the same owner, as Stolen.</span></div></div>
+        <div class="kitem"><span class="tag bad">${ic('repeat', 13)}</span><div><span><b>Repeat offender</b>: you already marked copies on this site, or another site of the same owner, as Stolen, or the site is on your stolen before list.</span></div></div>
+        <div class="kitem"><span class="tag bad">Stolen before</span><div><span><b>Stolen before</b>: this exact page is on your list of links stolen before (Settings › Hidden and approved sites).</span></div></div>
         <div class="kitem"><span class="tag ok">${ic('shop', 13)}</span><div><span><b>Selling something</b>: a shop page, product listing or ad.</span></div></div>
         <div class="kitem"><span class="tag warn">${ic('maybe', 13)}</span><div><span><b>Maybe</b>: the checker is not sure it is the same photo.</span></div></div>
         <div class="kitem"><span class="tag ok">Statutory</span><div><span><b>Damages column</b>: Statutory (registered), Register by a date (no number yet, window still open), Actual only (window closed). Empty when the file name has no date.</span></div></div>
@@ -687,6 +715,16 @@ V.found = async () => {
   ${state.picked.length ? `<div class="bulk"><b>${state.picked.length} picked</b><button class="btn" style="margin-left:auto" data-act="bulkhide">${state.fTab === 'social' ? 'Hide these accounts' : 'Hide these sites'}</button><button class="btn" data-act="bulk" data-v="removed">Remove</button><button class="btn" data-act="bulk" data-v="licensed">Mark licensed</button><button class="btn" data-act="bulk" data-v="stolen">Mark stolen</button><button class="btn" data-act="clearpick">Clear</button></div>` : ''}
   ${await drawer(me === RENDER_N ? (LIST = list) : list)}`;
 };
+// 4.24: one quiet line about spam blog copies: how many are hidden, and buttons to show them or
+// hide every one of those throwaway sites for good (the whole site, so new made-up addresses stay out too).
+function spamLine(xs) {
+  if (!xs.length) return '';
+  const bases = [...new Set(xs.map(c => FC.baseOf(c.site)))];
+  const eg = esc(xs[0].site);
+  const hideAll = `<button class="btn sm" data-act="spamhide" data-v="${esc(bases.join('\n'))}">Hide all ${bases.length === 1 ? 'of ' + esc(bases[0]) : bases.length + ' spam sites'}</button>`;
+  if (state.fSpam === 'hide') return `<div class="spamline" role="status"><span><b>${plural(xs.length, 'spam blog copy', 'spam blog copies')} hidden</b> <span class="muted">Random addresses on throwaway sites, like ${eg}. Nothing was answered for you.</span></span><span class="acts"><button class="btn sm" data-act="spamshow" data-v="show">Show them</button><button class="btn sm" data-act="spamshow" data-v="only">Only them</button>${hideAll}</span></div>`;
+  return `<div class="spamline on" role="status"><span><b>${plural(xs.length, 'spam blog copy', 'spam blog copies')} showing</b> <span class="muted">Each has a grey Spam blog tag. Point at the tag to see why.</span></span><span class="acts"><button class="btn sm" data-act="spamshow" data-v="hide">Hide them again</button>${hideAll}</span></div>`;
+}
 // Grouped by site, each site gets one strip: where it is, what PageProof knows, and buttons
 // that act on the whole site.
 function siteStrip(base, xs) {
@@ -964,9 +1002,10 @@ Object.assign(ACTS, {
   qcredit: v => { state.fCredit = v; state.fFilter = 'All'; render(true); },
   togglefilters: () => { state.showFilters = !state.showFilters; render(true); },
   unfilter: v => {
-    if (v === 'all') Object.assign(state, { fWhen: 'any', fMatch: 'any', fVer: 'Any', fFol: 'Any', fType: 'Any', fCountry: 'Any', fAcct: '', fPlat: 'Any', fFresh: false, fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fOwner: '', fYear: 'Any', fQuarter: 'Any', fPhoto: '', fq: '' });
+    if (v === 'all') Object.assign(state, { fWhen: 'any', fMatch: 'any', fVer: 'Any', fFol: 'Any', fType: 'Any', fCountry: 'Any', fAcct: '', fPlat: 'Any', fFresh: false, fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fKnown: '', fSpam: 'hide', fOwner: '', fYear: 'Any', fQuarter: 'Any', fPhoto: '', fq: '' });
     else if (v === 'fWhen' || v === 'fMatch') state[v] = 'any';
-    else state[v] = v === 'fShop' || v === 'fRepeat' || v === 'fFresh' ? false : ['fOwner', 'fPhoto', 'fq', 'fAcct'].includes(v) ? '' : 'Any';
+    else if (v === 'fSpam') state.fSpam = 'hide';
+    else state[v] = v === 'fShop' || v === 'fRepeat' || v === 'fFresh' ? false : ['fOwner', 'fPhoto', 'fq', 'fAcct', 'fKnown'].includes(v) ? '' : 'Any';
     render(true);
   },
   // Group by, Found, Match: the little switches above the list.
@@ -974,6 +1013,9 @@ Object.assign(ACTS, {
   // Quick filter chips: click to turn on, click again to turn off.
   qtoggle: v => {
     if (v === 'repeat') { state.fRepeat = !state.fRepeat; if (state.fRepeat) state.fFilter = 'New'; }
+    else if (v === 'known') state.fKnown = state.fKnown === 'only' ? '' : 'only';
+    else if (v === 'knownhide') state.fKnown = state.fKnown === 'hide' ? '' : 'hide';
+    else if (v === 'spam') state.fSpam = state.fSpam === 'only' ? 'hide' : 'only';
     else if (v === 'sus') state.fRisk = state.fRisk === 'sus' ? 'Any' : 'sus';
     else if (v === 'fresh') { state.fFresh = !state.fFresh; if (state.fFresh) state.fFilter = 'New'; }
     else if (v === 'shop') state.fShop = !state.fShop;
@@ -1066,6 +1108,23 @@ Object.assign(ACTS, {
     } finally { if (was !== id && ['compare', 'capture'].includes(what)) state.open = was; else if (was !== id) { state.open = was; render(true); } }
   },
   hidesite: async v => { await hideSite(v); render(true); },
+  spamshow: v => { state.fSpam = v; state.more = 250; render(true); },
+  // Hide whole spam sites (serecoun.blog hides every made-up address on it). Undo brings them back.
+  spamhide: async v => {
+    const sites = String(v || '').split('\n').filter(Boolean);
+    if (!sites.length) return;
+    pendHide(sites, true); dropRows(null);
+    if (state.open && sites.includes(FC.baseOf((FCD.copies.find(x => x.id === state.open) || {}).site || ''))) state.open = '';
+    await inTurn(async () => {
+      try {
+        await RS_LISTS.load();
+        for (const s of sites) { await RS_LISTS.add('hidden', s); if (!state.recentHides.includes(s)) state.recentHides.push(s); }
+      } finally { pendHide(sites, false); dropFC(); }
+      HIST.push({ label: plural(sites.length, 'spam site') + ' hidden', undo: async () => { await RS_LISTS.load(); for (const s of sites) await RS_LISTS.remove('hidden', s); } });
+      toastUndo(plural(sites.length, 'spam site') + ' hidden, with every address on ' + (sites.length === 1 ? 'it' : 'them') + '.');
+    });
+    render(true);
+  },
   openok: () => { ACTS.dtab('site'); const d = document.getElementById('okbox'); if (d) { d.open = true; d.scrollIntoView({ block: 'center', behavior: 'smooth' }); } },
   approvesite: async v => {
     const c = FCD.copies.find(x => x.id === state.open);
@@ -1287,7 +1346,7 @@ V.review = async () => {
   <div class="split rv">
     <section class="card pad review-cap" style="flex:3 1 560px;display:flex;flex-direction:column;gap:14px" aria-label="Your client's photo and their copy">
       ${pics}
-      <div class="rvsite"><div class="l1">${isSoc(c) ? `${platBadge(c, 26)}<h2>${c.acct ? esc(c.acct.handle) : '<span style="color:var(--warn)">Account not found yet</span>'}</h2><span class="muted">${esc(postWord(c))}</span>` : `<h2>${esc(c.site)}</h2>`}<span class="tag ${c.match === 'same' ? 'bad' : 'warn'}">${c.match === 'same' ? 'Same photo' : 'Maybe'}${c.pct >= 0 && c.pct != null ? ' · ' + c.pct + '% lines up' : ''}</span>${repeatTag(c)}${flagWords(c)}</div>
+      <div class="rvsite"><div class="l1">${isSoc(c) ? `${platBadge(c, 26)}<h2>${c.acct ? esc(c.acct.handle) : '<span style="color:var(--warn)">Account not found yet</span>'}</h2><span class="muted">${esc(postWord(c))}</span>` : `<h2>${esc(c.site)}</h2>`}<span class="tag ${c.match === 'same' ? 'bad' : 'warn'}">${c.match === 'same' ? 'Same photo' : 'Maybe'}${c.pct >= 0 && c.pct != null ? ' · ' + c.pct + '% lines up' : ''}</span>${knownTag(c)}${spamTag(c)}${repeatTag(c)}${flagWords(c)}</div>
         <a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" title="Open this page in a new tab"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>
         <div class="l3">${esc(c.photoName)} · ${esc(c.clientName || 'Client unknown')} · ${esc(FC.USE[c.use][0])} · found ${shortDate(c.firstSeen).toLowerCase()}</div></div>
       ${c.repeat ? `<div class="banner warn" style="padding:8px 12px;font-size:13.5px"><span><b>${isSoc(c) ? 'Known account.' : 'Repeat offender.'}</b> You already marked ${plural(c.repeat, 'copy', 'copies')} ${isSoc(c) ? 'by' : 'on'} ${esc(c.repeatWho)} as Stolen. These come first.</span></div>` : ''}
