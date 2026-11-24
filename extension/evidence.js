@@ -32,7 +32,7 @@ const PP_EVIDENCE = (() => {
     return null;
   }
   // Their copy right now (the full picture, else the search site's preview).
-  const grabCopy = async c => grab([[c.img, 'full'], [typeof FC !== 'undefined' ? await FC.thumbOf(c) : c.thumb, 'preview']]);
+  const grabCopy = async c => grab([[c.pic && c.pic.url, 'full'], [c.img, 'full'], [typeof FC !== 'undefined' ? await FC.thumbOf(c) : c.thumb, 'preview']]);
 
   // Does their copy still carry the photographer / copyright line that the client's photo has?
   function credit(om, cm) {
@@ -147,6 +147,8 @@ const PP_EVIDENCE = (() => {
     y = table(y, 'Where and when', [
       ['Page', { t: copy.url, mono: true, max: 3 }],
       copy.title ? ['Page title', copy.title] : null,
+      copy.pic && copy.pic.url ? ['Their picture', { t: (copy.pic.slide && copy.pic.slide.n ? 'Slide ' + copy.pic.slide.n + (copy.pic.slide.of ? ' of ' + copy.pic.slide.of : '') + ':  ' : '') + copy.pic.url, mono: true, max: 3 }] : null,
+      copy.pic && copy.pic.exp ? ['', { t: 'The site signs this picture link, so it stops working on ' + dayText(copy.pic.exp) + '. The picture as downloaded today is fingerprinted below.', color: MUTED }] : null,
       copy.acct && copy.acct.handle ? ['Posted by', { t: (copy.acctInfo && copy.acctInfo.ok && copy.acctInfo.name && copy.acctInfo.name !== copy.acct.handle ? copy.acctInfo.name + ' (' + copy.acct.handle + ')' : copy.acct.handle) + (copy.acct.url ? '  ' + copy.acct.url : ''), mono: true, max: 2 }] : null,
       copy.acctInfo && copy.acctInfo.ok ? ['The account', { t: [
         copy.acctInfo.followers != null ? copy.acctInfo.followers.toLocaleString('en-US') + ' ' + copy.acctInfo.fw + ' on ' + dayText(copy.acctInfo.at) : '',

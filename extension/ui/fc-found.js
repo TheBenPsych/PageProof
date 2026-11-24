@@ -256,7 +256,7 @@ async function readTheirPage(c, again) {
 // lined up with your client's photo. A clearly different picture is flagged "Not seen in the post".
 const POSTCHK_V = 1;
 const POST_BUSY = new Set();
-const needsPostCheck = c => isSoc(c) && c.status !== 'removed' && (!c.postChk || c.postChk.v !== POSTCHK_V);
+const needsPostCheck = c => isSoc(c) && (c.status !== 'removed' || (c.removedBy === 'postcheck' && slidesDue(c))) && (!c.postChk || c.postChk.v !== POSTCHK_V || slidesDue(c));
 async function bitmapOf(blob, max = 640) {
   const bm = await createImageBitmap(blob);
   const f = Math.min(1, max / Math.max(bm.width, bm.height));
@@ -292,6 +292,7 @@ async function postCheck(c) {
         }
       } catch (e) { res.err = String(e && e.message || e).slice(0, 120); }
     }
+    await slidesInto(c, res);         // TikTok slideshows: every slide, and which one it is
     const cc = await FC.DB.get('copies', c.id);
     if (cc) { cc.postChk = res; await FC.DB.put('copies', cc); }
     c.postChk = res; FCD_STALE = true;
@@ -493,6 +494,7 @@ async function drawer(list) {
     <dl class="facts">
       <dt>Client</dt><dd>${c.clientName ? esc(c.clientName) : `<span style="color:var(--warn);font-weight:600">Client unknown</span> <select data-act="setclient" aria-label="Set the client" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:13px;padding:2px 4px"><option value="">Set…</option>${clients.map(n => `<option>${esc(n)}</option>`).join('')}</select>`}</dd>
       <dt>Photo</dt><dd>${esc(c.photoName)}${p && p.w ? `<br><span class="muted" style="font-size:13px">${p.w} × ${p.h}</span>` : ''}</dd>
+      ${picLinkRow(c)}
       <dt>How it's used</dt><dd>${esc(FC.USE[c.use][0])}<br><span class="muted" style="font-size:13px">${esc(FC.USE[c.use][1])}</span></dd>
       <dt>Seen</dt><dd>${shortDate(c.firstSeen)}${c.lastSeen && c.lastSeen !== c.firstSeen ? ' → ' + shortDate(c.lastSeen) : ''}, ${c.times > 1 ? c.times + ' times' : 'once'}${c.by ? `<br><span class="muted" style="font-size:13px">First found by ${esc(c.by)}${c.engines && c.engines.length ? ' on ' + c.engines.map(e => ({ google: 'Google Lens', yandex: 'Yandex', bing: 'Bing' }[e] || esc(e))).join(', ') : ''}</span>` : ''}</dd>
       <dt>Their picture</dt><dd>${/^https?:/i.test(c.img || '') ? `From their page: <a class="mono" style="font-size:12px;overflow-wrap:anywhere" href="${safeUrl(c.img)}" target="_blank" rel="noreferrer">${esc(c.img.replace(/^https?:\/\/(www\.)?/, '').slice(0, 90))}</a>` : `The search site's small preview <span class="muted" style="font-size:13px">(PageProof did not get the picture from their page itself)</span>`}${isSoc(c) ? `<br><span class="muted" style="font-size:13px">${POST_BUSY.has(c.id) || !c.postChk ? 'Checking the post\'s own picture…' : c.postChk.state === 'seen' ? `The post's own picture matches (${c.postChk.pct}% lines up).` : c.postChk.state === 'notSeen' ? `<b style="color:var(--bad)">The post's own ${c.postChk.video ? 'video cover' : 'picture'} is a different photo.</b>` : 'The post\'s own picture could not be read (Facebook and Instagram often need a sign-in).'}${c.postChk && c.postChk.pic ? ` <a href="${safeUrl(c.postChk.pic)}" target="_blank" rel="noreferrer">See it</a>` : ''}${c.postChk ? ` · <a href="#" data-act="postagain">Check again</a>` : ''}</span>` : ''}</dd>
@@ -1229,7 +1231,7 @@ Object.assign(ACTS, {
   },
   putback: async () => { const c = FCD.copies.find(x => x.id === state.open); await answerCopies([state.open], 'new', (c ? c.site : 'Copy') + ' put back'); toastUndo('Put back as new.'); render(true); },
   changeans: async () => { const c = FCD.copies.find(x => x.id === state.open); await answerCopies([state.open], 'new', (c ? c.site : 'Copy') + ' answer cleared'); toastUndo('Answer cleared. Choose a new one.'); render(true); },
-  copytext: async v => { try { await navigator.clipboard.writeText(v); toast('Copied ' + (v.length > 40 ? 'the full path' : v)); } catch (e) { toast('Could not copy. Select the text and press Ctrl+C.'); } },
+  copytext: async v => { try { await navigator.clipboard.writeText(v); toast('Copied ' + (v.length > 40 ? (/^https?:/i.test(v) ? 'the link' : 'the full path') : v)); } catch (e) { toast('Could not copy. Select the text and press Ctrl+C.'); } },
   addreg: async v => {
     const i = document.getElementById('regIn');
     if (!i || !(await FC.setReg(v, i.value))) return toast('Type a number like VA 1-234-567 or 1-12345678901.');
@@ -1335,7 +1337,7 @@ async function matchReport(c, caseNo) {
     const p = FCD.photos.get(c.photo);
     const blob = await ourBlob(p);
     const r = await PP_EVIDENCE.make({ blob, name: c.photoName, w: p && p.w, h: p && p.h, hash: (p && p.hash) || await RS_UTIL.sha256(blob), client: c.clientName, path: await FC.pathOf(p), reg: p ? await FC.regFor(p) : null },
-      { ...c, use: FC.USE[c.use][0], acctInfo: infoOf(c) }, { caseNo, collector: await getName(), owner: await ownerSummary(c.site), checks: await reportChecks(c, p) });
+      { ...c, use: FC.USE[c.use][0], acctInfo: infoOf(c), pic: picLink(c) }, { caseNo, collector: await getName(), owner: await ownerSummary(c.site), checks: await reportChecks(c, p) });
     const a = document.createElement('a'); a.href = URL.createObjectURL(r.blob); a.download = r.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
     await FC.logReport({ id: r.id, file: r.name, url: c.url, site: c.site, photo: c.photoName, client: c.clientName, caseNo });
     if (r.credit) { const cc = await FC.DB.get('copies', c.id); if (cc) { cc.credit = r.credit; await FC.DB.put('copies', cc); } }

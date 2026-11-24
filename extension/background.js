@@ -2,6 +2,7 @@
 if (typeof PP_DB === 'undefined' && typeof importScripts === 'function') importScripts('db.js');
 // 4.8.2: the copy store, so the toolbar dot counts new copies the same way Copies found does.
 if (typeof FC === 'undefined' && typeof importScripts === 'function') { try { importScripts('rs-store.js', 'social.js', 'fc-store.js'); } catch (e) { /* old count below */ } }
+if (typeof PP_TIKTOK === 'undefined' && typeof importScripts === 'function') { try { importScripts('tiktok.js'); } catch (e) { /* TikTok slide numbers left out */ } }
 
 const api = globalThis.browser || globalThis.chrome;
 const MAX_PAGE_SHOTS = 60;     // stop after this many screens on very long pages
@@ -170,6 +171,18 @@ async function capture(tab, auto) {
   if (info.locked) record.notes.push('A pop-up window was open and the site had locked the page behind it so it could not be scrolled, so the capture shows the screen as it was, with any scroll box inside the pop-up written out as a numbered section below.');
   if (info.single) record.notes.push('This page shows one post per screen (like Instagram Reels), so only the post on screen was captured, not the ones after it.');
 
+  // TikTok photo posts (slideshows): only the slide on screen is in the screenshots, so every
+  // slide's picture link is listed too (post-pictures.txt in the pack; the files are in images/).
+  if (typeof PP_TIKTOK !== 'undefined' && PP_TIKTOK.isPhotoPost(info.url)) {
+    try {
+      const [r] = await api.scripting.executeScript({ target: { tabId }, func: PP_TIKTOK.readSlides });
+      const got = r && r.result;
+      if (got && got.slides.length) {
+        record.slides = got;
+        record.notes.push('This is a TikTok photo post with ' + got.of + ' picture' + (got.of > 1 ? 's' : '') + (got.on ? '; picture ' + got.on + ' was on screen' : '') + '. Each picture\'s link is listed in post-pictures.txt.');
+      }
+    } catch (e) { /* slides not listed */ }
+  }
   const server = serverCheck(info.url);
 
   try {
@@ -342,7 +355,7 @@ const MENU = { openApp: ['🏠 Open full PageProof', 'app.html#home'], found: ['
 //  - a picture hidden under a see-through cover (Instagram): rclick.js spots it the moment you
 //    right-click and asks for the second set ("h_" ids) to be shown.
 const NOT_IMG = ['page', 'selection', 'link', 'video', 'audio', 'frame', 'editable'];
-const PIC_ITEMS = [['inspectImage', '🔬 Inspect this photo'], ['reverse', '🔍 Find copies of it'], ['jpgImage', '💾 Save biggest copy…'], ['bnSave', '📰 Save as Breaking News photo…'], ['openImage', '↗️ Open biggest copy in a tab']];
+const PIC_ITEMS = [['inspectImage', '🔬 Inspect this photo'], ['reverse', '🔍 Find copies of it'], ['jpgImage', '💾 Save biggest copy…'], ['bnSave', '📰 Save as Breaking News photo…'], ['openImage', '↗️ Open biggest copy in a tab'], ['linkImage', '🔗 Copy picture link']];
 const REV_ITEMS = [['revGoogle', '🟢 Google Lens'], ['revYandex', '🔴 Yandex'], ['revBing', '🔵 Bing'], ['revAll', '🌐 All three']];
 api.runtime.onInstalled.addListener(() => {
   try {
@@ -360,7 +373,7 @@ api.runtime.onInstalled.addListener(() => {
 });
 
 function showHiddenPictureItems(show) {
-  for (const id of ['inspectImage', 'reverse', 'jpgImage', 'bnSave', 'openImage', 'webSep']) {
+  for (const id of ['inspectImage', 'reverse', 'jpgImage', 'bnSave', 'openImage', 'linkImage', 'webSep']) {
     try { api.contextMenus.update('h_' + id, { visible: show }, () => void api.runtime.lastError); } catch (e) { /* old browser */ }
   }
   try { api.contextMenus.refresh && api.contextMenus.refresh(); } catch (e) { /* Chrome has no refresh */ }
@@ -556,7 +569,7 @@ try {
       if (/^https?:\/\//i.test(info.linkUrl || '')) captureUrl(info.linkUrl, tab);
       return;
     }
-    if (['inspectImage', 'jpgImage', 'bnSave', 'openImage', 'revGoogle', 'revYandex', 'revBing', 'revAll'].includes(id)) {
+    if (['inspectImage', 'jpgImage', 'bnSave', 'openImage', 'linkImage', 'revGoogle', 'revYandex', 'revBing', 'revAll'].includes(id)) {
       if (!tab) return;
       const found = await rightClickedPicture(info, tab);
       if (!found.item) {
@@ -564,6 +577,16 @@ try {
         return note(tab, info.frameId, { kind: 'bad', title: t, lines: [l] });
       }
       const item = found.item;
+      // TikTok photo posts (slideshows): which slide this is, from the post's own slider.
+      if (typeof PP_TIKTOK !== 'undefined' && PP_TIKTOK.isPhotoPost(info.pageUrl || tab.url || '')) {
+        try {
+          const got = await inFrame(tab, 0, null, PP_TIKTOK.readSlides);
+          const key = u => String(u || '').split('?')[0];
+          const s = got && got.slides.find(x => key(x.url) === key(item.src) || key(x.url) === key(item.best));
+          if (s) { item.slide = { n: s.n, of: got.of }; if (!/^https?:/.test(item.best || '')) item.best = s.url; }
+        } catch (e) { /* no slide number */ }
+      }
+      if (id === 'linkImage') return pictureLink(item, tab, info);
       // Show a note if finding the biggest copy takes more than a moment.
       const wait = setTimeout(() => note(tab, 0, { kind: 'ok', title: '⏳ Finding the biggest copy of this picture...', lines: ['This takes a few seconds on busy pages.'] }), 500);
       const big = await largest(item, tab, info.frameId || 0);
@@ -601,6 +624,20 @@ try {
     if (m) api.tabs.create({ url: api.runtime.getURL(m[1]) });
   });
 } catch (e) { /* menus not available */ }
+
+// ---------- Copy picture link ----------
+// The web address of the picture itself (on TikTok slideshows, of the slide you right-clicked).
+async function pictureLink(item, tab, info) {
+  const url = /^https?:/.test(item.best || '') ? item.best : item.src;
+  if (!/^https?:/.test(url || '')) return note(tab, 0, { kind: 'bad', title: 'This picture has no web address', lines: ['It only exists inside this page. Use Save biggest copy to keep the file.'] });
+  const copied = await inFrame(tab, 0, ['rclick.js'], t => (window.__ppRC.copy ? window.__ppRC.copy(t) : false), [url]).catch(() => false);
+  const exp = typeof PP_TIKTOK !== 'undefined' ? PP_TIKTOK.expires(url) : '';
+  const lines = [];
+  if (item.slide) lines.push('Slide ' + item.slide.n + (item.slide.of ? ' of ' + item.slide.of : '') + ' of this post.');
+  lines.push(url.length > 160 ? url.slice(0, 157) + '…' : url);
+  if (exp) lines.push('The site signs this link, so it stops working ' + new Date(exp).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + '. Use Save biggest copy to keep the picture.');
+  return note(tab, 0, { kind: 'ok', title: copied ? '🔗 Picture link copied' : '🔗 Picture link', lines, links: [{ label: copied ? 'Copy again' : 'Copy link', copy: url }, { label: 'Open', open: url }] });
+}
 
 // ---------- Save as Breaking News photo ----------
 // Reads the article's date and the credit line under the picture, then opens PageProof's
