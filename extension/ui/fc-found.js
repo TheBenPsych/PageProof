@@ -704,7 +704,7 @@ function copyRow(c) {
     <input type="checkbox" class="cpick" aria-label="Pick ${esc(isSoc(c) && c.acct ? c.acct.handle : c.site)}" data-act="pick" data-v="${esc(c.id)}" ${state.picked.includes(c.id) ? 'checked' : ''}>
     <div class="cpair" data-hover="${esc(c.id)}"><img class="ours" src="${oursImg(p)}" alt="" loading="lazy"><img class="thumb" src="${theirImg(c)}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>
     <div class="cinfo">
-      ${isSoc(c) ? socLine(c) : `<div class="l1"><b>${esc(c.site)}</b>${done ? tagFor(c) : ''}${embedTag(c)}${sigIcons(c)}</div>`}
+      ${isSoc(c) ? socLine(c) : `<div class="l1"><b>${esc(c.site)}</b>${done ? tagFor(c) : ''}${embedTag(c)}${sigIcons(c)}${c.sweep ? '<span class="tag blue" title="Found by reading this site\'s own list of pictures (a sweep), not by a search site">Found by sweep</span>' : ''}${c.status === 'removed' && c.removedBy === 'weakmaybe' ? '<span class="tag grey" title="A Maybe under 50% that nobody answered for 30 days. Put back if it is a copy.">Weak Maybe, never answered</span>' : ''}</div>`}
       <a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink" title="Open this page in a new tab"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>${c.alts && c.alts.length ? `<span class="tag grey altn" title="${esc(c.alts.join('\n'))}" data-gloss="Same page">+${c.alts.length} ${c.alts.length === 1 ? 'address' : 'addresses'}</span>` : ''}
       <div class="l3">${esc(c.photoName)}<span class="l3x">${isSoc(c) && c.acct ? ' · ' + esc(c.site) : ''}${c.pct >= 0 && c.pct != null ? ` · <b class="num" data-gloss="Lines up">${c.pct}%</b> lines up` : ''} · ${esc(FC.USE[c.use][0])}${c.country ? ' · ' + esc(c.country) : ''} · found ${shortDate(c.firstSeen).toLowerCase()}</span></div>
     </div>
@@ -794,12 +794,22 @@ V.found = async () => {
     }
     // Copies from one site sit together: the first shows, the rest fold under "N more from this site".
     const clusters = new Map();
+    // 4.43: several of your photos on one page = one row ("3 of your photos on this page"), and the
+    // same story on 3 or more sites = one row ("Same story on 14 sites"). New copies only.
+    const multi = foldSites ? pageStoryKeys(xs) : null;
     // Social posts fold per account (never "N more from instagram.com").
-    for (const c of xs) { const b = !foldSites ? c.id : isSoc(c) ? (c.acct ? c.acct.handle + ' on ' + platOf(c).name : c.id) : FC.baseOf(c.site); if (!clusters.has(b)) clusters.set(b, []); clusters.get(b).push(c); }
+    for (const c of xs) { const b = !foldSites ? c.id : isSoc(c) ? (c.acct ? c.acct.handle + ' on ' + platOf(c).name : c.id) : (multi.get(c.id) || FC.baseOf(c.site)); if (!clusters.has(b)) clusters.set(b, []); clusters.get(b).push(c); }
     body += '<div class="clist">';
     for (const [b, cs] of clusters) {
       if (shown >= state.more) break;
       const mk = 'm:' + k + '|' + b, wide = cs.length < 2 || state.exp.includes(mk) || cs.some(x => x.id === state.open);
+      if (/^(pg|st):/.test(b) && cs.length > 1) {
+        body += groupRow(b, cs, mk, wide);
+        if (wide) for (const c of cs) { body += copyRow(c); list.push(c.id); }
+        else list.push(...cs.map(c => c.id));
+        shown += cs.length;
+        continue;
+      }
       for (const c of (wide ? cs : cs.slice(0, 1))) { if (shown >= state.more) break; body += copyRow(c); list.push(c.id); shown++; }
       if (cs.length > 1) {
         const fresh = cs.filter(x => x.status === 'new').map(x => x.id);
@@ -938,6 +948,45 @@ function siteStrip(base, xs) {
   const uses = [...new Set(xs.map(x => FC.USE[x.use][0]))].slice(0, 2).join(', ');
   return `<div class="strip"><div class="sname"><b class="gname">${esc(base)}</b>${c.country ? `<span class="tag grey">${esc(c.country)}</span>` : ''}${worst !== 'ok' ? `<span class="tag ${worst === 'sus' ? 'bad' : 'warn'}">${RISK[worst][0]}</span>` : ''}${o && o.real ? `<span class="tag blue" title="Site owner">${esc(o.name)}</span>` : ''}<span class="faint">${esc(uses)} · ${plural(new Set(xs.map(x => x.photo)).size, 'of your photos', 'of your photos')}</span></div>
     <div class="sbtns"><a class="btn sm" href="${safeUrl('https://' + base)}" target="_blank" rel="noreferrer" data-act="openlink">Home page</a><button class="btn sm" data-act="stripok" data-v="${esc(c.id)}">Approve site</button>${RS_LISTS.wholeSocial(base) ? '' : `<button class="btn sm" data-act="hidesite" data-v="${esc(base)}">Hide site</button>`}<button class="btn sm" data-act="gowho" data-v="${esc(c.id)}">Who's behind it</button></div></div>`;
+}
+// 4.43 (Ben's picks): which copies share a row. Same page (2+ of your photos on it), else the same
+// story (same headline on 3+ sites, found within 3 days). Returns copy id -> row key.
+const storyKey = t => { const s = String(t || '').split(/\s[|–—-]\s|\s·\s/)[0].toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim(); return s.split(' ').length >= 4 && s.length >= 20 ? s : ''; };
+function pageStoryKeys(xs) {
+  const out = new Map(), pages = new Map(), stories = new Map();
+  for (const c of xs) {
+    if (isSoc(c) || c.status !== 'new') continue;
+    const pk = c.pk || FC.pageKey(c.url);
+    if (!pages.has(pk)) pages.set(pk, []); pages.get(pk).push(c);
+  }
+  for (const [pk, cs] of pages) if (new Set(cs.map(c => c.photo)).size > 1) for (const c of cs) out.set(c.id, 'pg:' + pk);
+  for (const c of xs) {
+    if (isSoc(c) || c.status !== 'new' || out.has(c.id)) continue;
+    const sk = storyKey(c.title);
+    if (sk) { if (!stories.has(sk)) stories.set(sk, []); stories.get(sk).push(c); }
+  }
+  for (const [sk, cs] of stories) {
+    const sites = new Set(cs.map(c => FC.baseOf(c.site))), t = cs.map(c => Date.parse(c.firstSeen) || 0);
+    if (sites.size >= 3 && Math.max(...t) - Math.min(...t) <= 3 * 864e5) for (const c of cs) out.set(c.id, 'st:' + sk);
+  }
+  return out;
+}
+// One row for a page with several of your photos, or one story on many sites. One answer covers
+// all of them; "Answer one by one" opens the single rows.
+function groupRow(b, cs, mk, wide) {
+  const page = b.startsWith('pg:'), c = cs[0], ids = cs.map(x => x.id).join('\n');
+  const sites = [...new Set(cs.map(x => FC.baseOf(x.site)))];
+  const photos = [...new Map(cs.map(x => [x.photo, x])).values()];
+  const pics = (page ? photos : cs).slice(0, 5).map(x => `<img class="${page ? 'ours' : 'thumb'}" src="${page ? oursImg(FCD.photos.get(x.photo)) : theirImg(x)}" alt="" loading="lazy" referrerpolicy="no-referrer" style="width:52px;height:38px;object-fit:cover;border-radius:6px">`).join('');
+  const title = page ? `<b>${esc(c.site)}</b> <span class="tag copy">${photos.length} of your photos on this page</span>` : `<b>Same story on ${sites.length} sites</b> <span class="tag blue">${esc(cs.length + ' copies')}</span>`;
+  const sub = page ? `<a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>`
+    : `<span class="faint" style="overflow-wrap:anywhere">“${esc(c.title)}” · ${esc(sites.slice(0, 4).join(', '))}${sites.length > 4 ? ' and ' + (sites.length - 4) + ' more' : ''}. Often a news feed the client licenses.</span>`;
+  const all = page ? 'all ' + photos.length : 'all ' + cs.length;
+  return `<div class="frow crow grow" data-group="${esc(b)}">
+    <div class="cpair" style="display:flex;gap:4px;flex-wrap:wrap;min-width:0">${pics}</div>
+    <div class="cinfo"><div class="l1">${title}</div>${sub}<div class="l3">${esc(c.clientName || 'Client unknown')}${page ? ' · ' + esc(photos.map(x => x.photoName).slice(0, 3).join(', ')) + (photos.length > 3 ? '…' : '') : ''}</div></div>
+    <div class="acts"><button class="btn sm stolen" data-act="siteall" data-v="stolen\n${esc(ids)}">Stolen (${all})</button><button class="btn sm licensed" data-act="siteall" data-v="licensed\n${esc(ids)}">Licensed</button><button class="btn sm" data-act="siteall" data-v="removed\n${esc(ids)}">Remove all</button>
+      <button class="btn sm" data-act="gtoggle" data-v="${esc(mk)}" aria-expanded="${wide}">${wide ? 'Fold' : 'Answer one by one'} <span class="caret${wide ? ' on' : ''}">▸</span></button></div></div>`;
 }
 V.found.guard = async () => ((await FC.drive()).done ? null : 'connect');
 V.found.after = () => { if (typeof FC_PREV !== 'undefined') FC_PREV.start(); loadOurs(); bindHover(); ppPagePic(); ppKeptLine(); socQueue(); infoQueue(); if (typeof rpQueue === 'function') rpQueue(); };

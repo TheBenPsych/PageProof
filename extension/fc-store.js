@@ -1726,7 +1726,8 @@ const FC = (() => {
     for (const c of got) {
       before.push(JSON.parse(JSON.stringify(c)));
       // How PageProof is doing: your answers, answers changed later and copies put back.
-      if (typeof PP_STATS !== 'undefined' && status !== 'skip' && c.status !== status) {
+      // 4.43: weak Maybes put away by themselves are not your answers (not counted, not learned from).
+      if (typeof PP_STATS !== 'undefined' && status !== 'skip' && c.status !== status && extra.removedBy !== 'weakmaybe') {
         PP_STATS.add('ans.' + status);
         if (c.status === 'removed' && status === 'new') PP_STATS.add('ans.putBack' + (c.removedBy ? '.' + c.removedBy : ''));
         else if (c.status !== 'new') PP_STATS.add('ans.changed');
@@ -1735,7 +1736,7 @@ const FC = (() => {
       else { c.status = status; c.answered = now; delete c.skipped; }
       Object.assign(c, extra);
       touchedPhotos.add(c.photo);
-      if (status === 'removed') {
+      if (status === 'removed' && extra.removedBy !== 'weakmaybe') {
         if (!names.has(c.photo)) { const p = await DB.get('photos', c.photo); names.set(c.photo, p ? p.name : ''); }
         try { if (!RS_REJECT.find(c.url, names.get(c.photo), '')) { RS_REJECT.items.push({ url: c.url, pic: names.get(c.photo) || '', why: '' }); RS_REJECT.noteKey(c.url, names.get(c.photo) || '', ''); rejects++; } } catch (e) { /* lists not loaded */ }
       }
