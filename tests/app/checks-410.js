@@ -77,7 +77,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     box: document.getElementById('firstBox') && document.getElementById('firstBox').textContent.replace(/\s+/g, ' '),
     rows: [...document.querySelectorAll('#firstClients tbody tr')].map(t => t.textContent.replace(/\s+/g, ' ').trim()),
     share: document.querySelector('[data-act="firstshare"].on') && document.querySelector('[data-act="firstshare"].on').textContent,
-    which: !!document.querySelector('select[data-v="fiftyWhich"]'),
+    which: document.querySelectorAll('[data-act="fiftywhich"]').length === 2,
   }));
   console.log(JSON.stringify(k));
   ok(k.box && /13\s*of 20 photos searched at least once/.test(k.box) && k.box.includes("can't be searched"), 'Keep searching: big first-search block');
@@ -85,7 +85,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(k.share === '1 in 3' && k.which, 'Keep searching: share switch and Today\'s 50 choice');
   await page.click('[data-act="firstshare"][data-v="2"]'); await page.waitForTimeout(700);
   ok(await page.evaluate(async () => (await FC.keep()).firstShare) === 2 && /1 in 2/.test(await page.textContent('.sharebar')), 'Share switch saves 1 in 2');
-  await page.selectOption('select[data-v="fiftyWhich"]', 'first'); await page.waitForTimeout(500);
+  await page.click('[data-act="fiftywhich"][data-v="first"]'); await page.waitForTimeout(500);
   ok(await page.evaluate(async () => (await FC.keep()).fiftyWhich) === 'first', 'Today\'s 50 choice saved');
 
   // Home: card + client finished note.

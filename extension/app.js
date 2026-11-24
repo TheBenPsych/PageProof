@@ -296,25 +296,33 @@ V.capture = async () => {
   const log = await getLog();
   const caps = [...log].reverse().slice(0, 12);
   const t = await lastWebTab();
+  const step = (n, icon, t, d) => `<div class="cstep"><span class="ci">${ic(icon, 20)}</span><b><em>${n}</em> ${t}</b><span>${d}</span></div>`;
+  const capCard = e => {
+    const sv = e.saves && e.saves.length ? e.saves[e.saves.length - 1] : null, ts = sv && (sv.timestamps || sv.timestamp);
+    return `<button class="capcard lc" data-act="opencap" data-v="${esc(e.id)}" title="${esc(e.url)}">
+      <span class="capimg" data-capthumb="${esc(e.id)}"><b>${esc((site(e.url)[0] || '?').toUpperCase())}</b></span>
+      <span class="capt"><b class="capsite">${esc(site(e.url))}</b><span class="faint">${fmtDate(e.time)}</span></span>
+      <span class="lcok">${sv ? `<span class="okline">${ic('check', 12, 3)} Pack saved</span>${ts ? `<span class="okline">${ic('check', 12, 3)} Timestamped</span>` : ''}` : '<span class="tag warn">Pack not saved</span>'}</span></button>`;
+  };
   return `${head('Collect evidence', 'Capture a page', 'PageProof saves the whole web page from top to bottom as a PDF and a web copy, with fingerprints and three trusted timestamps.')}
-  <div class="split" style="align-items:flex-start">
-    <section class="card pad" style="flex:1 1 360px;display:flex;flex-direction:column;gap:12px">
-      <h2>Capture a page now</h2>
-      ${t ? `<div class="row" style="gap:10px;flex-wrap:nowrap"><img src="${esc(t.favIconUrl || 'icons/icon32.png')}" width="20" height="20" alt=""><div style="min-width:0"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.title || site(t.url))}</b><span class="faint mono" style="font-size:12px">${esc(site(t.url))}</span></div></div>
-      <button class="btn primary big" data-act="capturelast">${ic('capture', 20)} Capture this page</button>` : `<p class="muted" style="margin:0">Open the web page you want in another tab first.</p>`}
-      <ol class="muted" style="margin:0;padding-left:20px;font-size:14px;display:flex;flex-direction:column;gap:4px">
-        <li>Open the page and let it finish loading.</li>
-        <li>Click the PageProof icon, then <b>Capture this page</b>. Or press <span class="kbd">Alt+Shift+P</span>.</li>
-        <li>Don't scroll while it works. A box on the page shows each step.</li>
-        <li>The capture opens in a new tab. Type the case number and press <b>Save evidence pack</b>.</li>
-      </ol>
-    </section>
-    <section class="card" style="flex:2 1 520px;min-width:0">
-      <div class="pad row" style="border-bottom:1px solid var(--line)"><h2>Your last captures</h2><a class="btn ghost" style="margin-left:auto" href="#library">All evidence</a></div>
-      ${caps.length ? caps.map(e => `<button class="list-item" style="border-radius:0;padding:12px 22px;border-bottom:1px solid var(--line)" data-act="opencap" data-v="${esc(e.id)}"><span class="ic" style="color:var(--accent)">${ic('capture', 20)}</span><span style="min-width:0;flex:1"><b>${esc(site(e.url))}</b><span class="faint" style="display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.title || '')}</span></span><span class="muted" style="font-size:13px">${fmtDate(e.time)}</span>${(e.saves || []).length ? '<span class="tag ok">Saved</span>' : '<span class="tag grey">Not saved</span>'}</button>`).join('') : '<div class="pad muted">No captures yet.</div>'}
-    </section>
-  </div>`;
+  <section class="card pad caphero">
+    ${t ? `<span class="sitebig" style="background:${avColor(site(t.url))}" aria-hidden="true">${esc((site(t.url).replace(/^www\./, '')[0] || '?').toUpperCase())}</span>
+      <div class="ct"><span class="faint" style="font-size:12.5px">Your last tab</span><b>${esc(t.title || site(t.url))}</b><span class="faint mono" style="font-size:12.5px">${esc(site(t.url))}</span></div>
+      <button class="btn go big" data-act="capturelast">${ic('capture', 20)} Capture this page</button>`
+    : `<span class="sitebig" style="background:var(--faint)" aria-hidden="true">?</span><div class="ct"><b>Open the web page you want in another tab first</b><span class="faint" style="font-size:13px">Then come back here, or click the PageProof icon on that page.</span></div>`}
+  </section>
+  <div class="csteps">
+    ${step(1, 'globe', 'Open the page', 'Let it finish loading.')}
+    ${step(2, 'capture', 'Press Capture', 'Here, on the PageProof icon, or Alt+Shift+P.')}
+    ${step(3, 'pause', 'Hands off', 'Don\'t scroll while it works. A box shows each step.')}
+    ${step(4, 'down', 'Save the pack', 'Type the case number and press Save evidence pack.')}
+  </div>
+  <section class="card" style="min-width:0;overflow:hidden">
+    <div class="pad row" style="border-bottom:1px solid var(--line)"><h2>Your last captures</h2><a class="btn ghost" style="margin-left:auto" href="#library">All evidence</a></div>
+    ${caps.length ? `<div class="capgrid lcgrid">${caps.map(capCard).join('')}</div>` : '<div class="pad muted">No captures yet. They show here after your first one.</div>'}
+  </section>`;
 };
+V.capture.after = () => capThumbs();
 
 // =====================================================================================
 // Evidence library
@@ -379,7 +387,7 @@ ACTS.libview = async v => { state.libView = v; try { await api.storage.local.set
 // now from the capture itself while the browser still holds it (it keeps the last 10).
 async function capThumbs() {
   for (const el of document.querySelectorAll('[data-capthumb]')) {
-    if (state.shown !== 'library') return;
+    if (!['library', 'capture'].includes(state.shown)) return;
     const id = el.dataset.capthumb;
     try {
       let t = await PP_DB.get('thumb-' + id);
@@ -406,14 +414,14 @@ async function needsCapture() {
 V.tocapture = async () => {
   const { up } = await needsCapture();
   const ps = new Map((await FC.DB.getMany('photos', [...new Set(up.map(c => c.photo))])).filter(Boolean).map(p => [p.id, p]));
-  const row = (c, can) => { const p = ps.get(c.photo) || {}; return `<div class="caprow" data-id="${esc(c.id)}">
+  const row = (c, can, top) => { const p = ps.get(c.photo) || {}, d = ppDaysSince(c.answered || c.firstSeen); return `<div class="caprow" data-id="${esc(c.id)}">
     <img class="thumb" src="${safeImg(c.thumb || (c.th && FC.pics.seen(c.id)) || 'icons/icon48.png')}" alt="" referrerpolicy="no-referrer">
-    <div style="min-width:0;flex:1"><b>${esc(c.site)}</b><a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>
+    <div style="min-width:0;flex:1"><div class="row" style="gap:8px;flex-wrap:nowrap"><span class="sl" style="background:${avColor(FC.baseOf(c.site))}" aria-hidden="true">${esc((FC.baseOf(c.site)[0] || '?').toUpperCase())}</span><b>${esc(c.site)}</b><span class="agechip ${d >= 7 ? 'r' : d >= 3 ? 'a' : ''}">${d >= 1 ? 'Waiting ' + plural(d, 'day') : 'Today'}</span></div><a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>
       <div class="faint" style="font-size:12.5px">${esc(p.client || c.client || 'Client unknown')} · ${esc(p.name || 'Photo')} · marked stolen ${esc(fmtDate(c.answered || c.firstSeen))}</div></div>
-    <div class="row" style="gap:6px">${can ? `<button class="btn" data-act="capdone" data-v="${esc(c.id)}" title="It was captured another way (another computer, another tool)">Already captured</button><button class="btn primary" data-act="capturecopy" data-v="${esc(c.id)}">${ic('capture', 16)} Capture</button>` : `<button class="btn" data-act="capdone" data-v="${esc(c.id)}">Take off this list</button>`}</div></div>`; };
-  return `${head('', 'Needs a capture', 'Copies you marked Stolen that have no evidence pack yet, oldest first. Capture each one before the site takes it down. When you save its evidence pack, it leaves this list by itself.', `<a class="btn" href="#found?filter=Stolen">All stolen copies</a>`)}
+    <div class="row" style="gap:6px">${can ? `<button class="btn" data-act="capdone" data-v="${esc(c.id)}" title="It was captured another way (another computer, another tool)">Already captured</button><button class="btn${top ? ' primary' : ''}" data-act="capturecopy" data-v="${esc(c.id)}">${ic('capture', 16)} Capture</button>` : `<button class="btn" data-act="capdone" data-v="${esc(c.id)}">Take off this list</button>`}</div></div>`; };
+  return `${head('', 'Needs a capture', 'Copies you marked Stolen that have no evidence pack yet, oldest first. Capture each one before the site takes it down. When you save its evidence pack, it leaves this list by itself.', `<a class="btn" href="#found?filter=Stolen">All stolen copies</a>${up.length ? `<button class="btn primary" data-act="capturecopy" data-v="${esc(up[0].id)}">${ic('capture', 16)} Capture the oldest</button>` : ''}`)}
   <section class="card" id="capList">
-    ${up.length ? up.map(c => row(c, true)).join('') : `<div class="job lvl-ok"><span class="jdot">${ic('check', 16, 3)}</span><div class="jt"><b>Every stolen copy has an evidence pack</b><span>Copies you mark Stolen show up here until they are captured.</span></div></div>`}
+    ${up.length ? up.map((c, i) => row(c, true, i === 0)).join('') : `<div class="job lvl-ok"><span class="jdot">${ic('check', 16, 3)}</span><div class="jt"><b>Every stolen copy has an evidence pack</b><span>Copies you mark Stolen show up here until they are captured.</span></div></div>`}
   </section>`;
 };
 ACTS.capdone = async v => {

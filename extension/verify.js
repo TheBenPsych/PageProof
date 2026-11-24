@@ -75,8 +75,9 @@ async function checkFiles(files, zipBytes) {
     v.append('All ' + rows.length + ' files match their fingerprints, but there is no trusted timestamp to prove when.');
   } else {
     v.classList.add('good');
-    v.append('Unchanged. All ' + rows.length + ' files match their fingerprints.');
-    v.append(el('small', null, 'The fingerprint list was signed by ' + tsGood + ' independent timestamp service' + (tsGood > 1 ? 's' : '') + ', so these files existed exactly like this at that time.'));
+    const vt = el('div', 'vt', 'Nothing has changed since it was made');
+    vt.append(el('small', null, 'All ' + rows.length + ' files match their fingerprints. The fingerprint list was signed by ' + tsGood + ' independent timestamp service' + (tsGood > 1 ? 's' : '') + ', so these files existed exactly like this at that time.'));
+    v.append(vt);
   }
   out.append(v);
 
