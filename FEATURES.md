@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.38.0** (24 Nov 2026).
+Last updated: version **4.39.0** (24 Nov 2026).
 
 ---
 
@@ -59,6 +59,7 @@ Last updated: version **4.38.0** (24 Nov 2026).
 - **Logos and buildings are not copies.** When only printed logos, signs or lettering line up (a sponsor wall, a red carpet backdrop, a shop sign, a logo file), it says "Different photo, only the logos match". When a scene lines up but things at different distances shift against each other (a building shot from a few steps away), it says "Different photo of the same place". Both are thrown out of searches and show a low %. Unanswered copies already found are checked again once. (4.31)
 - **Mark up a copy:** highlight, box, circle, arrow, text, pick an area; copy to clipboard or save as PNG/PDF. Labelled "Marked-up copy" and never added to the pack. (3.0)
 - **Copy picture link.** Right-click a picture: its own web address is copied (on TikTok slideshows, with the slide number). (4.33)
+- **Only a seal, a slice or a pattern.** Different photos that share only a podium seal or wall crest, only a small slice of each picture, or only a repeating pattern (fence, checkered floor, tiles) are called "Different photo" and show a low %. (4.39)
 
 ## 4. Find copies of client photos
 
@@ -240,3 +241,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.37 | 24 Nov | Stats page, Checker test and Save stats for Claude |
 | 4.37.1 | 24 Nov | Fix: Bing reads its Visual matches with their pictures |
 | 4.38 | 24 Nov | Far fewer "Picture blocked" links (lazy pictures, Facebook/X links, page fallback) |
+| 4.39 | 24 Nov | Seals, crests, small slices and patterns (fences, floors) no longer count as copies |
