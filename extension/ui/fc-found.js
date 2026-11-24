@@ -259,7 +259,8 @@ async function readTheirPage(c, again) {
 // the copy go to Removed by itself ("Not seen in the post"; Put back still works).
 const POSTCHK_V = 2;
 const POST_BUSY = new Set();
-const needsPostCheck = c => isSoc(c) && c.status !== 'removed' && c.onPage !== 'seen' && !/^https?:/i.test(c.img || '') && (!c.postChk || c.postChk.v !== POSTCHK_V);
+const POST_HELD = new Map();     // copy id -> when a check was held by Pause (not tried again for a minute)
+const needsPostCheck = c => isSoc(c) && c.status !== 'removed' && !(Date.now() - (POST_HELD.get(c.id) || 0) < 60000) && c.onPage !== 'seen' && !/^https?:/i.test(c.img || '') && (!c.postChk || c.postChk.v !== POSTCHK_V);
 async function bitmapOf(blob, max = 640) {
   const bm = await createImageBitmap(blob);
   const f = Math.min(1, max / Math.max(bm.width, bm.height));
@@ -321,14 +322,19 @@ async function readPostPicsInTab() {
 }
 async function postInBrowser(c, ours) {
   if (!globalThis.PP_SOCIAL || !PP_SOCIAL.openQuiet || !api.scripting) return null;
+  // Quiet tabs follow Keep searching (4.30.2): none while it is paused, off or outside its hours.
+  try { if (!(await FC.quietOK()).ok) return { held: true }; } catch (e) { /* no check: carry on */ }
+  PP_SOCIAL.halt.on = false;
   let tab;
   try {
     tab = await PP_SOCIAL.openQuiet(c.url);
+    if (PP_SOCIAL.halt.on) return { held: true };
     await new Promise(r => setTimeout(r, 3000));      // the sites draw the post after loading
     const [res] = await api.scripting.executeScript({ target: { tabId: tab.id }, func: readPostPicsInTab });
     const urls = (res && res.result) || [];
     if (!urls.length) return null;                     // signed out, or the post is gone
     let n = 0, unsure = false;
+    if (PP_SOCIAL.halt.on) return { held: true };       // paused while the post was open
     for (const u of urls) {
       const m = await lineUpWith(ours, u);
       if (!m) continue;
@@ -356,6 +362,8 @@ async function postCheck(c, opts = {}) {
     // Not the main picture (or no picture readable): look at every picture of the post.
     if (ours && res.state !== 'seen' && opts.browser !== false) {
       const b = await postInBrowser(c, ours);
+      // Paused, off or outside the hours: nothing is saved, so the post is checked after Resume.
+      if (b && b.held) { POST_HELD.set(c.id, Date.now()); return null; }
       if (b) {
         res.browser = b.state; res.n = b.n;
         if (b.state === 'seen') { res.state = 'seen'; res.pct = b.pct; res.pic = b.pic; }

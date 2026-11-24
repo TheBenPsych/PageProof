@@ -351,7 +351,8 @@ async function socQueue() {
         const chk = FCD.copies.find(c => c.status === 'new' && needsPostCheck(c) && !POST_BUSY.has(c.id) && !(c.postTry && Date.now() - c.postTry < 864e5));
         if (!chk) break;
         chk.postTry = Date.now();
-        await postCheck(chk).catch(() => null);
+        const r = await postCheck(chk).catch(() => 'err');
+        if (r === null) { chk.postTry = 0; break; }      // held by Pause / Off / hours: again after Resume
         socRedrawSoon();
         await new Promise(r => setTimeout(r, 800));
         continue;
