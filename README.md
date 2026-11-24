@@ -70,7 +70,7 @@ One folder holds everything: **Documents › PageProof** keeps your saved work (
 3. Click **Load unpacked** and choose **Documents › PageProof › Install** (the folder with `manifest.json` in it).
 4. Click the puzzle-piece icon in the toolbar, then the pin next to PageProof so its icon is always visible.
 
-Chrome keeps it installed after a restart. To update later, download the new zip, unzip it into the same **Install** folder (say yes to replacing the files), and click the circular arrow on PageProof's card in `chrome://extensions`.
+Chrome keeps it installed after a restart. To update later, download the new zip, unzip it into the same **Install** folder (say yes to replacing the files), and click the circular arrow on PageProof's card in `chrome://extensions`. **Quicker:** double-click **Update PageProof.cmd** in Documents › PageProof (see [tools/windows](tools/windows/README.md)), then click that arrow.
 
 ### Step 2b: Firefox
 
@@ -99,3 +99,7 @@ Firefox removes "temporary" add-ons when it closes, so you'd repeat these steps 
 - Convert files uses a few free helper libraries, kept in `extension/lib/` (see `extension/lib/LICENSES.txt`). They are loaded only when needed and run entirely inside the browser.
 - Videos are saved as the frame showing on screen (and their cover picture in the HTML backup), not the video file itself.
 - Content inside an embedded frame from another site (like a YouTube player) is captured as it looks, but scroll boxes inside such frames aren't expanded.
+
+## Making changes
+
+See [CONTRIBUTING.md](CONTRIBUTING.md): no version bumps in pull requests, one note per change in `changes/`, and the download is rebuilt about a minute after each merge.

@@ -3,11 +3,12 @@
 This is the running list of everything PageProof can do and every improvement made to it.
 It is grouped by **what the tool does**, then there is a **version timeline** at the bottom.
 
-> **Keeping it up to date:** every new version adds its changes here, in the right group
-> and as one line in the timeline. Plain words only. No client names, real photos or real
+> **Keeping it up to date:** don't edit this file by hand for a new change. Add a note in
+> `changes/` (see CONTRIBUTING.md): the release build adds it here, in the right group and as
+> one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.32.0** (24 Nov 2026).
+Last updated: version **4.31.1** (24 Nov 2026).
 
 ---
 
@@ -105,8 +106,6 @@ Last updated: version **4.32.0** (24 Nov 2026).
 - **Websites and Social media tabs.** On social sites, Stolen, Hide and Approve work per **account**, not the whole site. About 80 social sites known, new ones spotted automatically. A whole social site can never be hidden. (4.9, 4.9.5)
 - **Account finder** from the link, short links, public post info, page tags or your own browser. **Same person** joins accounts across platforms. (4.9)
 - **Followers, Verified, account type, country and company** read automatically (no typing by hand), with filters and sorting. (4.12)
-- **Reposts and shares spotted and hidden.** Facebook shares, X reposts and quotes, Instagram, Threads, TikTok and Bluesky reposts and Tumblr reblogs are tagged "Share of …" / "Repost of …", hidden until you tick Show reposts and shares, and point to the original post and account as the lead. Never answered for you. (4.32)
-- **Exact post found when the link is only an account page.** PageProof scrolls the account page in a quiet background tab, lines each post's pictures up with your client's photo and links the post that holds it. Capture captures that post. (4.32)
 - **X details read right.** Followers, check mark and type come from the account itself, not your own account or X's page footer ("X Corp."). (4.27)
 - **Kinds of check mark, drawn like the site.** X blue = Paid (bought), X gold = Verified organisation, grey = Government, Instagram/Facebook = Meta check (paid or earned look the same), others = Verified. Filter "Really verified (not bought)". (4.27)
 - **Government accounts hidden.** Anyone in or running for public office (Congresswoman, Councilman, "for Council", campaign or .gov sites, grey check) is type Government and hidden unless you tick Show government. (4.27)
@@ -150,6 +149,7 @@ Last updated: version **4.32.0** (24 Nov 2026).
 - **Folder name warnings** when a photo folder looks wrong. (4.15)
 - **Automatic tests** run before every release. (4.1)
 - **Nothing writes into its own program folder** (after Windows Defender flagged a self-updater, it was removed). (4.2.1)
+- **New versions in about a minute:** the download link is updated a minute after each change, and the automatic checks run side by side before it. (4.31.1)
 
 ---
 
@@ -213,4 +213,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.30.1 | 24 Nov | Fix: Instagram accounts showed your own name; viewer's details left out, accounts read again |
 | 4.30.2 | 24 Nov | Pause and Off stop everything at once (big searches, account reader, their tabs); Resume picks up where it stopped |
 | 4.31 | 24 Nov | Logos and buildings no longer count as copies (only-logos and same-place checks) |
-| 4.32 | 24 Nov | Reposts and shares spotted and hidden, original poster as lead, exact post found on account-page links |
+| 4.31.1 | 24 Nov | Fix: New versions reach the download page in about a minute |

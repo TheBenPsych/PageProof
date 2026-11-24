@@ -1,4 +1,4 @@
-// 4.32: reposts and shares on social media. A link to an account page is followed to the exact post
+// Reposts and shares on social media (4.32).
 // that holds the photo, and a share or repost of someone else's post is tagged, hidden unless
 // "Show reposts and shares" is ticked, and points to the original post. Nothing is answered by itself.
 const { start } = require('./h.js');
