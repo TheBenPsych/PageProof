@@ -323,35 +323,37 @@ const RS_STOLEN = {
   text() { return RS_STOLEN.HEAD + RS_STOLEN.items.join('\n') + '\n'; },
   async load() {
     const api = globalThis.browser || globalThis.chrome;
+    const old = RS_STOLEN.items;
     RS_STOLEN.items = (await api.storage.local.get('rsStolen')).rsStolen || [];
     if ((await RS_DOCS.state()) === 'granted') {
       const t = await RS_DOCS.readText(RS_STOLEN.FILE);
       if (t === undefined) { /* folder too slow: keep the browser's copy */ }
-      else if (t !== null) RS_STOLEN.items = RS_STOLEN.parse(t);
+      else if (t !== null && t === RS_STOLEN._t) { RS_STOLEN.items = RS_STOLEN._a; return RS_STOLEN; }   // unchanged: nothing to do
+      else if (t !== null) { RS_STOLEN.items = RS_STOLEN._a = RS_STOLEN.parse(t); RS_STOLEN._t = t; await api.storage.local.set({ rsStolen: RS_STOLEN.items }); }
       else if (RS_STOLEN.items.length) await RS_DOCS.writeText(RS_STOLEN.FILE, RS_STOLEN.text());
-      await api.storage.local.set({ rsStolen: RS_STOLEN.items });
     }
-    RS_STOLEN._ix = null;
+    if (old.length !== RS_STOLEN.items.length || old.some((x, i) => x !== RS_STOLEN.items[i])) RS_STOLEN._ix = null;
     return RS_STOLEN;
   },
   async save() {
     const api = globalThis.browser || globalThis.chrome;
-    await api.storage.local.set({ rsStolen: RS_STOLEN.items, fcChanged: { what: 'stolen', at: Date.now() } });
-    if ((await RS_DOCS.state()) === 'granted') await RS_DOCS.writeText(RS_STOLEN.FILE, RS_STOLEN.text());
+    await api.storage.local.set({ rsStolen: RS_STOLEN.items });
+    if ((await RS_DOCS.state()) === 'granted') { const t = RS_STOLEN.text(); await RS_DOCS.writeText(RS_STOLEN.FILE, t); RS_STOLEN._t = t; RS_STOLEN._a = RS_STOLEN.items; }
     RS_STOLEN._ix = null;
   },
   // pages: exact pages (same page key Copies found uses). sites: links per website.
   // accts: links per social account (a whole social site never counts, only its accounts).
   index() {
     if (RS_STOLEN._ix) return RS_STOLEN._ix;
-    const FCx = globalThis.FC, S = globalThis.PP_SOCIAL;
+    const FCx = typeof FC !== 'undefined' ? FC : globalThis.FC, S = typeof PP_SOCIAL !== 'undefined' ? PP_SOCIAL : globalThis.PP_SOCIAL;
     const pages = new Set(), sites = new Map(), accts = new Map();
     for (const u of RS_STOLEN.items) {
       pages.add(FCx && FCx.pageKey ? FCx.pageKey(u) : u.toLowerCase());
       const site = RS_SITE.of(u);
-      const a = S && S.fromUrl ? S.fromUrl(u) : null;
+      const social = !!(S && S.isSocial && S.isSocial(site));
+      const a = social && S.fromUrl ? S.fromUrl(u) : null;
       if (a && a.key) accts.set(a.key, (accts.get(a.key) || 0) + 1);
-      else if (site && !(S && S.listed && S.listed(site))) sites.set(site, (sites.get(site) || 0) + 1);
+      else if (site && !social) sites.set(site, (sites.get(site) || 0) + 1);
     }
     return (RS_STOLEN._ix = { pages, sites, accts });
   },
@@ -411,7 +413,7 @@ const RS_IMPORTS = {
   // Sites from the file that sit earlier in the list were there before, and stay.
   fromFile(text, list) {
     let best = { added: [], before: [] };
-    for (const parsed of [RS_LISTS.parse(text), RS_IMPORTS.parseFile(text)]) {
+    for (const parsed of [RS_LISTS.parse(text), RS_IMPORTS.parseFile(text), RS_STOLEN.parse(text)]) {
       const pos = new Map(parsed.map((s, i) => [s, i]));
       let i = list.length - 1, seen = false, last = Infinity;
       const added = [];
