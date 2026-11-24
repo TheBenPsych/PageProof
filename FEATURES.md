@@ -108,7 +108,8 @@ Last updated: version **4.31.0** (24 Nov 2026).
 - **X details read right.** Followers, check mark and type come from the account itself, not your own account or X's page footer ("X Corp."). (4.27)
 - **Kinds of check mark, drawn like the site.** X blue = Paid (bought), X gold = Verified organisation, grey = Government, Instagram/Facebook = Meta check (paid or earned look the same), others = Verified. Filter "Really verified (not bought)". (4.27)
 - **Government accounts hidden.** Anyone in or running for public office (Congresswoman, Councilman, "for Council", campaign or .gov sites, grey check) is type Government and hidden unless you tick Show government. (4.27)
-- **Real names on accounts.** "Matt Thibodeau" instead of the number from the link, with the handle small beside it (Facebook numbers, YouTube channel IDs and more). Country filled from Facebook Page transparency or the place on the profile. (4.27)
+- **Real names on accounts.** "Jamie Rivera" (made-up example) instead of the number from the link, with the handle small beside it (Facebook numbers, YouTube channel IDs and more). Country filled from Facebook Page transparency or the place on the profile. (4.27)
+- **Never your own name on someone else's account.** Instagram, Threads and TikTok pages also carry the signed-in person's own details (name, followers). PageProof now reads only the viewed account's own part of the page, and Facebook's hidden page data is not used at all. Accounts read before this fix are read again by themselves. (4.30.1)
 - **Only the post's own picture counts.** Google Lens can show your client's photo next to a Facebook or Instagram link when the post itself shows something else (a video, another photo). PageProof now lines up the post's own picture (or video cover) with your client's photo; a clearly different picture sends the match to Removed by itself ("Not seen in the post", Put back still works). The panel also says where "Theirs" came from: the search site's small preview or a picture from their page. (4.30)
 - **Social media means the 17 main platforms only** (YouTube, Facebook, Instagram, TikTok, X, LinkedIn, Pinterest, Threads, Reddit, Snapchat, Tumblr, Bluesky, Substack, Nextdoor, Truth Social, Vimeo, Behance). Every other site is a normal website again, so country filters and whole-site hiding work on it. No more "is this social?" questions. (4.25)
 
@@ -206,4 +207,5 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.25 | 24 Nov | Social media means the 17 main platforms only |
 | 4.27 | 24 Nov | X details fixed, check kinds, Government hidden, countries to show, real account names |
 | 4.30 | 24 Nov | Social matches only count when the post's own picture is the photo; "Theirs" source shown |
+| 4.30.1 | 24 Nov | Fix: Instagram accounts showed your own name; viewer's details left out, accounts read again |
 | 4.31 | 24 Nov | Logos and buildings no longer count as copies (only-logos and same-place checks) |
