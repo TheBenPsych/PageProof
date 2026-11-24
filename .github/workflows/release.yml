@@ -69,7 +69,7 @@ jobs:
         if: steps.v.outputs.skip != 'true'
         run: |
           rm -rf ff && cp -r extension ff
-          python3 -c "import json;p='ff/manifest.json';m=json.load(open(p));m.pop('key',None);m['background']={'scripts':['db.js','rs-store.js','social.js','fc-store.js','tiktok.js','background.js']};m['permissions']=[x for x in m['permissions'] if x not in ('sidePanel','system.cpu','system.memory')];sp=m.pop('side_panel',None);m['sidebar_action']={'default_panel':'sidepanel.html','default_title':'PageProof'};json.dump(m,open(p,'w'),indent=2)"
+          python3 -c "import json;p='ff/manifest.json';m=json.load(open(p));m.pop('key',None);m['background']={'scripts':['pp-guard.js','db.js','rs-store.js','social.js','fc-store.js','tiktok.js','background.js']};m['permissions']=[x for x in m['permissions'] if x not in ('sidePanel','system.cpu','system.memory')];sp=m.pop('side_panel',None);m['sidebar_action']={'default_panel':'sidepanel.html','default_title':'PageProof'};json.dump(m,open(p,'w'),indent=2)"
           cd ff && zip -qr ../PageProof-Firefox.zip . -x '.*'
       - name: Publish the "latest" release
         if: steps.v.outputs.skip != 'true'

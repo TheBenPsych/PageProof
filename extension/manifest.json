@@ -36,7 +36,8 @@
     "system.cpu",
     "system.memory",
     "declarativeNetRequestWithHostAccess",
-    "cookies"
+    "cookies",
+    "unlimitedStorage"
   ],
   "commands": {
     "capture-page": {

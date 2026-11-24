@@ -82,6 +82,11 @@ const PP_REPORT = (() => {
       firstDay: Object.keys(st.days).sort()[0] || null,
     };
     if (!opts.light) { m.copies = await copiesNow(); m.cover = await coverNow(); }
+    // 4.39: the error diary, saves that failed and how much is stored (pp-guard.js).
+    if (typeof PP_GUARD !== 'undefined') {
+      m.saveFail = await PP_GUARD.lastFail().catch(() => null);
+      if (!opts.light) { m.errors = await PP_GUARD.diary(n).catch(() => []); m.usage = await PP_GUARD.usage().catch(() => null); }
+    }
     m.alerts = alerts(st, m);
     return m;
   }
@@ -90,6 +95,7 @@ const PP_REPORT = (() => {
   // Each: [level 'bad' | 'warn', what, more]. Compares the last days with this computer's usual.
   function alerts(st, m) {
     const out = [], days = st.days || {};
+    if (m && m.saveFail && Date.now() - m.saveFail.at < 7 * 864e5) out.push(['bad', 'PageProof could not save some changes', (m.saveFail.quota ? 'The browser\'s storage for PageProof is full. ' : '') + 'Last time ' + new Date(m.saveFail.at).toLocaleString() + ' (' + m.saveFail.n + ' times in all). Open Settings › Is everything working.']);
     const today = keyOf(new Date()), recent = lastDays(8).map(k => [k, days[k]]).filter(([, d]) => d);
     const T = days[today];
     const before = PP_STATS.sum(lastDays(7, 1).map(k => days[k]));
@@ -204,6 +210,16 @@ const PP_REPORT = (() => {
       L.push('  Up to date: priority ' + g.top[0] + '/' + g.top[1] + ', last 3 months ' + g.recent[0] + '/' + g.recent[1] + ', this year ' + g.year[0] + '/' + g.year[1] + ', older ' + g.older[0] + '/' + g.older[1]);
       if (perDay >= 1 && f.never) L.push('  At ' + Math.round(perDay) + ' photos a weekday, every photo is searched once in about ' + Math.max(1, Math.round(f.never / perDay / 21)) + ' months');
     }
+    if (m.errors) {
+      L.push('', 'What went wrong (problems PageProof handled quietly)');
+      if (!m.errors.length) L.push('  Nothing recorded');
+      for (const e of m.errors.slice(0, 20)) L.push('  ' + (e.kind === 'error' ? '[error] ' : '') + e.place + ': ' + num(e.n) + ' times on ' + e.days + (e.days === 1 ? ' day' : ' days') + ' · first ' + new Date(e.first).toLocaleString() + (e.msg ? ' · "' + e.msg + '"' : ''));
+    }
+    if (m.usage || m.saveFail) {
+      const u = m.usage || {}, mb = b => (b == null ? 'not known' : (b / 1048576).toFixed(1) + ' MB');
+      L.push('', 'Storage');
+      L.push('  Settings and lists ' + mb(u.local) + ' (no limit: ' + (api.runtime.getManifest().permissions || []).includes('unlimitedStorage') + ') · everything ' + mb(u.all) + ' · kept safe from clean-up: ' + (u.persisted == null ? 'not known' : u.persisted ? 'yes' : 'no') + ' · failed saves: ' + (m.saveFail ? m.saveFail.n + ', last ' + new Date(m.saveFail.at).toLocaleString() : '0'));
+    }
     L.push('', 'Computer strain');
     L.push('  Searches slowed down: busy ' + num(c(D, 'strain.eased.busy')) + ', memory ' + num(c(D, 'strain.eased.memory')) + ', battery ' + num(c(D, 'strain.eased.battery')) + ' · Keep searching waited for a busy computer ' + Math.round((km.by.busy || 0)) + ' min · search pages restarted ' + num(c(D, 'strain.resumed')) + ' · highest page memory ' + ((D.x || {})['mem.page'] ? num(D.x['mem.page']) + ' MB' : 'not known'));
     return L;
@@ -212,7 +228,7 @@ const PP_REPORT = (() => {
   function json(m) {
     const days = {}; for (const k of m.keys) if (m.days[k]) days[k] = m.days[k];
     return { pageproof: m.version, browser: m.browser, made: new Date().toISOString(), range: m.range, computer: m.hw ? { level: m.hw.level, cores: m.hw.cores, memGB: m.hw.memGB, limits: m.hw.limits } : null,
-      keep: m.keep, fast: m.fast, gpu: m.gpu, test: m.test, copies: m.copies, cover: m.cover, alerts: m.alerts, days };
+      keep: m.keep, fast: m.fast, gpu: m.gpu, test: m.test, copies: m.copies, cover: m.cover, alerts: m.alerts, errors: m.errors || null, usage: m.usage || null, saveFail: m.saveFail || null, days };
   }
   // Blanks anything that looks like one of your client names (and your own name), just in case.
   async function scrub(text) {

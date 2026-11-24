@@ -187,7 +187,8 @@ async function ppStorage() {
   }
   const known = kept.bytes + pages.bytes + prev.bytes + caps.bytes;
   const used = Math.max(est.usage || 0, known);
-  return { kept, pages, prev, caps, ans, old, used, quota: est.quota || 0, sizes: { kept: kept.bytes, pages: pages.bytes, prev: prev.bytes, caps: caps.bytes, rest: Math.max(0, used - known) }, at: Date.now() };
+  const guard = typeof PP_GUARD !== 'undefined' ? { u: await PP_GUARD.usage().catch(() => ({})), fail: await PP_GUARD.lastFail().catch(() => null) } : { u: {}, fail: null };
+  return { guard, kept, pages, prev, caps, ans, old, used, quota: est.quota || 0, sizes: { kept: kept.bytes, pages: pages.bytes, prev: prev.bytes, caps: caps.bytes, rest: Math.max(0, used - known) }, at: Date.now() };
 }
 function storageCard() {
   const s = state.storage;
@@ -208,6 +209,8 @@ function storageCard() {
   return `<section class="card pad" id="storage" style="display:flex;flex-direction:column;gap:14px">
     <div class="row"><h2>Space PageProof is using</h2><span class="tag ${pct > 80 ? 'warn' : 'ok'}" style="margin-left:auto">${pct > 80 ? 'Getting full' : 'Plenty of room'}</span></div>
     <div><div class="row" style="align-items:baseline;gap:8px"><b style="font-size:26px;letter-spacing:-.02em">${sizeText(s.used)}</b>${s.quota ? `<span class="muted">used of the ${sizeText(s.quota)} your browser allows on this computer</span>` : ''}</div>
+      ${(() => { const g = s.guard || { u: {} }, unl = (api.runtime.getManifest().permissions || []).includes('unlimitedStorage');
+        return `<p class="muted" style="margin:6px 0 0;font-size:13.5px" id="stGuard">Settings and lists: ${g.u.local != null ? sizeText(g.u.local) : 'not known'} · ${unl ? 'no size limit' : 'limit 10 MB'} · ${g.u.persisted ? 'kept safe from the browser\'s clean-up' : 'the browser may clear it when the disk is full'}</p>${g.fail ? `<div class="banner bad" role="alert" style="margin-top:8px" id="stFail"><div style="flex:1 1 260px;min-width:0"><b>Some changes could not be saved</b> <span style="font-size:13.5px">${g.fail.n} times, last ${esc(new Date(g.fail.at).toLocaleString())}${g.fail.quota ? '. The browser storage was full.' : '.'} ${esc(g.fail.msg || '')}</span></div><button class="btn" data-act="stfailok">I've seen it</button></div>` : ''}`; })()}
       <div class="stbar" role="img" aria-label="What the space is used for">${STORE_PARTS.map(([k, l, c]) => s.sizes[k] ? `<i style="flex:${Math.max(s.sizes[k], s.used / 150)} 0 0;background:${c}" title="${l}: ${sizeText(s.sizes[k])}"></i>` : '').join('')}</div></div>
     <div class="stlist">${STORE_PARTS.map(([k, l, c]) => `<div><i style="background:${c}"></i><span>${l}${{ kept: ' (' + s.kept.n.toLocaleString() + ')', pages: ' (' + s.pages.n.toLocaleString() + ')', prev: ' (' + s.prev.n.toLocaleString() + ')', caps: ' (' + s.caps.n + ' of the 10 most recent)' }[k] || ''}</span><b>${sizeText(s.sizes[k])}</b></div>`).join('')}</div>
     <div style="border-top:1px solid var(--line);padding-top:14px;display:flex;flex-direction:column;gap:10px">
@@ -291,6 +294,7 @@ V.skipped = async () => {
 V.skipped.guard = async () => ((await FC.drive()).done ? null : 'connect');
 
 Object.assign(ACTS, {
+  stfailok: async () => { if (typeof PP_GUARD !== 'undefined') await PP_GUARD.clearFail(); state.storage = null; render(true); },
   healthagain: async () => { state.support = ''; state.storage = null; toast('Checked again.'); render(true); },
   stpick: (v, el) => { (state.stPick || (state.stPick = {}))[v] = el.checked; render(true); },
   stfree: async () => {
