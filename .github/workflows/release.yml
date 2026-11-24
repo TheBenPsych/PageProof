@@ -39,7 +39,7 @@ jobs:
       # endless feeds, pop-up windows...). Each is captured the way PageProof does it and checked
       # for blank, missing or doubled parts.
       - name: Run the full-page capture checks
-        run: node tests/capture/run.js
+        run: NODE_PATH=tests/app/node_modules node tests/capture/run.js
 
   zip:
     needs: checks
