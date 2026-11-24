@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.41.0** (24 Nov 2026).
+Last updated: version **4.42.0** (24 Nov 2026).
 
 ---
 
@@ -85,6 +85,14 @@ Last updated: version **4.41.0** (24 Nov 2026).
 - **Reddit and forums never show.** Your team never pursues forums, so every Reddit link (reddit.com, old.reddit.com, redd.it, i.redd.it, preview.redd.it, redditmedia.com) is dropped from searches. Clear forum addresses go too: forum.*, forums.* or boards.* sites, pages under /forum/, /forums/ or /threads/, phpBB / vBulletin / Simple Machines pages (viewtopic.php, showthread.php...) and Discourse topics (/t/title/123). Copies found before are off Copies found; ones already marked Stolen stay. (4.34)
 - **The photo must be on their page itself.** A match made on Google's small preview is checked against the page during the search: the article's own pictures count, comments, sidebars and "related" boxes don't. If the photo isn't there, the match is left out; if the page can't be read, it's only a Maybe. (4.35)
 - **Moved or renamed photos keep their history.** When a folder is renamed or a shoot is moved in Google Drive, PageProof recognises the photos and keeps their copies, answers, flags and search dates. A ticked folder that can't be found any more gets a red line on Home. (4.41)
+- **One search line.** Big searches no longer stop Keep searching; it carries on at half speed and skips their photos. (4.42)
+- **Each search site at its own speed.** Google keeps the pace; Yandex and Bing search another photo (a re-search) while Google is busy. Every first search still uses all three. (4.42)
+- **New photo fast lane.** Photos that arrive in a client PageProof already knows are searched first, then again 3, 7 and 14 days later. (4.42)
+- **A goal instead of a pace.** Set a date for every photo's first search; PageProof picks the pace (never faster than is safe) and says on track or behind, with the real end date. (4.42)
+- **Hot shoots.** Marking a copy Stolen sends the other photos from that folder and day to the front of the line (Undo puts them back). (4.42)
+- **Bursts.** A frame that looks almost the same as one already searched with nothing found waits until every other photo had its first search, and goes at once if its twin finds copies. (4.42)
+- **Camera dates.** A photo whose folders give no year gets its date from the camera (EXIF). (4.42)
+- **New client folders.** Once a week PageProof lists the folder names in Google Drive (names only) and Home shows new folders that aren't ticked. (4.42)
 
 ## 5. Review the copies found
 
@@ -250,3 +258,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.39 | 24 Nov | Seals, crests, small slices and patterns (fences, floors) no longer count as copies |
 | 4.40 | 24 Nov | New look part 1: menu, top bar and Home |
 | 4.41 | 24 Nov | Safety nets: storage, search history in backups, moved photos, timestamp spares, error diary, update check-up |
+| 4.42 | 24 Nov | One search line, per-site lanes, new photo fast lane, goal date, hot shoots, bursts, camera dates, new client folders |
