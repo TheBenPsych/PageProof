@@ -190,5 +190,7 @@ img.save(f'{OUT}/wall__real-copy-crop-headline.png'); manifest.append({'orig': '
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from make_same_place import add_cases
 add_cases(OUT, D, manifest, wall, make, S, T, jpeg)
+from make_emblems import add_cases as add_emblems
+add_emblems(OUT, D, manifest, make, S, T, jpeg)
 json.dump(manifest, open(f'{OUT}/manifest.json', 'w'))
 print(len(manifest))

@@ -735,8 +735,7 @@ async function measure(p, bmp) {
       : await PP_ALIGN.align(await origBitmap(p), small, undefined, { fast: true });
     if (best && !w && best.sc.lines >= 0.3) {
       const A = await origBitmap(p), Sh = PP_ALIGN.shot(A, small, best);
-      best.backdrop = PP_ALIGN.repeats(A, small, best).backdropOnly && Sh.graphic >= 0.6;
-      Object.assign(best, { logos: Sh.logos, place: Sh.place, photo: Sh.photo });
+      Object.assign(best, { backdrop: Sh.backdrop, logos: Sh.logos, place: Sh.place, spot: Sh.emblem || Sh.slice || Sh.pattern, photo: Sh.photo });
     }
     const out = PP_VERDICT.fields(best, SCORE_VERSION);
     statCheck(out, Date.now() - t0 - (w && w._w || 0));
@@ -814,7 +813,7 @@ async function ownPageCheck(l, p) {
 // the middle), same-backdrop different photos about 0.3.
 // Version 4: a copy shrunk to a dot no longer counts (it was compared over two tiny squares and
 // could show 100%); at least 40 squares must be compared and 12 must match for Same photo.
-const SCORE_VERSION = 6;   // 5: press-wall check (4.8.3); 6: only-logos + same-place check (4.31.0)
+const SCORE_VERSION = 7;   // 5: press-wall check (4.8.3); 6: only-logos + same-place check (4.31.0); 7: only a seal / slice / pattern
 const userNo = l => !!(l.url && job && job.pics[l.pic] && RS_REJECT.notMatch(l.url, job.pics[l.pic].name));
 function baseVerdict(l) {
   if (l.rescued) return 'maybe';          // you said it is a copy
@@ -1076,7 +1075,7 @@ function statPhoto(p, fresh) {
     else {
       const v = verdict(l);
       if (v === 'cant') k = 'cant';
-      else if (v === 'no') k = cardOf(l) ? 'card' : l.onPage === 'notSeen' || l.onPage === 'card' ? 'notInPost' : userNo(l) ? 'removedBefore' : (l.wall || l.logos || l.place) ? 'logos' : 'different';
+      else if (v === 'no') k = cardOf(l) ? 'card' : l.onPage === 'notSeen' || l.onPage === 'card' ? 'notInPost' : userNo(l) ? 'removedBefore' : (l.wall || l.logos || l.place || l.spot) ? 'logos' : 'different';
       else if (v === 'same' || v === 'maybe') {
         if (isRejected(p, l)) k = 'removedBefore';
         else { if (RS_LISTS.isAllowed(l.site, l.url)) S.add('drop.approved'); if (v === 'same') same++; else maybe++; }

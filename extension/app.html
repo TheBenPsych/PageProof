@@ -18,15 +18,16 @@
       <div class="crumb" id="crumb" hidden></div>
       <label class="search" id="topSearch"><span id="topSearchIc"></span><input id="ppSearch" type="search" placeholder="Search sites, photos or clients" aria-label="Search sites, photos or clients"></label>
       <div class="topr">
-        <div class="undo-wrap"><button class="btn tb" id="undoBtn" title="Undo your last answer (U)" disabled></button><div class="tmenu" id="undoMenu" hidden></div></div>
-        <button class="btn tb icon" id="keysBtn" aria-label="Keyboard keys" title="Keyboard keys (?)"></button>
-        <button class="btn tb icon" id="themeBtn" aria-label="Switch between light and dark"></button>
+        <div class="tgroup" role="group" aria-label="Undo, help and colours">
+          <div class="undo-wrap"><button class="btn tb" id="undoBtn" title="Undo your last answer (U)" disabled></button><div class="tmenu" id="undoMenu" hidden></div></div>
+          <button class="btn tb icon" id="keysBtn" aria-label="Keyboard keys" title="Keyboard keys (?)"></button>
+          <button class="btn tb icon" id="themeBtn" aria-label="Switch between light and dark"></button>
+        </div>
         <a class="btn tb go" id="capBtn" href="#capture"></a>
       </div>
     </header>
     <main class="content" id="view"></main>
     <div class="content" id="live" style="display:none"></div>
-    <div class="statusline" id="statusLine" role="status" aria-label="PageProof status" hidden></div>
   </div>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>

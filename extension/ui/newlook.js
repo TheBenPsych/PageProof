@@ -10,7 +10,8 @@ function ppTopBar() {
   const n = typeof HIST === 'undefined' ? 0 : HIST.length;
   u.disabled = !n;
   u.dataset.why = 'Nothing to undo yet. After you answer a copy, Undo puts it back.';
-  u.innerHTML = `${ic('undo', 16)} Undo${n > 1 ? ` <span class="caret-d" data-undolist="1" title="Your last answers">▾</span>` : ''}`;
+  u.setAttribute('aria-label', 'Undo');
+  u.innerHTML = `${ic('undo', 17)}${n > 1 ? ` <span class="caret-d" data-undolist="1" title="Your last answers">▾</span>` : ''}`;
   u.title = n ? 'Undo: ' + HIST[n - 1].label + ' (U)' : 'Nothing to undo yet';
   const s = $id('ppSearch');
   if (s && document.activeElement !== s && s.value !== (state.fq || '')) s.value = state.fq || '';
@@ -36,6 +37,7 @@ async function undoAt(i) {
 document.addEventListener('DOMContentLoaded', () => {
   $id('topSearchIc').innerHTML = ic('find', 16);
   $id('capBtn').innerHTML = `${ic('cam', 16)}<span>Capture a page</span>`;
+  const sb = $id('topSearch'); if (sb && !sb.querySelector('.kbd')) sb.insertAdjacentHTML('beforeend', '<span class="kbd" title="Press / to search">/</span>');
   $id('undoBtn').addEventListener('click', e => {
     if (e.target.closest('[data-undolist]')) { undoMenu($id('undoMenu').hidden); return; }
     undoMenu(false); undoLast();
@@ -276,7 +278,8 @@ async function ppStatusLine() {
     if (b && b.label) return `<span class="si s-${lvl}">${t}${b.href ? `<a class="sfix" href="${b.href}"${b.act ? ` data-act="${b.act}"` : ''}>${b.label}</a>` : `<button class="sfix" data-act="${b.act}">${b.label}</button>`}</span>`;
     return b && b.href ? `<a class="si s-${lvl}" href="${b.href}">${t}</a>` : `<span class="si s-${lvl}">${t}</span>`;
   }).join('');
-  if (html !== STATUS_HTML) { STATUS_HTML = html; el.innerHTML = html; }
+  if (html !== STATUS_HTML || el.innerHTML !== html) { STATUS_HTML = html; el.innerHTML = html; }
+  PP_STATUS.html = html; PP_STATUS.bad = bad;
   el.classList.toggle('bad', bad);
   el.hidden = !items.length;
 }

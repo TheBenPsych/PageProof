@@ -444,7 +444,7 @@ $('auto').onclick = async () => {
     T = PP_ALIGN.place({ s: best.s, w: best.w, h: best.h, r: best.r, k: best.k, flip: best.flip, x: best.x, y: best.y }); draw();
     await rescore();
     const secs = ((performance.now() - t0) / 1000).toFixed(1);
-    if (scoreInfo.logos || scoreInfo.place) setStatus('Lined up in ' + secs + ' s, but this is a different photo: ' + (scoreInfo.logos ? 'only the logos and lettering match.' : 'the same place, taken from another spot or at another time.') + ' Fade between them with the slider to see it.', true);
+    if (scoreInfo.logos || scoreInfo.place || scoreInfo.only) setStatus('Lined up in ' + secs + ' s, but this is a different photo: ' + (scoreInfo.logos ? 'only the logos and lettering match.' : scoreInfo.only === 'emblem' ? 'only a seal or emblem matches.' : scoreInfo.only === 'slice' ? 'only a small part of each picture matches.' : scoreInfo.only === 'pattern' ? 'only a repeating pattern (a fence, a floor) matches.' : 'the same place, taken from another spot or at another time.') + ' Fade between them with the slider to see it.', true);
     else if (scoreInfo.verdict[0] === 'bad') setStatus('Could not find this photo inside the copy (' + secs + ' s). If you are sure it is there, drag the copy into place and use + Bigger / − Smaller.', true);
     else setStatus('Lined up in ' + secs + ' s' + (best.how === 'details' ? ', using ' + best.inliers + ' matching details' : '') + '. The copy was ' + describeShape() + '. Move the slider to fade between them, or try "Slide aside and back". You can still drag the copy to fine-tune it.');
   } catch (e) { setStatus('Could not line them up automatically (' + e.message + '). Drag the copy into place instead.', true); }
@@ -469,18 +469,22 @@ async function rescore() {
   // big part was painted over or redrawn (an added object, redrawn faces, a headline band).
   // Press walls repeat the same logos: a different shot in front of the same wall lines up on
   // those logos and nothing else. Then it is not the same photo, whatever the % says.
-  const RP = off || S.lines < 0.15 ? null : PP_ALIGN.repeats(P.A.bitmap, P.B.bitmap, T);
-  // Another photo of the same place: only printed logos / signs line up, or things at different
+  // Another photo of the same place: only printed logos / signs line up, only a seal or crest,
+  // only a small slice of each, only a pattern (fence, tiled floor), or things at different
   // distances shift against each other (a building from a few steps away). See shot() in align.js.
   const SH = off || S.lines < 0.15 ? null : PP_ALIGN.shot(P.A.bitmap, P.B.bitmap, T);
-  const wall = !!(RP && RP.backdropOnly && SH && SH.graphic >= 0.6);
+  const wall = !!(SH && SH.backdrop);
   const logos = !wall && !!(SH && SH.logos), place = !wall && !logos && !!(SH && SH.place);
+  const only = wall || logos || place || !SH ? null : SH.emblem ? 'emblem' : SH.slice ? 'slice' : SH.pattern ? 'pattern' : null;
   const photoPct = SH && SH.photo !== null ? Math.round(SH.photo * 100) : pct;
-  if (wall || logos || place) CH = null;
-  const heavy = !wall && !logos && !place && CH && enough && S.strength >= 0.75 && CH.sameShare >= 0.2 && CH.untouchedLines >= 0.6 && CH.changedShare >= 0.25;
+  if (wall || logos || place || only) CH = null;
+  const heavy = !wall && !logos && !place && !only && CH && enough && S.strength >= 0.75 && CH.sameShare >= 0.2 && CH.untouchedLines >= 0.6 && CH.changedShare >= 0.25;
   const verdict = off ? ['bad', 'The copy is mostly off the original', 'Line them up first.']
     : wall ? ['bad', 'Different photo, same backdrop', 'Only the logos printed over and over on the wall behind lines up. The people and everything else are different. A different shot in front of the same press wall lines up there, so this is not the same photo.']
     : logos ? ['bad', 'Different photo, only the logos match', 'What lines up is printed logos, signs or lettering. The people, the building and everything around them are different. A logo looks the same in every photo taken of it, so this is not the same photo.']
+    : only === 'emblem' ? ['bad', 'Different photo, only a seal or emblem matches', 'What lines up is one small spot, like a seal on a podium or a crest on the wall. The people and everything around it are different. A seal looks the same in every photo taken of it, so this is not the same photo.']
+    : only === 'slice' ? ['bad', 'Different photo, only a small part matches', 'Only a small part of each picture lines up (often a seal, a sign or a backdrop). A real copy shares most of one of the two pictures, so this is not the same photo.']
+    : only === 'pattern' ? ['bad', 'Different photo, only a pattern matches', 'What lines up is a repeating pattern, like a chain-link fence, a checkered floor or tiles. The people and everything else are different, so this is not the same photo.']
     : place ? ['bad', 'Different photo of the same place', 'The scene lines up roughly, but things at different distances (columns and the wall behind them, a pole, people) shift against each other and the fine detail does not match. It was taken from another spot or at another time, so it is not the same photo.']
     : pct >= 85 && S.strength >= 0.8 ? ['good', 'Very likely the same photo', 'They match detail for detail wherever they overlap.']
     : heavy ? ['good', 'Same photo, heavily edited (things added or redrawn)', 'Inside the green part the copy lines up with the original detail for detail. The red parts were painted over, added or redrawn (for example a new object, changed faces or a headline).']
@@ -488,7 +492,7 @@ async function rescore() {
     : pct >= 15 ? ['mid', 'Partly lines up', 'Check the overlay by eye. They may not be lined up exactly yet, or only part of the photo was used.']
     : ['bad', 'Probably not lined up, or not the same photo', 'Try "Line them up automatically", or drag the copy into place.'];
   if (verdict[0] === 'bad') CH = null;
-  scoreInfo = { pct: logos || place ? photoPct : pct, strength, verdict, overlap: S.overlap, overlapA: S.overlapA, heavy: !!heavy, wall, logos, place, same, unt, changed: CH ? 100 - same : 0 };
+  scoreInfo = { pct: logos || place || only ? photoPct : pct, strength, verdict, overlap: S.overlap, overlapA: S.overlapA, heavy: !!heavy, wall, logos, place, only, same, unt, changed: CH ? 100 - same : 0 };
   const box = $('score');
   box.hidden = false; box.className = 'card ' + verdict[0];
   box.innerHTML = '';
@@ -499,9 +503,11 @@ async function rescore() {
     // The headline number only judges the part that wasn't painted over; the overall one stays below.
     p.textContent = unt + '% lines up';
     const u = document.createElement('div'); u.className = 'under'; u.textContent = 'in the part that wasn\'t painted over'; box.append(u);
-  } else if (logos || place) {
+  } else if (logos || place || only) {
     p.textContent = photoPct + '% lines up';
-    const u = document.createElement('div'); u.className = 'under'; u.textContent = logos ? 'leaving out the logos and lettering' : 'leaving out the parts that shift'; box.append(u);
+    const u = document.createElement('div'); u.className = 'under';
+    u.textContent = logos ? 'leaving out the logos and lettering' : place ? 'leaving out the parts that shift' : only === 'emblem' ? 'leaving out the seal or emblem' : only === 'pattern' ? 'leaving out the pattern' : 'of each whole picture';
+    box.append(u);
   } else { p.textContent = wall ? 'Only the backdrop lines up' : pct + '% lines up'; if (wall) p.style.fontSize = '19px'; }
   if (CH && verdict[0] === 'good') {
     const bar = document.createElement('div'); bar.className = 'split';
@@ -512,7 +518,7 @@ async function rescore() {
     box.append(bar, key);
   }
   const sm = document.createElement('small');
-  sm.textContent = verdict[2] + (wall ? ' (' + pct + '% of the shared area lines up, all of it repeating logos.)' : '') + (logos || place ? ' (Counting everything, ' + pct + '% of the shared area lines up roughly.)' : '') + (heavy ? ' Over everything they share: ' + pct + '%.' : '') + ' The copy covers ' + Math.round(Math.min(1, S.overlapA) * 100) + '% of the original. The score is a guide; the overlay is what to show.';
+  sm.textContent = verdict[2] + (wall ? ' (' + pct + '% of the shared area lines up, all of it repeating logos.)' : '') + (logos || place || only ? ' (Counting everything, ' + pct + '% of the shared area lines up roughly.)' : '') + (heavy ? ' Over everything they share: ' + pct + '%.' : '') + ' The copy covers ' + Math.round(Math.min(1, S.overlapA) * 100) + '% of the original. The score is a guide; the overlay is what to show.';
   box.append(sm);
   for (const sp of spots) measureSpot(sp);
   if (spots.length) renderSpots();
@@ -583,7 +589,7 @@ $('sPdf').onclick = async () => {
       { kv: nearby.map(r => [r.name, r.bad ? 'could not be opened as a picture' : Math.round(r.lines * 100) + '% of the shared area lines up' + (r.same ? ' (' + Math.round(r.same * 100) + '% same photo)' : ''), P.A && r.name === P.A.name]) }
     ];
     const items = [
-      { p: 'In short: ' + scoreInfo.verdict[1] + ' (' + (scoreInfo.heavy ? scoreInfo.unt + '% lines up in the part that wasn\'t painted over; ' + scoreInfo.pct + '% over everything they share' : scoreInfo.logos ? scoreInfo.pct + '% of the photo lines up, leaving out the logos and lettering' : scoreInfo.place ? scoreInfo.pct + '% of the photo lines up, leaving out the parts that shift' : scoreInfo.pct + '% of the shared area lines up') + '). ' + scoreInfo.verdict[2], box: '#eff6ff', color: '#1e3a8a' },
+      { p: 'In short: ' + scoreInfo.verdict[1] + ' (' + (scoreInfo.heavy ? scoreInfo.unt + '% lines up in the part that wasn\'t painted over; ' + scoreInfo.pct + '% over everything they share' : scoreInfo.logos ? scoreInfo.pct + '% of the photo lines up, leaving out the logos and lettering' : scoreInfo.place ? scoreInfo.pct + '% of the photo lines up, leaving out the parts that shift' : scoreInfo.only ? scoreInfo.pct + '% of the photo lines up, leaving out the ' + (scoreInfo.only === 'emblem' ? 'seal or emblem' : scoreInfo.only === 'pattern' ? 'pattern' : 'parts outside the small shared slice') : scoreInfo.pct + '% of the shared area lines up') + '). ' + scoreInfo.verdict[2], box: '#eff6ff', color: '#1e3a8a' },
       { h: 'The two pictures' }, { image: sideBySide(1400), maxH: 520 },
       { kv: [
         ['Original', A.name + '  (' + A.bitmap.width + ' x ' + A.bitmap.height + ')'], ['Original from', A.src], ['Original SHA-256', A.sha],
