@@ -150,7 +150,7 @@ const PP_EVIDENCE = (() => {
       copy.acct && copy.acct.handle ? ['Posted by', { t: copy.acct.handle + (copy.acct.url ? '  ' + copy.acct.url : ''), mono: true, max: 2 }] : null,
       copy.acctInfo && copy.acctInfo.ok ? ['The account', { t: [
         copy.acctInfo.followers != null ? copy.acctInfo.followers.toLocaleString('en-US') + ' ' + copy.acctInfo.fw + ' on ' + dayText(copy.acctInfo.at) : '',
-        { blue: 'Verified', gold: 'Verified organisation', grey: 'Verified government account', no: 'Not verified' }[copy.acctInfo.verified] || '',
+        { blue: 'Verified', paid: 'Paid check (bought, not verification)', gold: 'Verified organisation (gold check)', grey: 'Government account (grey check)', meta: 'Instagram/Facebook check (paid or earned)', yes: 'Verified by the site', no: 'No check' }[copy.acctInfo.verified] || '',
         copy.acctInfo.type ? copy.acctInfo.type + (copy.acctInfo.typeSure === 'guess' ? ' (going by the profile)' : '') + (copy.acctInfo.category ? ': ' + copy.acctInfo.category : '') : '',
         copy.acctInfo.company ? 'Company: ' + copy.acctInfo.company + (copy.acctInfo.address ? ', ' + copy.acctInfo.address : '') : '',
         copy.acctInfo.country ? 'Based in ' + copy.acctInfo.country : ''].filter(Boolean).join('. '), max: 3 }] : null,

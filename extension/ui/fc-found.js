@@ -12,7 +12,7 @@ let FCD = null;          // what's loaded from the copies database (cleared when
 // next draw reads it again, but a click in between still finds its copy. (Clearing it outright
 // made a button press do nothing until the page was drawn again, 4.6.4.)
 let FCD_STALE = false;
-api.storage.onChanged.addListener(ch => { if (ch.fcChanged || ch.rsHidden || ch.rsAllowed || ch.rsStolen || ch.fcHiddenCountries || ch.ppSocialSites) FCD_STALE = true; });
+api.storage.onChanged.addListener(ch => { if (ch.fcChanged || ch.rsHidden || ch.rsAllowed || ch.rsStolen || ch.fcShownCountries || ch.ppSocialSites) FCD_STALE = true; });
 
 const STATUS = { new: ['New', 'copy'], stolen: ['Stolen', 'bad'], licensed: ['Licensed', 'ok'], removed: ['Removed', 'grey'] };
 const RISK = { ok: ['Looks normal', ''], watch: ['Worth a look', 'warn'], sus: ['Suspicious', 'bad'] };
@@ -52,7 +52,7 @@ function loadFC() {
   return FCD_P;
 }
 async function readFC() {
-  const [copies, clients, countries, sites] = [await FC.allCopies(), await FC.DB.all('clients'), await FC.hiddenCountries(), await FC.DB.all('sites')];
+  const [copies, clients, countries, sites] = [await FC.allCopies(), await FC.DB.all('clients'), await FC.shownCountries(), await FC.DB.all('sites')];
   const ids = new Set(copies.map(c => c.photo));
   const photos = new Map();
   const idList = [...ids];
@@ -191,7 +191,11 @@ function sistersOf(c) {
   if (!xs.length) return null;
   return { owner: o.name, ids: xs.map(x => x.id), sites: [...new Set(xs.map(x => x.site))], same: xs.every(x => x.photo === c.photo) };
 }
-const visible = c => !siteHidden(c) && !FCD.countries.includes(c.country);
+// 4.24 (Ben): website copies show only from the countries you chose (United States and Puerto
+// Rico to start). Copies whose country isn't known (most .com sites) always show; social copies
+// are about the account, so the country of the site doesn't hide them.
+const countryOut = c => !!c.country && !isSoc(c) && !FCD.countries.includes(c.country);
+const visible = c => !siteHidden(c) && !countryOut(c);
 
 // ---------------------------------------------------------------- the copy details panel
 function regBox(p, reg) {
@@ -447,7 +451,7 @@ async function drawer(list) {
     <dl class="facts">
       ${o && o.real ? `<dt>Site owner</dt><dd><a href="#owners" data-act="gowner" data-v="${esc(o.key)}" style="font-weight:600">${esc(o.name)}</a><br><span class="muted" style="font-size:13px">${esc(o.kind)}${o.sites.length > 1 ? ' · ' + FCD.copies.filter(x => o.sites.includes(x.site) && x.status !== 'removed').length + ' copies on their sites' : ''}</span></dd>` : ''}
       <dt>Site check</dt><dd>${RISK[c.risk.level][0]}${c.risk.why.length ? `<br><span class="muted" style="font-size:13px">${esc(c.risk.why.join(' · '))}</span>` : ''}</dd>
-      ${c.country ? `<dt>Country</dt><dd>${esc(c.country)} <button class="btn ghost sm" data-act="hidecountry" data-v="${esc(c.country)}">Hide this country</button></dd>` : ''}
+      ${c.country ? `<dt>Country</dt><dd>${esc(c.country)}${isSoc(c) ? '' : FCD.countries.includes(c.country) ? ` <button class="btn ghost sm" data-act="hidecountry" data-v="${esc(c.country)}">Stop showing this country</button>` : ` <button class="btn ghost sm" data-act="showcountry" data-v="${esc(c.country)}">Show this country</button>`}</dd>` : ''}
     </dl>
     <details class="hidebox" id="okbox"><summary><b>Is this site allowed to use the photo?</b> <span class="muted" style="font-size:13px">Approve it</span></summary>
       <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
@@ -526,7 +530,7 @@ V.found = async () => {
   const nWeb = tabN('web'), nSoc = tabN('social');
   if (state.fTab === 'social' && !everyTab.some(isSoc)) switchTab('web');
   const everything = everyTab.filter(inTab);
-  const hiddenN = everything.filter(c => c.status !== 'removed' && !siteHidden(c) && FCD.countries.includes(c.country)).length;
+  const hiddenN = everything.filter(c => c.status !== 'removed' && !siteHidden(c) && countryOut(c)).length;
   const all = everything.filter(visible);
   const social = state.fTab === 'social';
   if (!social && (state.fView === 'account' || state.sView === 'accounts')) { state.fView = 'client'; state.sView = 'copies'; }
@@ -608,12 +612,13 @@ V.found = async () => {
   if (state.fOwner) { const o = FCD.owners.find(z => z.key === state.fOwner); active.push(['fOwner', 'Owner: ' + (o ? o.name : '?')]); }
   if (state.fPhoto) { const p = FCD.photos.get(state.fPhoto); active.push(['fPhoto', 'Photo: ' + (p ? p.name : 'one photo')]); }
   if (state.fq) active.push(['fq', 'Search: ' + state.fq]);
-  if (social) for (const [k, l] of [['fVer', 'Verified'], ['fFol', 'Followers'], ['fType', 'Type'], ['fCountry', 'Country']]) if (state[k] !== 'Any') active.push([k, l + ': ' + (k === 'fFol' ? (state[k] === 'nk' ? 'Not known' : PP_SOCIAL.FOL_BANDS[+state[k]][2]) : k === 'fVer' ? { yes: 'Yes', blue: 'Blue check', gold: 'Organisation', grey: 'Government', no: 'No', nk: 'Not known' }[state[k]] : state[k] === 'nk' ? 'Not known' : state[k])]);
+  if (social) for (const [k, l] of [['fVer', 'Verified'], ['fFol', 'Followers'], ['fType', 'Type'], ['fCountry', 'Country']]) if (state[k] !== 'Any') active.push([k, l + ': ' + (k === 'fFol' ? (state[k] === 'nk' ? 'Not known' : PP_SOCIAL.FOL_BANDS[+state[k]][2]) : k === 'fVer' ? { real: 'Really verified', paid: 'Paid check', gold: 'Organisation', grey: 'Government', meta: 'Instagram/Facebook check', yes: 'Verified by the site', no: 'No check', nk: 'Not known' }[state[k]] : state[k] === 'nk' ? 'Not known' : state[k])]);
   if (state.fAcct) { const e = FCD.accts.get(state.fAcct); active.push(['fAcct', state.fAcct === '~' ? 'Account not found yet' : 'Account: ' + (e ? e.acct.handle : state.fAcct)]); }
   const shownOn = [...(state.fWhen !== 'any' ? [['fWhen', 'Found ' + WHEN[state.fWhen][0].toLowerCase()]] : []), ...(state.fMatch !== 'any' ? [['fMatch', state.fMatch[0].toUpperCase() + state.fMatch.slice(1) + ' match']] : []), ...(state.fFresh ? [['fFresh', 'Published in the last 3 months']] : []), ...active];
   const sel = (id, label, opts, cur) => `<label>${label}<select data-act="fsel" data-v="${id}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(cur) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`;
   const live = all.filter(c => c.status !== 'removed');
-  const countryList = [...new Set([...everything.map(c => c.country).filter(Boolean), 'Russia', 'China', 'Vietnam', 'India', 'Indonesia', 'Turkey', 'Brazil'])].filter(c => !FCD.countries.includes(c)).sort();
+  const countryList = [...new Set([...everything.map(c => c.country).filter(Boolean), ...Object.values(FC.COUNTRY)])].filter(c => !FCD.countries.includes(c)).sort();
+  const outList = [...new Set(everything.filter(c => countryOut(c) && c.status !== 'removed').map(c => c.country))];
   const recent = state.recentHides.filter(h => RS_LISTS.hidden.includes(h));
   const nNew = live.filter(c => c.status === 'new').length;
   const bigTabs = `<div class="bigtabs" role="tablist" aria-label="Websites or social media">${[['web', 'Websites', nWeb], ['social', 'Social media', nSoc]].map(([k, l, n]) => `<button role="tab" aria-selected="${state.fTab === k}" class="${state.fTab === k ? 'on' : ''}" data-act="ftab" data-v="${k}">${l} <span class="n num">${n}</span></button>`).join('')}</div>`;
@@ -688,9 +693,9 @@ V.found = async () => {
       ${sel('fCredit', 'Credit', [['Any', 'Any'], ['kept', 'Credits your client'], ['removed', 'Credit removed'], ['', 'Not checked yet']], state.fCredit)}
       <div class="countries">
         <span style="font-weight:600">Countries</span>
-        ${FCD.countries.length ? `<span class="faint">Hiding</span>${FCD.countries.map(c => `<button class="chip" style="cursor:pointer;text-decoration:line-through;text-decoration-color:var(--faint)" data-act="showcountry" data-v="${esc(c)}" title="Show ${esc(c)} again">${esc(c)} <span style="text-decoration:none">↺</span></button>`).join('')}` : '<span class="faint">Showing every country</span>'}
-        <select aria-label="Hide a country" data-act="hidecountrysel" class="chip" style="cursor:pointer;min-height:28px"><option value="">＋ Hide a country</option>${countryList.map(c => `<option>${esc(c)}</option>`).join('')}</select>
-        ${hiddenN ? `<span class="faint">${plural(hiddenN, 'copy', 'copies')} hidden by country</span>` : ''}
+        <span class="faint">Showing</span>${FCD.countries.map(c => `<button class="chip on" style="cursor:pointer" data-act="hidecountry" data-v="${esc(c)}" title="Stop showing copies from ${esc(c)}">${esc(c)} <span aria-hidden="true">✕</span></button>`).join('')}<span class="faint" title="Most sites (.com, .net, .org) don't say their country, so they always show.">+ country not known</span>
+        <select aria-label="Show another country" data-act="showcountrysel" class="chip" style="cursor:pointer;min-height:28px"><option value="">＋ Show a country</option>${[...outList.sort(), ...countryList.filter(c => !outList.includes(c))].map(c => `<option value="${esc(c)}">${esc(c)}${outList.includes(c) ? ' (has copies)' : ''}</option>`).join('')}</select>
+        ${hiddenN ? `<span class="faint">${plural(hiddenN, 'copy', 'copies')} from other countries not shown</span>` : ''}
         <a href="#hidden" style="font-weight:600;margin-left:auto">All hidden sites ›</a>
       </div></div>` : ''}
     ${shownOn.length ? `<div class="showing" role="status"><span>Showing <b class="num">${rows.length}</b> of <b class="num">${all.filter(c => passStatus(c)).length}</b> ${esc(state.fFilter === 'All' ? '' : state.fFilter.toLowerCase())} copies</span>${shownOn.map(([k, v]) => `<button class="stag" data-act="unfilter" data-v="${k}" title="Turn this filter off">${esc(v)} <span aria-hidden="true">✕</span></button>`).join('')}<button class="sclear" data-act="unfilter" data-v="all">Clear filters</button></div>` : ''}
@@ -1105,15 +1110,15 @@ Object.assign(ACTS, {
     toastUndo(v + ' shows again.'); render(true);
   },
   hidecountry: async v => {
-    const list = await FC.hiddenCountries();
-    if (!list.includes(v)) { await FC.setHiddenCountries([...list, v]); }
-    HIST.push({ label: v + ' hidden', undo: async () => FC.setHiddenCountries((await FC.hiddenCountries()).filter(x => x !== v)) });
-    dropFC(); state.open = ''; toastUndo('Copies on sites from ' + v + ' are hidden.'); render(true);
+    await FC.setShownCountries((await FC.shownCountries()).filter(x => x !== v));
+    HIST.push({ label: v + ' no longer shown', undo: async () => FC.setShownCountries([...(await FC.shownCountries()), v]) });
+    dropFC(); state.open = ''; toastUndo('Copies on sites from ' + v + ' no longer show.'); render(true);
   },
   showcountry: async v => {
-    await FC.setHiddenCountries((await FC.hiddenCountries()).filter(x => x !== v));
-    HIST.push({ label: v + ' shown again', undo: async () => FC.setHiddenCountries([...(await FC.hiddenCountries()), v]) });
-    dropFC(); toastUndo(v + ' shows again.'); render(true);
+    const list = await FC.shownCountries();
+    if (!list.includes(v)) await FC.setShownCountries([...list, v]);
+    HIST.push({ label: v + ' shown', undo: async () => FC.setShownCountries((await FC.shownCountries()).filter(x => x !== v)) });
+    dropFC(); toastUndo('Copies on sites from ' + v + ' show now.'); render(true);
   },
   putback: async () => { const c = FCD.copies.find(x => x.id === state.open); await answerCopies([state.open], 'new', (c ? c.site : 'Copy') + ' put back'); toastUndo('Put back as new.'); render(true); },
   changeans: async () => { const c = FCD.copies.find(x => x.id === state.open); await answerCopies([state.open], 'new', (c ? c.site : 'Copy') + ' answer cleared'); toastUndo('Answer cleared. Choose a new one.'); render(true); },
@@ -1191,7 +1196,7 @@ Object.assign(ACTS, {
   },
   fsel: (v, el) => { state[v] = el.value; state.more = 250; render(true); },
   fshop: (v, el) => { state.fShop = el.checked; render(true); },
-  hidecountrysel: (v, el) => el.value && ACTS.hidecountry(el.value),
+  showcountrysel: (v, el) => el.value && ACTS.showcountry(el.value),
   gowner: v => { state.ownerSel = v; location.hash = 'owners'; },
   gowho: v => { const c = FCD.copies.find(x => x.id === v); if (c) { state.who = { site: c.site, url: c.url, copy: c.id }; location.hash = 'who'; } },
   fcsv: async () => {

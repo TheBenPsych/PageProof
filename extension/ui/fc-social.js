@@ -2,7 +2,9 @@
 // them. Stolen, Hide, Approve and "stolen before" all work per account, the account is found
 // even when the link doesn't show it, and the live page preview gives way to "The post".
 // Loaded after ui/fc-found.js (uses its state, FCD, LIST, HIST, answers and toasts).
-Object.assign(state, { fTab: 'web', tabSaved: {}, fPlat: 'Any', fAcct: '', sView: 'copies', acctEdit: '', fVer: 'Any', fFol: 'Any', fType: 'Any', fCountry: 'Any', aSort: 'stolen' });
+Object.assign(state, { fTab: 'web', tabSaved: {}, fPlat: 'Any', fAcct: '', sView: 'copies', acctEdit: '', fVer: 'Any', fFol: 'Any', fType: 'Any', fCountry: 'Any', aSort: 'stolen', fGov: false });
+// 4.24 (Ben): government accounts are hidden unless "Show government" is on (remembered).
+api.storage.local.get('ppShowGov').then(st => { if (st && st.ppShowGov) state.fGov = true; }).catch(() => {});
 
 const isSoc = c => c.use === 'social';
 const inTab = c => (state.fTab === 'social') === isSoc(c);
@@ -70,7 +72,10 @@ async function socIndex(copies) {
 // Followers, verified, account type, country and owner company, read from the profile page in
 // your own browser by itself: once per account, again every 30 days, a failed read again after
 // 3 days. One account at a time while PageProof is open. Nothing to type in.
-const infoOf = c => (c && c.acct && FCD && FCD.acctInfo && FCD.acctInfo[c.acct.key]) || null;
+// 4.24: details read before the X fixes are not shown for X (they could be the viewer's own
+// followers and the site's footer); every account is read again once, the X ones first.
+const isXAcct = a => !!a && /^(x|twitter)\.com$/.test(a.plat || '');
+const infoOf = c => { const i = (c && c.acct && FCD && FCD.acctInfo && FCD.acctInfo[c.acct.key]) || null; return i && !i.v && isXAcct(c.acct) ? null : i; };
 const INFO_BUSY = new Set();
 async function readAcctInfo(acct) {
   if (!acct || INFO_BUSY.has(acct.key)) return null;
@@ -93,7 +98,7 @@ async function readAcctInfo(acct) {
     return all[acct.key];
   } finally { INFO_BUSY.delete(acct.key); }
 }
-const infoDue = i => !i || (i.ok ? Date.now() - Date.parse(i.at) > 30 * 864e5 && (!i.failAt || Date.now() - Date.parse(i.failAt) > 3 * 864e5) : Date.now() - Date.parse(i.failAt || i.at || 0) > 3 * 864e5);
+const infoDue = i => !i || (i.ok && !i.v) || (i.ok ? Date.now() - Date.parse(i.at) > 30 * 864e5 && (!i.failAt || Date.now() - Date.parse(i.failAt) > 3 * 864e5) : Date.now() - Date.parse(i.failAt || i.at || 0) > 3 * 864e5);
 let infoQueueOn = false;
 async function infoQueue() {
   if (infoQueueOn || !FCD) return;
@@ -106,7 +111,7 @@ async function infoQueue() {
       const info = FCD.acctInfo || {};
       // Accounts with new copies first, then the rest; each account once.
       const todo = [...FCD.accts.values()].filter(e => e.copies.length && !INFO_BUSY.has(e.key) && infoDue(info[e.key]))
-        .sort((a, b) => b.copies.filter(x => x.status === 'new').length - a.copies.filter(x => x.status === 'new').length)[0];
+        .sort((a, b) => (isXAcct(b.acct) && info[b.key] && !info[b.key].v ? 1 : 0) - (isXAcct(a.acct) && info[a.key] && !info[a.key].v ? 1 : 0) || b.copies.filter(x => x.status === 'new').length - a.copies.filter(x => x.status === 'new').length)[0];
       if (!todo) break;
       await readAcctInfo(todo.acct).catch(() => null);
       socRedrawSoon();
@@ -115,13 +120,29 @@ async function infoQueue() {
   } finally { infoQueueOn = false; }
 }
 // The filters on the Social media tab: Verified, Followers, Account type, Country.
-const TYPES = ['Business', 'Creator', 'Organisation', 'News or media', 'Fan page', 'Group', 'Person'];
-const verOf = c => { const i = infoOf(c); return !i || !i.ok || !i.verified ? 'nk' : i.verified; };
+const TYPES = ['Business', 'Creator', 'Organisation', 'Government', 'News or media', 'Fan page', 'Group', 'Person'];
+// Kinds of check (4.24, Ben): paid = X blue / Meta Verified; gold = organisation X verified;
+// grey = government; meta = Instagram/Facebook check (paid or earned look the same); yes = the
+// site gave it (TikTok, YouTube...). 'blue' is the old single kind, read before 4.24.
+const verOf = c => { const i = infoOf(c); if (!i || !i.ok || !i.verified) return 'nk'; return i.verified === 'blue' ? (isXAcct(c.acct) ? 'paid' : 'yes') : i.verified; };
+const REAL_V = ['gold', 'grey', 'yes'];
+// The check mark drawn the way the site draws it: a scalloped seal, coloured by kind.
+const SEAL = (() => { let d = ''; for (let k = 0; k < 24; k++) { const a = Math.PI * 2 * k / 24 - Math.PI / 2, r = k % 2 ? 8.2 : 10; d += (k ? 'L' : 'M') + (12 + r * Math.cos(a)).toFixed(2) + ' ' + (12 + r * Math.sin(a)).toFixed(2); } return d + 'Z'; })();
+const V_KIND = {
+  paid: ['#1D9BF0', 'Paid check', 'Paid check (X Premium blue check or Meta Verified). Anyone can buy it, so it is not real verification.'],
+  gold: ['#E2A90F', 'Verified organisation', 'Gold check: an organisation verified by X. Real verification.'],
+  grey: ['#829AAB', 'Government', 'Grey check: a government or official account.'],
+  meta: ['#0095F6', 'Meta check', 'Instagram and Facebook show the same check for paid Meta Verified and earned verification.'],
+  yes: ['#20D5EC', 'Verified', 'Verified by the site itself (not bought).'],
+};
+const vIcon = (k, size = 15) => { const v = V_KIND[k]; if (!v) return ''; return `<svg class="vseal" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true"><path d="${SEAL}" fill="${v[0]}"/><path d="M7.6 12.3l3 3 5.8-6.4" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`; };
+const vBadge = k => V_KIND[k] ? `<span class="vchk v-${k}" title="${esc(V_KIND[k][2])}">${vIcon(k)}${esc(V_KIND[k][1])}</span>` : '';
 const typeOf = c => { const i = infoOf(c); return i && i.ok && i.type ? i.type : 'nk'; };
 const countryOfAcct = c => { const i = infoOf(c); return i && i.country ? i.country : 'nk'; };
 const folOf = c => { const i = infoOf(c); return i && i.ok ? i.followers : null; };
 function passAcct(c) {
-  if (state.fVer !== 'Any') { const v = verOf(c); if (state.fVer === 'yes' ? !['blue', 'gold', 'grey'].includes(v) : v !== state.fVer) return false; }
+  if (state.fVer !== 'Any') { const v = verOf(c); if (state.fVer === 'real' ? !REAL_V.includes(v) : v !== state.fVer) return false; }
+  if (!state.fGov && state.fType !== 'Government' && typeOf(c) === 'Government') return false;
   if (state.fFol !== 'Any' && PP_SOCIAL.folBand(folOf(c)) !== state.fFol) return false;
   if (state.fType !== 'Any' && typeOf(c) !== state.fType) return false;
   if (state.fCountry !== 'Any' && countryOfAcct(c) !== state.fCountry) return false;
@@ -134,18 +155,19 @@ function acctFilterLine(dd, xs) {
   const countries = [...new Set(xs.map(countryOfAcct).filter(x => x !== 'nk'))].sort();
   const busy = FCD && FCD.accts ? [...FCD.accts.values()].filter(e => e.copies.length && !(FCD.acctInfo || {})[e.key]).length : 0;
   return `<div class="acctfilters" aria-label="Account filters">
-    ${dd('fVer', 'Verified', [['Any', 'Any'], ['yes', 'Verified (any check)', n('fVer', c => ['blue', 'gold', 'grey'].includes(verOf(c))) + ' copies'], ['blue', 'Blue check', n('fVer', c => verOf(c) === 'blue') + ''], ['gold', 'Organisation (gold check)', n('fVer', c => verOf(c) === 'gold') + ''], ['grey', 'Government (grey check)', n('fVer', c => verOf(c) === 'grey') + ''], ['no', 'Not verified', n('fVer', c => verOf(c) === 'no') + ''], ['nk', 'Not known', n('fVer', c => verOf(c) === 'nk') + '']], state.fVer, false, 'Any')}
+    ${dd('fVer', 'Verified', [['Any', 'Any'], ['real', 'Really verified (not bought)', n('fVer', c => REAL_V.includes(verOf(c))) + ' copies'], ['paid', 'Paid check (X blue, Meta Verified)', n('fVer', c => verOf(c) === 'paid') + ''], ['gold', 'Organisation (X gold check)', n('fVer', c => verOf(c) === 'gold') + ''], ['grey', 'Government (grey check)', n('fVer', c => verOf(c) === 'grey') + ''], ['meta', 'Instagram/Facebook check', n('fVer', c => verOf(c) === 'meta') + ''], ['yes', 'Verified by the site', n('fVer', c => verOf(c) === 'yes') + ''], ['no', 'No check', n('fVer', c => verOf(c) === 'no') + ''], ['nk', 'Not known', n('fVer', c => verOf(c) === 'nk') + '']], state.fVer, false, 'Any')}
     ${dd('fFol', 'Followers', [['Any', 'Any'], ...PP_SOCIAL.FOL_BANDS.map(([, , l], i) => [String(i), l, n('fFol', c => PP_SOCIAL.folBand(folOf(c)) === String(i)) + '']), ['nk', 'Not known', n('fFol', c => folOf(c) == null) + '']], state.fFol, false, 'Any')}
     ${dd('fType', 'Account type', [['Any', 'Any'], ...TYPES.map(t => [t, t, n('fType', c => typeOf(c) === t) + '']), ['nk', 'Not known', n('fType', c => typeOf(c) === 'nk') + '']], state.fType, false, 'Any')}
     ${dd('fCountry', 'Country', [['Any', 'Any'], ...countries.map(t => [t, t, n('fCountry', c => countryOfAcct(c) === t) + '']), ['nk', 'Not known', n('fCountry', c => countryOfAcct(c) === 'nk') + '']], state.fCountry, false, 'Any')}
+    ${(() => { const g = xs.filter(c => typeOf(c) === 'Government').length; return state.fType === 'Government' ? '' : `<label class="chip" style="cursor:pointer;gap:6px" title="People and offices in government, and anyone running for office. Hidden unless you tick this."><input type="checkbox" data-act="fgov" ${state.fGov ? 'checked' : ''}> Show government${g ? ` <span class="faint">(${g} ${state.fGov ? 'shown' : 'hidden'})</span>` : ''}</label>`; })()}
     ${busy ? `<span class="faint" style="font-size:12.5px">${plural(busy, 'account')} still being read</span>` : ''}</div>`;
 }
 // The little badges on a row: check mark, followers, type, company.
 function acctBadges(c) {
   const i = infoOf(c);
   if (!i || !i.ok) return '';
-  const v = { blue: '<span class="vchk" title="Verified">✓ Verified</span>', gold: '<span class="vchk gold" title="Verified organisation">✓ Organisation</span>', grey: '<span class="vchk grey" title="Verified government account">✓ Government</span>' }[i.verified] || '';
-  const t = i.type && !(i.type === 'Organisation' && (i.verified === 'gold' || i.verified === 'grey')) ? `<span class="atype${i.type === 'Business' || i.type === 'Organisation' ? ' biz' : ''}${i.typeSure === 'guess' ? ' guess' : ''}" title="${esc(i.typeSure === 'guess' ? 'A guess from: ' + (i.signs || []).join(', ') : 'Read from the profile' + (i.category ? ': ' + i.category : ''))}">${esc(i.type)}${i.typeSure === 'guess' ? ' (guess)' : ''}</span>` : '';
+  const vk = verOf(c), v = vBadge(vk);
+  const t = i.type && !(i.type === 'Organisation' && vk === 'gold') && !(i.type === 'Government' && vk === 'grey') ? `<span class="atype${i.type === 'Business' || i.type === 'Organisation' ? ' biz' : i.type === 'Government' ? ' gov' : ''}${i.typeSure === 'guess' ? ' guess' : ''}" title="${esc(i.type === 'Government' && i.gov ? 'Government, going by ' + i.gov + '. Hidden unless Show government is on.' : i.typeSure === 'guess' ? 'A guess from: ' + (i.signs || []).join(', ') : 'Read from the profile' + (i.category ? ': ' + i.category : ''))}">${esc(i.type)}${i.typeSure === 'guess' ? ' (guess)' : ''}</span>` : '';
   const f = i.followers != null ? `<span class="afol num" title="${esc(i.followers.toLocaleString() + ' ' + i.fw + ' on ' + shortDate(i.at))}">${PP_SOCIAL.shortNum(i.followers)} ${esc(i.fw)}</span>` : '';
   const co = i.company ? `<span class="aco" title="Company named on the account">${esc(i.company)}</span>` : '';
   return v + t + f + co;
@@ -158,8 +180,10 @@ function acctAbout(c) {
   const enc = encodeURIComponent;
   const rows = [];
   if (i.followers != null) rows.push(['Followers', i.followers.toLocaleString() + ' ' + i.fw]);
-  rows.push(['Verified', { blue: 'Yes, blue check', gold: 'Yes, organisation (gold check)', grey: 'Yes, government (grey check)', no: 'No' }[i.verified] || 'Not known']);
+  const vk = verOf(c);
+  rows.push(['Verified', vk === 'no' ? 'No check' : vk === 'nk' ? 'Not known' : V_KIND[vk][1] + '. ' + V_KIND[vk][2], vk]);
   rows.push(['Account type', i.type ? i.type + (i.typeSure === 'guess' ? ' (a guess)' : '') + (i.category ? ' · ' + i.category : '') : 'Not known']);
+  if (i.type === 'Government' && i.gov) rows.push(['Why government', 'Going by ' + i.gov]);
   if (i.signs && i.signs.length) rows.push(['Business signs', i.signs.join(', ')]);
   if (i.company) rows.push(['Company', i.company + (i.address ? '\n' + i.address : '')]);
   if (i.country) rows.push(['Based in', i.country]);
@@ -171,7 +195,7 @@ function acctAbout(c) {
   const st = (/,\s*([A-Z]{2})\s+\d{5}/.exec(i.address || '') || [])[1];
   const look = i.company ? [['State business register', 'https://opencorporates.com/companies' + (st ? '/us_' + st.toLowerCase() : '') + '?q=' + enc(i.company.replace(/,?\s(LLC|L\.L\.C\.|Inc\.?|Corp\.?|Ltd\.?|Co\.)$/i, ''))], ['USPTO trademarks', 'https://tmsearch.uspto.gov/search/search-results?query=' + enc(i.company.replace(/,?\s(LLC|L\.L\.C\.|Inc\.?|Corp\.?|Ltd\.?|Co\.)$/i, ''))], ['Google', 'https://www.google.com/search?q=' + enc('"' + i.company + '"')]] : [];
   return `<section class="dsec" id="acctabout"><div class="row" style="justify-content:space-between;gap:8px"><div class="dsh" style="margin:0">About this account</div><span class="faint" style="font-size:12px">${i.ok ? 'Read ' + esc(shortDate(i.at)) : 'Couldn\'t read the profile'}${i.failAt && i.ok ? ' · last try failed' : ''}</span></div>
-    ${i.ok ? `<dl class="facts">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd style="white-space:pre-line;overflow-wrap:anywhere">${esc(v)}</dd>`).join('')}</dl>` : `<span class="faint" style="font-size:13px">${esc(platOf(c).name)} didn't show the profile. PageProof tries again by itself in 3 days.</span>`}
+    ${i.ok ? `<dl class="facts">${rows.map(([k, v, ic]) => `<dt>${esc(k)}</dt><dd style="white-space:pre-line;overflow-wrap:anywhere">${ic ? vIcon(ic, 16) + ' ' : ''}${esc(v)}</dd>`).join('')}</dl>` : `<span class="faint" style="font-size:13px">${esc(platOf(c).name)} didn't show the profile. PageProof tries again by itself in 3 days.</span>`}
     ${look.length ? `<div class="row" style="gap:6px;flex-wrap:wrap"><span class="muted" style="font-size:12.5px">Who's behind ${esc(i.company)}:</span>${look.map(([l, u]) => `<a class="chip" href="${safeUrl(u)}" target="_blank" rel="noreferrer">${esc(l)}</a>`).join('')}</div>` : ''}
     <div><button class="btn ghost sm" data-act="readinfo" data-v="${esc(c.id)}"${busy ? ' disabled data-why="Already reading this account. Wait a moment."' : ''}>${busy ? 'Reading…' : 'Read again now'}</button></div></section>`;
 }
@@ -350,7 +374,7 @@ function accountsView(rows) {
     const st = (FCD.stolenBy.get(e.k) || []).length, others = [...e.keys].filter(k => k !== a.key);
     const linked = (FCD.acctLinks.find(g => g.includes(a.key)) || []).filter(k => k !== a.key && !e.keys.has(k));
     const clients = [...new Set(e.xs.map(x => x.clientName).filter(Boolean))];
-    const i = infoOf(first), vt = i && i.ok ? { blue: '<span class="vchk">✓</span>', gold: '<span class="vchk gold">✓ Org</span>', grey: '<span class="vchk grey">✓ Gov</span>', no: '<span class="faint">No</span>' }[i.verified] || '<span class="faint">?</span>' : '<span class="faint">?</span>';
+    const i = infoOf(first), vk = verOf(first), vt = V_KIND[vk] ? `<span title="${esc(V_KIND[vk][1] + ': ' + V_KIND[vk][2])}">${vIcon(vk, 17)}</span>` : vk === 'no' ? '<span class="faint">No</span>' : '<span class="faint">?</span>';
     const status = allowed(a.key) ? '<span class="tag ok">Approved</span>' : st ? '<span class="tag bad">Known stolen</span>' : '<span class="tag grey">Watching</span>';
     return `<tr class="arow" data-act="acctonly" data-v="${esc(a.key)}"><td>${platBadge(first)} <b>${esc(a.handle)}</b>${others.length || linked.length ? ` <span class="faint" style="font-size:12px">+ ${esc([...others, ...linked].map(k => (FCD.accts.get(k) || { acct: { handle: k } }).acct.handle + ' on ' + PP_SOCIAL.platform((FCD.accts.get(k) || {}).site || k.split('/')[0]).name).join(', '))}</span>` : ''}</td>
       <td class="num">${i && i.ok && i.followers != null ? PP_SOCIAL.shortNum(i.followers) : '<span class="faint">?</span>'}</td><td>${vt}</td><td>${i && i.ok && i.type ? esc(i.type) + (i.typeSure === 'guess' ? ' <span class="faint">(guess)</span>' : '') : '<span class="faint">Not known</span>'}${i && i.company ? '<br><span class="faint" style="font-size:12px">' + esc(i.company) + '</span>' : ''}</td><td>${i && i.country ? esc(i.country) : '<span class="faint">?</span>'}</td>
@@ -375,6 +399,7 @@ function socAskBanner(copies) {
 }
 
 Object.assign(ACTS, {
+  fgov: async (v, el) => { state.fGov = !!(el && el.checked); await api.storage.local.set({ ppShowGov: state.fGov }).catch(() => {}); render(true); },
   ftab: v => { switchTab(v); render(true); },
   readinfo: async v => {
     const c = FCD.copies.find(x => x.id === v);

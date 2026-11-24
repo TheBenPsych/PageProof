@@ -13,7 +13,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   // answer + undo + weekly counts + rejected list
   const r = await page.evaluate(async () => {
     await RS_LISTS.load(); await loadFC();
-    const news = FCD.copies.filter(c => c.status === 'new');
+    const news = FCD.copies.filter(c => c.status === 'new' && visible(c));   // 4.24: copies from countries not shown aren't counted
     const n0 = await FC.countNew(), rej0 = RS_REJECT.items.length;
     const ids = news.slice(0, 20).map(c => c.id);
     const h = await answerCopies(ids, 'removed', 'x');

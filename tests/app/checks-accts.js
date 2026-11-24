@@ -34,7 +34,12 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
       fb: S.profileFacts(fb, [{ kind: 'profile', text: 'Harbor Light Outfitters\n48K likes • 52K followers\nPage · Clothing store\n', data: [], badge: ['Verified account'], links: ['https://l.facebook.com/l.php?u=https%3A%2F%2Fharborlight.example%2F'], buttons: ['Shop now'] },
         { kind: 'transparency', text: 'Page transparency\nConfirmed Page owner\nHarbor Light Outfitters LLC\n12 Pier St, Portland, ME 04101\nPage created - March 4, 2015\nPrimary country/region location for people who manage this Page\nUnited States (3)\n' }]),
       fan: S.profileFacts(fan, [{ kind: 'profile', text: 'Coastal Sunsets Fans\n3.1K followers\nPage · Fan Page\n', data: [] }]),
-      xo: S.profileFacts(xo, [{ kind: 'profile', text: 'Daily Example News\n1.4M Followers', data: [['verified_type', '"Business"'], ['followers_count', '1450000']] }, { kind: 'transparency', text: 'About this account\nAccount based in\nCanada\n' }]),
+      xo: S.profileFacts(xo, [{ kind: 'profile', text: 'Daily Example News\n1.4M Followers', data: [['verified_type', '"Business"'], ['followers_count', '1450000']], x: { name: 'Daily Example News', check: 'gold', followers: '1.4M Followers', bio: 'News all day' } }, { kind: 'transparency', text: 'About this account\nAccount based in\nCanada\n' }]),
+      // 4.24 (Ben's screenshots): X's page data is the viewer's (0 followers, a check) and its
+      // footer says "© 2026 X Corp." Neither may end up on the account.
+      xs: S.profileFacts(S.fromUrl('https://x.com/ExampleRep'), [{ kind: 'profile', text: 'Pat Example\n@ExampleRep\nTerms of Service\n© 2026 X Corp.', data: [['followers_count', '0'], ['is_blue_verified', 'true']], x: { name: 'Pat Example', check: 'blue', followers: '1M Followers', bio: 'Mom | NY99 Congresswoman | Author', url: 'https://linktr.ee/example' } }, { kind: 'transparency', text: 'About this account\n© 2026 X Corp.', data: [['followers_count', '0']] }]),
+      xc: S.profileFacts(S.fromUrl('https://x.com/examplecouncil'), [{ kind: 'profile', text: '© 2026 X Corp.', data: [['followers_count', '0'], ['verified', 'true']], x: { name: 'Sam Example', check: '', followers: '12.6K Followers', category: 'Media Personality', bio: 'From radio to City Hall | Staten Island', url: 'https://sampleforcouncil.example' } }]),
+      xp: S.profileFacts(S.fromUrl('https://x.com/plainperson'), [{ kind: 'profile', text: '', data: [], x: { name: 'Plain Person', check: 'blue', followers: '830 Followers', bio: 'Photos of the coast' } }]),
       grp: S.profileFacts(grp, [{ kind: 'profile', text: 'Shore Photo Swap\nPublic group · 12.4K members', data: [] }]),
       // No category shown: the automatic business check adds up the signs.
       guess: S.addShopSign(S.profileFacts(guess, [{ kind: 'profile', desc: '2,100 Followers - Seaside Goods (@seaside.goods)', text: '', data: [['biography', '"Handmade home decor. hello@seaside.example"'], ['is_business_account', 'null']], links: ['https://seasidegoods.example/'], buttons: [] }]), { ok: true, sells: { cart: true } }),
@@ -45,10 +50,13 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(/facebook\.com\/harborlightoutfitters\/about_profile_transparency/.test(unit.pages) && /x\.com\/DailyExNews\/about/.test(unit.pages), 'Facebook Page transparency and X "About this account" are read too');
   ok(unit.ig.followers === 9812 && unit.ig.verified === 'no' && unit.ig.type === 'Business' && unit.ig.typeSure === 'sure' && unit.ig.country === 'United States' && unit.ig.created === 'March 2019' && unit.ig.oldNames[0] === '@pinecrest_old',
     'Instagram: followers, not verified, Business (Bakery), based in, date joined, old names');
-  ok(unit.fb.followers === 52000 && unit.fb.verified === 'blue' && unit.fb.company === 'Harbor Light Outfitters LLC' && /ME 04101/.test(unit.fb.address) && unit.fb.country === 'United States' && unit.fb.type === 'Business' && unit.fb.website === 'https://harborlight.example/',
+  ok(unit.fb.followers === 52000 && unit.fb.verified === 'meta' && unit.fb.company === 'Harbor Light Outfitters LLC' && /ME 04101/.test(unit.fb.address) && unit.fb.country === 'United States' && unit.fb.type === 'Business' && unit.fb.website === 'https://harborlight.example/',
     'Facebook: followers (not likes), check mark, owner company and address from Page transparency, country, website');
   ok(unit.fan.type === 'Fan page' && unit.grp.type === 'Group' && unit.grp.fw === 'members' && unit.grp.followers === 12400, 'Facebook fan page and group are told apart (' + unit.fan.type + ', ' + unit.grp.type + ' ' + unit.grp.followers + ' ' + unit.grp.fw + ')');
-  ok(unit.xo.verified === 'gold' && unit.xo.type === 'Organisation' && unit.xo.followers === 1450000 && unit.xo.country === 'Canada', 'X: gold check = Organisation, followers, based in');
+  ok(unit.xo.verified === 'gold' && unit.xo.type === 'Organisation' && unit.xo.followers === 1400000 && unit.xo.country === 'Canada', 'X: gold check = Organisation, followers, based in');
+  ok(unit.xs.followers === 1000000 && unit.xs.verified === 'paid' && unit.xs.type === 'Government' && !unit.xs.company, 'X: followers from the profile not the viewer, blue check = Paid, Congresswoman = Government, no "X Corp." company (' + [unit.xs.followers, unit.xs.verified, unit.xs.type, unit.xs.company].join(' / ') + ')');
+  ok(unit.xc.followers === 12600 && unit.xc.verified === 'no' && unit.xc.type === 'Government' && /forcouncil/.test(unit.xc.gov), 'X: no check stays No, a "for council" website = Government (' + [unit.xc.followers, unit.xc.verified, unit.xc.type, unit.xc.gov].join(' / ') + ')');
+  ok(unit.xp.verified === 'paid' && unit.xp.type !== 'Government' && unit.xp.followers === 830, 'X: an ordinary paid-check account is not Government');
   ok(unit.guess.type === 'Business' && unit.guess.typeSure === 'guess' && unit.guess.signs.length >= 3 && unit.guess.signs.includes('its website sells things'), 'No category: the business check adds up the signs (' + unit.guess.signs.join('; ') + ')');
   ok(!unit.nothing.ok && unit.nothing.type === '' && unit.nothing.verified === '' && unit.nothing.followers == null, 'A login wall gives "Not known", never a guess');
 
@@ -73,7 +81,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
       'facebook.com/harborlightoutfitters': [{ kind: 'profile', text: 'Harbor Light Outfitters\n52K followers\nPage · Clothing store\n', data: [], badge: ['Verified'], buttons: ['Shop now'] }, { kind: 'transparency', text: 'Confirmed Page owner\nHarbor Light Outfitters LLC\n12 Pier St, Portland, ME 04101\nPrimary country/region location for people who manage this Page\nUnited States (3)\n' }],
       'facebook.com/coastalsunsetsfans': [{ kind: 'profile', text: 'Coastal Sunsets Fans\n3.1K followers\nPage · Fan Page\n', data: [] }],
       'instagram.com/pinecrest.bakery': [{ kind: 'profile', desc: '9,812 Followers, 300 Following', text: '', data: [['is_business_account', 'true'], ['category_name', '"Bakery"'], ['is_verified', 'false']] }],
-      'x.com/dailyexnews': [{ kind: 'profile', text: '', data: [['verified_type', '"Business"'], ['followers_count', '1450000']] }, { kind: 'transparency', text: 'Account based in\nCanada\n' }],
+      'x.com/dailyexnews': [{ kind: 'profile', text: '', data: [['verified_type', '"Business"'], ['followers_count', '1450000']], x: { name: 'Daily Example News', check: 'gold', followers: '1.4M Followers' } }, { kind: 'transparency', text: 'Account based in\nCanada\n' }],
       'tiktok.com/@quickclips': [{ kind: 'profile', text: 'Log in', data: [] }],
     };
     window.READS = window.READS || [];
@@ -100,8 +108,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
 
   await page.evaluate(() => { FCD = null; return render(true); }); await page.waitForTimeout(700);
   const rows = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll('.crow')].map(r => [r.dataset.v, r.textContent.replace(/\s+/g, ' ')])));
-  ok(/✓ Verified/.test(rows.a1 || '') && /Business/.test(rows.a1) && /52k followers/.test(rows.a1) && /Harbor Light Outfitters LLC/.test(rows.a1), 'A row shows the check mark, type, followers and company (' + (rows.a1 || '').slice(0, 160) + ')');
-  ok(/✓ Organisation/.test(rows.a4 || '') && /1\.5M followers|1\.4M followers/.test(rows.a4), 'X organisation row: gold check and followers');
+  ok(/Meta check/.test(rows.a1 || '') && /Business/.test(rows.a1) && /52k followers/.test(rows.a1) && /Harbor Light Outfitters LLC/.test(rows.a1), 'A row shows the check mark, type, followers and company (' + (rows.a1 || '').slice(0, 160) + ')');
+  ok(/Verified organisation/.test(rows.a4 || '') && /1\.4M followers/.test(rows.a4), 'X organisation row: gold check and followers');
   const dds = await page.evaluate(() => [...document.querySelectorAll('.acctfilters summary')].map(s => s.textContent.replace(/\s+/g, ' ').trim()));
   ok(dds.length === 4 && /^Verified/.test(dds[0]) && /^Followers/.test(dds[1]) && /^Account type/.test(dds[2]) && /^Country/.test(dds[3]), 'Four account filters on the Social media tab (' + dds.join(' | ') + ')');
   await shot('410-social');
@@ -111,7 +119,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok((await pick('fType', 'Fan page')) === 'a2', 'Account type: Fan page');
   ok((await pick('fType', 'nk')) === 'a5', 'Account type: Not known (the profile that didn\'t show)');
   await pick('fType', 'Any');
-  ok((await pick('fVer', 'yes')) === 'a1,a4', 'Verified: any check');
+  ok((await pick('fVer', 'real')) === 'a4', 'Verified: really verified (the gold check, not the Meta check)');
+  ok((await pick('fVer', 'meta')) === 'a1', 'Verified: Instagram/Facebook check');
   ok((await pick('fVer', 'no')) === 'a3', 'Verified: not verified');
   await pick('fVer', 'Any');
   ok((await pick('fFol', '1')) === 'a2,a3', 'Followers 1k–10k');

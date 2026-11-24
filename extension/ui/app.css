@@ -888,6 +888,10 @@ table.accts tr.arow:hover{background:var(--sunk)}
 /* 4.10: account details on social rows, the account filter line, Accounts list sorting */
 .vchk{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;font-weight:700;padding:0 7px;border-radius:99px;border:1px solid currentColor;color:var(--accent);line-height:18px;white-space:nowrap}
 .vchk.gold{color:var(--warn)}.vchk.grey{color:var(--muted)}
+.vseal{flex:none;vertical-align:-3px}.vchk .vseal{margin-left:-3px}
+.vchk.v-paid{color:#1A8CD8}.vchk.v-gold{color:#B7791F}.vchk.v-grey{color:#6B8394}.vchk.v-meta{color:#0081D6}.vchk.v-yes{color:var(--accent)}
+:root[data-theme="dark"] .vchk.v-paid{color:#4CB3F5}:root[data-theme="dark"] .vchk.v-gold{color:#F2C94C}:root[data-theme="dark"] .vchk.v-grey{color:#A9BCC9}
+.atype.gov{color:var(--bad);border-color:currentColor}
 .atype{font-size:11.5px;padding:0 8px;border-radius:99px;border:1px solid var(--line);background:var(--sunk);color:var(--muted);line-height:18px;white-space:nowrap}
 .atype.biz{color:var(--ok);border-color:currentColor;background:transparent;font-weight:600}
 .atype.guess{border-style:dashed}

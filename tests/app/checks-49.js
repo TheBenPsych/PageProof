@@ -118,7 +118,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   // 4.15 (Ben's pick 11): copies marked Stolen are never hidden by a hidden account or site.
   ok(await page.evaluate(async () => !FC.hiddenCopy(await FC.DB.get('copies', 's1'), RS_LISTS.hidden) && (await FC.DB.get('copies', 's1')).status === 'stolen'), 'Its Stolen post stays in your list (Stolen copies are never hidden)');
   const n = await page.evaluate(() => FC.countNew());
-  const nVis = await page.evaluate(async () => (await FC.allCopies()).filter(c => c.status === 'new' && !FC.hiddenCopy(c, RS_LISTS.hidden) && !FCD.countries.includes(c.country)).length);
+  const nVis = await page.evaluate(async () => (await FC.allCopies()).filter(c => c.status === 'new' && !FC.hiddenCopy(c, RS_LISTS.hidden) && !countryOut(c)).length);
   ok(n === nVis, 'The new-copies number leaves out hidden accounts (' + n + ' = ' + nVis + ')');
   const choices = await page.evaluate(() => hideChoices(FCD.copies.find(c => c.id === 's5')).map(x => x[1]));
   ok(choices.length === 1 && choices[0] === 'Hide @quickclips', 'Hide choices on a social post: only the account (' + choices.join(' | ') + ')');
