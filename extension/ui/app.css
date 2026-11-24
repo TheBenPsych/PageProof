@@ -1007,3 +1007,6 @@ body.framed .statusline{position:static}
 .toast{bottom:calc(52px + env(safe-area-inset-bottom,0px))}
 .banner.warn{background:var(--warn-soft);color:var(--ink);border:1px solid color-mix(in srgb,var(--warn) 45%,var(--line))}
 a.banner{text-decoration:none}
+
+.ahandle{font-size:12px;font-weight:400;color:var(--faint);overflow-wrap:anywhere}
+h2 .ahandle{font-size:13px}

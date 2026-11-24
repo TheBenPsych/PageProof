@@ -337,7 +337,7 @@ const PP_SOCIAL = (() => {
     if (!acct || !acct.url) return [];
     const out = [{ url: acct.url, kind: 'profile', click: acct.plat === 'instagram.com' ? 'ig-about' : '' }];
     if (acct.plat === 'facebook.com' && !/\/groups\//.test(acct.url)) {
-      const id = /\/id\.(\d+)$/.exec(acct.key || '');
+      const id = /(?:^|\/)(?:id\.)?(\d{6,})$/.exec(acct.key || '');
       out.push({ url: id ? 'https://www.facebook.com/profile.php?id=' + id[1] + '&sk=about_profile_transparency' : acct.url.replace(/\/+$/, '') + '/about_profile_transparency', kind: 'transparency' });
     }
     if (acct.plat === 'x.com' || acct.plat === 'twitter.com') out.push({ url: 'https://x.com/' + bareName(acct) + '/about', kind: 'transparency' });
@@ -391,7 +391,9 @@ const PP_SOCIAL = (() => {
       if (fl) x.followers = (fl.innerText || '').trim();
       x.labels = [...document.querySelectorAll('[data-testid="primaryColumn"] [aria-label*="government" i], [data-testid="primaryColumn"] [aria-label*="official" i], [data-testid="primaryColumn"] [aria-label*="label" i]')].map(e => e.getAttribute('aria-label')).slice(0, 6).join(' · ');
     }
-    return { url: location.href, title: document.title, desc: meta('og:description') || meta('description'), ogTitle: meta('og:title'), text: (document.body ? document.body.innerText : '').slice(0, 30000), about, data, badge, links, buttons, x };
+    // 4.24: the profile's own name as the page shows it (Facebook, YouTube...): the big heading.
+    const h1 = [...document.querySelectorAll('[role="main"] h1, #page-header h1, ytd-channel-name #text, h1')].map(e => (e.innerText || e.textContent || '').split('\n')[0].trim()).find(t => t && t.length <= 80 && !/^(notifications|facebook|youtube|home|chats|menu)$/i.test(t)) || '';
+    return { h1, url: location.href, title: document.title, desc: meta('og:description') || meta('description'), ogTitle: meta('og:title'), text: (document.body ? document.body.innerText : '').slice(0, 30000), about, data, badge, links, buttons, x };
   }
 
   // ---------- quiet lookup tabs (4.20, Ben) ----------
@@ -469,6 +471,18 @@ const PP_SOCIAL = (() => {
   const noCopyright = t => String(t || '').split('\n').filter(l => !/©|\(c\)\s*\d{4}|all rights reserved/i.test(l)).join('\n');
   const CAT_ORG = /non-?profit|government|charity|organi[sz]ation|school|university|college|church|religious|political|public (&|and) government/i;
   const WEB_SKIP = /(^|\.)(facebook|fb|instagram|threads|x|twitter|tiktok|youtube|youtu|pinterest|linkedin|snapchat|reddit|tumblr|google|apple|whatsapp|wa|meta|messenger|bit|t|lnkd|about|help|play|apps|microsoft|cdninstagram|fbcdn|twimg|ytimg|gstatic|w3|schema|tiktokcdn)\.[a-z.]+$/i;
+  // "Boston, MA, United States" -> United States; "Austin, Texas" -> United States; else ''.
+  const US_STATES = /^(A[LKZR]|C[AOT]|D[EC]|FL|GA|HI|I[DLNA]|K[SY]|LA|M[EDAINSOT]|N[EVHJMYCD]|O[HKR]|PA|PR|RI|S[CD]|T[NX]|UT|V[TA]|W[AVIY]|Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming|District of Columbia)$/;
+  function placeCountry(line) {
+    const parts = String(line || '').split(',').map(x => x.trim()).filter(Boolean);
+    if (parts.length < 2 || parts.length > 4 || line.length > 70) return '';
+    const last = parts[parts.length - 1];
+    if (/^(United States|USA|U\.S\.A?\.?|US)$/i.test(last)) return 'United States';
+    if (/^Puerto Rico$/i.test(last) || last === 'PR') return 'Puerto Rico';
+    if (US_STATES.test(last)) return 'United States';
+    const names = typeof FC !== 'undefined' && FC.COUNTRY ? Object.values(FC.COUNTRY) : [];
+    return names.includes(last) ? last : '';
+  }
   // Turns what the reader saw into plain facts. Unknown stays empty, never guessed as "no".
   function profileFacts(acct, pages) {
     const f = { ok: false, followers: null, fw: 'followers', verified: '', type: '', typeSure: '', category: '', company: '', address: '', country: '', created: '', oldNames: [], website: '', email: '', phone: '', signs: [], name: '' };
@@ -517,7 +531,8 @@ const PP_SOCIAL = (() => {
       else if (anyFalse) f.verified = 'no';
     }
     // Name, bio, category.
-    f.name = String((X && X.name) || dv('full_name') || prof.ogTitle || '').replace(/\s*[(•|].*$/, '').trim().slice(0, 80);
+    f.name = String((X && X.name) || dv('full_name') || prof.h1 || prof.ogTitle || '').replace(/\s*[(•|].*$/, '').replace(/\s+-\s+(YouTube|Facebook|TikTok)$/i, '').trim().slice(0, 80);
+    if (/^(log ?in|sign ?in|facebook|instagram|youtube|tiktok|x|error|page not found)$/i.test(f.name)) f.name = '';
     const bio = String((X && X.bio) || dv('biography') || dv('signature') || desc || '').slice(0, 600);
     f.category = String((X && X.category) || dv('business_category_name') || dv('category_name') || '').trim();
     if (!f.category && plat === 'facebook.com') { const m = /(?:^|\n)\s*(?:Page|Profile)\s*·\s*([^\n·]{2,40})/.exec(text); if (m) f.category = m[1].trim(); }
@@ -530,8 +545,14 @@ const PP_SOCIAL = (() => {
     if (SITE_CO.test(co)) co = '';
     f.company = co ? co : owner[0] && !/^(see|learn|more)\b/i.test(owner[0]) && /confirmed page owner/i.test(tr) ? owner[0] : '';
     f.address = owner.slice(1).find(l => /\d/.test(l) && /,/.test(l)) || '';
-    f.country = (after(/(?:Account based in|Based in|Primary country\/region location for people who manage this Page|Country\/region location for people who manage this Page|Country\/region)\s*:?\s*\n?\s*([^\n]{2,60})/i)[0] || '').replace(/\s*\(\d+\)$/, '').trim();
-    if (f.country && !/^[A-Z][A-Za-z .,'()&-]{1,59}$/.test(f.country)) f.country = '';
+    f.country = (after(/(?:Account based in|Based in|Primary country\/region location for people who manage this Page|Country\/region location for people who manage this Page|Country\/region)\s*(?:includes)?\s*:?\s*\n?\s*(?:includes:?\s*\n?\s*)?([^\n]{2,60})/i)[0] || '').replace(/\s*\(\d+\)$/, '').trim();
+    if (f.country && (!/^[A-Z][A-Za-z .,'()&-]{1,59}$/.test(f.country) || /^includes/i.test(f.country))) f.country = '';
+    // 4.24 (Ben): else the place on the profile ("Boston, MA, United States", "Lives in Austin, Texas").
+    if (!f.country) {
+      const det = /(?:^|\n)\s*(?:Details|Intro)\s*\n((?:.*\n?){1,6})/.exec(text);
+      const lines = det ? det[1].split('\n').map(l => l.replace(/^(Lives in|From|Based in)\s+/i, '').trim()) : [];
+      for (const l of lines) { const c = placeCountry(l); if (c) { f.country = c; f.place = l; break; } }
+    }
     const cm = /(?:Page created|Creation date|Date joined|Joined)\s*[-–:]?\s*\n?\s*([A-Z][a-z]+ \d{1,2}, \d{4}|[A-Z][a-z]+ \d{4})/.exec(tr) || /\bJoined ([A-Z][a-z]+ \d{4})\b/.exec(top);
     if (cm) f.created = cm[1];
     const old = /Former usernames?\s*\n((?:.*\n){1,4})/i.exec(tr);

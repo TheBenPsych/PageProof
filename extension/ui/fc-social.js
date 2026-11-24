@@ -7,6 +7,7 @@ Object.assign(state, { fTab: 'web', tabSaved: {}, fPlat: 'Any', fAcct: '', sView
 api.storage.local.get('ppShowGov').then(st => { if (st && st.ppShowGov) state.fGov = true; }).catch(() => {});
 
 const isSoc = c => c.use === 'social';
+const isXAcct = a => !!a && /^(x|twitter)\.com$/.test(a.plat || '');
 const inTab = c => (state.fTab === 'social') === isSoc(c);
 const platOf = c => PP_SOCIAL.platform(c.site);
 const platBadge = (c, size = 20) => { const p = platOf(c); return `<span class="plat" style="--pc:${p.color};width:${size}px;height:${size}px;font-size:${Math.round(size * 0.45)}px" title="${esc(p.name)}" aria-label="${esc(p.name)}">${esc(p.short)}</span>`; };
@@ -15,6 +16,17 @@ const postWord = c => platOf(c).name + ' ' + (KIND_WORD[PP_SOCIAL.postKind(c.url
 const FROM = { link: 'the link itself', short: 'the short link\'s real address', public: 'the site\'s public post info', page: 'the post page\'s own info', browser: 'the post opened in your browser', you: 'you typed it' };
 const sureTag = a => a.from === 'you' ? '<span class="tag grey">set by you</span>' : a.sure === 'likely' ? '<span class="tag warn" title="Read from the page\'s text. Check it once.">likely</span>' : '<span class="tag blue">sure</span>';
 // The key used to count and remember an account, with linked accounts (the same person) folded together.
+// 4.24 (Ben): the account's real name ("Matt Thibodeau") leads, with the handle or number from
+// the link ("61580282979353", "channel/UC...") smaller beside it. The name comes from the profile.
+function acctName(a) {
+  if (!a) return '';
+  const i = FCD && FCD.acctInfo && FCD.acctInfo[a.key];
+  const n = String((i && i.ok && i.name && !(isXAcct(a) && !i.v) && i.name) || a.name || '').trim();
+  const plain = s => String(s || '').toLowerCase().replace(/^@/, '').replace(/[\s._-]/g, '');
+  return n && plain(n) !== plain(PP_SOCIAL.bareName(a)) && plain(n) !== plain(a.handle) ? n : '';
+}
+const acctHtml = (a, cls = '') => { const n = acctName(a); return n ? `<b class="${cls}">${esc(n)}</b> <span class="ahandle">${esc(a.handle)}</span>` : `<b class="${cls}">${esc(a.handle)}</b>`; };
+const acctText = a => { const n = acctName(a); return n ? n + ' (' + a.handle + ')' : a.handle; };
 const acctGroup = key => (FCD && FCD.acctLinkOf && FCD.acctLinkOf.get(key)) || key;
 
 // The tab state: each tab keeps its own filters.
@@ -74,7 +86,6 @@ async function socIndex(copies) {
 // 3 days. One account at a time while PageProof is open. Nothing to type in.
 // 4.24: details read before the X fixes are not shown for X (they could be the viewer's own
 // followers and the site's footer); every account is read again once, the X ones first.
-const isXAcct = a => !!a && /^(x|twitter)\.com$/.test(a.plat || '');
 const infoOf = c => { const i = (c && c.acct && FCD && FCD.acctInfo && FCD.acctInfo[c.acct.key]) || null; return i && !i.v && isXAcct(c.acct) ? null : i; };
 const INFO_BUSY = new Set();
 async function readAcctInfo(acct) {
@@ -179,6 +190,7 @@ function acctAbout(c) {
   if (!i) return `<section class="dsec"><div class="dsh">About this account</div><span class="faint" style="font-size:13px">${busy ? 'Reading the profile in your browser…' : 'Not read yet. PageProof reads every account\'s profile by itself, one at a time.'}</span></section>`;
   const enc = encodeURIComponent;
   const rows = [];
+  if (i.name) rows.push(['Name', i.name]);
   if (i.followers != null) rows.push(['Followers', i.followers.toLocaleString() + ' ' + i.fw]);
   const vk = verOf(c);
   rows.push(['Verified', vk === 'no' ? 'No check' : vk === 'nk' ? 'Not known' : V_KIND[vk][1] + '. ' + V_KIND[vk][2], vk]);
@@ -186,7 +198,7 @@ function acctAbout(c) {
   if (i.type === 'Government' && i.gov) rows.push(['Why government', 'Going by ' + i.gov]);
   if (i.signs && i.signs.length) rows.push(['Business signs', i.signs.join(', ')]);
   if (i.company) rows.push(['Company', i.company + (i.address ? '\n' + i.address : '')]);
-  if (i.country) rows.push(['Based in', i.country]);
+  if (i.country) rows.push(['Based in', i.place && i.place !== i.country ? i.place : i.country]);
   if (i.created) rows.push(['Created', i.created]);
   if (i.oldNames && i.oldNames.length) rows.push(['Old names', i.oldNames.join(', ')]);
   if (i.website) rows.push(['Website', i.website + (i.shop ? ' (sells things)' : '')]);
@@ -291,7 +303,7 @@ function readPostInTab() {
 // The row's first line on the Social media tab: the account leads.
 function socLine(c) {
   const a = c.acct;
-  return `<div class="l1 soc">${platBadge(c)}${a ? `<b>${esc(a.handle)}</b>` : '<b class="nofind">Account not found yet</b>'}<span class="pkind">${esc(postWord(c))}</span>${c.status !== 'new' ? tagFor(c) : ''}
+  return `<div class="l1 soc">${platBadge(c)}${a ? acctHtml(a) : '<b class="nofind">Account not found yet</b>'}<span class="pkind">${esc(postWord(c))}</span>${c.status !== 'new' ? tagFor(c) : ''}
     ${a && c.repeat && c.status === 'new' ? `<span class="tag bad" title="You marked this account stolen before">Marked stolen ${c.repeat === 1 ? 'once' : c.repeat + ' times'} before</span>` : ''}
     ${a ? acctBadges(c) : ''}
     ${!a ? `<button class="btn sm ghost setacct" data-act="openacct" data-v="${esc(c.id)}">Set account</button>` : a.sure === 'likely' ? '<span class="tag warn" title="Read from the page\'s text. Check it once.">Account: likely</span>' : ''}${sigIcons(c)}</div>`;
@@ -376,7 +388,7 @@ function accountsView(rows) {
     const clients = [...new Set(e.xs.map(x => x.clientName).filter(Boolean))];
     const i = infoOf(first), vk = verOf(first), vt = V_KIND[vk] ? `<span title="${esc(V_KIND[vk][1] + ': ' + V_KIND[vk][2])}">${vIcon(vk, 17)}</span>` : vk === 'no' ? '<span class="faint">No</span>' : '<span class="faint">?</span>';
     const status = allowed(a.key) ? '<span class="tag ok">Approved</span>' : st ? '<span class="tag bad">Known stolen</span>' : '<span class="tag grey">Watching</span>';
-    return `<tr class="arow" data-act="acctonly" data-v="${esc(a.key)}"><td>${platBadge(first)} <b>${esc(a.handle)}</b>${others.length || linked.length ? ` <span class="faint" style="font-size:12px">+ ${esc([...others, ...linked].map(k => (FCD.accts.get(k) || { acct: { handle: k } }).acct.handle + ' on ' + PP_SOCIAL.platform((FCD.accts.get(k) || {}).site || k.split('/')[0]).name).join(', '))}</span>` : ''}</td>
+    return `<tr class="arow" data-act="acctonly" data-v="${esc(a.key)}"><td>${platBadge(first)} ${acctHtml(a)}${others.length || linked.length ? ` <span class="faint" style="font-size:12px">+ ${esc([...others, ...linked].map(k => (FCD.accts.get(k) || { acct: { handle: k } }).acct.handle + ' on ' + PP_SOCIAL.platform((FCD.accts.get(k) || {}).site || k.split('/')[0]).name).join(', '))}</span>` : ''}</td>
       <td class="num">${i && i.ok && i.followers != null ? PP_SOCIAL.shortNum(i.followers) : '<span class="faint">?</span>'}</td><td>${vt}</td><td>${i && i.ok && i.type ? esc(i.type) + (i.typeSure === 'guess' ? ' <span class="faint">(guess)</span>' : '') : '<span class="faint">Not known</span>'}${i && i.company ? '<br><span class="faint" style="font-size:12px">' + esc(i.company) + '</span>' : ''}</td><td>${i && i.country ? esc(i.country) : '<span class="faint">?</span>'}</td>
       <td class="num">${e.xs.length}</td><td class="num">${e.xs.filter(x => x.status === 'new').length}</td><td class="num">${st}</td><td>${esc(clients.slice(0, 2).join(', '))}${clients.length > 2 ? ' +' + (clients.length - 2) : ''}</td><td>${status}</td>
       <td><a class="btn ghost sm" href="${safeUrl(a.url)}" target="_blank" rel="noreferrer" data-act="openlink" aria-label="Open ${esc(a.handle)}">${ic('ext', 14)}</a></td></tr>`;
