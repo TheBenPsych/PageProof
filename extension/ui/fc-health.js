@@ -48,6 +48,9 @@ async function healthLights() {
     else if (h.ok) L.push(['ok', name, 'Last gave results ' + agoText(h.ok) + '.' + (h.zeros >= 3 ? ' Nothing for the last ' + h.zeros + ' photos.' : '')]);
     else L.push(['grey', name, h.last ? 'Has not given any results yet (' + (h.zeros || 0) + ' photos tried).' : 'Not used yet.']);
   }
+  // 4.37.2: signed in to the social sites? Only whether the site's sign-in cookie is there is
+  // looked at, never what is in it, and nothing is saved or sent anywhere.
+  L.push(...await signInLights());
   // Backup
   if (docs === 'granted') { const at = st.ppBackupAt ? Date.parse(st.ppBackupAt) : 0; L.push([at ? 'ok' : 'grey', 'Backup in Documents › PageProof', at ? 'Settings saved ' + agoText(at) + '.' : 'Nothing has been saved there yet.']); }
   else if (docs === 'prompt') L.push(['warn', 'Backup in Documents › PageProof', 'Needs one click before PageProof can save there.', '<button class="btn primary sm" data-act="docsallow">Allow</button>']);
@@ -214,6 +217,39 @@ function storageCard() {
         <span class="muted" style="font-size:13.5px;display:inline-flex;align-items:center;gap:6px">${ic('check', 16)} Copies you marked Stolen are never deleted here.</span></div>
     </div>
   </section>`;
+}
+
+// ---------------------------------------------------------------- signed in to the sites?
+// Facebook, Instagram and X hide many posts and pictures from anyone who is not signed in.
+// PageProof's post check, account reader and Capture look at posts in THIS browser, so they see
+// what you see: signed out, they often get a sign-in wall instead of the post.
+// [name, sites, sign-in cookie, needed?, why, where to sign in]
+const SIGNIN = [
+  ['Facebook', ['facebook.com'], 'c_user', true, 'Facebook hides most posts and pictures from anyone not signed in.', 'https://www.facebook.com/'],
+  ['Instagram', ['instagram.com'], 'ds_user_id', true, 'Instagram shows a sign-in wall instead of posts.', 'https://www.instagram.com/'],
+  ['X (Twitter)', ['x.com', 'twitter.com'], 'twid', true, 'X hides posts, replies and pictures from anyone not signed in.', 'https://x.com/login'],
+  ['TikTok', ['tiktok.com'], 'sessionid', false, 'Some TikTok videos only show when signed in.', 'https://www.tiktok.com/login'],
+  ['LinkedIn', ['linkedin.com'], 'li_at', false, 'LinkedIn hides most posts from anyone not signed in.', 'https://www.linkedin.com/login'],
+  ['Google (Lens and YouTube)', ['google.com'], 'SID', false, 'Signed in, Google asks "are you a robot?" less often.', 'https://accounts.google.com/'],
+  ['Bing', ['bing.com'], '_U', false, 'Signed in, Bing asks "are you a robot?" less often.', 'https://www.bing.com/'],
+];
+async function signedIn(sites, name) {
+  if (!api.cookies) return null;                          // the browser doesn't allow the check
+  try {
+    for (const domain of sites) if ((await api.cookies.getAll({ domain, name })).length) return true;
+    return false;
+  } catch (e) { return null; }
+}
+async function signInLights() {
+  const out = [];
+  for (const [title, sites, cookie, needed, why, href] of SIGNIN) {
+    const on = await signedIn(sites, cookie);
+    const btn = `<a class="btn sm" href="${href}" target="_blank" rel="noreferrer">${on ? 'Open' : 'Sign in'}</a>`;
+    if (on === null) out.push(['grey', 'Signed in: ' + title, 'This browser would not let PageProof check. ' + why]);
+    else if (on) out.push(['ok', 'Signed in: ' + title, 'Yes, in this browser.']);
+    else out.push([needed ? 'warn' : 'grey', 'Signed in: ' + title, 'Not signed in. ' + why + (needed ? ' PageProof checks posts in this browser, so sign in here (any account you use for work).' : ' Optional.'), btn]);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- the page
