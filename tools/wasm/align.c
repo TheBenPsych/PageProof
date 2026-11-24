@@ -129,26 +129,8 @@ static void msort(int *a, int *t, int n, const float *key) {   // stable, strong
   while (j < n) t[k++] = a[j++];
   for (k = 0; k < n; k++) a[k] = t[k];
 }
-__attribute__((export_name("corners"))) int corners(const float *g, int w, int h, int max, int *outXY, float *outR) {
-  const size_t_ m0 = mark();
+static int pickPoints(const float *resp, int w, int h, double topR, int max, int *outXY, float *outR) {
   const int n = w * h;
-  float *xx = alloc(n * 4), *yy = alloc(n * 4), *xy = alloc(n * 4);
-  float *tmp = alloc(n * 4), *mid = alloc(n * 4);
-  float *sxx = alloc(n * 4), *syy = alloc(n * 4), *sxy = alloc(n * 4), *resp = alloc(n * 4);
-  for (int i = 0; i < n; i++) { xx[i] = 0; yy[i] = 0; xy[i] = 0; }
-  for (int y = 1; y < h - 1; y++) for (int x = 1; x < w - 1; x++) {
-    const int i = y * w + x;
-    const double gx = ((double)g[i + 1] - (double)g[i - 1]) / 2, gy = ((double)g[i + w] - (double)g[i - w]) / 2;
-    xx[i] = (float)(gx * gx); yy[i] = (float)(gy * gy); xy[i] = (float)(gx * gy);
-  }
-  blur(xx, sxx, tmp, mid, w, h, 2); blur(yy, syy, tmp, mid, w, h, 2); blur(xy, sxy, tmp, mid, w, h, 2);
-  double topR = 0;
-  for (int i = 0; i < n; i++) {
-    const double a = sxx[i], c = syy[i], b = sxy[i];
-    const double hd = (a - c) / 2;
-    const double r = (a + c) / 2 - __builtin_sqrt(hd * hd + b * b);
-    resp[i] = (float)r; if (r > topR) topR = r;
-  }
   const int B = RAD + 2; const double floorR = topR * 0.005;
   int *idx = (int *)alloc(n * 4); int cnt = 0;
   for (int y = B; y < h - B; y++) for (int x = B; x < w - B; x++) {
@@ -170,9 +152,43 @@ __attribute__((export_name("corners"))) int corners(const float *g, int w, int h
     used[k]++; outXY[out * 2] = x; outXY[out * 2 + 1] = y; outR[out] = resp[i]; out++;
     if (out >= max) break;
   }
+  return out;
+}
+__attribute__((export_name("corners"))) int corners(const float *g, int w, int h, int max, int *outXY, float *outR) {
+  const size_t_ m0 = mark();
+  const int n = w * h;
+  float *xx = alloc(n * 4), *yy = alloc(n * 4), *xy = alloc(n * 4);
+  float *tmp = alloc(n * 4), *mid = alloc(n * 4);
+  float *sxx = alloc(n * 4), *syy = alloc(n * 4), *sxy = alloc(n * 4), *resp = alloc(n * 4);
+  for (int i = 0; i < n; i++) { xx[i] = 0; yy[i] = 0; xy[i] = 0; }
+  for (int y = 1; y < h - 1; y++) for (int x = 1; x < w - 1; x++) {
+    const int i = y * w + x;
+    const double gx = ((double)g[i + 1] - (double)g[i - 1]) / 2, gy = ((double)g[i + w] - (double)g[i - w]) / 2;
+    xx[i] = (float)(gx * gx); yy[i] = (float)(gy * gy); xy[i] = (float)(gx * gy);
+  }
+  blur(xx, sxx, tmp, mid, w, h, 2); blur(yy, syy, tmp, mid, w, h, 2); blur(xy, sxy, tmp, mid, w, h, 2);
+  double topR = 0;
+  for (int i = 0; i < n; i++) {
+    const double a = sxx[i], c = syy[i], b = sxy[i];
+    const double hd = (a - c) / 2;
+    const double r = (a + c) / 2 - __builtin_sqrt(hd * hd + b * b);
+    resp[i] = (float)r; if (r > topR) topR = r;
+  }
+  const int out = pickPoints(resp, w, h, topR, max, outXY, outR);
   release(m0);
   return out;
 }
+
+// The strongest corner points, spread out (at most 3 per 20 x 20 square). Also used on the
+// corner strengths worked out by the graphics card (topR < 0: find the strongest here).
+__attribute__((export_name("pick"))) int pick(const float *resp, int w, int h, double topR, int max, int *outXY, float *outR) {
+  const size_t_ m0 = mark();
+  if (topR < 0) { topR = 0; for (int i = 0; i < w * h; i++) if (resp[i] > topR) topR = resp[i]; }
+  const int out = pickPoints(resp, w, h, topR, max, outXY, outR);
+  release(m0);
+  return out;
+}
+
 
 // ---------- fingerprints (BRIEF, 256 bits), align.js describe ----------
 __attribute__((export_name("describe"))) void describe(const float *g, int w, const int *xy, int n, const signed char *pairs, uint32_t *d) {
