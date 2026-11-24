@@ -590,6 +590,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Full-page captures on tricky sites', 'Details panels that slide in from the side (like a business search result) no longer leave a narrow strip with blank space beside it: the page is kept as it looks and the panel is written out in full as a numbered section. Boxes that fade or slide in as you scroll, late pictures, sticky headings and column titles, "Add to cart" and cookie bars at the bottom, pop-up windows and pages that grow as pictures load now come out whole, with nothing blank or doubled.'],
   ['Uses your graphics card', 'On computers with a graphics card, PageProof now uses it to find the details in each found picture, pair them up and line up real copies. Each computer tests itself on its first few pictures and only keeps the graphics card where it is quicker. Settings › Is everything working? shows whether it is in use.'],
   ['A faster photo checker', 'The part that checks each found picture against your photo now runs in WebAssembly, a faster language built into Chrome and Edge. Same answers as before, worked out about twice as fast (the pairing-up step about 5 times). Nothing to install.'],
   ['Mirror check with half the work', 'To catch copies flipped left to right, PageProof now flips your photo once and reuses it, instead of flipping every found picture and starting over.'],
