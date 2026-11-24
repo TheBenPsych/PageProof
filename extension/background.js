@@ -264,6 +264,9 @@ async function capture(tab, auto) {
   }
 
   record.server = await server;
+  // 4.44: a "who's behind it" page (About, Contact, the account's profile) goes into the main
+  // capture's pack, so it gets no viewer tab and no line of its own in the capture log.
+  if (auto && auto.who) { record.who = auto.who; await PP_DB.put(record); return record.id; }
   await PP_DB.put(record);
   await addLog({ id: record.id, captureId: record.captureId, time: record.time, url: record.url, title: record.title });
   const q = new URLSearchParams({ id: record.id, ...(auto || {}) });
@@ -673,6 +676,39 @@ async function openBreakingNews(item, info, tab) {
 }
 
 // ---------- Capture a link: open it in a new tab, wait for it to load, then capture ----------
+// 4.44 (Ben's pick): who's behind it, in the same pack. The capture page asks for these pages
+// (About, Contact, Privacy, or the account's profile); each is captured like any page, in its own
+// tab that closes again, and handed back to the capture page, which adds it to the pack.
+async function captureWho(list, near) {
+  const out = [];
+  if (busy) return { ok: false, error: 'A capture is already running.' };
+  for (const [kind, url] of list.slice(0, 4)) {
+    if (!/^https?:\/\//i.test(String(url || ''))) continue;
+    const opts = { url, active: true };
+    if (near && near.windowId) { opts.windowId = near.windowId; opts.index = near.index + 1; }
+    let tab;
+    try {
+      tab = await api.tabs.create(opts);
+      await new Promise(resolve => {
+        const t = setTimeout(done, 30000);
+        function done() { clearTimeout(t); api.tabs.onUpdated.removeListener(on); resolve(); }
+        function on(id, ch) { if (id === tab.id && ch.status === 'complete') done(); }
+        api.tabs.onUpdated.addListener(on);
+      });
+      await sleep(1500);
+      busy = true; stopRequested = false;
+      const id = await capture(await api.tabs.get(tab.id), { who: kind });
+      out.push({ kind, url, id });
+    } catch (e) { out.push({ kind, url, error: String((e && e.message) || e) }); }
+    finally {
+      busy = false; stopRequested = false;
+      api.action.setBadgeText({ text: '' });
+      if (tab) await api.tabs.remove(tab.id).catch(() => {});
+    }
+  }
+  if (near && near.id) await api.tabs.update(near.id, { active: true }).catch(() => {});
+  return { ok: true, pages: out };
+}
 async function captureUrl(url, near) {
   if (!/^https?:\/\//i.test(String(url || ''))) return { ok: false, error: 'Only web pages (http or https) can be captured.' };
   if (busy) return { ok: false, error: 'A capture is already running.' };
@@ -931,6 +967,7 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || sender.id !== api.runtime.id) return false;
   const jobs = {
     captureUrl: () => captureUrl(msg.url, sender.tab),
+    captureWho: () => captureWho(msg.list || [], sender.tab),
     fcKeepWake: async () => { await keepAlive(!!msg.show, true); return { ok: true }; },
     fcBgStart: async () => { await keepAlive(false, true); return { ok: true }; },
     fcKeepStop: async () => ({ ok: true }),   // the window closes itself when Keep searching is turned off

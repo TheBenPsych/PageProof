@@ -3,7 +3,7 @@
 // (Stolen, Licensed, Remove, Skip), undo for every answer, hiding sites and countries, and
 // grouping by client, photo, site or site owner.
 Object.assign(state, {
-  open: '', picked: [], fFilter: 'New', fq: '', fWhen: 'any', fMatch: 'any', fYear: 'Any', fQuarter: 'Any', fPhoto: '', sis: null, fView: 'client', fSort: 'act', fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fKnown: '', fSpam: 'hide', fOwner: '',
+  open: '', picked: [], fFilter: 'New', fq: '', fWhen: 'any', fMatch: 'any', fYear: 'Any', fQuarter: 'Any', fPhoto: '', sis: null, fView: 'client', fSort: 'act', fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fStrong: false, fKnown: '', fSpam: 'hide', fOwner: '',
   showFilters: false, fFresh: false, dTab: 'sum', dTabFor: '', dView: '', slide: 50, fCols: null, exp: [], more: 250, qi: 0, cmpMode: 'side', cut: 50, rvTab: 'review', recentHides: [],
 });
 const HIST = [];         // every answer and hide, newest last, so each one can be undone in turn
@@ -163,6 +163,8 @@ function passMain(c) {
 // The newer filters: the search box, found when, how strong the match is, photo year and quarter.
 function passMore(c) {
   if (state.fPhoto && c.photo !== state.fPhoto) return false;
+  // 4.44: "Look at these first" on Home (strong claims).
+  if (state.fStrong && !(typeof FC_RULES !== 'undefined' && FC_RULES.isStrong(c))) return false;
   if (state.fq && !(c.site + ' ' + c.url + ' ' + (c.acct ? c.acct.handle + ' ' + acctName(c.acct) : '') + ' ' + c.photoName + ' ' + (c.clientName || '') + ' ' + (c.title || '')).toLowerCase().includes(state.fq)) return false;
   if (state.fWhen !== 'any') {
     const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - (WHEN[state.fWhen][1] - 1));
@@ -720,6 +722,7 @@ V.found = async () => {
   if (routeArg('open')) { const id = routeArg('open'), oc = FCD.copies.find(x => x.id === id); if (oc) switchTab(isSoc(oc) ? 'social' : 'web'); state.open = id; state.fFilter = 'All'; history.replaceState(null, '', '#found'); }
   if (routeArg('client')) { state.fClient = routeArg('client'); state.fFilter = 'All'; history.replaceState(null, '', '#found'); }
   if (routeArg('filter')) { state.fFilter = routeArg('filter'); history.replaceState(null, '', '#found'); }
+  if (routeArg('strong')) { state.fStrong = true; state.fFilter = 'New'; switchTab('web'); history.replaceState(null, '', '#found'); }
   if (routeArg('photo')) { state.fPhoto = routeArg('photo'); state.fFilter = 'All'; state.fView = 'list'; history.replaceState(null, '', '#found'); }
   const everyTab = FCD.copies;
   // 4.9: two tabs, Websites and Social media. Each keeps its own filters.
@@ -815,6 +818,7 @@ V.found = async () => {
     ['fYear', state.fYear === 'Any' ? 'Any' : 'Year ' + state.fYear], ['fQuarter', state.fQuarter === 'Any' ? 'Any' : 'Quarter ' + state.fQuarter]].filter(([, v]) => v !== 'Any');
   if (state.fShop) active.push(['fShop', 'Selling something']);
   if (state.fRepeat) active.push(['fRepeat', 'Repeat offenders']);
+  if (state.fStrong) active.push(['fStrong', 'Strong claims']);
   if (state.fSpam === 'only') active.push(['fSpam', 'Spam blogs only']);
   if (state.fKnown) active.push(['fKnown', state.fKnown === 'only' ? 'Stolen before links only' : 'Without stolen before links']);
   if (state.fOwner) { const o = FCD.owners.find(z => z.key === state.fOwner); active.push(['fOwner', 'Owner: ' + (o ? o.name : '?')]); }
@@ -1248,10 +1252,10 @@ Object.assign(ACTS, {
   qcredit: v => { state.fCredit = v; state.fFilter = 'All'; render(true); },
   togglefilters: () => { state.showFilters = !state.showFilters; render(true); },
   unfilter: v => {
-    if (v === 'all') Object.assign(state, { fWhen: 'any', fMatch: 'any', fVer: 'Any', fFol: 'Any', fType: 'Any', fCountry: 'Any', fAcct: '', fPlat: 'Any', fFresh: false, fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fKnown: '', fSpam: 'hide', fOwner: '', fYear: 'Any', fQuarter: 'Any', fPhoto: '', fq: '' });
+    if (v === 'all') Object.assign(state, { fWhen: 'any', fMatch: 'any', fVer: 'Any', fFol: 'Any', fType: 'Any', fCountry: 'Any', fAcct: '', fPlat: 'Any', fFresh: false, fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fStrong: false, fKnown: '', fSpam: 'hide', fOwner: '', fYear: 'Any', fQuarter: 'Any', fPhoto: '', fq: '' });
     else if (v === 'fWhen' || v === 'fMatch') state[v] = 'any';
     else if (v === 'fSpam') state.fSpam = 'hide';
-    else state[v] = v === 'fShop' || v === 'fRepeat' || v === 'fFresh' ? false : ['fOwner', 'fPhoto', 'fq', 'fAcct', 'fKnown'].includes(v) ? '' : 'Any';
+    else state[v] = v === 'fShop' || v === 'fRepeat' || v === 'fFresh' || v === 'fStrong' ? false : ['fOwner', 'fPhoto', 'fq', 'fAcct', 'fKnown'].includes(v) ? '' : 'Any';
     render(true);
   },
   // Group by, Found, Match: the little switches above the list.
