@@ -153,5 +153,28 @@ const FC_PREV = (() => {
     } catch (e) { /* try again next time Copies found opens */ }
     finally { running = false; if (worker) { try { worker.terminate(); } catch (x) { /* gone */ } worker = null; } }
   }
-  return { start, candidates };
+  // 4.29: which of these pictures is your client's photo? Used to find the exact post on an
+  // account page. Lines each one up with your photo (or, when Drive can't be read, with the small
+  // copy of theirs). Returns { i, pct } for the best one, or null.
+  async function bestOf(c, urls, enough = 70) {
+    let orig = null;
+    try { const { file } = await photoFile(c.photo); if (file) orig = file; } catch (e) { /* Drive not reachable */ }
+    if (!orig && /^data:image/.test(c.thumb || '')) { try { orig = await (await fetch(c.thumb)).blob(); } catch (e) { /* no small copy */ } }
+    if (!orig) return null;
+    const key = 'b' + wid++;
+    let best = null;
+    try {
+      const ob = await bitmap640(orig);
+      await ask({ type: 'orig', key, bmp: ob }, [ob]);
+      for (let i = 0; i < urls.length; i++) {
+        const b = await get(urls[i], 12000);
+        if (!b || b.size < 2500) continue;
+        const pct = await lineUp(key, b);
+        if (!best || pct > best.pct) best = { i, pct };
+        if (pct >= enough) break;
+      }
+    } finally { ask({ type: 'forget', key }); }
+    return best;
+  }
+  return { start, candidates, bestOf };
 })();

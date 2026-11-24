@@ -1152,7 +1152,7 @@ const FC = (() => {
   // 4.24: also leaves out website copies from countries not shown, and government accounts
   // (unless Show government is on), the same as Copies found.
   async function countNew() {
-    const st = await api.storage.local.get(HID ? ['fcShownCountries', 'ppShowGov'] : ['rsHidden', 'fcShownCountries', 'ppShowGov']);
+    const st = await api.storage.local.get(HID ? ['fcShownCountries', 'ppShowGov', 'ppShowReposts'] : ['rsHidden', 'fcShownCountries', 'ppShowGov', 'ppShowReposts']);
     if (!HID) HID = st.rsHidden || [];
     const hidden = HID, shown = Array.isArray(st.fcShownCountries) ? st.fcShownCountries : SHOWN_START;
     const every = await allCopies(), fresh = every.filter(c => c.status === 'new');
@@ -1162,6 +1162,8 @@ const FC = (() => {
     if (!st.ppShowGov && fresh.some(c => c.acct)) info = (await meta.get('acctInfo').catch(() => null)) || {};
     return fresh.filter(c => {
       if (spam.has(c.id) || hiddenCopy(c, hidden)) return false;
+      // 4.29: reposts and shares of someone else's post are hidden until you show them.
+      if (!st.ppShowReposts && c.rp && c.rp.state === 'repost') return false;
       const ct = c.country || countryOf(c.site);
       if (c.use !== 'social' && ct && !shown.includes(ct)) return false;
       const i = c.acct && info[c.acct.key];

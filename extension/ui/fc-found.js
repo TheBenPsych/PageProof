@@ -390,6 +390,8 @@ async function drawer(list) {
   else if (!soc) fine.push('Site looks normal');
   if (c.credit === 'removed') look.push(['copy', 'nocredit', 'Credit removed', 'Your client\'s photo carries a copyright line in its hidden data. Their copy has none.']);
   else if (c.credit === 'kept') fine.push('Credit kept');
+  if (soc && c.rp && c.rp.state === 'repost') look.push(['warn', 'repeat', `${rpWord(c)} of ${origName(c)}'s post`, 'This account only passed someone else\'s post along. The original poster is the lead. See The post tab.', 'dtab', 'The post', 'page']);
+  else if (soc && PP_REPOST.profileOnly(c) && !(c.rp && c.rp.post)) look.push(['warn', 'warn', 'Link goes to the account page, not the post', RP_BUSY.has(c.id) ? 'Finding the post now…' : 'PageProof looks for the exact post in your browser. See The post tab.', 'dtab', 'The post', 'page']);
   if (soc && !c.acct) look.push(['warn', 'who', 'Account not found yet', 'The link doesn\'t show who posted it. Set it in the Account tab.', 'dtab', 'Account', 'acct']);
   if (c.spam) look.push(['warn', 'warn', 'Looks like a spam blog', c.spam.join(' · ') + '. Nothing was answered for you.', 'spamhide', 'Hide all of ' + esc(FC.baseOf(c.site)), esc(FC.baseOf(c.site))]);
   if (c.known) look.push(['bad', 'repeat', 'On your stolen-before list', 'This exact page is on your list of links stolen before.']);
@@ -740,7 +742,7 @@ function siteStrip(base, xs) {
     <div class="sbtns"><a class="btn sm" href="${safeUrl('https://' + base)}" target="_blank" rel="noreferrer" data-act="openlink">Home page</a><button class="btn sm" data-act="stripok" data-v="${esc(c.id)}">Approve site</button>${RS_LISTS.wholeSocial(base) ? '' : `<button class="btn sm" data-act="hidesite" data-v="${esc(base)}">Hide site</button>`}<button class="btn sm" data-act="gowho" data-v="${esc(c.id)}">Who's behind it</button></div></div>`;
 }
 V.found.guard = async () => ((await FC.drive()).done ? null : 'connect');
-V.found.after = () => { if (typeof FC_PREV !== 'undefined') FC_PREV.start(); loadOurs(); bindHover(); ppPagePic(); ppKeptLine(); socQueue(); infoQueue(); };
+V.found.after = () => { if (typeof FC_PREV !== 'undefined') FC_PREV.start(); loadOurs(); bindHover(); ppPagePic(); ppKeptLine(); socQueue(); infoQueue(); if (typeof rpQueue === 'function') rpQueue(); };
 
 // Hovering a copy's thumbnail shows it next to your client's photo.
 // Only one card ever exists. It goes away when the mouse leaves the pictures, and also when the
@@ -1284,8 +1286,10 @@ async function captureCopy(c) {
     }
     if (!pic && p) pic = await FC.thumbOf(p);
   } catch (e) { /* the check is skipped */ }
-  await api.storage.local.set({ fcCapFor: { url: c.url, id: c.id, at: Date.now(), pic } });
-  await api.runtime.sendMessage({ type: 'captureUrl', url: c.url }).catch(() => {});
+  // 4.29: when the link was an account page and the exact post was found, capture the post.
+  const capUrl = (c.rp && c.rp.post) || c.url;
+  await api.storage.local.set({ fcCapFor: { url: capUrl, id: c.id, at: Date.now(), pic } });
+  await api.runtime.sendMessage({ type: 'captureUrl', url: capUrl }).catch(() => {});
   toast('Opening ' + c.site + ' to capture it. When you save the evidence pack, the match report PDF is saved too.');
 }
 // The capture page asks for the match report after saving a pack (fcReportReq). Only one open
