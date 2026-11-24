@@ -1089,6 +1089,51 @@ const FC = (() => {
     const strong = why.filter(w => /Ends in|months old|copycat/.test(w)).length;
     return { level: strong >= 1 && why.length >= 2 ? 'sus' : why.length ? 'watch' : 'ok', why };
   }
+  // 4.24: spam blog farms. Throwaway sites with a made-up name (serecoun.blog, adfomusto.blog) that
+  // put each copy on a random-looking address of their own (ass4c61.serecoun.blog). Only signs
+  // PageProof can see in the links; nothing is answered by itself. Returns Map copy id -> reasons.
+  const SPAM_END = /\.(blog|xyz|top|shop|online|site|buzz|click|icu|cyou|rest|monster|lol|cfd|sbs|bond|live|fun|space|store|vip|win|loan|work|info|biz|pw|tk|ml|ga|cf|gq|life|world|today|club|website|pics|homes|beauty|hair|quest|autos|boats|mom|skin|makeup|cam|bar|uno|press|digital|ink|wiki|link|asia|mobi|cc|ws)$/;
+  // Big blog and website hosts: everyone there gets their own sub-address, so these are never a farm.
+  const BLOG_HOSTS = /(^|\.)(wordpress\.com|blogspot\.[a-z.]+|blogger\.com|tumblr\.com|medium\.com|substack\.com|wixsite\.com|weebly\.com|github\.io|netlify\.app|vercel\.app|pages\.dev|squarespace\.com|webflow\.io|jimdofree\.com|jimdosite\.com|over-blog\.com|livejournal\.com|ghost\.io|typepad\.com|home\.blog|art\.blog|travel\.blog|food\.blog|music\.blog|photo\.blog|business\.blog|news\.blog|fashion\.blog|data\.blog|video\.blog|car\.blog|game\.blog|design\.blog|family\.blog|school\.blog|health\.blog|film\.blog|sport\.blog|tech\.blog)$/;
+  // A random-looking name part: letters and numbers mixed up (ass4c61, kl77lfl, vemv18u0g), or a long
+  // run of letters with no vowels (xkqztr). "news24" or "blog2" (number only at the end) don't count.
+  function randomLabel(l) {
+    l = String(l || '').toLowerCase();
+    if (!/^[a-z0-9]{5,24}$/.test(l)) return false;
+    const flips = (l.match(/[a-z](?=\d)|\d(?=[a-z])/g) || []).length;
+    if (/\d/.test(l) && /[a-z]/.test(l) && flips >= 2) return true;
+    return l.length >= 6 && /[bcdfghjklmnpqrstvwxz]{5,}/.test(l);
+  }
+  const homeOnly = u => { try { const x = new URL(u); return /^\/?(index\.(html?|php))?$/i.test(x.pathname) && !x.search; } catch (e) { return false; } };
+  function spamMarks(copies) {
+    const out = new Map(), subs = new Map();
+    const parts = c => {
+      const site = String(c.site || '').toLowerCase().replace(/^www\./, ''), base = baseOf(site);
+      return { site, base, sub: site.length > base.length ? site.slice(0, site.length - base.length - 1) : '' };
+    };
+    const skip = (c, p) => !p.site || BLOG_HOSTS.test(p.site) || c.use === 'social' || (typeof PP_SOCIAL !== 'undefined' ? PP_SOCIAL.isSocial(p.site) : SOCIAL.test(p.site));
+    for (const c of copies) {
+      const p = parts(c);
+      if (skip(c, p) || !p.sub) continue;
+      if (!subs.has(p.base)) subs.set(p.base, new Set());
+      subs.get(p.base).add(p.sub);
+    }
+    for (const c of copies) {
+      const p = parts(c);
+      if (skip(c, p)) continue;
+      const first = p.sub.split('.')[0], rnd = !!first && randomLabel(first);
+      const cheap = SPAM_END.test(p.base), home = homeOnly(c.url), farm = (subs.get(p.base) || new Set()).size;
+      const randomFarm = farm >= 3 && [...subs.get(p.base)].filter(x => randomLabel(x.split('.')[0])).length >= 2;
+      if (!(rnd && (cheap || home || farm >= 3)) && !(randomFarm && (cheap || home))) continue;
+      const why = [];
+      if (rnd) why.push('Random-looking address (' + first + ')');
+      if (cheap) why.push('Throwaway ending .' + p.base.split('.').pop());
+      if (farm >= 3) why.push(p.base + ' shows up under ' + farm + ' different made-up addresses');
+      if (home) why.push('Only the home page, no article');
+      out.set(c.id, why);
+    }
+    return out;
+  }
   async function copiesOf(photoId) { return DB.by('copies', 'photo', photoId); }
   async function allCopies() {
     if (COPIES) return COPIES;
@@ -1107,9 +1152,12 @@ const FC = (() => {
     const st = await api.storage.local.get(HID ? ['fcHiddenCountries'] : ['rsHidden', 'fcHiddenCountries']);
     if (!HID) HID = st.rsHidden || [];
     const hidden = HID, countries = st.fcHiddenCountries || [];
-    const fresh = (await allCopies()).filter(c => c.status === 'new');
-    if (!hidden.length && !countries.length) return fresh.length;
-    return fresh.filter(c => !hiddenCopy(c, hidden) && !countries.includes(c.country || countryOf(c.site))).length;
+    const every = await allCopies(), fresh = every.filter(c => c.status === 'new');
+    // 4.24: spam blog copies are hidden on Copies found until you show them, so they don't count here.
+    const spam = spamMarks(every);
+    const keep = fresh.filter(c => !spam.has(c.id));
+    if (!hidden.length && !countries.length) return keep.length;
+    return keep.filter(c => !hiddenCopy(c, hidden) && !countries.includes(c.country || countryOf(c.site))).length;
   }
   // Is this copy on a hidden site, or posted by a hidden account? (4.9: an Instagram /p/ link has
   // no account in it, so "Hide this account" is matched against the account PageProof found.)
@@ -1823,6 +1871,6 @@ const FC = (() => {
   return { DB, meta, open, touch, pics, dropDotMatches, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, setPicked, pickInside, SCAN, applyPendingFlags, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setClients, logWeek, week, weekKey, firstNotes, searchedOnce,
-    isPool, hiddenCountries, setHiddenCountries, ownerFor, pathOf, logReport, USE, useOf, riskOf, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
+    isPool, hiddenCountries, setHiddenCountries, ownerFor, pathOf, logReport, USE, useOf, riskOf, spamMarks, randomLabel, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
     backupSoon, backupCopiesSoon, writeSettings, writeCopies, readBackup, restore, restoreCopies, settingsSnapshot, monthsOld, newness, yearOf, quarterOf, dayOf };
 })();
