@@ -99,3 +99,7 @@ Firefox removes "temporary" add-ons when it closes, so you'd repeat these steps 
 - Convert files uses a few free helper libraries, kept in `extension/lib/` (see `extension/lib/LICENSES.txt`). They are loaded only when needed and run entirely inside the browser.
 - Videos are saved as the frame showing on screen (and their cover picture in the HTML backup), not the video file itself.
 - Content inside an embedded frame from another site (like a YouTube player) is captured as it looks, but scroll boxes inside such frames aren't expanded.
+
+## Making changes
+
+See [CONTRIBUTING.md](CONTRIBUTING.md): no version bumps in pull requests, one note per change in `changes/`, and the download is rebuilt about a minute after each merge.

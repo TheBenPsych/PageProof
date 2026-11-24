@@ -1,7 +1,9 @@
 # PageProof's automatic checks
 
-These run by themselves on GitHub every time a new version is made. If any check fails, the
-new version is **not** released, so a broken PageProof never reaches the download page.
+These run by themselves on GitHub on every pull request (`.github/workflows/checks.yml`),
+split into 6 parts that run side by side. A pull request is only merged when they pass, so a
+broken PageProof never reaches the download page. When you add a new check file, add it to
+`FILES` in `run.js` (and its time in seconds to `TIMES`, so the 6 parts stay even).
 
 They start a real browser with PageProof loaded and a pretend library (pretend photos on a
 pretend Google Drive folder, pretend copies found). No real photos, clients or websites are used.

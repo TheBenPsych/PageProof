@@ -3,8 +3,9 @@
 This is the running list of everything PageProof can do and every improvement made to it.
 It is grouped by **what the tool does**, then there is a **version timeline** at the bottom.
 
-> **Keeping it up to date:** every new version adds its changes here, in the right group
-> and as one line in the timeline. Plain words only. No client names, real photos or real
+> **Keeping it up to date:** don't edit this file by hand for a new change. Add a note in
+> `changes/` (see CONTRIBUTING.md): the release build adds it here, in the right group and as
+> one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
 Last updated: version **4.30.2** (24 Nov 2026).
