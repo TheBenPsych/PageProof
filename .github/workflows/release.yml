@@ -35,6 +35,11 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Run every check
         run: xvfb-run -a node tests/app/run.js
+      # 60 test pages that copy tricky layouts (side panels, slide-ins, sticky bars, late pictures,
+      # endless feeds, pop-up windows...). Each is captured the way PageProof does it and checked
+      # for blank, missing or doubled parts.
+      - name: Run the full-page capture checks
+        run: node tests/capture/run.js
 
   zip:
     needs: checks
