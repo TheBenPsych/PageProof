@@ -7,7 +7,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > and as one line in the timeline. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.30.1** (24 Nov 2026).
+Last updated: version **4.30.2** (24 Nov 2026).
 
 ---
 
@@ -141,6 +141,7 @@ Last updated: version **4.30.1** (24 Nov 2026).
 - **Is everything working?** health page, Copy details for support, storage meter with safe clean-up (never touches Stolen). (4.1, 4.3)
 - **Where the time goes** is shown on Is everything working. (4.16)
 - **Graphics card row** on Is everything working. (4.17)
+- **Pause really stops everything.** Pause or Off stops the photo being searched, any big search (today's 50, New search) and the account details reader at once, and closes their tabs. Resume picks up where it stopped, including the rest of a big search. The account reader only works in your Keep searching hours, only for accounts with copies still to review (or when you open a copy), keeps what it read for 90 days, and has hard limits per site (X: one profile every 2 minutes, 30 a day; a site showing empty pages is left alone for 6 hours). Only the profile is opened for X, Instagram and Threads (their "About this account" is skipped; Facebook still reads Page transparency). "Read account details" switch on Keep searching, which shows "Reading account details 12 of 80". No more "beforeunload" errors on edge://extensions. (4.30.2)
 - **Keep searching guards:** reopens if closed by mistake, tab title says leave open, starts fresh after updates. (4.4.3, 4.9.4, 4.15)
 - **A long hidden sites list no longer slows PageProof down** (9,000 copies against 25,000 hidden sites: from 7 seconds to under a tenth of a second). (4.22.1)
 - **Folder name warnings** when a photo folder looks wrong. (4.15)
@@ -207,3 +208,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.27 | 24 Nov | X details fixed, check kinds, Government hidden, countries to show, real account names |
 | 4.30 | 24 Nov | Social matches only count when the post's own picture is the photo; "Theirs" source shown |
 | 4.30.1 | 24 Nov | Fix: Instagram accounts showed your own name; viewer's details left out, accounts read again |
+| 4.30.2 | 24 Nov | Pause and Off stop everything at once (big searches, account reader, their tabs); Resume picks up where it stopped |
