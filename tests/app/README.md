@@ -1,7 +1,9 @@
 # PageProof's automatic checks
 
-These run by themselves on GitHub every time a new version is made. If any check fails, the
-new version is **not** released, so a broken PageProof never reaches the download page.
+These run by themselves on GitHub on every pull request (`.github/workflows/checks.yml`),
+split into 6 parts that run side by side. A pull request is only merged when they pass, so a
+broken PageProof never reaches the download page. When you add a new check file, add it to
+`FILES` in `run.js` (and its time in seconds to `TIMES`, so the 6 parts stay even).
 
 They start a real browser with PageProof loaded and a pretend library (pretend photos on a
 pretend Google Drive folder, pretend copies found). No real photos, clients or websites are used.
@@ -17,7 +19,7 @@ pretend Google Drive folder, pretend copies found). No real photos, clients or w
 | `checks-44.js` | Firm rule check before Stolen, their page read (credit, prices, ads), dates and damages hint, Ready for legal, research steps, POOL photos skipped, Save as Breaking News photo with the new-or-recycled check |
 | `checks-47.js` | The calmer details panel (Look at these, tabs, picture views, answers pinned, More menu, Hide site opens the next copy), Quick filter buttons (solid blue with a tick when on), dropdowns that light up with an ✕, the Showing line, Damages and Client columns, Columns menu, sticky group headings, Hide site in One at a time |
 | `checks-badge.js` | The new-copies number (menu, toolbar dot, side panel) leaves out copies on hidden sites and hidden countries, so it matches Copies found |
-| `checks-49.js` | Websites and Social media tabs: accounts read from links, short links and the post page; Set account; Stolen, Hide and Approve per account (also for /p/ links); The post instead of the live page; Group by account and the Accounts list; only the 17 fixed platforms are social (4.25.0); Settings › Social sites |
+| `checks-49.js` | Websites and Social media tabs: accounts read from links, short links and the post page; Set account; Stolen, Hide and Approve per account (also for /p/ links); The post instead of the live page; Group by account and the Accounts list; only the 17 fixed platforms are social (4.31.0); Settings › Social sites |
 | `checks-accts.js` | Account details on social copies: followers, verified, account type (automatic business check), country and owner company read from the profile (stubbed); Verified / Followers / Account type / Country filters; Sort by Most followers; Accounts list columns and sorting; About this account with business register and trademark searches; the Settings switch |
 | `checks-410.js` | Every photo searched at least once: 1 in 3 searches go to never-searched photos even when newer photos are due, ★ priority clients first then clients take turns, ⚑ High still first, the counts (POOL and broken photos apart), the client-finished note, Keep searching, Home and the weekly summary |
 | `checks-415.js` | Mistake-proofing: Before you save, blocked page box, your photo found on the capture, capture pauses on a tab switch, held keys and "That was quick", Stolen copies kept by Hide and Remove, setup folder notes, greyed-out buttons say why, the Keep searching tab coming back, no Still online check |
@@ -29,7 +31,8 @@ pretend Google Drive folder, pretend copies found). No real photos, clients or w
 | `checks-423.js` | Stolen before links: Add from a file on that tab (two links on a line count as two), nothing goes into Hidden sites, the red Stolen before tag on a copy on a listed page (www. and tracking bits ignored), its answer unchanged, other pages on the same site count as repeat offenders, the Stolen before quick filter, Undo this import |
 | `checks-424.js` | Spam blogs: random-looking addresses on throwaway sites get a Spam blog tag, their answers are not changed, they stay out of Copies found, One at a time and the new-copies number until you press Show them, the Spam blogs quick filter, Hide all hides the whole sites (new made-up addresses too), Undo |
 | `checks-postcheck.js` | A Facebook or Instagram match only counts when one of the post's own pictures is the client's photo: the main picture first, then every picture of the post in the signed-in browser (an album's 3rd picture is found); removed by itself only when every picture is different; an unreadable post is left alone; the panel says where "Theirs" came from |
-| `checks-433.js` | During a search, a match made on Google's small preview waits until their page is read: the photo in the article itself keeps it (with the picture's address), a photo only in comments or "related posts" throws it out, an unreadable page makes it a Maybe; the signed-in post reader leaves out comments, link previews and the account picture |
+| `checks-431.js` | Another photo of the same place is not a copy: a different shot in front of the same logo wall is found out and its % shows low, a real copy still lines up, unanswered copies already in Copies found are checked again (the other shot moves to Removed, a real copy stays, answered ones are left alone) and Put back works |
+| `checks-433.js` | During a search, a match made on Google's small preview waits until their page is read: the photo in the article itself keeps it (with the picture's address), a photo only in comments or "related posts" throws it out, an unreadable page makes it a Maybe; the signed-in post reader picks the post itself and leaves out comments, replies, link previews, the account picture and "more posts" grids |
 | `speed.js` | Every main page draws quickly with 50,000 photos and 5,000 copies |
 
 To run them yourself (needs Node.js):

@@ -335,12 +335,15 @@ const PP_SOCIAL = (() => {
   // account" opens from the profile's menu, so the reader clicks it there.
   function profilePages(acct) {
     if (!acct || !acct.url) return [];
-    const out = [{ url: acct.url, kind: 'profile', click: acct.plat === 'instagram.com' ? 'ig-about' : '' }];
+    // 4.30.2 (Ben): X, Instagram and Threads put everything useful in the bio on the profile itself;
+    // their "About this account" almost never adds anything, so only the profile is opened (one
+    // page per account, which also keeps them from blocking you). Facebook keeps its Page
+    // transparency page: it often names the owner and the country.
+    const out = [{ url: acct.url, kind: 'profile' }];
     if (acct.plat === 'facebook.com' && !/\/groups\//.test(acct.url)) {
       const id = /(?:^|\/)(?:id\.)?(\d{6,})$/.exec(acct.key || '');
       out.push({ url: id ? 'https://www.facebook.com/profile.php?id=' + id[1] + '&sk=about_profile_transparency' : acct.url.replace(/\/+$/, '') + '/about_profile_transparency', kind: 'transparency' });
     }
-    if (acct.plat === 'x.com' || acct.plat === 'twitter.com') out.push({ url: 'https://x.com/' + bareName(acct) + '/about', kind: 'transparency' });
     return out;
   }
   // Runs INSIDE the profile's tab (self-contained). Returns the page's tags, the text, the short
@@ -359,7 +362,13 @@ const PP_SOCIAL = (() => {
     const html = document.documentElement.innerHTML.slice(0, 3e6);
     const rx = /"((?:[a-z_]*follower[a-z_]*)|(?:[a-z_]*verified[a-z_]*)|(?:edge_followed_by)|(?:subscriberCountText)|(?:category_name)|(?:business_category_name)|(?:category)|(?:is_business_account)|(?:is_professional_account)|(?:business_email)|(?:public_email)|(?:contact_phone_number)|(?:business_phone_number)|(?:external_url)|(?:biography)|(?:full_name)|(?:signature)|(?:verified_type)|(?:is_blue_verified)|(?:commerceUserInfo)|(?:ttSeller))"\s*:\s*("(?:[^"\\]|\\.){0,300}"|true|false|null|-?\d+(?:\.\d+)?|\{[^{}]{0,300}\})/gi;
     const data = []; let m, n = 0;
-    while ((m = rx.exec(html)) && n++ < 400) data.push([m[1], m[2]]);
+    while ((m = rx.exec(html)) && n++ < 400) data.push([m[1], m[2], m.index]);
+    // 4.30.1: the page's data also holds YOU (the signed-in viewer): your name, your followers.
+    // Where the viewed account's own block starts ("username":"1010wins") is noted, so only the
+    // data next to it is used (Instagram, Threads, TikTok).
+    const who = (location.pathname.split('/').filter(Boolean)[0] || '').replace(/^@/, '').toLowerCase();
+    const own = [];
+    if (who) { const ux = new RegExp('"(?:username|uniqueId)"\\s*:\\s*"' + who.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"', 'gi'); let u2; while ((u2 = ux.exec(html)) && own.length < 40) own.push(u2.index); }
     const top = document.querySelector('header, [role="main"]') || document.body;
     const near = el => !!el.closest('header, h1, h2, [role="main"] > div:first-child');
     const badge = [...document.querySelectorAll('[aria-label*="erified" i], [title*="erified" i], [data-testid="icon-verified"]')].filter(near).map(e => e.getAttribute('aria-label') || e.getAttribute('title') || 'verified').slice(0, 4);
@@ -393,7 +402,7 @@ const PP_SOCIAL = (() => {
     }
     // 4.24: the profile's own name as the page shows it (Facebook, YouTube...): the big heading.
     const h1 = [...document.querySelectorAll('[role="main"] h1, #page-header h1, ytd-channel-name #text, h1')].map(e => (e.innerText || e.textContent || '').split('\n')[0].trim()).find(t => t && t.length <= 80 && !/^(notifications|facebook|youtube|home|chats|menu)$/i.test(t)) || '';
-    return { h1, url: location.href, title: document.title, desc: meta('og:description') || meta('description'), ogTitle: meta('og:title'), text: (document.body ? document.body.innerText : '').slice(0, 30000), about, data, badge, links, buttons, x };
+    return { who, own, h1, url: location.href, title: document.title, desc: meta('og:description') || meta('description'), ogTitle: meta('og:title'), text: (document.body ? document.body.innerText : '').slice(0, 30000), about, data, badge, links, buttons, x };
   }
 
   // ---------- quiet lookup tabs (4.20, Ben) ----------
@@ -425,6 +434,7 @@ const PP_SOCIAL = (() => {
     const opts = { url, active: false, ...(win != null ? { windowId: win } : {}) };
     let tab;
     try { tab = await api.tabs.create({ ...opts, pinned: true }); } catch (e) { tab = await api.tabs.create(opts); }
+    QUIET.add(tab.id);
     await new Promise(res => {
       const t = setTimeout(done, ms);
       function done() { clearTimeout(t); api.tabs.onUpdated.removeListener(on); res(); }
@@ -437,11 +447,17 @@ const PP_SOCIAL = (() => {
     });
     return tab;
   }
-  const closeQuiet = tab => { if (tab) api.tabs.remove(tab.id).catch(() => {}); };
+  const closeQuiet = tab => { if (tab) { QUIET.delete(tab.id); api.tabs.remove(tab.id).catch(() => {}); } };
+  // 4.30.2 (Ben): Pause or Off closes every quiet tab straight away, and a read in progress stops
+  // (it is not counted as a failed read, so it is simply done again after Resume).
+  const QUIET = new Set();
+  const halt = { on: false };
+  function stopQuiet() { halt.on = true; for (const id of QUIET) api.tabs.remove(id).catch(() => {}); QUIET.clear(); }
   // Opens each page in a quiet pinned tab of your own browser, reads it, and closes it.
   async function readProfile(acct) {
     const out = [];
     for (const p of profilePages(acct)) {
+      if (halt.on) break;
       let tab;
       try {
         tab = await openQuiet(p.url);
@@ -492,7 +508,12 @@ const PP_SOCIAL = (() => {
     const tr = noCopyright(pages.filter(p => p.kind === 'transparency').map(p => p.text || '').join('\n') + '\n' + pages.map(p => p.about || '').join('\n'));
     const isX = plat === 'x.com' || plat === 'twitter.com';
     // On X the page's data is the viewer's and suggested accounts', not this profile's (4.24).
-    const D = {}; if (!isX) for (const p of pages) for (const [k, v] of (p.data || [])) { const key = k.toLowerCase(); if (!(key in D)) D[key] = v; }
+    // 4.30.1 (Ben: his own name showed on other Instagram accounts): the page's data holds the
+    // signed-in viewer too. Instagram, Threads, TikTok: only data within the viewed account's own
+    // block is used. Facebook: its data is not used at all (the page text and heading are).
+    const SCOPED = /^(instagram\.com|threads\.net|threads\.com|tiktok\.com)$/.test(plat);
+    const near = (p, i) => Array.isArray(p.own) && p.own.some(o => Math.abs(o - i) < 4000);
+    const D = {}; if (!isX && plat !== 'facebook.com') for (const p of pages) for (const [k, v, i] of (p.data || [])) { if (SCOPED && !(typeof i === 'number' && near(p, i))) continue; const key = k.toLowerCase(); if (!(key in D)) D[key] = v; }
     const X = isX ? (pages.find(p => p.x && p.x.name) || pages.find(p => p.x) || {}).x || null : null;
     const dv = k => k in D ? unq(D[k]) : undefined;
     const text = noCopyright(prof.text), desc = String(prof.desc || ''), top = text.slice(0, 4000);
@@ -531,7 +552,10 @@ const PP_SOCIAL = (() => {
       else if (anyFalse) f.verified = 'no';
     }
     // Name, bio, category.
-    f.name = String((X && X.name) || dv('full_name') || prof.h1 || prof.ogTitle || '').replace(/\s*[(•|].*$/, '').replace(/\s+-\s+(YouTube|Facebook|TikTok)$/i, '').trim().slice(0, 80);
+    // Instagram's and Threads' og:title is "1010 WINS (@1010wins) • Instagram photos and videos":
+    // always the viewed account, never you.
+    const ogName = (/^(.+?)\s*\(@([\w.]+)\)/.exec(prof.ogTitle || '') || [])[1] || '';
+    f.name = String((X && X.name) || (SCOPED ? ogName || dv('full_name') : prof.h1 || prof.ogTitle) || '').replace(/\s*[(•|].*$/, '').replace(/\s+-\s+(YouTube|Facebook|TikTok)$/i, '').trim().slice(0, 80);
     if (/^(log ?in|sign ?in|facebook|instagram|youtube|tiktok|x|error|page not found)$/i.test(f.name)) f.name = '';
     const bio = String((X && X.bio) || dv('biography') || dv('signature') || desc || '').slice(0, 600);
     f.category = String((X && X.category) || dv('business_category_name') || dv('category_name') || '').trim();
@@ -568,7 +592,7 @@ const PP_SOCIAL = (() => {
     f.ok = f.followers != null || !!f.name || !!f.category || !!f.country;
     // What kind of account: the site says it, or the signs add up.
     const btn = (prof.buttons || []).join(' | ');
-    f.v = 2;   // 4.24: read with the X fixes and government check
+    f.v = 4;   // 4.24: read with the X fixes and government check; 4 (4.30.1): viewer's own data left out
     const name = f.name + ' ' + bareName(acct);
     if (/shop now|shop$|view shop|book now|book$|order (now|online)|call now|get directions|directions|send email|email$|contact$|contact us|visit website|buy tickets|start order/i.test(btn)) f.signs.push('a "' + ((btn.match(/shop now|view shop|book now|order now|order online|call now|get directions|send email|contact us|visit website|buy tickets|start order|shop|book|contact|email|directions/i) || ['Contact'])[0]) + '" button');
     if (BIZ_WORDS.test(name) || BIZ_WORDS.test(bio)) f.signs.push('a business word in the name or bio ("' + ((name.match(BIZ_WORDS) || bio.match(BIZ_WORDS))[0]) + '")');
@@ -626,6 +650,6 @@ const PP_SOCIAL = (() => {
   const shortNum = n => n == null ? '' : n >= 1e9 ? (n / 1e9).toFixed(n >= 1e10 ? 0 : 1).replace(/\.0$/, '') + 'B' : n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e4 ? 0 : 1).replace(/\.0$/, '') + 'k' : String(n);
 
   return { SITES, ready, listed, isSocial, platform, postKind, fromUrl, fromTyped, isShort, unshort, publicInfo, hasPublic: url => !!OEMBED[listed(host(url))], fromTags, shapeOf, pageSigns, askFor, setMine, mine: () => mine, mineFor, ELSEWHERE, plainName, bareName, host,
-    big, profilePages, readProfileInTab, readProfile, openQuiet, closeQuiet, profileFacts, addShopSign, FOL_BANDS, folBand, shortNum };
+    big, profilePages, readProfileInTab, readProfile, openQuiet, closeQuiet, stopQuiet, halt, profileFacts, addShopSign, FOL_BANDS, folBand, shortNum };
 })();
 if (typeof self !== 'undefined') self.PP_SOCIAL = PP_SOCIAL;

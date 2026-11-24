@@ -252,7 +252,7 @@ async function readTheirPage(c, again) {
 // 4.30: is the photo really in the post? Google Lens can show your client's photo next to a
 // Facebook or Instagram link even when the post shows something else (a video, another picture):
 // it matched a picture elsewhere on that page. Only the post's own pictures count (Ben).
-// 4.33: first the post's main picture (or video cover) from its public page; if that isn't the
+// 4.32: first the post's main picture (or video cover) from its public page; if that isn't the
 // photo, the post is opened in your signed-in browser (a quiet pinned tab) and EVERY picture of it
 // is checked, so a photo that is the 3rd picture of an album is not missed. Comments, link
 // previews and suggested posts are left out. Only when every picture is clearly different does
@@ -509,6 +509,7 @@ async function drawer(list) {
   const pub = PP_CHECKS.pubDate(p);
   const hits = PP_CHECKS.rules(c, kind, c.pf);
   const capturedAt = [c.url, ...(c.alts || [])].map(u => PP_CHECKS.captureOf(logR.log, u)).find(Boolean) || c.packAt || null;
+  if (typeof acctOnOpen === 'function' && isSoc(c) && c.acct) acctOnOpen(c).then(r => { if (r && state.open === c.id) { FCD_STALE = true; render(true); } }).catch(() => {});
   if (needsPostCheck(c) && !POST_BUSY.has(c.id)) postCheck(c).then(() => { if (state.open === c.id) render(true); }).catch(() => {});
   else if (!c.pf && !PF_BUSY.has(c.id)) readTheirPage(c).then(() => { if (state.open === c.id) render(true); }).catch(() => {});
   const ck = checksParts(c, reg, kind, hits, pub, capturedAt);

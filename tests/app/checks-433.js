@@ -1,4 +1,4 @@
-// Checks for 4.33: a match made on the search site's small preview only counts when the photo is
+// Checks for 4.32: a match made on the search site's small preview only counts when the photo is
 // one of THEIR PAGE's own pictures, never one in comments, link previews or "related" boxes.
 // Pretend sites only (answered by the test, the internet is never used).
 const { start } = require('./h.js');

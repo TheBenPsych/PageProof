@@ -1,4 +1,4 @@
-// Checks for 4.30 and 4.33: a social post only counts when one of the post's OWN pictures is your client's photo.
+// Checks for 4.30 and 4.32: a social post only counts when one of the post's OWN pictures is your client's photo.
 // Google Lens can show your client's photo next to a Facebook link when the post itself shows
 // something else (a video, another photo): the match came from elsewhere on that page.
 // Pretend copies only; the post pages are stubbed (the network is never used).

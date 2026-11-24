@@ -3,3 +3,4 @@
 tools/wasm/align.wasm
 tests/capture/pages/
 tests/capture/out/
+__pycache__/

@@ -527,7 +527,7 @@ async function rememberSeen(p) {
 }
 // Match results are remembered per picture, so a link already checked is never downloaded
 // and compared again in a later search.
-const SAVE_FIELDS = ['pct', 'inl', 'tiles', 'str', 'mid', 'w', 'h', 'from', 'onPage', 'pv', 'img'];   // 4.33: and what their page check found
+const SAVE_FIELDS = ['pct', 'inl', 'tiles', 'str', 'mid', 'w', 'h', 'from', 'onPage', 'pv', 'img'];   // 4.32: and what their page check found
 function addScores(rec, p) {
   rec.scores = rec.scores || {};
   for (const l of p.links) if (l.sv === SCORE_VERSION && l.pct >= 0 && !l.fromMemory) {
@@ -703,11 +703,18 @@ async function measure(p, bmp) {
   try {
     const w = await checkInWorker(p, small);
     if (w && w.stuck) return { pct: -1, sv: SCORE_VERSION };        // took too long: shown as "Can't check"
-    let best = w ? (w.none ? null : { inliers: w.inliers, sc: w, backdrop: w.backdrop })
+    let best = w ? (w.none ? null : { inliers: w.inliers, sc: w, backdrop: w.backdrop, logos: w.logos, place: w.place, photo: w.photo })
       : await PP_ALIGN.align(await origBitmap(p), small, undefined, { fast: true });
-    if (best && !w && best.sc.lines >= 0.3) best.backdrop = PP_ALIGN.repeats(await origBitmap(p), small, best).backdropOnly;
+    if (best && !w && best.sc.lines >= 0.3) {
+      const A = await origBitmap(p), Sh = PP_ALIGN.shot(A, small, best);
+      best.backdrop = PP_ALIGN.repeats(A, small, best).backdropOnly && Sh.graphic >= 0.6;
+      Object.assign(best, { logos: Sh.logos, place: Sh.place, photo: Sh.photo });
+    }
+    // Only logos line up, or another shot of the same place: the % shown is what lines up of the
+    // photo itself (without the logos / the parts that shift), so these show low, not 50-77%.
+    const other = !!(best && (best.logos || best.place) && best.photo !== null && best.photo !== undefined);
     return {
-      pct: best ? Math.max(0, Math.min(100, Math.round(best.sc.lines * 100))) : 0,
+      pct: best ? Math.max(0, Math.min(100, Math.round((other ? best.photo : best.sc.lines) * 100))) : 0,
       inl: best && best.inliers || 0,                       // matching details found in both pictures
       tiles: best ? best.sc.matched : 0,                    // small squares that line up
       str: best ? +best.sc.strength.toFixed(2) : 0,         // how closely they line up
@@ -716,6 +723,8 @@ async function measure(p, bmp) {
       n: best ? best.sc.inside || 0 : 0,                   // small squares compared at all (the shared area)
       // Only a repeating press wall (the same logos printed over and over) lines up.
       wall: best && best.backdrop ? 1 : 0,
+      logos: best && best.logos ? 1 : 0,                    // only printed logos / lettering line up
+      place: best && best.place ? 1 : 0,                    // another shot of the same place (parallax)
       sv: SCORE_VERSION,
     };
   } catch (e) { return { pct: 0, inl: 0, tiles: 0, str: 0, mid: null, sv: SCORE_VERSION }; }
@@ -739,7 +748,7 @@ async function scoreLink(l) {
     Object.assign(l, m, { from: 'image' });
     return;
   }
-  // 4.33: only the search site's small preview was checked (Google never gives the picture's
+  // 4.32: only the search site's small preview was checked (Google never gives the picture's
   // own address). pageCheck() then looks for the photo on their page itself.
   if (quick) { Object.assign(l, quick, { from: 'preview' }); return; }
   const tb = l.thumb ? await fetchPicture(l.thumb) : null;
@@ -755,7 +764,7 @@ async function scoreLink(l) {
 // the middle), same-backdrop different photos about 0.3.
 // Version 4: a copy shrunk to a dot no longer counts (it was compared over two tiny squares and
 // could show 100%); at least 40 squares must be compared and 12 must match for Same photo.
-const SCORE_VERSION = 5;   // 5: press-wall check (4.8.3)
+const SCORE_VERSION = 6;   // 5: press-wall check (4.8.3); 6: only-logos + same-place check (4.31.0)
 const userNo = l => !!(l.url && job && job.pics[l.pic] && RS_REJECT.notMatch(l.url, job.pics[l.pic].name));
 function baseVerdict(l) {
   if (l.rescued) return 'maybe';          // you said it is a copy
@@ -765,6 +774,7 @@ function baseVerdict(l) {
   if (l.n != null && l.n < 40) return 'no';   // shared area too small to say anything
   if (!(l.tiles >= 12)) return 'no';           // too few matching squares, whatever the %
   if (l.wall) return 'no';                     // only the repeating logos behind the people line up
+  if (l.logos || l.place) return 'no';         // only logos / lettering, or another shot of the same place
   if (l.mid !== null && l.mid !== undefined && l.mid < 0.35) return 'no';
   const midOk = l.mid === null || l.mid === undefined || l.mid >= 0.42;
   // Most of the shared area must line up. Copies with a big headline over them (about 55%)
@@ -774,7 +784,7 @@ function baseVerdict(l) {
   if (l.inl >= 11 && l.tiles >= 12 && l.pct >= 40) return 'maybe';
   return 'no';
 }
-// 4.33 (Ben): a match only counts when the photo is on their page itself, never only in a
+// 4.32 (Ben): a match only counts when the photo is on their page itself, never only in a
 // comment, a link preview, a "related posts" box or a suggested post. A match made on the search
 // site's preview waits ("Checking…") until their page is read:
 //   seen     the photo is one of the page's own pictures: kept, with that picture's address
@@ -1402,7 +1412,10 @@ async function initResults() {
   scoreAll();
   for (const p of job.pics) maybeIngest(p);
   if (mine && (!job.started || unfinished)) runJob();
-  if (!BG) window.addEventListener('beforeunload', e => { if (R.running) { e.preventDefault(); e.returnValue = ''; } });
+  // 4.30.2: the browser only shows "Leave site?" after someone clicked in the tab, and logs an error
+  // (shown on edge://extensions) when a page asks without that click. So it only asks after one.
+  const clicked = () => !navigator.userActivation || navigator.userActivation.hasBeenActive;
+  if (!BG) window.addEventListener('beforeunload', e => { if (R.running && clicked()) { e.preventDefault(); e.returnValue = ''; } });
   if (BG) api.runtime.onMessage.addListener(msg => {
     if (msg && msg.type === 'ppBgStop' && msg.job === job.id && R.running) { R.stop = true; for (const t of [...R.tasks.values()]) finishTask(t, 'skip', 'Stopped'); }
     return false;
