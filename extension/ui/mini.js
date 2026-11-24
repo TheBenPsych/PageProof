@@ -7,7 +7,7 @@ const appUrl = h => api.runtime.getURL('app.html#' + h);
 const canUse = tab => tab && /^(https?|file):/.test(tab.url || '');
 const NOT_HERE = 'PageProof can\'t work on this page. Browser pages (settings, new tab, the add-on store) are protected. Open a normal website and try again.';
 const STATE = { closed: ['Stopped: tab closed', ''], running: ['Searching', 'on'], waiting: ['Resting between photos', 'on'], idle: ['Nothing due', 'on'], off: ['Off', ''], paused: ['Paused', ''], hours: ['Outside your hours', ''],
-  fifty: ['Paused for a big search', 'warn'], offline: ['Google Drive offline', 'bad'], allow: ['Needs one click', 'warn'], busy: ['Computer busy', 'warn'], resting: ['Search sites resting', 'warn'], setup: ['Not set up', 'warn'] };
+  fifty: ['Big search running', 'ok'], offline: ['Google Drive offline', 'bad'], allow: ['Needs one click', 'warn'], busy: ['Computer busy', 'warn'], resting: ['Search sites resting', 'warn'], setup: ['Not set up', 'warn'] };
 
 function err(t) { const e = $('err'); e.textContent = t; e.hidden = !t; }
 async function activeTab() { const [t] = await api.tabs.query({ active: true, lastFocusedWindow: true }); return t; }
