@@ -106,11 +106,22 @@
     }
     return {};
   };
+  // 4.37.2: Google (and Yandex) put a tiny blank placeholder in a result's picture until it is
+  // scrolled into view, and keep the real one in a data-... attribute. A placeholder is not a
+  // picture: the real one is used instead, or nothing (so it is never mistaken for the thumb).
+  const PLACEHOLDER = s => /^data:/i.test(s) && s.length < 400;
   const imgSrc = img => {
     if (!img) return '';
-    const s = img.currentSrc || img.src || img.getAttribute('data-src') || '';
-    return /^(https?:|data:image)/.test(s) && s.length < 200000 ? new URL(s, location.href).href : '';
+    const tries = [img.currentSrc, img.src, img.getAttribute('data-src'), img.getAttribute('data-iurl'), img.getAttribute('data-lazy-src'), img.getAttribute('data-original')];
+    for (const s of tries) {
+      if (!s || PLACEHOLDER(s) || !/^(https?:|data:image)/.test(s) || s.length >= 200000) continue;
+      try { return new URL(s, location.href).href; } catch (e) { /* not an address */ }
+    }
+    return '';
   };
+  // Big enough to be a result's picture (not an icon), even before it has loaded.
+  const bigEnough = i => Math.max(i.naturalWidth || 0, i.width || 0, +i.getAttribute('width') || 0, i.getBoundingClientRect().width || 0) > 40;
+  const RS_HOST = u => { try { return new URL(u).hostname.replace(/^(www|m|mobile)\./, ''); } catch (e) { return ''; } };
   const clean = s => (s || '').replace(/\s+/g, ' ').trim().slice(0, 300);
 
   function yandexLinks() {
@@ -203,11 +214,30 @@
       if (text.length > cur.title.length && !/^https?:/.test(text)) cur.title = text;
       // 4.30: a picture inside a link to somewhere else belongs to that other result (or to
       // Google's own preview of your upload), never to this link.
-      if (!cur.thumb) cur.thumb = imgSrc([...box.querySelectorAll('img')].find(i => {
-        if (/favicon/i.test(i.src) || (i.naturalWidth || i.width || 0) <= 40) return false;
+      const mine = i => {
+        if (/favicon/i.test(i.src) || !bigEnough(i) || !imgSrc(i)) return false;
         const own = i.closest('a[href]');
         return !own || own === a || extOf(own) === url;
-      }));
+      };
+      if (!cur.thumb) cur.thumb = imgSrc([...box.querySelectorAll('img')].find(mine));
+      // 4.37.2: some results (Facebook posts, X posts, YouTube videos) carry a second link, to
+      // the group, account or channel, so the block above stops at the link itself and its
+      // picture sits just outside. Look a few steps further out, but only where this result is
+      // the only one around and there is exactly one picture that can be its own.
+      if (!cur.thumb) {
+        let up = box;
+        for (let k = 0; k < 4 && up.parentElement && up.parentElement !== document.body; k++) {
+          up = up.parentElement;
+          const urls = new Set([...up.querySelectorAll('a[href]')].map(extOf).filter(Boolean));
+          if ([...urls].some(u => RS_HOST(u) !== RS_HOST(url))) break;     // another result is in here
+          // The result's own title link decides whose picture it is (not the group or account link).
+          const h = up.querySelector('a[href] h3, a[href] h2, a[href] [role="heading"]'), titleA = h && h.closest('a[href]');
+          if (titleA && extOf(titleA) !== url) break;
+          const pics = [...up.querySelectorAll('img')].filter(mine);
+          if (pics.length === 1) { cur.thumb = imgSrc(pics[0]); break; }
+          if (pics.length > 1) break;
+        }
+      }
       if (!cur.w) Object.assign(cur, sizeIn(box.textContent));
       byUrl.set(url, cur);
     }
@@ -224,6 +254,12 @@
       if (i === 6 || i === 10) window.scrollTo(0, document.body.scrollHeight);
       await sleep(500);
     }
+    // 4.37.2: walk down the whole list one screen at a time. Pictures only load when they come
+    // into view; jumping straight to the bottom skipped the middle, and those results were read
+    // with no picture ("Picture blocked").
+    const stepH = Math.max(300, Math.round(innerHeight * 0.8));
+    for (let y = 0, n = 0; y < document.body.scrollHeight && n < 60; y += stepH, n++) { window.scrollTo(0, y); await sleep(150); }
+    await sleep(400);
     window.scrollTo(0, 0);
   }
 

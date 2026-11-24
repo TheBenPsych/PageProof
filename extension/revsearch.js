@@ -769,7 +769,41 @@ async function scoreLink(l) {
   if (quick) { Object.assign(l, quick, { from: 'preview' }); return; }
   const tb = l.thumb ? await fetchPicture(l.thumb) : null;
   if (tb) { const m = await measure(p, tb.bmp); freePic(tb); Object.assign(l, m, { from: 'preview' }); return; }
+  // 4.37.2: the search site gave no picture that could be downloaded. Before giving up
+  // ("Picture blocked"), read their page once (signed out, like anyone visiting) and check its
+  // own pictures: the share picture first, then the pictures in the article.
+  if (await ownPageCheck(l, p)) return;
   l.pct = -1; l.sv = SCORE_VERSION;
+}
+async function ownPageCheck(l, p) {
+  let social = false;
+  try { social = !!(globalThis.PP_SOCIAL && PP_SOCIAL.isSocial(new URL(l.url).hostname)); } catch (e) { return false; }
+  const t0 = Date.now();
+  let best = null, bestUrl = '', bw = 0, bh = 0;
+  try {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 12000);
+    const r = await fetch(l.url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal });
+    const html = r.ok && /html/i.test(r.headers.get('content-type') || 'html') ? (await r.text()).slice(0, 3e6) : '';
+    clearTimeout(t);
+    if (!html) { PP_STATS.add('job.own.n'); PP_STATS.add('job.own.fail'); return false; }
+    const doc = new DOMParser().parseFromString(html.replace(/<script[\s\S]*?<\/script>/gi, ''), 'text/html');
+    for (const u of pagePictures(doc, r.url || l.url, social).slice(0, 4)) {
+      if (R.stop && !BG) break;
+      const pic = await fetchPicture(u);
+      if (!pic) continue;
+      const m = await measure(p, pic.bmp);
+      if (!best || (m.pct || 0) > (best.pct || 0)) { best = m; bestUrl = u; bw = pic.w; bh = pic.h; }
+      freePic(pic);
+      if (['same', 'maybe'].includes(baseVerdict({ ...m }))) break;
+    }
+  } catch (e) { PP_STATS.site(l.url, 'f'); }
+  PP_STATS.time('job.own', Date.now() - t0);
+  if (!best) { PP_STATS.add('job.own.n'); PP_STATS.add('job.own.fail'); return false; }
+  PP_STATS.add('job.own.n'); PP_STATS.add('job.own.ok');
+  // A picture of their page itself: it counts as seen on the page (a link preview card still doesn't).
+  Object.assign(l, best, { from: 'page', img: bestUrl, onPage: social && PP_SOCIAL.cardPic(bestUrl) ? 'card' : 'seen', pv: PV });
+  if (!l.w) { l.w = bw; l.h = bh; }
+  return true;
 }
 
 // Is it the same photo? Tested on real copies (cropped, resized, colour-graded, mirrored, tiny
@@ -1190,13 +1224,13 @@ function resultsSide() {
 // found; "It is a copy" rescues one that really is your photo.
 function rowFor(p, l) {
   const v = verdict(l);
-  const why = userNo(l) ? 'You: not a match' : cardOf(l) ? 'Only in a link preview' : v === 'cant' ? (l.pct === null ? 'Not checked' : 'Picture blocked') : 'Different photo';
+  const why = userNo(l) ? 'You: not a match' : cardOf(l) ? 'Only in a link preview' : v === 'cant' ? (l.pct === null ? 'Not checked' : !l.thumb && !l.img ? 'No picture' : 'Picture blocked') : 'Different photo';
   return h('div', { class: 'row' },
     (l.thumb || l.img) ? h('img', { class: 'th', src: l.thumb || l.img, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer', onerror: e => e.target.replaceWith(h('div', { class: 'th' })) }) : h('div', { class: 'th' }),
     h('div', { class: 't' }, h('a', { href: l.url, target: '_blank', rel: 'noreferrer', text: l.title || l.url, title: l.title || l.url }),
       h('small', { text: l.site + ' · ' + l.url })),
     h('div', { class: 'mt' }, h('span', { class: 'pct ' + (v === 'cant' ? 'no' : 'lo'),
-      title: v === 'cant' ? 'The site would not let PageProof download its picture, so it could not be compared. Open it to look yourself.' : 'The two pictures did not line up detail for detail.',
+      title: v === 'cant' ? (!l.thumb && !l.img ? 'The search site showed no picture for this link, and their page could not be read (Facebook and X often hide posts from anyone not signed in). Open it to look yourself.' : 'The site would not let PageProof download its picture, so it could not be compared. Open it to look yourself.') : 'The two pictures did not line up detail for detail.',
       text: why }), h('small', {}, l.w ? l.w + ' × ' + l.h : 'size unknown')),
     h('div', { class: 'tags' },
       l.engines.map(e => h('span', { class: 'tag ' + e, text: ENGINES[e].short })),
