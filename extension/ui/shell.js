@@ -36,16 +36,20 @@ const PP_CRUMBS = {
   hidden: 'Settings › Hidden and approved sites', computer: 'Settings › Your computer', whatsnew: 'Settings › What\'s new', health: 'Settings › Is everything working?', stats: 'Settings › How PageProof is doing', skipped: 'Skipped photos', bnsave: 'Save a Breaking News photo', setup: 'First-time setup', help: 'Help and tutorial'
 };
 const PP_BADGES = {};
+const PP_STATUS = { html: '', bad: false };   // the last status line drawn (4.40: it sits in the menu)
 
 function ppRenderSide(route) {
   const [sec, sub] = PP_ROUTES[route] || PP_ROUTES.home;
   let h = `<a class="brand" href="#home" style="text-decoration:none;color:inherit"><img src="icons/icon48.png" width="36" height="36" alt=""><b>PageProof</b></a>`;
   for (const it of PP_MENU) {
     const on = it.id === sec, badge = it.badgeKey && PP_BADGES[it.badgeKey];
-    h += `<a class="nav${on ? ' on' : ''}" href="#${it.href}"${on ? ' aria-current="page"' : ''}>${ic(it.icon || it.id)}<span class="t"><b>${it.label}</b></span>${badge ? `<span class="pill-n">${badge}</span>` : ''}</a>`;
+    // 4.40 (UI overhaul 1): soft blue / amber numbers; solid only when something is urgent.
+    const tone = it.badgeKey === 'toCapture' ? 'amber' : 'blue', loud = PP_BADGES[it.badgeKey + 'Urgent'];
+    h += `<a class="nav${on ? ' on' : ''}" href="#${it.href}"${on ? ' aria-current="page"' : ''}>${ic(it.icon || it.id)}<span class="t"><b>${it.label}</b></span>${badge ? `<span class="pill-n ${tone}${loud ? ' loud' : ''}"${loud ? ` title="${esc(loud)}"` : ''}>${badge}</span>` : ''}</a>`;
     if (on && it.subs) h += `<div class="subs">${it.subs.map(([l, r]) => `<a href="#${r}" class="${r === sub ? 'on' : ''}">${l}</a>`).join('')}</div>`;
   }
-  h += `<div class="grow"></div>`;
+  // 4.40: the status line (Drive, Keep searching, search sites) lives at the foot of the menu.
+  h += `<div class="grow"></div><div class="statusline sidestat${PP_STATUS.bad ? ' bad' : ''}" id="statusLine" role="status" aria-label="PageProof status"${PP_STATUS.html ? '' : ' hidden'}>${PP_STATUS.html}</div>`;
   document.getElementById('side').innerHTML = h;
   if (typeof ppSideLive === 'function') ppSideLive();
 }
