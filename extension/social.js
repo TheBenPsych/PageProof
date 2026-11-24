@@ -8,36 +8,29 @@
 const PP_SOCIAL = (() => {
   const api = typeof browser !== 'undefined' ? browser : chrome;
   // site -> [name, short label, colour]. A site covers its sub-sites (m.facebook.com).
+  // 4.25.0: Ben's fixed list. ONLY these 17 platforms count as social media. Every other site
+  // (Naver Blog, note, Twitch, Quora, Medium, Flickr, chat apps...) is a normal website.
   const SITES = {
+    'youtube.com': ['YouTube', 'YT', '#C22222'], 'youtu.be': ['YouTube', 'YT', '#C22222'], 'youtube-nocookie.com': ['YouTube', 'YT', '#C22222'],
+    'facebook.com': ['Facebook', 'FB', '#2F5BD1'], 'fb.com': ['Facebook', 'FB', '#2F5BD1'], 'fb.watch': ['Facebook', 'FB', '#2F5BD1'], 'fb.me': ['Facebook', 'FB', '#2F5BD1'], 'fb.gg': ['Facebook', 'FB', '#2F5BD1'],
     'instagram.com': ['Instagram', 'IG', '#B0367C'], 'instagr.am': ['Instagram', 'IG', '#B0367C'],
-    'tiktok.com': ['TikTok', 'TT', '#1F2430'], 'douyin.com': ['Douyin', 'DY', '#1F2430'],
-    'facebook.com': ['Facebook', 'FB', '#2F5BD1'], 'fb.com': ['Facebook', 'FB', '#2F5BD1'], 'fb.watch': ['Facebook', 'FB', '#2F5BD1'], 'fb.me': ['Facebook', 'FB', '#2F5BD1'],
+    'tiktok.com': ['TikTok', 'TT', '#1F2430'],
     'x.com': ['X', 'X', '#3B3F4A'], 'twitter.com': ['X', 'X', '#3B3F4A'], 't.co': ['X', 'X', '#3B3F4A'],
-    'threads.net': ['Threads', 'TH', '#3B3F4A'], 'threads.com': ['Threads', 'TH', '#3B3F4A'],
-    'youtube.com': ['YouTube', 'YT', '#C22222'], 'youtu.be': ['YouTube', 'YT', '#C22222'],
+    'linkedin.com': ['LinkedIn', 'IN', '#0A66C2'], 'lnkd.in': ['LinkedIn', 'IN', '#0A66C2'],
     'pinterest.com': ['Pinterest', 'PI', '#B8243A'], 'pin.it': ['Pinterest', 'PI', '#B8243A'],
+    'threads.net': ['Threads', 'TH', '#3B3F4A'], 'threads.com': ['Threads', 'TH', '#3B3F4A'],
     'reddit.com': ['Reddit', 'RD', '#C9471F'], 'redd.it': ['Reddit', 'RD', '#C9471F'],
-    'tumblr.com': ['Tumblr', 'TU', '#34465D'], 'linkedin.com': ['LinkedIn', 'IN', '#0A66C2'], 'lnkd.in': ['LinkedIn', 'IN', '#0A66C2'],
-    'snapchat.com': ['Snapchat', 'SC', '#8A7A00'], 't.me': ['Telegram', 'TG', '#1F7FB8'], 'telegram.me': ['Telegram', 'TG', '#1F7FB8'], 'telegram.org': ['Telegram', 'TG', '#1F7FB8'],
-    'vk.com': ['VK', 'VK', '#2A5D99'], 'vk.ru': ['VK', 'VK', '#2A5D99'], 'ok.ru': ['OK', 'OK', '#C76A00'],
-    'weibo.com': ['Weibo', 'WB', '#C0302B'], 'weibo.cn': ['Weibo', 'WB', '#C0302B'], 'xiaohongshu.com': ['Xiaohongshu', 'XH', '#C0303F'], 'xhslink.com': ['Xiaohongshu', 'XH', '#C0303F'],
-    'bilibili.com': ['Bilibili', 'BI', '#1E7FB0'], 'b23.tv': ['Bilibili', 'BI', '#1E7FB0'], 'zhihu.com': ['Zhihu', 'ZH', '#1764C2'], 'lofter.com': ['Lofter', 'LO', '#3E6E5E'],
-    'bsky.app': ['Bluesky', 'BS', '#1866C9'], 'mastodon.social': ['Mastodon', 'MA', '#5B49C9'], 'mstdn.social': ['Mastodon', 'MA', '#5B49C9'], 'mastodon.online': ['Mastodon', 'MA', '#5B49C9'],
-    'pixelfed.social': ['Pixelfed', 'PF', '#5B49C9'], 'misskey.io': ['Misskey', 'MI', '#4F7A1F'], 'lemmy.world': ['Lemmy', 'LE', '#3E6E5E'],
-    'truthsocial.com': ['Truth Social', 'TS', '#3F4FA8'], 'gab.com': ['Gab', 'GB', '#2F7D3F'], 'gettr.com': ['Gettr', 'GE', '#B3261E'], 'parler.com': ['Parler', 'PA', '#B3261E'], 'minds.com': ['Minds', 'MN', '#3F4FA8'], 'mewe.com': ['MeWe', 'MW', '#1F6FB8'],
-    'quora.com': ['Quora', 'QU', '#A82400'], 'flickr.com': ['Flickr', 'FL', '#C2185B'], 'flic.kr': ['Flickr', 'FL', '#C2185B'], 'deviantart.com': ['DeviantArt', 'DA', '#2E7D5B'],
-    'behance.net': ['Behance', 'BE', '#1F4FCF'], '500px.com': ['500px', '5P', '#2A2F3A'], 'imgur.com': ['Imgur', 'IM', '#2E7D3F'], '9gag.com': ['9GAG', '9G', '#2A2F3A'],
-    'vimeo.com': ['Vimeo', 'VI', '#1A7FB0'], 'dailymotion.com': ['Dailymotion', 'DM', '#1F4FCF'], 'twitch.tv': ['Twitch', 'TW', '#6B3FC9'], 'rumble.com': ['Rumble', 'RU', '#4F7A1F'], 'odysee.com': ['Odysee', 'OD', '#B3261E'],
-    'vsco.co': ['VSCO', 'VS', '#2A2F3A'], 'lemon8-app.com': ['Lemon8', 'L8', '#6E7A00'], 'likee.video': ['Likee', 'LK', '#B3267C'], 'kwai.com': ['Kwai', 'KW', '#C76A00'], 'snackvideo.com': ['Snack Video', 'SV', '#8A7A00'],
-    'triller.co': ['Triller', 'TR', '#2A2F3A'], 'weheartit.com': ['We Heart It', 'WH', '#B3267C'], 'pixiv.net': ['Pixiv', 'PX', '#1F6FB8'], 'artstation.com': ['ArtStation', 'AS', '#1F6FB8'], 'dribbble.com': ['Dribbble', 'DR', '#B3267C'],
-    'tapatalk.com': ['Tapatalk', 'TA', '#2A2F3A'], 'myspace.com': ['Myspace', 'MS', '#2A2F3A'], 'ask.fm': ['ASKfm', 'AF', '#B3261E'], 'nextdoor.com': ['Nextdoor', 'ND', '#2E7D3F'],
-    'livejournal.com': ['LiveJournal', 'LJ', '#1F5F8B'], 'ameblo.jp': ['Ameba', 'AM', '#2E7D3F'], 'note.com': ['note', 'NO', '#2A2F3A'], 'plurk.com': ['Plurk', 'PL', '#B3261E'], 'vero.co': ['VERO', 'VE', '#1F6FB8'],
-    'cara.app': ['Cara', 'CA', '#2A2F3A'], 'patreon.com': ['Patreon', 'PT', '#B3261E'], 'onlyfans.com': ['OnlyFans', 'OF', '#1F7FB8'], 'fansly.com': ['Fansly', 'FA', '#1F7FB8'], 'substack.com': ['Substack', 'SS', '#C76A00'],
-    'medium.com': ['Medium', 'ME', '#2A2F3A'], 'steemit.com': ['Steemit', 'ST', '#1F6FB8'], 'hive.blog': ['Hive', 'HV', '#B3261E'], 'spoutible.com': ['Spoutible', 'SP', '#1F6FB8'], 'post.news': ['Post', 'PN', '#2A2F3A'],
-    'whatsapp.com': ['WhatsApp', 'WA', '#2E7D3F'], 'line.me': ['LINE', 'LN', '#2E7D3F'], 'discord.com': ['Discord', 'DC', '#4F5BD5'], 'story.kakao.com': ['KakaoStory', 'KS', '#8A7A00'], 'blog.naver.com': ['Naver Blog', 'NB', '#2E7D3F'],
+    'snapchat.com': ['Snapchat', 'SC', '#8A7A00'],
+    'tumblr.com': ['Tumblr', 'TU', '#34465D'],
+    'bsky.app': ['Bluesky', 'BS', '#1866C9'], 'bsky.social': ['Bluesky', 'BS', '#1866C9'],
+    'substack.com': ['Substack', 'SS', '#C76A00'],
+    'nextdoor.com': ['Nextdoor', 'ND', '#2E7D3F'],
+    'truthsocial.com': ['Truth Social', 'TS', '#3F4FA8'],
+    'vimeo.com': ['Vimeo', 'VI', '#1A7FB0'],
+    'behance.net': ['Behance', 'BE', '#1F4FCF'],
   };
   // Pinterest and others have one site per country (pinterest.co.uk, pinterest.de).
-  const SITE_RX = [[/(^|\.)pinterest\.[a-z.]+$/, 'pinterest.com'], [/(^|\.)tumblr\.com$/, 'tumblr.com'], [/(^|\.)substack\.com$/, 'substack.com'], [/(^|\.)livejournal\.com$/, 'livejournal.com'], [/(^|\.)deviantart\.com$/, 'deviantart.com']];
+  const SITE_RX = [[/(^|\.)pinterest\.(com?\.)?[a-z]{2,3}$/, 'pinterest.com'], [/(^|\.)nextdoor\.(com?\.)?[a-z]{2,3}$/, 'nextdoor.com'], [/(^|\.)tumblr\.com$/, 'tumblr.com'], [/(^|\.)substack\.com$/, 'substack.com']];
   const host = u => { try { return new URL(u).hostname.toLowerCase().replace(/^(www\d?|m|mobile|mbasic|web|touch|old|new|np|vm|vt)\./, ''); } catch (e) { return ''; } };
   // Your own choices: site -> 'social' or 'web'. Kept in storage, read once and kept fresh.
   let mine = {};
@@ -53,8 +46,8 @@ const PP_SOCIAL = (() => {
     return '';
   }
   const mineFor = site => { const labels = String(site || '').toLowerCase().split('.'); for (let i = 0; i < labels.length - 1; i++) { const d = labels.slice(i).join('.'); if (mine[d]) return mine[d]; } return ''; };
-  // Is this site social? Your own choice wins, then the built-in list.
-  function isSocial(site) { const m = mineFor(site); return m ? m === 'social' : !!listed(site); }
+  // Is this site social? 4.25.0: only the fixed list decides (old "mark as social" choices no longer count).
+  function isSocial(site) { return !!listed(site); }
   // The platform of a site, for the little badge: { key, name, short, color }.
   function platform(site) {
     const d = listed(site);
@@ -163,11 +156,19 @@ const PP_SOCIAL = (() => {
         return okName(seg[0]) ? mk('deviantart.com', seg[0], 'https://www.deviantart.com/' + seg[0]) : null;
       }
       case 'vimeo.com': case 'dailymotion.com': case 'twitch.tv': case 'rumble.com': case 'imgur.com': case '9gag.com': case 'youtu.be': case 'redd.it': case 'pin.it': case 't.co': case 'fb.watch': case 'fb.me': case 'flic.kr': case 'lnkd.in':
+        if (d === 'vimeo.com' && okName(seg[0]) && !/^\d+$/.test(seg[0]) && !/^(channels|groups|showcase|album|ondemand|categories|blog|features|upload|manage|log_in|join)$/i.test(seg[0])) return mk('vimeo.com', seg[0], 'https://vimeo.com/' + seg[0]);
         if (d === 'twitch.tv' && okName(seg[0])) return mk('twitch.tv', seg[0], 'https://www.twitch.tv/' + seg[0]);
         if (d === 'dailymotion.com' && okName(seg[0]) && seg[0] !== 'video') return mk('dailymotion.com', seg[0], 'https://www.dailymotion.com/' + seg[0]);
         if (d === 'imgur.com' && seg[0] === 'user' && seg[1]) return mk('imgur.com', seg[1], 'https://imgur.com/user/' + seg[1]);
         if (d === 'rumble.com' && (seg[0] === 'c' || seg[0] === 'user') && seg[1]) return mk('rumble.com', seg[0] + '/' + seg[1], 'https://rumble.com/' + seg[0] + '/' + seg[1]);
         return null;
+      case 'behance.net':
+        return okName(seg[0]) && !/^(gallery|search|galleries|joblist|hire|assets|onboarding|for_you|live|moodboard|collection)$/i.test(seg[0]) ? mk('behance.net', seg[0], 'https://www.behance.net/' + seg[0]) : null;
+      case 'substack.com': {
+        const sub = h.endsWith('.substack.com') ? h.slice(0, -'.substack.com'.length) : '';
+        if (sub && !/^(www|open|on|support|cdn)$/.test(sub)) return mk('substack.com', sub, 'https://' + sub + '.substack.com/');
+        return at ? mk('substack.com', at, 'https://substack.com/' + at) : null;
+      }
       default: {
         // Any other social site (on the list, marked by you, or caught by its link shape):
         // /@name/..., /u/name, /user/name, /users/name, /profile/name, or the first part of the link.
@@ -293,10 +294,8 @@ const PP_SOCIAL = (() => {
     return '';
   }
   // Every site worth asking about once: not listed, not answered by you, and showing a sign.
-  function askFor(c) {
-    if (!c || !c.site || listed(c.site) || mineFor(c.site)) return '';
-    return shapeOf(c.url) || pageSigns(c.pf && c.pf.soc);
-  }
+  // 4.25.0: never asked any more (the list of social platforms is fixed).
+  function askFor() { return ''; }
   async function setMine(site, kind) {
     await ready;
     const m = { ...mine }, b = String(site || '').toLowerCase().replace(/^www\./, '');

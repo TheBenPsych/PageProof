@@ -1,6 +1,6 @@
 // Checks for 4.9: Copies found split into Websites and Social media. Social posts are about the
 // ACCOUNT: the account is found even when the link hides it, Stolen / Hide / Approve work per
-// account, the live preview gives way to "The post", new social sites are asked about once.
+// account, the live preview gives way to "The post", only the 17 fixed platforms are social (4.25.0).
 // Pretend accounts and photos only; the network is never used (the finder's steps are stubbed).
 const { start } = require('./h.js');
 process.env.NP = 400; process.env.NC = 120;
@@ -37,7 +37,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
       mk('s4', p2, cl2, 'https://www.instagram.com/other.pics/p/XYZ/'),
       mk('s5', p1, cl, 'https://vm.tiktok.com/ZMshort1/'),                           // short link
       mk('s6', p1, cl, 'https://www.facebook.com/share/p/1Bq8sXk3/'),                // nothing works: set by hand
-      mk('s7', p2, cl2, 'https://photoverse.example/@jane/123456789'),               // a new social site
+      mk('s7', p2, cl2, 'https://photoverse.example/@jane/123456789'),               // not a listed platform: a website
       mk('w1', p2, cl2, 'https://dailynews.example/2026/11/harbor', { pf: { ok: true, at: day(0), embeds: [{ key: 'instagram.com/harbor.light', handle: '@harbor.light', url: 'https://www.instagram.com/harbor.light/', plat: 'instagram.com' }] } }),
     ];
     for (const c of xs) { c.country = FC.countryOf(c.site); c.use = FC.useOf(c); const a = c.use === 'social' && PP_SOCIAL.fromUrl(c.url); if (a) c.acct = { ...a, from: 'link', sure: 'sure' }; }
@@ -162,22 +162,27 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(/Same photo on other platforms/.test(ap) && /Look for @harbor\.light on/.test(ap) && /Stolen before ?1 time/.test(ap), 'Account tab: stolen before, the same photo elsewhere, and where to look for the name (' + ap.slice(0, 160) + ')');
   await shot('49-account-tab');
 
-  // ---- a new social site is asked about once
+  // ---- 4.25.0: only the 17 fixed platforms are social; nothing is asked any more
   await page.evaluate(() => { state.open = ''; return render(true); }); await page.waitForTimeout(500);
   await page.click('.bigtabs [data-v="web"]'); await page.waitForTimeout(800);
-  const back = await page.evaluate(() => ({ ask: (document.querySelector('.socask') || {}).textContent || '', fClient: state.fClient }));
+  const back = await page.evaluate(() => ({ ask: !!document.querySelector('.socask'), fClient: state.fClient }));
   ok(back.fClient === 'Client B Media', 'Back on Websites, its own filters are still there');
-  ok(/photoverse\.example/.test(back.ask), 'A new social site is asked about (' + back.ask.trim().slice(0, 60) + ')');
-  await page.click('.socask [data-act="socmark"][data-v="photoverse.example|social"]'); await page.waitForTimeout(900);
-  const moved = await page.evaluate(async () => ({ use: FC.useOf(await FC.DB.get('copies', 's7')), ask: !!document.querySelector('.socask') }));
-  ok(moved.use === 'social' && !moved.ask, 'Answering "Yes, social" moves it to the Social media tab and stops asking');
+  ok(!back.ask, 'No "is this social?" question any more');
+  const fixed = await page.evaluate(() => ({
+    yes: ['m.facebook.com', 'youtu.be', 'twitter.com', 'x.com', 'threads.com', 'threads.net', 'www.behance.net', 'jane.substack.com', 'nextdoor.co.uk', 'truthsocial.com', 'player.vimeo.com', 'bsky.app', 'lnkd.in', 'pin.it', 'old.reddit.com', 'story.snapchat.com', 'foo.tumblr.com', 'vm.tiktok.com', 'instagr.am'].filter(s => !PP_SOCIAL.isSocial(s)),
+    no: ['blog.naver.com', 'note.com', 'twitch.tv', 'quora.com', 'medium.com', 'flickr.com', 'kick.com', 'patreon.com', 't.me', 'discord.com'].filter(s => PP_SOCIAL.isSocial(s)),
+    plats: new Set(Object.values(PP_SOCIAL.SITES).map(x => x[0])).size,
+    whole: [RS_LISTS.wholeSocial('instagram.com'), RS_LISTS.wholeSocial('twitch.tv'), RS_LISTS.wholeSocial('blog.naver.com')].join(),
+  }));
+  ok(!fixed.yes.length && !fixed.no.length && fixed.plats === 17, 'Only the 17 platforms count as social (wrong: ' + fixed.yes.concat(fixed.no).join(', ') + '; ' + fixed.plats + ' platforms)');
+  ok(fixed.whole === 'true,false,false', 'Instagram can only be hidden per account; Twitch and Naver Blog can be hidden as a whole site (' + fixed.whole + ')');
 
   // ---- Settings › Social sites
   await page.evaluate(() => { state.hidTab = 'social'; state.hidQ = ''; }); await go('hidden'); await page.waitForTimeout(500);
   const set2 = await page.evaluate(() => document.querySelector('main, #app, body').textContent.replace(/\s+/g, ' '));
-  ok(/photoverse\.example/.test(set2) && /social sites PageProof already knows/.test(set2), 'Settings lists your social-site choices and the built-in ones');
+  ok(/Only these 17 platforms count as social media/.test(set2) && /Behance/.test(set2) && /youtu\.be/.test(set2), 'Settings lists the 17 platforms and their web addresses');
   const snap = await page.evaluate(() => FC.settingsSnapshot());
-  ok(snap.socialSites && snap.socialSites['photoverse.example'] === 'social' && snap.accounts, 'Social-site choices and typed accounts are in the settings backup');
+  ok(snap.accounts, 'Typed accounts are in the settings backup');
 
   console.log(fails ? fails + ' FAILED' : 'ALL PASSED');
   await ctx.close();
