@@ -195,6 +195,11 @@ async function homeFinds() {
   else if (ds === 'prompt') jobs.push({ lvl: 'warn', title: 'One click needed: let PageProof read your photos again', sub: 'Your browser asks once after it restarts.', btn: { act: 'driveallow', label: 'Allow', main: 1 } });
   if (k.on && !store.fcPause && st && st.state === 'closed') jobs.push({ lvl: 'bad', title: 'Keep searching is stopped', sub: 'Its pinned PageProof tab was closed, so no new photos are being searched.', btn: { act: 'keepshow', label: 'Start it again', main: 1 } });
   for (const [e, until] of Object.entries(await FC.brokenEngines())) jobs.push({ lvl: 'bad', title: `${FC.ENGINE_NAME[e]} may have stopped working`, sub: `It gave nothing for many photos in a row, so it rests until ${new Date(until).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}. The other search sites carry on.`, btn: { href: '#health', label: 'See details' } });
+  // 4.15: the searching tab came back by itself, and the computer clock check.
+  const reo = (await api.storage.local.get('fcReopened')).fcReopened;
+  if (reo && reo.at && !reo.seen && Date.now() - reo.at < 3 * 3600000) jobs.push({ lvl: 'info', id: 'keepReopened', icon: 'check', title: 'The searching tab was closed, so PageProof opened it again', sub: `It's the small pinned tab at the far left, and it carried on where it was at ${new Date(reo.at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}. Nothing was lost.`, btn: { act: 'reopenok', label: 'OK' }, btn2: { act: 'reopenpause', label: 'Pause searching' } });
+  const clk = (await api.storage.local.get('ppClockOff')).ppClockOff;
+  if (clk && Math.abs(clk.off) > 120 && Date.now() - clk.at < 14 * 86400000) jobs.push({ lvl: 'bad', title: `This computer's clock is ${Math.round(Math.abs(clk.off) / 60)} minutes ${clk.off > 0 ? 'fast' : 'slow'}`, sub: 'Times written in your evidence won\'t match the trusted timestamp. Fix: Windows Settings › Time &amp; language › Date &amp; time › turn on "Set time automatically" and press "Sync now".', btn: { href: '#health', label: 'Details' } });
   // 2. copies that need you
   if (caps.up.length) jobs.push(capJob(caps.up));
   if (nNew) jobs.push({ lvl: 'warn', icon: 'copies', id: 'jobNew', title: `${nNew.toLocaleString()} new ${nNew === 1 ? 'copy' : 'copies'} to answer`,
@@ -362,11 +367,11 @@ async function needsCapture() {
   for (const e of log) if (e.saves && e.saves.some(s => s.at)) saved.add(FC.pageKey(e.url));
   const list = copies.filter(c => c.status === 'stolen' && !c.packAt && !FC.hiddenCopy(c, RS_LISTS.hidden) && ![c.url, ...(c.alts || [])].some(u => saved.has(FC.pageKey(u))))
     .sort((a, b) => String(a.answered || a.firstSeen).localeCompare(String(b.answered || b.firstSeen)));
-  return { up: list.filter(c => c.online !== 'gone'), gone: list.filter(c => c.online === 'gone') };
+  return { up: list };   // 4.15: no "still online" check any more, so no Gone group
 }
 V.tocapture = async () => {
-  const { up, gone } = await needsCapture();
-  const ps = new Map((await FC.DB.getMany('photos', [...new Set(up.concat(gone).map(c => c.photo))])).filter(Boolean).map(p => [p.id, p]));
+  const { up } = await needsCapture();
+  const ps = new Map((await FC.DB.getMany('photos', [...new Set(up.map(c => c.photo))])).filter(Boolean).map(p => [p.id, p]));
   const row = (c, can) => { const p = ps.get(c.photo) || {}; return `<div class="caprow" data-id="${esc(c.id)}">
     <img class="thumb" src="${safeImg(c.thumb || (c.th && FC.pics.seen(c.id)) || 'icons/icon48.png')}" alt="" referrerpolicy="no-referrer">
     <div style="min-width:0;flex:1"><b>${esc(c.site)}</b><a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>
@@ -374,9 +379,8 @@ V.tocapture = async () => {
     <div class="row" style="gap:6px">${can ? `<button class="btn" data-act="capdone" data-v="${esc(c.id)}" title="It was captured another way (another computer, another tool)">Already captured</button><button class="btn primary" data-act="capturecopy" data-v="${esc(c.id)}">${ic('capture', 16)} Capture</button>` : `<button class="btn" data-act="capdone" data-v="${esc(c.id)}">Take off this list</button>`}</div></div>`; };
   return `${head('', 'Needs a capture', 'Copies you marked Stolen that have no evidence pack yet, oldest first. Capture each one before the site takes it down. When you save its evidence pack, it leaves this list by itself.', `<a class="btn" href="#found?filter=Stolen">All stolen copies</a>`)}
   <section class="card" id="capList">
-    ${up.length ? up.map(c => row(c, true)).join('') : `<div class="job lvl-ok"><span class="jdot">${ic('check', 16, 3)}</span><div class="jt"><b>Every stolen copy that is still online has an evidence pack</b><span>Copies you mark Stolen show up here until they are captured.</span></div></div>`}
-  </section>
-  ${gone.length ? `<details class="card pad"><summary><b>${gone.length} gone before a capture</b> <span class="faint">The page no longer shows the copy. PageProof kept their picture when it was found, so you can still make an Evidence report from Copies found.</span></summary><div style="margin-top:10px">${gone.map(c => row(c, false)).join('')}</div></details>` : ''}`;
+    ${up.length ? up.map(c => row(c, true)).join('') : `<div class="job lvl-ok"><span class="jdot">${ic('check', 16, 3)}</span><div class="jt"><b>Every stolen copy has an evidence pack</b><span>Copies you mark Stolen show up here until they are captured.</span></div></div>`}
+  </section>`;
 };
 ACTS.capdone = async v => {
   const undo = await FC.markCaptured(v, 'hand');
@@ -586,6 +590,17 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['A check before you save', 'Pressing Save evidence pack first checks what people forget: an empty case number or name, a page that looks blocked, your photo missing from the capture, or a wrong computer clock. If all is fine it saves straight away; if not, you see a short list with Fix buttons and Save anyway.'],
+  ['Is your photo on the capture?', 'When you capture a page from Copies found, PageProof looks for your client\'s photo on the captured screens and ticks it off ("on screen 2"), or warns you before you save if it isn\'t there.'],
+  ['Blocked page warning', 'If a capture shows a login wall, "page not found", "access denied", a robot check or an empty page, a red box says so straight away, with Capture again.'],
+  ['Computer clock check', 'Each capture compares this computer\'s clock with the trusted timestamp. More than 2 minutes off shows on Home and Is everything working, with the Windows steps to fix it.'],
+  ['Hands off during a capture', 'If you switch tabs or minimise the window mid-capture, PageProof pauses and carries on when you come back (it used to photograph the wrong tab). Scrolling the page mid-capture no longer spoils the joins.'],
+  ['Closed the searching tab by mistake? It comes back', 'The pinned Keep searching tab reopens by itself and carries on, with a note on Home and a Pause button if you meant to stop. Its tab now says "leave open", and asks before closing.'],
+  ['Stolen copies are protected', 'Hiding a site or account, or removing a group of picked copies, never hides or removes copies you marked Stolen.'],
+  ['No more racing through by accident', 'Holding a key down gives one answer, not one after another. After 12 answers in 20 seconds PageProof offers a quick look at them, with Change on each.'],
+  ['Clear notes when ticking folders', 'Ticking a year or quarter folder, or a big group folder, in Connect your photos now explains how it will be used, with Untick it and Yes, use it.'],
+  ['Greyed-out buttons explain themselves', 'Point at a switched-off button to see why it is off and what to do.'],
+  ['"Still online" checks removed', 'PageProof no longer revisits Stolen pages every week to see if they are still up, so no computer time is spent on it. The Still online card, Back online and Gone tags and filters are gone.'],
   ['A shorter menu', 'Five items instead of nine: Home, Copies found, Clients, Evidence and Settings. Keep searching is under Copies found, the photo tools and Verify are under Evidence, and Is everything working, hidden sites and Help are under Settings.'],
   ['Home is a list of what to do now', 'The most urgent job comes first, each with one button: a stopped search, new copies to answer, stolen copies that need a capture. When nothing needs you, it says All done.'],
   ['Pop-ups are closed before a capture', 'Cookie notices, newsletter boxes and "allow notifications" boxes are closed with the site\'s own button before the first screen, and the capture log says what was closed. Turn it off in Settings › Capturing a page.'],

@@ -30,7 +30,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
 
   // ---- list
   const t = await page.evaluate(() => [...document.querySelectorAll('.qf')].map(b => b.textContent.replace(/\s+/g, ' ').trim()));
-  ok(t.length === 4 && /Found today/.test(t[0]) && /last 3 months/.test(t[3]), 'Four Quick filter buttons (' + t.join(' | ') + ')');
+  ok(t.length === 3 && /Found today/.test(t[0]) && /last 3 months/.test(t[2]), 'Three Quick filter buttons (Back online is gone in 4.15) (' + t.join(' | ') + ')');
   await page.click('.qf[data-v="fresh"]'); await page.waitForTimeout(600);
   const fr = await page.evaluate(id => ({ n: LIST.length, has: LIST.includes(id) }), ids.fresh);
   ok(fr.n >= 1 && fr.has, 'The "Published in the last 3 months" tile filters to recent photos (' + fr.n + ')');

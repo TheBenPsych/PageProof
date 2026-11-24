@@ -23,7 +23,10 @@
       <li id="pfPics" class="wait"><i></i><span>Saving the pictures</span></li>
       <li id="pfPrint" class="wait"><i></i><span>Making fingerprints</span></li>
       <li id="pfStamp" class="wait"><i></i><span>Getting trusted timestamps</span></li>
+      <li id="pfOurs" class="wait" hidden><i></i><span>Looking for your photo on the capture</span></li>
     </ul>
+
+    <div id="warnBox" class="ppwarn bad" role="alert" hidden></div>
 
     <section id="caseBox" hidden>
       <h3><b class="stepn">1</b> Case details</h3>
@@ -34,12 +37,13 @@
 
     <section id="saveBox">
       <h3><b class="stepn">2</b> Save</h3>
-      <button id="pack" class="main save" disabled>⬇ Save evidence pack</button>
+      <div id="checkBox" class="ppwarn" role="alert" hidden></div>
+      <button id="pack" class="main save" disabled data-why="Still getting the capture ready (stitching, pictures, fingerprints, timestamps). This takes a few seconds.">⬇ Save evidence pack</button>
       <div class="grid">
-        <button id="copy" class="tile" disabled title="Copy the whole capture as a picture, to paste into an email, chat or document"><span>📋</span>Copy</button>
-        <button id="markup" class="tile" disabled title="Highlight, draw and type on a copy of this capture"><span>✏️</span>Markup</button>
-        <button id="pdf" class="tile" disabled title="Download just the PDF"><span>📄</span>PDF</button>
-        <button id="html" class="tile" disabled title="Download just the HTML backup"><span>🌐</span>HTML</button>
+        <button id="copy" class="tile" disabled data-why="Still getting the capture ready (stitching, pictures, fingerprints, timestamps). This takes a few seconds." title="Copy the whole capture as a picture, to paste into an email, chat or document"><span>📋</span>Copy</button>
+        <button id="markup" class="tile" disabled data-why="Still getting the capture ready (stitching, pictures, fingerprints, timestamps). This takes a few seconds." title="Highlight, draw and type on a copy of this capture"><span>✏️</span>Markup</button>
+        <button id="pdf" class="tile" disabled data-why="Still getting the capture ready (stitching, pictures, fingerprints, timestamps). This takes a few seconds." title="Download just the PDF"><span>📄</span>PDF</button>
+        <button id="html" class="tile" disabled data-why="Still getting the capture ready (stitching, pictures, fingerprints, timestamps). This takes a few seconds." title="Download just the HTML backup"><span>🌐</span>HTML</button>
       </div>
     </section>
 
@@ -67,5 +71,6 @@
   <script src="meta.js"></script>
   <script src="report.js"></script>
   <script src="viewer.js"></script>
+<script src="ui/why.js"></script>
 </body>
 </html>

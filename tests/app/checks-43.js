@@ -115,8 +115,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await v.waitForSelector('#pack');
   await v.waitForFunction(() => !document.getElementById('pack').disabled, null, { timeout: 120000 });
   const cap = await v.evaluate(() => ({
-    proof: [...document.querySelectorAll('#proof li')].map(l => l.className + ':' + l.textContent.trim()),
-    order: [...document.querySelectorAll('#side > *')].map(e => e.id).filter(Boolean).join(' '),
+    proof: [...document.querySelectorAll('#proof li:not([hidden])')].map(l => l.className + ':' + l.textContent.trim()),
+    order: [...document.querySelectorAll('#side > *')].filter(e => !e.hidden).map(e => e.id).filter(Boolean).join(' '),
     steps: [...document.querySelectorAll('#side h3')].map(h => h.textContent.trim()).join(' | '),
     fields: [...document.querySelectorAll('#caseBox label')].map(l => l.textContent.trim().split(' ')[0]).join(' '),
     tiles: [...document.querySelectorAll('#saveBox .tile')].map(b => b.textContent.trim()).join(' '),

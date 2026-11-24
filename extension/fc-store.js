@@ -1111,6 +1111,8 @@ const FC = (() => {
   // no account in it, so "Hide this account" is matched against the account PageProof found.)
   function hiddenCopy(c, list) {
     if (typeof RS_SITE === 'undefined') return false;
+    // 4.15 (Ben's idea 11): copies you marked Stolen are never hidden by a hidden site or account.
+    if (c && c.status === 'stolen') return false;
     list = list || (typeof RS_LISTS !== 'undefined' ? RS_LISTS.hidden : []);
     if (RS_SITE.entryFor(c.site, c.url, list)) return true;
     const k = c.acct && c.acct.key;
@@ -1219,7 +1221,6 @@ const FC = (() => {
         if (!base.thumb && !c.thumb && c.th) delete base.thumb;      // its preview is already kept
         if (!base.img && c.img) base.img = c.img;
         Object.assign(c, base, { lastSeen: now, times: (c.times || 1) + 1 });
-        if (c.online === 'gone') { c.online = 'back'; c.backAt = now; }
         out.push(c);
       } else {
         const n = { id, photo: p.id, client: p.client || '', ...base, firstSeen: now, lastSeen: now, times: 1, by, status: 'new', online: 'up' };
@@ -1486,33 +1487,6 @@ const FC = (() => {
       await DB.put('clients', c);
     }
     queueDirty(); backupSoon(); touch('clients');
-  }
-
-  // ---------------------------------------------------------------- still online?
-  // Opens the page (without your cookies) and looks for the photo's file name in it.
-  async function checkOnline(c) {
-    let state = 'up', why = '';
-    try {
-      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000);
-      const r = await fetch(c.url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal });
-      clearTimeout(t);
-      if (r.status === 404 || r.status === 410) { state = 'gone'; why = 'The page is gone (' + r.status + ')'; }
-      else if (r.ok) {
-        const html = (await r.text()).slice(0, 4e6);
-        let file = '';
-        try { file = c.img ? decodeURIComponent(new URL(c.img).pathname.split('/').pop()).replace(/\.[a-z0-9]+$/i, '').replace(/[-_]\d{2,4}x\d{2,4}$/, '') : ''; } catch (e) { /* none */ }
-        if (file && file.length >= 6 && !html.includes(file)) { state = 'gone'; why = 'The page is there, but the photo is not on it any more'; }
-      } else { why = 'The site answered ' + r.status + '. Checked again next week.'; state = c.online || 'up'; }
-    } catch (e) { why = 'The site did not answer. Checked again next week.'; state = c.online || 'up'; }
-    const was = c.online;
-    c.checked = new Date().toISOString();
-    if (state === 'gone' && was !== 'gone') { c.goneAt = c.checked; await logWeek({ wentOffline: 1, site: c.site }); }
-    if (state === 'up' && was === 'gone') { state = 'back'; c.backAt = c.checked; await logWeek({ backOnline: 1, site: c.site }); }
-    if (state === 'up' && was === 'back') state = 'back';
-    c.online = state; c.onlineWhy = why;
-    await DB.put('copies', c);
-    touch('copies');
-    return c;
   }
 
   // ---------------------------------------------------------------- the week, for the weekly summary
@@ -1844,7 +1818,7 @@ const FC = (() => {
 
   return { DB, meta, open, touch, pics, dropDotMatches, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, setPicked, pickInside, SCAN, applyPendingFlags, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
-    photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setClients, checkOnline, logWeek, week, weekKey, firstNotes, searchedOnce,
+    photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setClients, logWeek, week, weekKey, firstNotes, searchedOnce,
     isPool, hiddenCountries, setHiddenCountries, ownerFor, pathOf, logReport, USE, useOf, riskOf, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
     backupSoon, backupCopiesSoon, writeSettings, writeCopies, readBackup, restore, restoreCopies, settingsSnapshot, monthsOld, newness, yearOf, quarterOf, dayOf };
 })();

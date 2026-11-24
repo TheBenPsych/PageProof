@@ -23,7 +23,7 @@ V.owners = async () => {
       <div class="row"><button class="btn primary" data-act="oseecopies" data-v="${esc(sel.key)}">See their copies</button><button class="btn" data-act="owho" data-v="${esc(sel.sites[0])}">Who's behind this site</button><button class="btn" data-act="ohideall" data-v="${esc(sel.key)}">${ic('ban', 16)} Hide all their sites</button></div>
     </section>`;
   })() : '';
-  return `${head('Find copies', 'Site owners', 'Sites that belong to one company, put together: a media group, the same company in the footer, the same Google Analytics or ad ID, or sub-sites of one domain.', unread.length ? `<button class="btn" data-act="oreadall"${state.whoBusy ? ' disabled' : ''}>${state.whoBusy ? 'Reading…' : 'Read ' + Math.min(20, unread.length) + ' more sites'}</button>` : '')}
+  return `${head('Find copies', 'Site owners', 'Sites that belong to one company, put together: a media group, the same company in the footer, the same Google Analytics or ad ID, or sub-sites of one domain.', unread.length ? `<button class="btn" data-act="oreadall"${state.whoBusy ? ' disabled data-why="PageProof is already reading a site. Wait a moment."' : ''}>${state.whoBusy ? 'Reading…' : 'Read ' + Math.min(20, unread.length) + ' more sites'}</button>` : '')}
   <p class="faint" style="margin:0;font-size:13px">${unread.length ? plural(unread.length, 'site has', 'sites have') + ' not been read yet. Keep searching reads one new site every couple of minutes.' : 'Every site with a copy has been read.'}</p>
   <div class="split">
     <section class="card" style="flex:2 1 300px;align-self:flex-start;overflow:hidden">
@@ -92,12 +92,12 @@ V.who = async () => {
       <p class="muted" style="margin:0;font-size:13.5px">Go through them in order. Tick each one when it's done. Ticks are saved for ${esc(base)}.</p>
       ${steps.map(([k, t, d, u]) => `<div class="rstep${ticks.includes(k) ? ' done' : ''}"><input type="checkbox" id="rs-${k}" data-act="rstep" data-v="${esc(base)}|${k}" ${ticks.includes(k) ? 'checked' : ''} aria-label="${esc(t)} done"><label for="rs-${k}"><b>${esc(t)}</b><span class="muted">${esc(d)}</span></label><a class="btn ghost sm" href="${safeUrl(u)}"${u.startsWith('#') ? '' : ' target="_blank" rel="noreferrer"'}>Open${u.startsWith('#') ? '' : ' ↗'}</a></div>`).join('')}
     </section>`;
-  if (!f0) return `${hd}${form}<div class="grid g2"><section class="card pad" style="display:flex;flex-direction:column;gap:10px;align-items:flex-start"><h2>${esc(w.site)}</h2><p class="muted" style="margin:0">Not read yet. PageProof opens the home page, the page with the copy, and the About, Contact and Privacy pages, and reads the domain record.</p><button class="btn primary" data-act="whoread"${state.whoBusy ? ' disabled' : ''}>${state.whoBusy ? 'Reading the site…' : 'Read the site now'}</button></section>
+  if (!f0) return `${hd}${form}<div class="grid g2"><section class="card pad" style="display:flex;flex-direction:column;gap:10px;align-items:flex-start"><h2>${esc(w.site)}</h2><p class="muted" style="margin:0">Not read yet. PageProof opens the home page, the page with the copy, and the About, Contact and Privacy pages, and reads the domain record.</p><button class="btn primary" data-act="whoread"${state.whoBusy ? ' disabled data-why="PageProof is already reading a site. Wait a moment."' : ''}>${state.whoBusy ? 'Reading the site…' : 'Read the site now'}</button></section>
     ${research}</div>`;
   const pages = [['about', 'About page'], ['contact', 'Contact page'], ['privacy', 'Privacy policy']].filter(([k]) => f[k]);
   return `${hd}${form}
   <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
-    <div class="row"><h2 style="overflow-wrap:anywhere">${esc(w.site)}</h2>${name ? `<span class="tag ok">Probably ${esc(name)}</span>` : '<span class="tag grey">No owner named</span>'}<button class="btn ghost sm" style="margin-left:auto" data-act="whoread"${state.whoBusy ? ' disabled' : ''}>${state.whoBusy ? 'Reading…' : 'Read again'}</button></div>
+    <div class="row"><h2 style="overflow-wrap:anywhere">${esc(w.site)}</h2>${name ? `<span class="tag ok">Probably ${esc(name)}</span>` : '<span class="tag grey">No owner named</span>'}<button class="btn ghost sm" style="margin-left:auto" data-act="whoread"${state.whoBusy ? ' disabled data-why="PageProof is already reading a site. Wait a moment."' : ''}>${state.whoBusy ? 'Reading…' : 'Read again'}</button></div>
     <span class="faint" style="font-size:12.5px">Read ${fmtDate(f.at)} from ${plural((f.pages || []).length, 'page')}. Only what was actually found is shown.</span>
     ${g ? `<div class="banner info" style="padding:10px 12px"><span><b>${esc(g.name)}</b>: ${esc(g.how)}</span></div>` : ''}
     <div class="grid g2">${(f.clues || []).map(c => `<div class="clue"><b>${esc(c.title)}</b><span style="overflow-wrap:anywhere">${esc(c.value)}</span><span class="faint" style="font-size:12px">From: ${esc(c.src || '')}</span></div>`).join('') || '<p class="muted">The site doesn\'t name its owner anywhere PageProof looked.</p>'}</div>
@@ -153,13 +153,11 @@ V.weekly = async () => {
   <section class="paper" style="max-width:860px">
     <div class="row"><img src="icons/icon48.png" width="28" height="28" alt=""><b>PageProof weekly summary</b><span class="muted" style="margin-left:auto">${esc(w.label)}</span></div>
     <div class="big4"><div><b>${w.searched}</b><span>photos searched</span></div><div><b>${w.found}</b><span>new copies found</span></div><div><b style="color:var(--bad)">${w.stolen}</b><span>marked stolen</span></div><div><b style="color:var(--ok)">${w.licensed}</b><span>licensed</span></div></div>
-    <div class="big4"><div><b>${w.removed}</b><span>removed</span></div><div><b>${w.wentOffline}</b><span>went offline</span></div><div><b style="color:var(--bad)">${w.backOnline}</b><span>came back online</span></div><div><b>${reports.length}</b><span>evidence reports</span></div></div>
+    <div class="big4"><div><b>${w.removed}</b><span>removed</span></div><div><b>${reports.length}</b><span>evidence reports</span></div></div>
     <h3>By client</h3>
     ${clients.length ? `<table><thead><tr><th>Client</th><th>Searched</th><th>Found</th><th>Stolen</th></tr></thead><tbody>${clients.map(([n, c]) => `<tr><td>${esc(n)}</td><td class="num">${c.searched}</td><td class="num">${c.found}</td><td class="num">${c.stolen}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nothing searched this week.</p>'}
     <h3>Every photo searched once</h3>
     <p style="margin:0">${w.first.toLocaleString()} ${w.first === 1 ? 'photo was' : 'photos were'} searched for the first time this week.${w.finished.length ? ' Every photo now searched at least once: ' + esc(w.finished.map(n => n.name + ' (' + n.n.toLocaleString() + ' photos)').join(', ')) + '.' : ''}</p>
-    ${w.back.length ? `<h3>Came back online</h3><ul>${w.back.map(([s, t]) => `<li>${esc(s)} · ${fmtDate(t)}</li>`).join('')}</ul>` : ''}
-    ${w.offline.length ? `<h3>Went offline</h3><ul>${w.offline.slice(0, 30).map(([s, t]) => `<li>${esc(s)} · ${fmtDate(t)}</li>`).join('')}</ul>` : ''}
     ${reports.length ? `<h3>Evidence reports</h3><ul>${reports.slice(0, 40).map(r => `<li>${esc(r.site)} · ${esc(r.photo || '')}${r.caseNo ? ' · case ' + esc(r.caseNo) : ''}</li>`).join('')}</ul>` : ''}
   </section>`;
 };
@@ -172,7 +170,7 @@ Object.assign(ACTS, {
     x.fillStyle = '#22252E'; x.font = 'bold 44px Arial'; x.fillText('PageProof weekly summary', 80, 130);
     x.font = '28px Arial'; x.fillStyle = '#5E6582'; x.fillText(w.label, 80, 180);
     const box = (i, n, l, col) => { const bx = 80 + (i % 4) * 275, by = 240 + Math.floor(i / 4) * 170; x.strokeStyle = '#D6DBE3'; x.lineWidth = 2; x.strokeRect(bx, by, 255, 145); x.fillStyle = col || '#22252E'; x.font = 'bold 56px Arial'; x.fillText(String(n), bx + 22, by + 76); x.fillStyle = '#5E6582'; x.font = '24px Arial'; x.fillText(l, bx + 22, by + 118); };
-    [[w.searched, 'photos searched'], [w.found, 'new copies'], [w.stolen, 'marked stolen', '#C62828'], [w.licensed, 'licensed', '#1B7F3B'], [w.removed, 'removed'], [w.wentOffline, 'went offline'], [w.backOnline, 'back online', '#C62828']].forEach((b, i) => box(i, ...b));
+    [[w.searched, 'photos searched'], [w.found, 'new copies'], [w.stolen, 'marked stolen', '#C62828'], [w.licensed, 'licensed', '#1B7F3B'], [w.removed, 'removed']].forEach((b, i) => box(i, ...b));
     let y = 650;
     x.fillStyle = '#22252E'; x.font = 'bold 32px Arial'; x.fillText('By client', 80, y); y += 50;
     x.font = 'bold 24px Arial'; ['Client', 'Searched', 'Found', 'Stolen'].forEach((t, i) => x.fillText(t, [80, 700, 860, 1020][i], y)); y += 14;

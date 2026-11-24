@@ -9,6 +9,7 @@ function ppTopBar() {
   if (!u) return;
   const n = typeof HIST === 'undefined' ? 0 : HIST.length;
   u.disabled = !n;
+  u.dataset.why = 'Nothing to undo yet. After you answer a copy, Undo puts it back.';
   u.innerHTML = `${ic('undo', 16)} Undo${n > 1 ? ` <span class="caret-d" data-undolist="1" title="Your last answers">▾</span>` : ''}`;
   u.title = n ? 'Undo: ' + HIST[n - 1].label + ' (U)' : 'Nothing to undo yet';
   const s = $id('ppSearch');

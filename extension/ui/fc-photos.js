@@ -49,7 +49,7 @@ V.connect = async () => {
         const on = pick.has(f.rel) && !f.ignore, inherited = under(f.rel), open = state.csOpen.has(f.rel) && !f.ignore;
         rows.push(`<div class="crow" style="padding-left:${10 + depth * 22}px">
           <button class="btn ghost sm" style="min-height:28px;width:28px;padding:0" data-act="csopen" data-v="${esc(f.rel)}" aria-label="${open ? 'Close' : 'Open'} ${esc(f.name)}" aria-expanded="${open}">${open ? '▾' : '▸'}</button>
-          <label style="display:flex;gap:10px;align-items:center;flex:1;min-width:0;cursor:pointer"><input type="checkbox" data-act="cspk" data-v="${esc(f.rel)}" ${(on || inherited) && !f.ignore ? 'checked' : ''} ${f.ignore ? 'disabled title="Skipped: this folder has client_info_ignore.txt"' : inherited ? 'disabled title="Included: the folder above it is ticked"' : ''}><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${on ? ';font-weight:700' : ''}${f.ignore ? ';text-decoration:line-through;color:var(--faint)' : ''}">${esc(f.name)}</span>${f.ignore ? '<span class="tag grey" style="font-size:11px;flex-shrink:0" title="client_info_ignore.txt is in this folder, so it and everything inside it is never searched">Skipped</span>' : f.id ? `<span class="tag ok" style="font-size:11px;flex-shrink:0" title="client_info.txt names this client">ID: ${esc(f.id)}</span>` : ''}</label>
+          <label style="display:flex;gap:10px;align-items:center;flex:1;min-width:0;cursor:pointer"><input type="checkbox" data-act="cspk" data-v="${esc(f.rel)}" ${(on || inherited) && !f.ignore ? 'checked' : ''} ${f.ignore ? 'disabled data-why="Skipped: this folder has client_info_ignore.txt, so it and everything inside it are never searched." title="Skipped: this folder has client_info_ignore.txt"' : inherited ? 'disabled data-why="Already included: the folder above it is ticked, and that takes in every folder inside it." title="Included: the folder above it is ticked"' : ''}><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${on ? ';font-weight:700' : ''}${f.ignore ? ';text-decoration:line-through;color:var(--faint)' : ''}">${esc(f.name)}</span>${f.ignore ? '<span class="tag grey" style="font-size:11px;flex-shrink:0" title="client_info_ignore.txt is in this folder, so it and everything inside it is never searched">Skipped</span>' : f.id ? `<span class="tag ok" style="font-size:11px;flex-shrink:0" title="client_info.txt names this client">ID: ${esc(f.id)}</span>` : ''}</label>
           ${on ? `<button class="starbtn${state.csStar.has(f.rel) ? ' on' : ''}" data-act="csstar" data-v="${esc(f.rel)}" aria-label="Priority client" title="Priority: searched right after High priority photos">★</button>` : ''}</div>`);
         if (open) {
           if (!Array.isArray(state.csTree.get(f.rel)) && !(state.csTree.get(f.rel) || {}).error) rows.push(`<div class="faint" style="padding:6px 0 6px ${42 + depth * 22}px;font-size:13px">Opening…</div>`);
@@ -69,6 +69,7 @@ V.connect = async () => {
     <label class="field" for="csLabel">Where the top folder is, as File Explorer shows it<input id="csLabel" value="${esc(d.label)}" placeholder="G:\\Shared drives"><span class="faint" style="font-size:12.5px">Your browser can't see the full path, so it's typed here once. It goes in the evidence report next to the photo.</span></label>
     ${rows.length ? `<div class="row"><b>${plural(pick.size + extras.length, 'folder')} ticked</b>${pick.size ? '<button class="btn ghost sm" data-act="csnone">Untick all</button>' : ''}<span class="faint" style="font-size:12.5px;margin-left:auto">Ticking a folder includes every folder inside it.</span></div>
       <div class="cpick" style="max-height:440px">${rows.join('')}</div>` : ''}
+    ${[...pick].filter(r => state.csNew && state.csNew.has(r) && !(state.csOk && state.csOk.has(r))).map(r => [r, csWarnFor(r)]).filter(x => x[1]).slice(0, 3).map(([r, w]) => `<div class="banner warn" role="alert" style="margin:0"><div style="flex:1 1 260px;min-width:0;font-size:13.5px">${w}</div><button class="btn" data-act="cswarnun" data-v="${esc(r)}">Untick it</button><button class="btn primary" data-act="cswarnok" data-v="${esc(r)}">Yes, use it</button></div>`).join('')}
     ${pick.size ? `<div class="chips">${[...pick].sort().map(r => `<button class="chip" data-act="cspk" data-v="${esc(r)}" title="Untick">${state.csStar.has(r) ? '★ ' : ''}${esc(r.split('/').pop())} ✕</button>`).join('')}</div>` : ''}
     ${extras.length ? `<div class="faint" style="font-size:13px">Folders outside the top folder: ${extras.map(x => `<b>${esc(x.client)}</b>`).join(', ')}</div>` : ''}
     <details><summary class="muted" style="cursor:pointer">A client's photos are outside the top folder?</summary><div class="row" style="margin-top:8px"><input id="csExtra" class="chip" style="min-height:36px;padding:0 10px;font-size:14px;flex:1 1 200px" placeholder="Client name"><button class="btn" data-act="csextra">Add their folder</button></div></details>
@@ -162,6 +163,19 @@ async function csInfoOne(rel) {
   if (par) { (par.info = par.info || {})[rel.slice(i + 1)] = info; csCacheSave(); }
   csDraw(true);
 }
+// 4.15 (Ben's idea 14): after you tick a folder, say in plain words how it will be used, and
+// warn about the usual slips (a year or quarter folder instead of the client, or a big group
+// folder that would become one client). Only folder names are read, never the photos.
+const CS_PART = /^(registered images?|\d{4}|q[1-4]|\d{4}[ _.-]*q[1-4]|q[1-4][ _.-]*\d{4}|quarter ?[1-4]|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*( \d{4})?|\d{1,2}[-_.]\d{1,2}([-_.]\d{2,4})?|\d{4}[-_.]\d{1,2}([-_.]\d{1,2})?)$/i;
+function csWarnFor(rel) {
+  if (!rel) return '';
+  const name = rel.split('/').pop(), info = state.csInfo.get(rel) || {};
+  if (info.id || info.ignore) return '';
+  if (CS_PART.test(name.trim())) return `<b>“${esc(name)}” looks like one ${/registered/i.test(name) ? 'part' : 'year, quarter or day'} of a client's photos, not the whole client.</b> Only the photos inside it would be searched, under the client name “${esc(name)}”. Usually you tick the client's own folder (the one above it) instead.`;
+  const kids = state.csTree.get(rel);
+  if (Array.isArray(kids) && kids.length >= 8 && !rel.includes('/')) return `<b>“${esc(name)}” holds ${kids.length} folders.</b> Ticked as it is, everything inside counts as ONE client called “${esc(name)}”, except folders inside that have their own client_info.txt. If these are separate clients, open it with ▸ and tick each client instead.`;
+  return '';
+}
 function csReset() { state.csTree = new Map(); state.csInfo = new Map(); state.csOpen = new Set(); state.csPick = null; state.csStar = new Set(); state.csBusy = ''; }
 Object.assign(ACTS, {
   csgo: v => {
@@ -188,9 +202,11 @@ Object.assign(ACTS, {
   cspk: v => {
     const p = state.csPick || (state.csPick = new Set());
     if (p.has(v)) { p.delete(v); state.csStar.delete(v); }
-    else { p.add(v); for (const o of [...p]) if (o.startsWith(v + '/')) { p.delete(o); state.csStar.delete(o); } csInfoOne(v); }
+    else { p.add(v); for (const o of [...p]) if (o.startsWith(v + '/')) { p.delete(o); state.csStar.delete(o); } csInfoOne(v); csLoad(v); (state.csNew = state.csNew || new Set()).add(v); }
     render(true);
   },
+  cswarnok: v => { (state.csOk = state.csOk || new Set()).add(v); render(true); },
+  cswarnun: v => { ACTS.cspk(v); toast('Unticked. Open the folder above it with ▸ and tick the client\'s own folder.'); },
   csnone: () => { state.csPick = new Set(); state.csStar = new Set(); render(true); },
   csstar: v => { if (state.csStar.has(v)) state.csStar.delete(v); else state.csStar.add(v); render(true); },
   csaddone: async () => {
@@ -258,7 +274,7 @@ V.clients = async () => {
     .sort((a, b) => state.cSort === 'new' ? (nNew[b.name] || 0) - (nNew[a.name] || 0) : state.cSort === 'photos' ? (b.photos || 0) - (a.photos || 0) : (b.priority - a.priority) || a.name.localeCompare(b.name));
   const sc = await FC.meta.get('scan');
   const nSkipped = (await FC.skipped()).length;
-  return `${head('Find copies', 'Clients and photos', 'Every client folder in your shared Google Drive. Pick which clients you search for, and star the ones that matter most.', `${nSkipped ? `<a class="btn" href="#skipped">Skipped photos <span class="pill-n" style="background:var(--warn);margin:0">${nSkipped > 999 ? '999+' : nSkipped}</span></a>` : ''}<button class="btn" data-act="cscan"${FC.SCAN.busy ? ' disabled' : ''}>${ic('refresh', 16)} ${FC.SCAN.busy ? 'Looking…' : 'Look for new photos'}</button><a class="btn" href="#connect" data-act="csreset">Change folder</a>`)}
+  return `${head('Find copies', 'Clients and photos', 'Every client folder in your shared Google Drive. Pick which clients you search for, and star the ones that matter most.', `${nSkipped ? `<a class="btn" href="#skipped">Skipped photos <span class="pill-n" style="background:var(--warn);margin:0">${nSkipped > 999 ? '999+' : nSkipped}</span></a>` : ''}<button class="btn" data-act="cscan"${FC.SCAN.busy ? ' disabled data-why="PageProof is already looking for new photos. Wait for it to finish."' : ''}>${ic('refresh', 16)} ${FC.SCAN.busy ? 'Looking…' : 'Look for new photos'}</button><a class="btn" href="#connect" data-act="csreset">Change folder</a>`)}
   ${await driveBanner()}
   ${state.scanText ? `<div class="scanbar"><span class="spin"></span>${esc(state.scanText)}</div>` : sc ? `<p class="faint" style="margin:0;font-size:13px">Last looked ${fmtDate(sc.at)}${sc.added ? ' · ' + sc.added + ' new photos' : ''}. PageProof looks in this and last quarter's folders every hour, and every folder once a week on a weekday (8 AM to 6 PM).</p>` : ''}
   <section class="card" style="overflow:hidden">
@@ -536,7 +552,7 @@ V.keep = async () => {
   const hlabel = h => new Date(2000, 0, 1, h).toLocaleTimeString(undefined, { hour: 'numeric' });
   return `${head('Find copies', 'Keep searching', 'Searches your clients\' photos one at a time, all day, in a small pinned PageProof tab. It goes gently so the search sites don\'t block you.')}
   ${await driveBanner()}
-  ${k.on && !store.fcPause && st && st.state === 'closed' ? keepClosedBanner() : ''}
+  ${k.on && !store.fcPause && st && st.state === 'closed' ? keepClosedBanner() : ''}${await keepReopenedBanner()}
   <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
     <div class="row"><label class="switch"><input type="checkbox" data-act="keepon" ${k.on ? 'checked' : ''}><span></span></label><h2>Keep searching is ${k.on ? 'on' : 'off'}</h2><span class="tag ${tc}" style="margin-left:auto">${tl}</span></div>
     ${k.on ? `<p class="muted" style="margin:0">${esc(alive ? st.text : st && st.state === 'closed' ? 'Stopped: its pinned tab was closed.' : 'Starting the search tab…')}</p>
@@ -561,7 +577,7 @@ V.keep = async () => {
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
       <div class="row"><h2>Today's 50</h2>${fifty ? '<span class="tag ok" style="margin-left:auto">Running now</span>' : ''}</div>
       <p class="muted" style="margin:0;font-size:14px">A bigger batch at once. It runs quietly in the small pinned PageProof tab, so you can keep working and close this page (see how far it is in All searches). Keep searching pauses while it runs, then carries on. The 50 are the next photos in line.</p>
-      <div class="row"><label class="mini">How many<select data-act="keepnum" data-v="perDay">${[10, 25, 50, 75, 100].map(n => `<option value="${n}" ${k.perDay === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label class="mini">Which photos<select data-act="keepset2" data-v="fiftyWhich"><option value="next" ${k.fiftyWhich !== 'first' ? 'selected' : ''}>Next in line</option><option value="first" ${k.fiftyWhich === 'first' ? 'selected' : ''}>Never searched first</option></select></label><button class="btn primary" data-act="fifty"${fifty ? ' disabled' : ''}>Check ${k.perDay} now</button></div>
+      <div class="row"><label class="mini">How many<select data-act="keepnum" data-v="perDay">${[10, 25, 50, 75, 100].map(n => `<option value="${n}" ${k.perDay === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label class="mini">Which photos<select data-act="keepset2" data-v="fiftyWhich"><option value="next" ${k.fiftyWhich !== 'first' ? 'selected' : ''}>Next in line</option><option value="first" ${k.fiftyWhich === 'first' ? 'selected' : ''}>Never searched first</option></select></label><button class="btn primary" data-act="fifty"${fifty ? ' disabled data-why="Today\'s check is already running. It carries on by itself."' : ''}>Check ${k.perDay} now</button></div>
       <label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" data-act="keepauto" ${k.fiftyAuto ? 'checked' : ''}> Start by itself every weekday at <input type="time" value="${esc(k.fiftyTime)}" data-act="keeptime" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);padding:2px 6px"></label>
       <p class="faint" style="margin:0;font-size:13px">On this computer 50 photos take ${esc(hw.limits.fifty)}.</p>
     </section>
@@ -632,6 +648,16 @@ Object.assign(ACTS, {
   },
 });
 
+// 4.15: the searching tab was closed by hand and came back by itself.
+async function keepReopenedBanner() {
+  const r = (await api.storage.local.get('fcReopened')).fcReopened;
+  if (!r || !r.at || r.seen || Date.now() - r.at > 3 * 3600000) return '';
+  return `<div class="banner info" role="status" id="keepReopened">${ic('help', 22)}<div style="flex:1 1 260px;min-width:0"><b>The searching tab was closed, so PageProof opened it again</b><div style="font-size:13.5px">It's the small pinned tab at the far left, and it carried on where it was at ${new Date(r.at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}. Nothing was lost.</div></div><button class="btn ghost" data-act="reopenpause">Pause searching</button><button class="btn" data-act="reopenok">OK</button></div>`;
+}
+Object.assign(ACTS, {
+  reopenok: async () => { const r = (await api.storage.local.get('fcReopened')).fcReopened || {}; await api.storage.local.set({ fcReopened: { ...r, seen: true } }); render(true); },
+  reopenpause: async () => { const r = (await api.storage.local.get('fcReopened')).fcReopened || {}; await api.storage.local.set({ fcPause: Date.now(), fcReopened: { ...r, seen: true } }); toast('Searching is paused. Press Resume on Keep searching to start again.'); render(true); },
+});
 // Shown when Keep searching is on but you closed its pinned tab (Ben, 4.4.3).
 function keepClosedBanner() {
   return `<div class="banner warn" role="alert">${ic('help', 22)}<div style="flex:1 1 260px;min-width:0"><b>Keep searching is stopped</b><div style="font-size:13.5px">Its pinned PageProof tab was closed, so no new photos are being searched.</div></div><button class="btn primary" data-act="keepshow">Start it again</button></div>`;

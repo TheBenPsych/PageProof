@@ -159,7 +159,6 @@ const PP_EVIDENCE = (() => {
       copy.use ? ['How it\'s used', copy.use] : null,
       ['First seen', dayText(copy.firstSeen) + (copy.by ? ' by ' + copy.by : '') + (copy.engines && copy.engines.length ? ' (' + copy.engines.map(e => ENG[e] || e).join(', ') + ')' : '')],
       ['Seen again', seen],
-      copy.online === 'gone' ? ['Online now', { t: 'Gone when last checked. This report still shows it was there.', color: ORANGE }] : null,
     ]);
     // About this use: dates, damages, the credit line on their page and signs it was on purpose.
     const ck = opts.checks;

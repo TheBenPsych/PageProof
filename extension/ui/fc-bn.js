@@ -94,7 +94,7 @@ V.bnsave = async () => {
       <label class="row" style="gap:8px;font-size:14px;cursor:pointer"><input id="bnPool" type="checkbox" data-act="bnpool" ${b.pool ? 'checked' : ''}> <span><b>POOL photo</b> <span class="muted">(court photo shared with other papers; it is never searched)</span></span></label>
       <div class="dsec"><div class="dsh">File name</div><div class="mono bnname" id="bnName">${esc(name)}</div>${leadZero ? '<span class="tag warn">No leading zeros in the date</span>' : ''}</div>
       <div class="dsec"><div class="dsh">New or recycled?</div>${b.client ? (bnVerdict(b.check) || (BN_BLOB ? `<button class="btn" data-act="bncheck">Check against ${esc(b.client)}'s photos</button>` : '')) : '<span class="muted" style="font-size:13.5px">Pick the photographer to check.</span>'}</div>
-      <button class="btn primary" data-act="bnsave" ${BN_BLOB && b.client && b.subject && b.last ? '' : 'disabled'}>${ic('down', 18)} Save as ${esc(name)}</button>
+      <button class="btn primary" data-act="bnsave" ${BN_BLOB && b.client && b.subject && b.last ? '' : `disabled data-why="${!BN_BLOB ? 'Add the picture first.' : 'Fill in the ' + [!b.client && 'photographer', !b.subject && 'subject', !b.last && 'last name'].filter(Boolean).join(', ') + ' first.'}"`}>${ic('down', 18)} Save as ${esc(name)}</button>
       ${b.saved ? `<div class="banner ok" style="padding:10px 12px"><span>Saved as <b>${esc(b.saved)}</b>.</span></div>` : '<span class="faint" style="font-size:12.5px">Fill in the photographer, subject and last name to save.</span>'}
     </section>
   </div>`;

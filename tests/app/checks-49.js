@@ -115,7 +115,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.evaluate(async () => { await hideSite('instagram.com/harbor.light'); FCD = null; return render(true); }); await page.waitForTimeout(800);
   const hid = await page.evaluate(() => ({ list: LIST.slice(), hidden: RS_LISTS.hidden.includes('instagram.com/harbor.light') }));
   ok(hid.hidden && !hid.list.includes('s2') && !hid.list.includes('s3'), 'Hiding @harbor.light hides its posts, including the /p/ link that doesn\'t show the account');
-  ok(await page.evaluate(() => { state.fFilter = 'All'; return true; }) && !hid.list.includes('s1'), 'Its stolen post is hidden too');
+  // 4.15 (Ben's pick 11): copies marked Stolen are never hidden by a hidden account or site.
+  ok(await page.evaluate(async () => !FC.hiddenCopy(await FC.DB.get('copies', 's1'), RS_LISTS.hidden) && (await FC.DB.get('copies', 's1')).status === 'stolen'), 'Its Stolen post stays in your list (Stolen copies are never hidden)');
   const n = await page.evaluate(() => FC.countNew());
   const nVis = await page.evaluate(async () => (await FC.allCopies()).filter(c => c.status === 'new' && !FC.hiddenCopy(c, RS_LISTS.hidden) && !FCD.countries.includes(c.country)).length);
   ok(n === nVis, 'The new-copies number leaves out hidden accounts (' + n + ' = ' + nVis + ')');
