@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.39.0** (24 Nov 2026).
+Last updated: version **4.40.0** (24 Nov 2026).
 
 ---
 
@@ -242,3 +242,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.37.1 | 24 Nov | Fix: Bing reads its Visual matches with their pictures |
 | 4.38 | 24 Nov | Far fewer "Picture blocked" links (lazy pictures, Facebook/X links, page fallback) |
 | 4.39 | 24 Nov | Seals, crests, small slices and patterns (fences, floors) no longer count as copies |
+| 4.40 | 24 Nov | New look part 1: menu, top bar and Home |
