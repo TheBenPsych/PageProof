@@ -7,7 +7,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > and as one line in the timeline. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.25.0** (24 Nov 2026).
+Last updated: version **4.27.0** (24 Nov 2026).
 
 ---
 
@@ -88,6 +88,7 @@ Last updated: version **4.25.0** (24 Nov 2026).
 - **Group by site or site owner,** fold "N more from this site", sister sites together, one row per page (same page at different addresses merged). (4.2, 4.14)
 - **One at a time** view for fast reviewing. (4.2, 4.3)
 - **Hide a site** (this account / this sub-site / whole domain), **Approve a site** for one client or all, hidden countries. (3.10 to 4.6.5)
+- **Countries: pick the ones to show.** Website copies show only from the countries you pick (United States and Puerto Rico to start); sites whose country isn't known always show. (4.27)
 - **Before you mark Stolen:** rule check by kind of site, photo credit read from their page, signs it was on purpose, date first published, damages hint, and a Ready for legal checklist. (4.4)
 - **Breaking News saver:** saves a photo named the firm's way and checks if it's new or recycled. (4.4)
 - **Site owners** page groups sites run by one company (footer name, shared analytics IDs). **Who's behind this site** helps with OpenCorporates, USPTO and Google lookups. (4.0)
@@ -103,6 +104,10 @@ Last updated: version **4.25.0** (24 Nov 2026).
 - **Websites and Social media tabs.** On social sites, Stolen, Hide and Approve work per **account**, not the whole site. About 80 social sites known, new ones spotted automatically. A whole social site can never be hidden. (4.9, 4.9.5)
 - **Account finder** from the link, short links, public post info, page tags or your own browser. **Same person** joins accounts across platforms. (4.9)
 - **Followers, Verified, account type, country and company** read automatically (no typing by hand), with filters and sorting. (4.12)
+- **X details read right.** Followers, check mark and type come from the account itself, not your own account or X's page footer ("X Corp."). (4.27)
+- **Kinds of check mark, drawn like the site.** X blue = Paid (bought), X gold = Verified organisation, grey = Government, Instagram/Facebook = Meta check (paid or earned look the same), others = Verified. Filter "Really verified (not bought)". (4.27)
+- **Government accounts hidden.** Anyone in or running for public office (Congresswoman, Councilman, "for Council", campaign or .gov sites, grey check) is type Government and hidden unless you tick Show government. (4.27)
+- **Real names on accounts.** "Matt Thibodeau" instead of the number from the link, with the handle small beside it (Facebook numbers, YouTube channel IDs and more). Country filled from Facebook Page transparency or the place on the profile. (4.27)
 - **Social media means the 17 main platforms only** (YouTube, Facebook, Instagram, TikTok, X, LinkedIn, Pinterest, Threads, Reddit, Snapchat, Tumblr, Bluesky, Substack, Nextdoor, Truth Social, Vimeo, Behance). Every other site is a normal website again, so country filters and whole-site hiding work on it. No more "is this social?" questions. (4.25)
 
 ## 7. Everyday tools
@@ -197,3 +202,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.23 | 24 Nov | Stolen before links in Copies found |
 | 4.24 | 24 Nov | Spam blog copies hidden until you show them |
 | 4.25 | 24 Nov | Social media means the 17 main platforms only |
+| 4.27 | 24 Nov | X details fixed, check kinds, Government hidden, countries to show, real account names |
