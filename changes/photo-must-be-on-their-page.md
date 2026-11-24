@@ -1,0 +1,6 @@
+type: new
+title: The photo must be on their page itself
+news: Every Google match is now checked against their page before it shows up. It only counts when your client's photo is one of the page's own pictures: comments, link previews, "related posts", sidebars and "More posts from…" grids don't count. For Facebook, Instagram and X, PageProof opens the post in a quiet pinned tab of your signed-in browser and looks at every picture (albums too) before removing a match. A page that can't be read stays a Maybe.
+timeline: Photo must be on their page itself (checked during the search, every picture of social posts)
+feature 4: **The photo must be on their page itself.** A match made on Google's small preview is checked against the page during the search: the article's own pictures count, comments, sidebars and "related" boxes don't. If the photo isn't there, the match is left out; if the page can't be read, it's only a Maybe.
+feature 6: **Every picture of a social post checked.** When a post's main picture isn't the photo, the post is opened in your signed-in browser and every picture (albums, video covers) is looked at, leaving out comments, replies, link previews and "More posts" grids. Only then is a match moved to Removed (Put back works).

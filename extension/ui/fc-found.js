@@ -251,15 +251,21 @@ async function readTheirPage(c, again) {
 }
 // 4.30: is the photo really in the post? Google Lens can show your client's photo next to a
 // Facebook or Instagram link even when the post shows something else (a video, another picture):
-// its small preview may come from a nearby result or another post on that page. For a social copy
-// matched on the search site's preview only, the post's own main picture (or video cover) is
-// lined up with your client's photo. A clearly different picture is flagged "Not seen in the post".
-const POSTCHK_V = 1;
+// it matched a picture elsewhere on that page. Only the post's own pictures count (Ben).
+// 4.35: first the post's main picture (or video cover) from its public page; if that isn't the
+// photo, the post is opened in your signed-in browser (a quiet pinned tab) and EVERY picture of it
+// is checked, so a photo that is the 3rd picture of an album is not missed. Comments, link
+// previews and suggested posts are left out. Only when every picture is clearly different does
+// the copy go to Removed by itself ("Not seen in the post"; Put back still works).
+const POSTCHK_V = 2;
 const POST_BUSY = new Set();
+const POST_HELD = new Map();     // copy id -> when a check was held by Pause (not tried again for a minute)
 // 4.32: a link to an account page has no "post's own picture" (its picture is the profile photo),
 // so it is never checked or removed this way. The repost check finds the exact post instead.
 const acctPageLink = c => typeof PP_REPOST !== 'undefined' && PP_REPOST.profileOnly(c);
-const needsPostCheck = c => isSoc(c) && (c.status !== 'removed' || (c.removedBy === 'postcheck' && slidesDue(c))) && !acctPageLink(c) && (!c.postChk || c.postChk.v !== POSTCHK_V || slidesDue(c));
+const needsPostCheck = c => isSoc(c) && !(Date.now() - (POST_HELD.get(c.id) || 0) < 60000) && !acctPageLink(c)
+  && (c.status !== 'removed' || (c.removedBy === 'postcheck' && slidesDue(c)))
+  && (slidesDue(c) || (c.onPage !== 'seen' && !/^https?:/i.test(c.img || '') && (!c.postChk || c.postChk.v !== POSTCHK_V)));
 async function bitmapOf(blob, max = 640) {
   const bm = await createImageBitmap(blob);
   const f = Math.min(1, max / Math.max(bm.width, bm.height));
@@ -268,51 +274,128 @@ async function bitmapOf(blob, max = 640) {
   try { bm.close(); } catch (e) { /* freed */ }
   return small;
 }
-async function postCheck(c) {
+// One of their pictures against your client's photo: seen, notSeen, unsure (a burst shot from the
+// same spot), or null when the picture can't be downloaded.
+async function lineUpWith(ours, url) {
+  let bm = null;
+  try {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 15000);
+    const r = await fetch(url, { credentials: 'omit', referrerPolicy: 'no-referrer', signal: ctl.signal });
+    clearTimeout(t);
+    if (!r.ok) return null;
+    bm = await bitmapOf(await r.blob());
+    const best = await PP_ALIGN.align(ours, bm, undefined, { fast: true });
+    const pct = best ? Math.max(0, Math.min(100, Math.round(best.sc.lines * 100))) : 0;
+    const inl = best ? best.inliers || 0 : 0;
+    return { pct, state: inl >= 12 && pct >= 60 ? 'seen' : inl < 10 || pct < 40 ? 'notSeen' : 'unsure' };
+  } catch (e) { return null; } finally { if (bm) try { bm.close(); } catch (e) { /* freed */ } }
+}
+// Runs inside the post's tab: the post's own pictures (and video covers). Comments (posts inside
+// the post), link previews, the account picture and side boxes are left out. Multi-picture posts
+// are stepped through with their Next button.
+async function readPostPicsInTab() {
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  // The post itself: the outermost article that links to this post's own address (on X, the
+  // tweets above a reply and the replies below are articles too; on Instagram and Facebook the
+  // "More posts from…" grid and suggested posts sit outside it).
+  const idOf = h => { try { const u = new URL(h, location.href); const m = u.pathname.match(/\/(?:p|reel|reels|tv|status|posts|videos|permalink|photo)\/([^/?#]+)/i) || u.pathname.match(/\/(\d{6,})\/?$/); return m ? m[1] : (u.searchParams.get('story_fbid') || u.searchParams.get('fbid') || ''); } catch (e) { return ''; } };
+  const me = idOf(location.href);
+  const roots = [...document.querySelectorAll('[role="dialog"] [role="article"], [role="main"] [role="article"], article')].filter(r => !r.parentElement || !r.parentElement.closest('[role="article"], article'));
+  const root = (me && roots.find(r => [...r.querySelectorAll('a[href]')].some(a => idOf(a.href) === me))) || roots[0] || document.querySelector('[role="main"], main') || document.body;
+  const out = [];
+  const grab = () => {
+    for (const el of root.querySelectorAll('img, video')) {
+      const inner = el.closest('[role="article"], article');
+      if (inner && inner !== root && root.contains(inner)) continue;                      // a comment or a reply
+      // A picture that links to ANOTHER post ("More posts from…", suggested and related posts).
+      const lk = el.closest('a[href]'); const other = lk && idOf(lk.href);
+      if (other && me && other !== me && !/\/photo/i.test(lk.href)) continue;
+      if (el.closest('a[href*="l.facebook.com"], a[href*="l.instagram.com"], a[href*="lm.facebook.com"], [role="complementary"], header, [role="banner"]')) continue;
+      const u = el.tagName === 'VIDEO' ? el.poster : (el.currentSrc || el.src);
+      const w = el.naturalWidth || el.videoWidth || el.width || 0, h = el.naturalHeight || el.videoHeight || el.height || 0;
+      if (!/^https?:/.test(u || '') || (el.tagName !== 'VIDEO' && (w < 200 || h < 150)) || out.includes(u)) continue;
+      out.push(u);
+    }
+  };
+  grab();
+  for (let i = 0; i < 12; i++) {
+    const next = root.querySelector('button[aria-label="Next" i], [aria-label="Next photo" i], [aria-label="Next image" i]');
+    if (!next || out.length >= 15) break;
+    next.click(); await wait(600); grab();
+  }
+  return out.slice(0, 15);
+}
+async function postInBrowser(c, ours) {
+  if (!globalThis.PP_SOCIAL || !PP_SOCIAL.openQuiet || !api.scripting) return null;
+  // Quiet tabs follow Keep searching (4.30.2): none while it is paused, off or outside its hours.
+  try { if (!(await FC.quietOK()).ok) return { held: true }; } catch (e) { /* no check: carry on */ }
+  PP_SOCIAL.halt.on = false;
+  let tab;
+  try {
+    tab = await PP_SOCIAL.openQuiet(c.url);
+    if (PP_SOCIAL.halt.on) return { held: true };
+    await new Promise(r => setTimeout(r, 3000));      // the sites draw the post after loading
+    const [res] = await api.scripting.executeScript({ target: { tabId: tab.id }, func: readPostPicsInTab });
+    const urls = (res && res.result) || [];
+    if (!urls.length) return null;                     // signed out, or the post is gone
+    let n = 0, unsure = false;
+    if (PP_SOCIAL.halt.on) return { held: true };       // paused while the post was open
+    for (const u of urls) {
+      const m = await lineUpWith(ours, u);
+      if (!m) continue;
+      n++;
+      if (m.state === 'seen') return { state: 'seen', pct: m.pct, pic: u, n };
+      if (m.state === 'unsure') unsure = true;
+    }
+    return n ? { state: unsure ? 'unsure' : 'notSeen', n } : null;
+  } catch (e) { return null; } finally { if (tab) PP_SOCIAL.closeQuiet(tab); }
+}
+async function postCheck(c, opts = {}) {
   if (POST_BUSY.has(c.id) || typeof PP_ALIGN === 'undefined') return null;
   POST_BUSY.add(c.id);
-  const A = [];
+  let ours = null;
   try {
     const pf = c.pf && c.pf.ok && 'pic' in c.pf ? c.pf : await readTheirPage(c, true).catch(() => null);
-    let res = { v: POSTCHK_V, at: new Date().toISOString(), pic: '', state: 'unknown' };
-    if (pf && pf.ok && pf.pic) {
+    const res = { v: POSTCHK_V, at: new Date().toISOString(), pic: '', state: 'unknown' };
+    res.video = !!pf && (/^video/i.test(pf.type || '') || /\/(reel|videos?|watch)\b/i.test(pf.url || c.url || ''));
+    try { ours = await bitmapOf(await ourBlob(FCD && FCD.photos.get(c.photo))); } catch (e) { res.err = String(e && e.message || e).slice(0, 120); }
+    if (ours && pf && pf.ok && pf.pic) {
       res.pic = pf.pic;
-      try {
-        const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 15000);
-        const r = await fetch(pf.pic, { credentials: 'omit', referrerPolicy: 'no-referrer', signal: ctl.signal });
-        clearTimeout(t);
-        if (r.ok) {
-          const p = FCD && FCD.photos.get(c.photo);
-          const ours = await bitmapOf(await ourBlob(p)); A.push(ours);
-          const theirs = await bitmapOf(await r.blob()); A.push(theirs);
-          const best = await PP_ALIGN.align(ours, theirs, undefined, { fast: true });
-          const pct = best ? Math.max(0, Math.min(100, Math.round(best.sc.lines * 100))) : 0;
-          const inl = best ? best.inliers || 0 : 0;
-          res.pct = pct;
-          // Clearly the same photo, clearly not, or in between (no flag: a burst shot from the same spot).
-          res.state = inl >= 12 && pct >= 60 ? 'seen' : inl < 10 || pct < 40 ? 'notSeen' : 'unsure';
-          res.video = /^video/i.test(pf.type || '') || /\/(reel|videos?|watch)\b/i.test(pf.url || c.url || '');
-        }
-      } catch (e) { res.err = String(e && e.message || e).slice(0, 120); }
+      const m = await lineUpWith(ours, pf.pic);
+      if (m) { res.pct = m.pct; res.state = m.state; }
+    }
+    // Not the main picture (or no picture readable): look at every picture of the post.
+    // (TikTok photo posts are read slide by slide by slidesInto below instead.)
+    const tiktokSlides = typeof PP_TIKTOK !== 'undefined' && PP_TIKTOK.isPhotoPost(c.url);
+    if (ours && res.state !== 'seen' && opts.browser !== false && !tiktokSlides) {
+      const b = await postInBrowser(c, ours);
+      // Paused, off or outside the hours: nothing is saved, so the post is checked after Resume.
+      if (b && b.held) { POST_HELD.set(c.id, Date.now()); return null; }
+      if (b) {
+        res.browser = b.state; res.n = b.n;
+        if (b.state === 'seen') { res.state = 'seen'; res.pct = b.pct; res.pic = b.pic; }
+        else if (b.state === 'notSeen' && res.state !== 'unsure') res.state = 'notSeen';
+        else res.state = 'unsure';
+      }
     }
     await slidesInto(c, res);         // TikTok slideshows: every slide, and which one it is
     const cc = await FC.DB.get('copies', c.id);
     if (cc) { cc.postChk = res; await FC.DB.put('copies', cc); }
     c.postChk = res; FCD_STALE = true;
-    // Ben (4.30): only the post's own picture counts, never a picture in its comments or links.
-    // A new copy whose post clearly shows a different photo goes to Removed (Put back still works).
-    if (res.state === 'notSeen' && notInPost(c) && c.status === 'new' && !/by hand/.test(c.by || '')) {
+    // Ben (4.30): only the post's own pictures count, never a picture in its comments or links.
+    // Removed by itself only when every picture of the post was looked at and none is the photo.
+    if (res.state === 'notSeen' && res.browser === 'notSeen' && notInPost(c) && c.status === 'new' && !/by hand/.test(c.by || '')) {
       await FC.answer([c.id], 'removed', { removedBy: 'postcheck' });
       c.status = 'removed'; c.removedBy = 'postcheck';
     }
     return res;
   } finally {
-    for (const b of A) { try { b.close(); } catch (e) { /* freed */ } }
+    if (ours) try { ours.close(); } catch (e) { /* freed */ }
     POST_BUSY.delete(c.id);
   }
 }
 const notInPost = c => isSoc(c) && !acctPageLink(c) && c.postChk && c.postChk.state === 'notSeen' && !/^https?:/i.test(c.img || '');
-const NOT_IN_POST = c => `The post's own ${c.postChk.video ? 'video cover' : 'picture'} is a different photo. Google matched a picture somewhere else on that page (a comment, a link preview, a suggested post), and only the post's own picture counts.${c.removedBy === 'postcheck' ? ' So PageProof moved it to Removed. Put it back if your client\'s photo is in the post after all (for example a later picture in a multi-picture post).' : ' Open the post and look before marking Stolen.'}`;
+const NOT_IN_POST = c => `${c.postChk.browser === 'notSeen' ? `None of the post's ${c.postChk.n > 1 ? c.postChk.n + ' pictures' : 'pictures'} is your client's photo` : `The post's own ${c.postChk.video ? 'video cover' : 'picture'} is a different photo`}. Google matched a picture somewhere else on that page (a comment, a link preview, a suggested post), and only the post's own pictures count.${c.removedBy === 'postcheck' ? ' So PageProof moved it to Removed. Put it back if you see the photo in the post.' : ' Open the post and look before marking Stolen.'}`;
 const ruleRow = h => `<div class="rrow ${h.lvl}"><span class="tag ${PP_CHECKS.LVL[h.lvl][1]}">${PP_CHECKS.LVL[h.lvl][0]}</span><span>${esc(h.text)}</span></div>`;
 function kindSelect(c, kind, id) {
   const guess = kind ? '' : PP_CHECKS.guessKind(c, c.pf, FCD && FCD.facts.get(c.site));
@@ -502,7 +585,7 @@ async function drawer(list) {
       ${picLinkRow(c)}
       <dt>How it's used</dt><dd>${esc(FC.USE[c.use][0])}<br><span class="muted" style="font-size:13px">${esc(FC.USE[c.use][1])}</span></dd>
       <dt>Seen</dt><dd>${shortDate(c.firstSeen)}${c.lastSeen && c.lastSeen !== c.firstSeen ? ' → ' + shortDate(c.lastSeen) : ''}, ${c.times > 1 ? c.times + ' times' : 'once'}${c.by ? `<br><span class="muted" style="font-size:13px">First found by ${esc(c.by)}${c.engines && c.engines.length ? ' on ' + c.engines.map(e => ({ google: 'Google Lens', yandex: 'Yandex', bing: 'Bing' }[e] || esc(e))).join(', ') : ''}</span>` : ''}</dd>
-      <dt>Their picture</dt><dd>${/^https?:/i.test(c.img || '') ? `From their page: <a class="mono" style="font-size:12px;overflow-wrap:anywhere" href="${safeUrl(c.img)}" target="_blank" rel="noreferrer">${esc(c.img.replace(/^https?:\/\/(www\.)?/, '').slice(0, 90))}</a>` : `The search site's small preview <span class="muted" style="font-size:13px">(PageProof did not get the picture from their page itself)</span>`}${isSoc(c) ? `<br><span class="muted" style="font-size:13px">${POST_BUSY.has(c.id) || !c.postChk ? 'Checking the post\'s own picture…' : c.postChk.state === 'seen' ? `The post's own picture matches (${c.postChk.pct}% lines up).` : c.postChk.state === 'notSeen' ? `<b style="color:var(--bad)">The post's own ${c.postChk.video ? 'video cover' : 'picture'} is a different photo.</b>` : 'The post\'s own picture could not be read (Facebook and Instagram often need a sign-in).'}${c.postChk && c.postChk.pic ? ` <a href="${safeUrl(c.postChk.pic)}" target="_blank" rel="noreferrer">See it</a>` : ''}${c.postChk ? ` · <a href="#" data-act="postagain">Check again</a>` : ''}</span>` : ''}</dd>
+      <dt>Their picture</dt><dd>${/^https?:/i.test(c.img || '') ? `From their page: <a class="mono" style="font-size:12px;overflow-wrap:anywhere" href="${safeUrl(c.img)}" target="_blank" rel="noreferrer">${esc(c.img.replace(/^https?:\/\/(www\.)?/, '').slice(0, 90))}</a>` : `The search site's small preview <span class="muted" style="font-size:13px">(PageProof did not get the picture from their page itself)</span>${!isSoc(c) && c.onPage === 'unknown' ? '<br><span class="muted" style="font-size:13px">Their page could not be read, so this stays a Maybe until you look.</span>' : ''}`}${isSoc(c) ? `<br><span class="muted" style="font-size:13px">${POST_BUSY.has(c.id) || !c.postChk ? 'Checking the post\'s own picture…' : c.postChk.state === 'seen' ? `The post's own picture matches (${c.postChk.pct}% lines up).` : c.postChk.state === 'notSeen' ? `<b style="color:var(--bad)">${c.postChk.browser === 'notSeen' ? 'None of the post\'s pictures is this photo.' : `The post's own ${c.postChk.video ? 'video cover' : 'picture'} is a different photo.`}</b>` : c.postChk.state === 'unsure' ? 'The post\'s picture looks close but not clearly the same. Compare closely.' : 'The post\'s own pictures could not be read (sign in to Facebook or Instagram in this browser so PageProof can look).'}${c.postChk && c.postChk.pic ? ` <a href="${safeUrl(c.postChk.pic)}" target="_blank" rel="noreferrer">See it</a>` : ''}${c.postChk ? ` · <a href="#" data-act="postagain">Check again</a>` : ''}</span>` : ''}</dd>
       ${doubles.length > 1 ? `<dt>Double</dt><dd><div style="border:1px solid var(--accent);background:var(--accent-soft);border-radius:10px;padding:8px 10px;font-size:13.5px"><b>You have ${doubles.length} versions of this photo</b>${doubles.map(d => `<br>${esc(d.name)}${d.w ? ' (' + d.w + ' × ' + d.h + ')' : ''}${d.id === p.id ? ' · <b>this one</b>' : ''}`).join('')}<br><b style="color:var(--copy)">Note them all in the claim.</b></div></dd>` : ''}
     </dl>
     ${keptBoxHtml(c)}

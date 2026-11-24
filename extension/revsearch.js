@@ -527,7 +527,7 @@ async function rememberSeen(p) {
 }
 // Match results are remembered per picture, so a link already checked is never downloaded
 // and compared again in a later search.
-const SAVE_FIELDS = ['pct', 'inl', 'tiles', 'str', 'mid', 'w', 'h'];
+const SAVE_FIELDS = ['pct', 'inl', 'tiles', 'str', 'mid', 'w', 'h', 'from', 'onPage', 'pv', 'img'];   // 4.35: and what their page check found
 function addScores(rec, p) {
   rec.scores = rec.scores || {};
   for (const l of p.links) if (l.sv === SCORE_VERSION && l.pct >= 0 && !l.fromMemory) {
@@ -745,12 +745,14 @@ async function scoreLink(l) {
     if (!l.w) { l.w = full.w; l.h = full.h; }
     const m = await measure(p, full.bmp);
     freePic(full);
-    Object.assign(l, m);
+    Object.assign(l, m, { from: 'image' });
     return;
   }
-  if (quick) { Object.assign(l, quick); return; }
+  // 4.35: only the search site's small preview was checked (Google never gives the picture's
+  // own address). pageCheck() then looks for the photo on their page itself.
+  if (quick) { Object.assign(l, quick, { from: 'preview' }); return; }
   const tb = l.thumb ? await fetchPicture(l.thumb) : null;
-  if (tb) { const m = await measure(p, tb.bmp); freePic(tb); Object.assign(l, m); return; }
+  if (tb) { const m = await measure(p, tb.bmp); freePic(tb); Object.assign(l, m, { from: 'preview' }); return; }
   l.pct = -1; l.sv = SCORE_VERSION;
 }
 
@@ -764,7 +766,7 @@ async function scoreLink(l) {
 // could show 100%); at least 40 squares must be compared and 12 must match for Same photo.
 const SCORE_VERSION = 6;   // 5: press-wall check (4.8.3); 6: only-logos + same-place check (4.31.0)
 const userNo = l => !!(l.url && job && job.pics[l.pic] && RS_REJECT.notMatch(l.url, job.pics[l.pic].name));
-function verdict(l) {
+function baseVerdict(l) {
   if (l.rescued) return 'maybe';          // you said it is a copy
   if (userNo(l)) return 'no';
   if (l.sv !== SCORE_VERSION) return l.pct === null ? 'cant' : 'pending';
@@ -781,6 +783,82 @@ function verdict(l) {
   // A high % on its own means nothing: two different photos can "line up" over a tiny shared patch.
   if (l.inl >= 11 && l.tiles >= 12 && l.pct >= 40) return 'maybe';
   return 'no';
+}
+// 4.35 (Ben): a match only counts when the photo is on their page itself, never only in a
+// comment, a link preview, a "related posts" box or a suggested post. A match made on the search
+// site's preview waits ("Checking…") until their page is read:
+//   seen     the photo is one of the page's own pictures: kept, with that picture's address
+//   notSeen  the page was read and none of its own pictures is the photo: thrown out
+//   postOnly a social post whose main picture is different: kept as Maybe; Copies found then
+//            looks at every picture of the post in your signed-in browser (multi-picture posts)
+//   unknown  the page could not be read (login wall, blocked): kept, but only as Maybe
+const PV = 1;
+const needsPage = l => l.from === 'preview' && l.pv !== PV && !l.rescued && ['same', 'maybe'].includes(baseVerdict(l));
+function verdict(l) {
+  const v = baseVerdict(l);
+  if (l.rescued || l.from !== 'preview' || !['same', 'maybe'].includes(v)) return v;
+  if (l.pv !== PV) return 'pending';
+  if (l.onPage === 'notSeen') return 'no';
+  if (l.onPage === 'seen') return v;
+  return 'maybe';
+}
+// The page's own pictures, best first: its share picture, then pictures in the article itself.
+// Pictures in comments, sidebars, "related" boxes, menus and footers are not the page's own.
+const NOT_OWN = 'aside, nav, footer, form, [class*="related" i], [id*="related" i], [class*="sidebar" i], [id*="sidebar" i], [class*="widget" i], [class*="comment" i], [id*="comment" i], [class*="recommend" i], [class*="trending" i], [class*="popular" i], [class*="more-stories" i], [class*="newsletter" i], [class*="advert" i], [class*="promo" i]';
+const JUNK_IMG = /(^data:|\.svg(\?|$)|\.gif(\?|$)|logo|icon|avatar|sprite|placeholder|blank|spacer|pixel|gravatar|emoji|badge|\/ads?\/)/i;
+function pagePictures(doc, base, social) {
+  const out = [];
+  const add = u => { if (!u) return; try { const h = new URL(u.trim(), base).href; if (/^https?:/i.test(h) && !JUNK_IMG.test(h) && !out.includes(h)) out.push(h); } catch (e) { /* not an address */ } };
+  const meta = n => { const m = doc.querySelector(`meta[property="${n}"], meta[name="${n}"]`); return m ? m.getAttribute('content') || '' : ''; };
+  add(meta('og:image:secure_url') || meta('og:image')); add(meta('twitter:image')); add(meta('twitter:image:src'));
+  const ls = doc.querySelector('link[rel="image_src"]'); if (ls) add(ls.getAttribute('href'));
+  if (social) return out.slice(0, 3);          // a post page's own picture; the rest is the site around it
+  const biggest = ss => { let best = '', bw = 0; for (const part of String(ss || '').split(',')) { const [u, w] = part.trim().split(/\s+/); const n = parseInt(w, 10) || 1; if (u && n >= bw) { best = u; bw = n; } } return best; };
+  const main = doc.querySelector('article, main, [role="main"], .entry-content, .post-content, .article-body') || doc.body;
+  const imgs = [...(main ? main.querySelectorAll('img, source') : []), ...doc.querySelectorAll('img')];
+  for (const im of imgs) {
+    if (out.length >= 10) break;
+    if (im.closest(NOT_OWN) || (im.closest('header') && !im.closest('article, main, [role="main"]'))) continue;
+    const w = parseInt(im.getAttribute('width'), 10), h = parseInt(im.getAttribute('height'), 10);
+    if ((w && w < 150) || (h && h < 150)) continue;
+    add(biggest(im.getAttribute('srcset') || im.getAttribute('data-srcset')) || im.getAttribute('data-src') || im.getAttribute('data-lazy-src') || im.getAttribute('data-original') || im.getAttribute('src'));
+  }
+  return out.slice(0, 8);
+}
+async function pageCheck(l) {
+  const p = job.pics[l.pic];
+  let social = false;
+  try { social = !!(globalThis.PP_SOCIAL && PP_SOCIAL.isSocial(new URL(l.url).hostname)); } catch (e) { /* bad address */ }
+  let state = 'unknown';
+  try {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 12000);
+    const r = await fetch(l.url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal });
+    const type = r.headers.get('content-type') || 'html';
+    const html = r.ok && /html/i.test(type) ? (await r.text()).slice(0, 3e6) : '';
+    clearTimeout(t);
+    if (html) {
+      const doc = new DOMParser().parseFromString(html.replace(/<script[\s\S]*?<\/script>/gi, ''), 'text/html');
+      const pics = pagePictures(doc, r.url || l.url, social);
+      let tried = 0;
+      for (const u of pics) {
+        if (R.stop && !BG) break;
+        const pic = await fetchPicture(u);
+        if (!pic) continue;
+        tried++;
+        const m = await measure(p, pic.bmp);
+        const w = pic.w, h = pic.h;
+        freePic(pic);
+        if (['same', 'maybe'].includes(baseVerdict({ ...m }))) {
+          state = 'seen'; l.img = u; if (!l.w) { l.w = w; l.h = h; }
+          if (m.pct > l.pct) Object.assign(l, m);
+          break;
+        }
+      }
+      if (state !== 'seen' && tried) state = social ? 'postOnly' : 'notSeen';
+      TIMES.pages = (TIMES.pages || 0) + 1;
+    }
+  } catch (e) { /* their page did not answer: unknown */ }
+  l.onPage = state; l.pv = PV;
 }
 const VERDICT = {
   same: { tag: 'Same photo', cls: 'ex', rank: 4 },
@@ -850,12 +928,13 @@ async function scoreWorker() {
         R.qSorted = (R.scoreQ.length - 1) + ':' + R.sel;
       } else R.qSorted = (R.scoreQ.length - 1) + ':' + R.sel;
       const l = R.scoreQ.shift();
-      if (l.sv === SCORE_VERSION) continue;
+      if (l.sv === SCORE_VERSION && !needsPage(l)) continue;
       // Links on your hidden sites are never shown, so they are not downloaded or checked. If you
       // show a site again, its links are checked then (unpark).
       if (!l.rescued && RS_LISTS.isHidden(l.site, l.url)) { R.parked.add(l); TIMES.skipped++; timesSoon(); continue; }
       const p = job.pics[l.pic];
-      await scoreLink(l);
+      if (l.sv !== SCORE_VERSION) await scoreLink(l);
+      if (needsPage(l)) await pageCheck(l);
       saveScoresSoon(job.pics[l.pic]);
       maybeIngest(job.pics[l.pic]);
       saveJob(); renderSoon();
@@ -1308,7 +1387,7 @@ async function initResults() {
       else if (rec && p.prevSnapshot) R.prev[p.i] = p.prevSnapshot;
     } catch (e) { /* ignore */ }
     if (!p.prevSnapshot && R.prev[p.i]) p.prevSnapshot = { lastSearched: R.prev[p.i].lastSearched, urls: R.prev[p.i].urls };
-    for (const l of p.links) { l.pic = p.i; if ((l.sv !== SCORE_VERSION || l.pct === null) && !knownScore(p, l)) R.scoreQ.push(l); }   // older searches (and links an old version skipped) get checked
+    for (const l of p.links) { l.pic = p.i; if (((l.sv !== SCORE_VERSION || l.pct === null) && !knownScore(p, l)) || needsPage(l)) R.scoreQ.push(l); }   // older searches (and links an old version skipped) get checked
   }
   // Only one page runs a search: if it is already running in another PageProof tab, this one
   // just shows it.
