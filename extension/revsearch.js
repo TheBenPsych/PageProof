@@ -583,7 +583,7 @@ async function fetchPicture(url) {
 // few are opened at once.
 const DECODE = { busy: 0, wait: [] };
 async function decodeTurn(fn) {
-  while (DECODE.busy >= POOL_SIZE + 1) await new Promise(r => DECODE.wait.push(r));
+  while (DECODE.busy >= liveDecode()) await new Promise(r => DECODE.wait.push(r));
   DECODE.busy++;
   try { return await fn(); } finally { DECODE.busy--; const n = DECODE.wait.shift(); if (n) n(); }
 }
@@ -607,7 +607,38 @@ const freePic = x => { try { x && x.bmp.close && x.bmp.close(); } catch (e) { /*
 // stopped after 30 seconds and its worker replaced, so one bad picture can't freeze anything.
 // If workers aren't available the check runs on the page as before.
 const POOL = { list: [], next: 1, failed: false };
-let POOL_SIZE = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));   // lowered to the computer's limit when a search opens
+let POOL_SIZE = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));   // set to the computer's limit when a search opens
+// This computer's limits (ui/hardware.js), read fresh each time a search opens, so a new speed
+// level in Settings › Your computer counts from the next search on.
+let LIM = { checks: POOL_SIZE, tabs: 3, dl: POOL_SIZE + 4, decode: POOL_SIZE + 1 };
+// Easing off: while the computer is busy (processor flat out for a minute, memory nearly full, a
+// laptop low on battery) a running search drops to ONE photo check, ONE picture opened and ONE
+// search tab, and goes back to full speed a minute after the computer calms down. It never stops,
+// so today's 50 still finishes. (Only the work on this computer changes; how fast the search sites
+// are asked never goes up.)
+const EASE = { on: false, why: '', calm: 0, st: {}, since: 0, timer: null };
+const liveChecks = () => (EASE.on ? 1 : POOL_SIZE);
+const liveDecode = () => (EASE.on ? 1 : Math.max(1, LIM.decode || POOL_SIZE + 1));
+const liveTabs = () => (EASE.on ? 1 : Math.max(1, LIM.tabs || 3));
+async function easeTick() {
+  if (!job || (!R.running && !R.scoring)) { EASE.st = {}; if (EASE.on) easeSet(false); return; }
+  const why = await ppBusy(EASE.st);
+  if (why) { EASE.calm = 0; EASE.why = why; if (!EASE.on) easeSet(true); }
+  else if (EASE.on && ++EASE.calm >= 2) easeSet(false);
+}
+function easeSet(on) {
+  EASE.on = on; EASE.calm = 0;
+  if (on) { EASE.since = Date.now(); TIMES.eased++; timesSoon(); }
+  else { EASE.why = ''; freeWorker(); freeSlots(); const n = DECODE.wait.splice(0); n.forEach(f => f()); }
+  trimWorkers(); renderSoon();
+}
+// Workers above the live limit are closed when idle (each holds its own memory).
+function trimWorkers() {
+  for (const w of POOL.list.filter(x => !x.busy).slice(0, Math.max(0, POOL.list.length - liveChecks()))) {
+    try { w.worker.terminate(); } catch (e) { /* gone */ }
+    POOL.list.splice(POOL.list.indexOf(w), 1);
+  }
+}
 function newWorker() {
   const w = { worker: new Worker('score-worker.js'), busy: 0, sent: new Set(), waits: new Map() };
   w.worker.onmessage = e => { const r = w.waits.get(e.data.id); if (r) { w.waits.delete(e.data.id); w.busy--; r(e.data); freeWorker(); } };
@@ -625,12 +656,15 @@ function killWorker(w) {
 // inside one worker, and the 30-second "stuck" timer ran while they waited, so on a slower
 // computer good checks were stopped and shown as "Can't check".)
 const POOL_WAIT = [];
-function freeWorker() { while (POOL_WAIT.length && (POOL.list.length < POOL_SIZE || POOL.list.some(x => !x.busy))) POOL_WAIT.shift()(); }
+const busyWorkers = () => POOL.list.filter(x => x.busy).length;
+function freeWorker() { while (POOL_WAIT.length && busyWorkers() < liveChecks() && (POOL.list.length < liveChecks() || POOL.list.some(x => !x.busy))) POOL_WAIT.shift()(); }
 async function idleWorker() {
   for (;;) {
-    while (POOL.list.length < POOL_SIZE) POOL.list.push(newWorker());
-    const w = POOL.list.find(x => !x.busy);
-    if (w) return w;
+    if (busyWorkers() < liveChecks()) {
+      while (POOL.list.length < liveChecks()) POOL.list.push(newWorker());
+      const w = POOL.list.find(x => !x.busy);
+      if (w) return w;
+    }
     await new Promise(r => POOL_WAIT.push(r));
   }
 }
@@ -753,7 +787,7 @@ function unpark() {
 }
 // "Where the time goes" (Settings › Is everything working?): how long each kind of work takes
 // on this computer, added up per day for the last 7 days. Numbers only.
-const TIMES = { search: [0, 0], dl: [0, 0], check: [0, 0], wait: [0, 0], skipped: 0, fast: null, gpu: null, gpuWhy: '' };
+const TIMES = { search: [0, 0], dl: [0, 0], check: [0, 0], wait: [0, 0], skipped: 0, eased: 0, fast: null, gpu: null, gpuWhy: '' };
 function timeAdd(k, ms) { TIMES[k][0]++; TIMES[k][1] += Math.max(0, ms); timesSoon(); }
 let timesT = null;
 function timesSoon() {
@@ -765,9 +799,10 @@ function timesSoon() {
       const d = st.days[day] || (st.days[day] = { search: [0, 0], dl: [0, 0], check: [0, 0], wait: [0, 0], skipped: 0 });
       for (const k of ['search', 'dl', 'check', 'wait']) { d[k][0] += TIMES[k][0]; d[k][1] += TIMES[k][1]; TIMES[k] = [0, 0]; }
       d.skipped += TIMES.skipped; TIMES.skipped = 0;
+      d.eased = (d.eased || 0) + TIMES.eased; TIMES.eased = 0;
       if (TIMES.fast !== null) st.fast = TIMES.fast;
       if (TIMES.gpu !== null) { st.gpu = TIMES.gpu; st.gpuWhy = TIMES.gpuWhy; }
-      st.checks = POOL_SIZE; st.at = Date.now();
+      st.checks = POOL_SIZE; st.level = LIM.level || ''; st.at = Date.now();
       for (const k of Object.keys(st.days).sort().slice(0, -7)) delete st.days[k];
       await api.storage.local.set({ rsTiming: st });
     } catch (e) { /* only numbers for a help page */ }
@@ -778,10 +813,10 @@ function timesSoon() {
 async function scoreAll() {
   if (R.scoring || R.watch) return;                 // the pinned tab does the checks
   R.scoring = true;
-  // 6 at a time: downloads overlap well; more than that mostly waits on the computer itself.
-  // Downloads overlap: four more than the checks that can run at once, so a check never waits on
-  // the internet (pictures are opened a few at a time, see decodeTurn).
-  const run = () => Promise.all(Array.from({ length: POOL_SIZE + 4 }, scoreWorker));
+  // Downloads overlap: a few more than the checks that can run at once (the computer check sets
+  // how many), so a check never waits on the internet (pictures are opened a few at a time, see
+  // decodeTurn).
+  const run = () => Promise.all(Array.from({ length: Math.max(POOL_SIZE + 1, LIM.dl || POOL_SIZE + 4) }, scoreWorker));
   // Holding a lock while checking tells Chrome and Edge this page is busy, so they don't put it
   // to sleep when the window is minimized or left in the background. One lock per search: a
   // single shared lock made every other open search (and Keep searching) wait for this one's
@@ -821,9 +856,11 @@ async function scoreWorker() {
 
 // ---------- running the whole search ----------
 // The computer check sets how many search tabs may be open at once (all sites together).
-const SLOTS = { free: 3, wait: [] };
-const takeSlot = () => (SLOTS.free > 0 ? (SLOTS.free--, Promise.resolve()) : new Promise(r => SLOTS.wait.push(r)));
-const giveSlot = () => { const n = SLOTS.wait.shift(); if (n) n(); else SLOTS.free++; };
+// While the computer is busy only one is open (liveTabs).
+const SLOTS = { used: 0, wait: [] };
+const takeSlot = () => (SLOTS.used < liveTabs() ? (SLOTS.used++, Promise.resolve()) : new Promise(r => SLOTS.wait.push(r)));
+const giveSlot = () => { SLOTS.used--; freeSlots(); };
+function freeSlots() { while (SLOTS.wait.length && SLOTS.used < liveTabs()) { SLOTS.used++; SLOTS.wait.shift()(); } }
 // Keeps a running search awake when its page is not on screen: the tab may not be put to sleep
 // (discarded) by the browser, and holding a lock tells Chrome and Edge the page is busy, so they
 // don't freeze it. Both are undone when the search ends.
@@ -1071,6 +1108,7 @@ function renderResults() {
     h('div', {}, h('b', { text: R.running ? 'Searching… ' + plural(totalKept, 'copy', 'copies') + ' found so far' : plural(totalKept, 'copy', 'copies') + ' found in this search' }),
       h('small', { text: allIn ? 'They are in All copies found, with each photo\'s client. Review them there: Stolen, Licensed or Remove.'
         : 'Each photo\'s copies go to All copies found as soon as that photo is searched and checked. You review them there.' })),
+    EASE.on && (R.running || R.scoring) ? h('small', { class: 'ease', text: EASE.why + ', so PageProof slowed down to one photo check and one search tab. Full speed again when the computer calms down.' }) : null,
     h('a', { class: 'btn blue', href: appUrl('review'), onclick: e => goApp('review', e), text: 'Review new copies' }),
     h('a', { class: 'btn', href: appUrl('found'), onclick: e => goApp('found', e), text: 'All copies found' }));
   const state = searching ? 'Searching… ' + statusLine(p)
@@ -1247,9 +1285,9 @@ async function initResults() {
   try { const me = await api.tabs.getCurrent(); R.myTab = me.id; R.winId = me.windowId; } catch (e) { /* ignore */ }
   if (R.myTab && !job.auto && !job.bg) api.storage.local.set({ rsOpenJob: { id: job.id, tab: R.myTab } });
   // Never more tabs or photo checks than this computer can take.
-  const lim = job.limits || (await ppHardware()).limits;
-  SLOTS.free = Math.max(1, lim.tabs || 3);
-  POOL_SIZE = Math.max(1, Math.min(POOL_SIZE, lim.checks || 4));
+  try { const hw = await ppHardware(); LIM = { ...hw.limits, level: hw.level }; } catch (e) { LIM = { ...LIM, ...(job.limits || {}) }; }
+  POOL_SIZE = Math.max(1, LIM.checks || 1);
+  if (!EASE.timer) EASE.timer = CLOCK.every(30000, () => easeTick().catch(() => {}));
   if (job.kind === 'fifty' || BG) CLOCK.every(20000, () => { if (R.running) fiftyBeat(true); });
   for (const p of job.pics) {
     try {

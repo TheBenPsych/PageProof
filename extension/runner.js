@@ -43,35 +43,8 @@ async function status(state, text, extra = {}) {
   $('pause').textContent = state === 'paused' ? 'Resume' : 'Pause';
 }
 
-// Is the computer busy? Processor over 80% for about a minute, memory nearly full, or a laptop
-// on battery below 30%.
-async function computerBusy() {
-  try {
-    if (api.system && api.system.cpu) {
-      const info = await api.system.cpu.getInfo();
-      const t = info.processors.reduce((a, p) => ({ busy: a.busy + p.usage.user + p.usage.kernel, total: a.total + p.usage.total }), { busy: 0, total: 0 });
-      if (S.cpu) {
-        const use = (t.busy - S.cpu.busy) / Math.max(1, t.total - S.cpu.total);
-        S.busyTicks = use > 0.8 ? S.busyTicks + 1 : 0;
-      }
-      S.cpu = t;
-      if (S.busyTicks >= 2) return 'The processor has been very busy for a minute';
-    }
-  } catch (e) { /* not allowed */ }
-  try {
-    if (api.system && api.system.memory) {
-      const m = await api.system.memory.getInfo();
-      if (m.availableCapacity / m.capacity < 0.1) return 'Almost all of the memory is in use';
-    }
-  } catch (e) { /* not allowed */ }
-  try {
-    if (navigator.getBattery) {
-      const b = await navigator.getBattery();
-      if (!b.charging && b.level < 0.3) return 'The laptop is on battery below 30%';
-    }
-  } catch (e) { /* no battery info */ }
-  return '';
-}
+// Is the computer busy? (ui/hardware.js) Keep searching waits until it calms down.
+const computerBusy = () => ppBusy(S);
 
 // Today's 50 (or another big Drive search) is running: it says so every 20 seconds and says
 // "finished" at the end. 5 minutes of silence also counts as finished (its page was closed), so a
