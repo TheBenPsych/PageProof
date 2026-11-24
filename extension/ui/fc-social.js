@@ -652,6 +652,8 @@ async function rpQueue() {
       if (route() !== 'found' && route() !== 'review') break;
       if ((await api.storage.local.get('ppAcctRead').catch(() => ({}))).ppAcctRead === false) break;
       if (!(await FC.quietOK()).ok) break;        // Resume / hours starting again restarts it (below)
+      // One background tab at a time: wait while the account reader has one open.
+      if (INFO_BUSY.size) { await new Promise(r => setTimeout(r, 5000)); continue; }
       if (!FCD) await loadFC();
       const L = await siteLimits();
       const c = FCD.copies.filter(c => isSoc(c) && PP_REPOST.due(c) && !RP_BUSY.has(c.id) && !siteWait(L, rpSite(c)))
