@@ -1,4 +1,4 @@
-// 4.20: the computer check sets every part of a search on this computer (photo checks, search
+// 4.21: the computer check sets every part of a search on this computer (photo checks, search
 // tabs, downloads, pictures opened), and a big search eases off to one check and one tab while
 // the computer is busy, then goes back to full speed.
 const { start } = require('./h.js');
