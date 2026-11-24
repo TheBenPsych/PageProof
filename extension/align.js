@@ -146,30 +146,84 @@ const PP_ALIGN = (() => {
     }
     return d;
   }
+  // ---------- the fast checker (WebAssembly) ----------
+  // The sums in corners, blur, shrink, describe and match also exist in C (tools/wasm/align.c),
+  // compiled to WebAssembly: a pre-translated language every Chrome, Edge and Firefox runs much
+  // faster than JavaScript for this kind of number crunching. They do exactly the same sums in
+  // the same order, so the answers are the same (tests/align/wasm_same.js checks it). If it
+  // can't load, everything below simply uses the JavaScript versions.
+  // WASM-START
+  const WASM_B64 = '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AAEAAQAiEf26ASISIAlBMGr9AAAAIAr9Uf1iIAlBIGr9AAAAIAv9Uf1i/W79fSAR/boBIhP9DQABAgMQERITCAkKCxgZGhsgEiAT/Q0EBQYHFBUWFwwNDg8cHR4f/a4BIhIgCUHQAGr9AAAAIAr9Uf1iIAlBwABq/QAAACAL/VH9Yv1u/X0gEf26ASITIAlB8ABq/QAAACAK/VH9YiAJQeAAav0AAAAgC/1R/WL9bv19IBH9ugEiEf0NAAECAxAREhMICQoLGBkaGyATIBH9DQQFBgcUFRYXDA0ODxwdHh/9rgEiEf0NAAECAwQFBgcQERITFBUWFyASIBH9DQgJCgsMDQ4PGBkaGxwdHh/9rgEiESAM/RH9Of2kAUUNACAR/RsDIg0gEf0bAiIUIBH9GwEiFSAR/RsAIhYgDyAWIA9IIhcbIA8gFiAMSCIYGyIZIBUgGUgiGhsgGSAVIBYgDyAWIA9KGyAMIBgbIgxIIhYbIg8gFCAPSCIbGyAPIBQgFSAZIBUgGUobIAwgFhsiGUgiFRsiDCANIAxIIhwbIAwgDSAUIA8gFCAPShsgGSAVGyIZSCIUGyEPIA0gDCANIAxKGyAZIBQbIQwgECAQQX9qIBBBfmogEEF9aiAOIBcbIA4gGBsiDiAaGyAOIBYbIg4gGxsgDiAVGyIOIBwbIA4gFBshDgsgCUGAAWohCSAQQQRqIhAgAUgNAAsgByENCwJAAkAgDSABSA0AIA8hCQwBCyAAIA1BBXRqIRADQCAQQRBq/QAAACAK/VH9YiAQ/QAAACAL/VH9Yv1u/X39DAEAAQABAAEAAQABAAEAAQD9ugEiEf0bACAR/RsBaiAR/RsCaiAR/RsDaiIJIA8gCSAPShsgDCAJIAxIIhQbIQwgDSAOIAkgD0giFRsgDiAUGyEOIBBBIGohECAJIA8gFRsgDyAUGyIJIQ8gASANQQFqIg1HDQALC0F/IQ8CQCAOQQBIDQAgCUHGAEoNACAMt0QzMzMzMzPrP6IgCbdkRQ0AIA4hDwsgBSADQQJ0IgxqIA82AgAgBiAMaiAJNgIAIANBAWoiAyAERw0ACwsLAIMBBG5hbWUACwphbGlnbi53YXNtAVsMAAVyZXNldAEFYWxsb2MCBG1hcmsDB3JlbGVhc2UEBGJsdXIFBWhwYXNzBgV2cGFzcwcGc2hyaW5rCAdjb3JuZXJzCQVtc29ydAoIZGVzY3JpYmULBW1hdGNoBxIBAA9fX3N0YWNrX3BvaW50ZXIAOAlwcm9kdWNlcnMBDHByb2Nlc3NlZC1ieQEMVWJ1bnR1IGNsYW5nETE4LjEuMyAoMXVidW50dTEpAEIPdGFyZ2V0X2ZlYXR1cmVzBCsLYnVsay1tZW1vcnkrD211dGFibGUtZ2xvYmFscysIc2lnbi1leHQrB3NpbWQxMjg=';
+  // WASM-END
+  let W = null, PAIRS_BYTES = null;
+  const ready = (async () => {
+    try {
+      if (typeof WebAssembly === 'undefined' || !WASM_B64 || (typeof self !== 'undefined' && self.PP_NO_WASM)) return false;
+      const bin = Uint8Array.from(atob(WASM_B64), c => c.charCodeAt(0));
+      const { instance } = await WebAssembly.instantiate(bin, {});
+      PAIRS_BYTES = new Uint8Array(PAIRS.buffer.slice(0));
+      W = instance.exports;
+      return true;
+    } catch (e) { W = null; return false; }
+  })();
+  const mem = () => W.memory.buffer;
+  function featuresW(im, f0, xs, ys, mx, descs) {
+    W.reset();
+    const pairs = W.alloc(1024); new Uint8Array(mem(), pairs, 1024).set(PAIRS_BYTES);
+    const MAX = 700, xyP = W.alloc(MAX * 8), rP = W.alloc(MAX * 4);
+    let w = im.w, h = im.h, g = W.alloc(w * h * 4);
+    new Float32Array(mem(), g, w * h).set(im.g);
+    for (let lv = 0, scale = f0; lv < 12; lv++) {
+      if (Math.min(w, h) < 2 * R + 20) break;
+      const n = W.corners(g, w, h, MAX, xyP, rP), m = W.mark();
+      const bl = W.alloc(w * h * 4), tmp = W.alloc(w * h * 4), mid = W.alloc(w * h * 4), dP = W.alloc(n * 32 + 32);
+      W.blur(g, bl, tmp, mid, w, h, 1);
+      W.describe(bl, w, xyP, n, pairs, dP);
+      const XY = new Int32Array(mem(), xyP, n * 2);
+      for (let k = 0; k < n; k++) { xs.push(XY[k * 2] / scale); ys.push(XY[k * 2 + 1] / scale); mx.push((w - 1 - XY[k * 2]) / scale); }
+      descs.push(new Uint32Array(mem(), dP, n * 8).slice());
+      W.release(m);
+      const nw = Math.max(1, Math.round(w * (1 / 1.3))), nh = Math.max(1, Math.round(h * (1 / 1.3))), g2 = W.alloc(nw * nh * 4);
+      W.shrink(g, w, h, g2, nw, nh);
+      g = g2; w = nw; h = nh; scale /= 1.3;
+    }
+  }
   // Points + fingerprints at many sizes. x, y are given back in the full picture's pixels.
-  function features(bitmap, maxSide) {
+  // mx: where each point would be in the picture flipped left-right (for the mirror check).
+  function features(bitmap, maxSide, opts = {}) {
     // Big pictures are shrunk to save time; very small ones (thumbnails) are enlarged so their
     // details are big enough to fingerprint.
     const big = Math.max(bitmap.width, bitmap.height), f0 = big < 450 ? 450 / big : Math.min(1, maxSide / big);
     let im = grayOf(bitmap, bitmap.width * f0, bitmap.height * f0);
-    const xs = [], ys = [], descs = [];
-    for (let lv = 0, scale = f0; lv < 12; lv++) {
+    const xs = [], ys = [], mx = [], descs = [];
+    if (W && !opts.js) featuresW(im, f0, xs, ys, mx, descs);
+    else for (let lv = 0, scale = f0; lv < 12; lv++) {
       if (Math.min(im.w, im.h) < 2 * R + 20) break;
       const pts = corners(im, 700);
       const d = describe(blur(im, 1), pts);
-      for (const p of pts) { xs.push(p.x / scale); ys.push(p.y / scale); }
+      for (const p of pts) { xs.push(p.x / scale); ys.push(p.y / scale); mx.push((im.w - 1 - p.x) / scale); }
       descs.push(d);
       im = shrink(im, 1 / 1.3); scale /= 1.3;
     }
     const all = new Uint32Array(descs.reduce((n, d) => n + d.length, 0)); let o = 0;
     for (const d of descs) { all.set(d, o); o += d.length; }
-    return { x: Float64Array.from(xs), y: Float64Array.from(ys), d: all, n: xs.length, f0 };
+    return { x: Float64Array.from(xs), y: Float64Array.from(ys), mx: Float64Array.from(mx), d: all, n: xs.length, f0 };
   }
 
   // ---------- 3. pairing up fingerprints ----------
   function pop(v) { v -= (v >>> 1) & 0x55555555; v = (v & 0x33333333) + ((v >>> 2) & 0x33333333); return (((v + (v >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24; }
-  async function match(A, B) {
+  // i, j: the two details' numbers (in A and in B).
+  async function match(A, B, opts = {}) {
     const out = [];
+    if (W && !opts.js) {
+      W.reset();
+      const aP = W.alloc(A.n * 32 + 32), bP = W.alloc(B.n * 32 + 32), iP = W.alloc(B.n * 4 + 4), dP = W.alloc(B.n * 4 + 4);
+      new Uint32Array(mem(), aP, A.n * 8).set(A.d); new Uint32Array(mem(), bP, B.n * 8).set(B.d);
+      W.match(aP, A.n, bP, 0, B.n, iP, dP);            // fast enough to run in one go
+      const I = new Int32Array(mem(), iP, B.n), D = new Int32Array(mem(), dP, B.n);
+      for (let j = 0; j < B.n; j++) { const bi = I[j]; if (bi >= 0) out.push({ ax: A.x[bi], ay: A.y[bi], bx: B.x[j], by: B.y[j], d: D[j], i: bi, j }); }
+      return out;
+    }
     for (let j = 0; j < B.n; j++) {
       let best = 999, second = 999, bi = -1; const bo = j * 8;
       for (let i = 0; i < A.n; i++) {
@@ -179,7 +233,7 @@ const PP_ALIGN = (() => {
         dist += pop(A.d[ao + 4] ^ B.d[bo + 4]) + pop(A.d[ao + 5] ^ B.d[bo + 5]) + pop(A.d[ao + 6] ^ B.d[bo + 6]) + pop(A.d[ao + 7] ^ B.d[bo + 7]);
         if (dist < best) { second = best; best = dist; bi = i; } else if (dist < second) second = dist;
       }
-      if (bi >= 0 && best <= 70 && best < 0.85 * second) out.push({ ax: A.x[bi], ay: A.y[bi], bx: B.x[j], by: B.y[j], d: best });
+      if (bi >= 0 && best <= 70 && best < 0.85 * second) out.push({ ax: A.x[bi], ay: A.y[bi], bx: B.x[j], by: B.y[j], d: best, i: bi, j });
       if (j % 300 === 299) await pause();
     }
     return out;
@@ -613,7 +667,7 @@ const PP_ALIGN = (() => {
   // Returns a placement plus { how, inliers, sc } or null. progress(text) gets plain-English updates.
   // opts.fast (reverse search, many copies to check): reuse the original's details between
   // calls and skip the slow whole-picture search, which only helps plain copies with few details.
-  const featCache = new WeakMap();
+  const featCache = new WeakMap(), featMirCache = new WeakMap();
   const FAST_MIN_INLIERS = 10;
   async function align(A, B, progress = () => {}, opts = {}) {
     const tries = [], tick = pause;
@@ -622,10 +676,25 @@ const PP_ALIGN = (() => {
     if (!FA) { FA = features(A, 900); if (opts.fast) featCache.set(A, FA); }
     await tick();
     const thr = Math.max(3 / FA.f0, Math.max(A.width, A.height) * 0.012);
+    let FBplain = null;
     const viaDetails = async (Bimg, flip) => {
-      const FB = features(Bimg, 900); await tick();
-      progress(flip ? 'Checking whether the copy was mirrored...' : 'Pairing up matching details...');
-      const ms = await match(FA, FB);
+      let FB, ms;
+      if (flip && opts.fast) {
+        // Mirror check, the quick way: instead of flipping every found picture and finding its
+        // details all over again, your photo is flipped once (kept for the next picture) and the
+        // found picture's details are reused. The pairs come out the same, in the same pixels as
+        // the flipped picture would give, for about half the work.
+        let FM = featMirCache.get(A);
+        if (!FM) { const Am = await mirrored(A); try { FM = features(Am, 900); } finally { try { Am.close && Am.close(); } catch (e) { /* freed */ } } featMirCache.set(A, FM); }
+        FB = FBplain || features(B, 900); await tick();
+        progress('Checking whether the copy was mirrored...');
+        ms = (await match(FM, FB)).map(m => ({ ax: FM.mx[m.i], ay: m.ay, bx: FB.mx[m.j], by: m.by, d: m.d }));
+      } else {
+        FB = features(Bimg, 900); await tick();
+        if (!flip) FBplain = FB;
+        progress(flip ? 'Checking whether the copy was mirrored...' : 'Pairing up matching details...');
+        ms = await match(FA, FB);
+      }
       // The copy must cover at least 8% of the original's width or height once lined up.
       const R1 = ransac(ms, thr, 20 / FB.f0, Math.max(0.02, 0.08 * Math.max(A.width, A.height) / Math.max(Bimg.width, Bimg.height)));
       // Reverse search (fast) needs at least 10 matching details to call anything a copy (see
@@ -654,8 +723,11 @@ const PP_ALIGN = (() => {
     await viaDetails(B, false);
     // Copies are sometimes mirrored to dodge detection. Try that if the straight way didn't fit well.
     if (!sure()) {
-      const M = await mirrored(B);
-      try { await viaDetails(M, true); } finally { try { M.close && M.close(); } catch (e) { /* already freed */ } }
+      if (opts.fast) await viaDetails(B, true);          // B is only measured; no flipped copy needed
+      else {
+        const M = await mirrored(B);
+        try { await viaDetails(M, true); } finally { try { M.close && M.close(); } catch (e) { /* already freed */ } }
+      }
     }
     // Backup: the whole-picture search, for plain resized copies with few sharp details.
     if (!sure() && !opts.fast) {
@@ -666,5 +738,5 @@ const PP_ALIGN = (() => {
     return best();
   }
 
-  return { align, score, changes, spot, repeats, grayOf, place, drawCopy, bounds, reshape, sizes, mapPoint };
+  return { align, score, changes, spot, repeats, grayOf, place, drawCopy, bounds, reshape, sizes, mapPoint, ready, fast: () => !!W, _t: { features, match, W: () => W, grayOf } };
 })();

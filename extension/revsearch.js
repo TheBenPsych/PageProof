@@ -303,7 +303,7 @@ function setupDropAndPaste(onFiles) {
 // =====================================================================================
 let job = null;
 const R = { tasks: new Map(), paused: {}, captchas: {}, gaveUp: {}, queues: {}, stop: false, running: false, winId: null, myTab: null,
-  groups: {}, prev: {}, sel: 0, filter: 'same', engineFilter: new Set(), text: '', showHidden: false, ticked: new Set(), scoreQ: [], scoring: false, origBmp: {}, known: {} };
+  groups: {}, prev: {}, sel: 0, filter: 'same', engineFilter: new Set(), text: '', showHidden: false, ticked: new Set(), scoreQ: [], scoring: false, origBmp: {}, known: {}, parked: new Set() };
 
 let saveTimer = null;
 function saveJob(now) {
@@ -386,7 +386,7 @@ async function runOne(p, engine) {
   tagTab(tab.id);
   // Search tabs are pinned (small icons at the left of the tab bar) so they don't fill it. A
   // pinned tab can't be in a tab group, so the old coloured groups are no longer made.
-  await new Promise(done => R.tasks.set(tab.id, { p, engine, tabId: tab.id, stage: 'upload', deadline: Date.now() + TASK_TIMEOUT, done }));
+  await new Promise(done => R.tasks.set(tab.id, { p, engine, tabId: tab.id, stage: 'upload', deadline: Date.now() + TASK_TIMEOUT, done, start: Date.now() }));
 }
 
 // Marks PageProof's own search tabs, so rsearch.js puts the PageProof logo on them straight away
@@ -407,6 +407,7 @@ function finishTask(t, state, why) {
   R.tasks.delete(t.tabId);
   const run = t.p.runs[t.engine];
   run.state = state;
+  if (state === 'done' && t.start) timeAdd('search', Date.now() - t.start);
   if (why) run.why = why; else delete run.why;
   if (t.captcha) { t.captcha = false; updatePause(t.engine); }
   if (picDone(t.p)) maybeIngest(t.p);
@@ -568,10 +569,26 @@ async function fetchPicture(url) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 7000);
   try {
+    const t0 = Date.now();
     const r = await fetch(url, { signal: ctl.signal, credentials: 'omit' });
     if (!r.ok) return null;
     const b = await r.blob();
+    timeAdd('dl', Date.now() - t0);
     if (b.size > 25e6) return null;
+    return await decodeTurn(() => shrinkPicture(b));
+  } catch (e) { return null; } finally { clearTimeout(timer); }
+}
+// Downloads run several more at a time than the photo checks (the internet is the slow part of a
+// download, not the computer), but opening a big picture takes 50-100 MB for a moment, so only a
+// few are opened at once.
+const DECODE = { busy: 0, wait: [] };
+async function decodeTurn(fn) {
+  while (DECODE.busy >= POOL_SIZE + 1) await new Promise(r => DECODE.wait.push(r));
+  DECODE.busy++;
+  try { return await fn(); } finally { DECODE.busy--; const n = DECODE.wait.shift(); if (n) n(); }
+}
+async function shrinkPicture(b) {
+  try {
     // Shrink straight away and free the full-size copy: a big photo takes 50-100 MB of memory
     // once opened, and the check only ever looks at it 640 pixels wide.
     const big = await createImageBitmap(b);
@@ -581,7 +598,7 @@ async function fetchPicture(url) {
     const out = { bmp, w: big.width, h: big.height };
     big.close && big.close();
     return out;
-  } catch (e) { return null; } finally { clearTimeout(timer); }
+  } catch (e) { return null; }
 }
 const freePic = x => { try { x && x.bmp.close && x.bmp.close(); } catch (e) { /* already freed */ } };
 // Line one found picture up with yours and note how well it fits.
@@ -620,7 +637,9 @@ async function idleWorker() {
 async function checkInWorker(p, bmp) {
   if (POOL.failed || typeof Worker === 'undefined' || typeof OffscreenCanvas === 'undefined') return null;
   let w;
+  const tw = Date.now();
   try { w = await idleWorker(); } catch (e) { POOL.failed = true; return null; }
+  timeAdd('wait', Date.now() - tw);
   w.busy++;                                            // taken before any waiting below
   try {
     if (!w.sent.has(p.i)) {
@@ -631,13 +650,15 @@ async function checkInWorker(p, bmp) {
       if (w.sent.size > 8) { const old = w.sent.values().next().value; w.sent.delete(old); w.worker.postMessage({ type: 'forget', key: old }); }   // keep memory small
     } else { w.sent.delete(p.i); w.sent.add(p.i); }   // most recently used goes last
   } catch (e) { w.busy--; freeWorker(); throw e; }
-  const id = POOL.next++;
+  const id = POOL.next++, tc = Date.now();
   const res = await new Promise(resolve => {
     w.waits.set(id, resolve);
     w.worker.postMessage({ type: 'check', id, key: p.i, bmp }, [bmp]);
     setTimeout(() => { if (w.waits.has(id)) killWorker(w); }, 30000);
   });
   if (res.err) return { stuck: true };                // the picture was handed over, so no second try here
+  timeAdd('check', Date.now() - tc);
+  if (res.fast !== undefined) TIMES.fast = res.fast;
   return res.out;
 }
 
@@ -723,12 +744,42 @@ const VERDICT = {
   cant: { tag: "Can't check", cls: 'sim', rank: 1 },
   no: { tag: 'Different photo', cls: 'sim', rank: 0 },
 };
+// A site was shown again: its links that were skipped while hidden get checked now.
+function unpark() {
+  let n = 0;
+  for (const l of [...R.parked]) if (!RS_LISTS.isHidden(l.site, l.url)) { R.parked.delete(l); if (l.sv !== SCORE_VERSION && !R.scoreQ.includes(l)) { R.scoreQ.push(l); n++; } }
+  if (n) scoreAll();
+}
+// "Where the time goes" (Settings › Is everything working?): how long each kind of work takes
+// on this computer, added up per day for the last 7 days. Numbers only.
+const TIMES = { search: [0, 0], dl: [0, 0], check: [0, 0], wait: [0, 0], skipped: 0, fast: null };
+function timeAdd(k, ms) { TIMES[k][0]++; TIMES[k][1] += Math.max(0, ms); timesSoon(); }
+let timesT = null;
+function timesSoon() {
+  if (timesT) return;
+  timesT = CLOCK.after(30000, async () => {
+    timesT = null;
+    try {
+      const day = RS_UTIL.today(), st = (await api.storage.local.get('rsTiming')).rsTiming || { days: {} };
+      const d = st.days[day] || (st.days[day] = { search: [0, 0], dl: [0, 0], check: [0, 0], wait: [0, 0], skipped: 0 });
+      for (const k of ['search', 'dl', 'check', 'wait']) { d[k][0] += TIMES[k][0]; d[k][1] += TIMES[k][1]; TIMES[k] = [0, 0]; }
+      d.skipped += TIMES.skipped; TIMES.skipped = 0;
+      if (TIMES.fast !== null) st.fast = TIMES.fast;
+      st.checks = POOL_SIZE; st.at = Date.now();
+      for (const k of Object.keys(st.days).sort().slice(0, -7)) delete st.days[k];
+      await api.storage.local.set({ rsTiming: st });
+    } catch (e) { /* only numbers for a help page */ }
+  });
+}
+
 // Checks every picture's links in the background, three at a time, the picture on screen first.
 async function scoreAll() {
   if (R.scoring || R.watch) return;                 // the pinned tab does the checks
   R.scoring = true;
   // 6 at a time: downloads overlap well; more than that mostly waits on the computer itself.
-  const run = () => Promise.all(Array.from({ length: Math.max(3, POOL_SIZE * 2) }, scoreWorker));
+  // Downloads overlap: four more than the checks that can run at once, so a check never waits on
+  // the internet (pictures are opened a few at a time, see decodeTurn).
+  const run = () => Promise.all(Array.from({ length: POOL_SIZE + 4 }, scoreWorker));
   // Holding a lock while checking tells Chrome and Edge this page is busy, so they don't put it
   // to sleep when the window is minimized or left in the background. One lock per search: a
   // single shared lock made every other open search (and Keep searching) wait for this one's
@@ -745,11 +796,17 @@ async function scoreWorker() {
       // (Sorted only when something was added or another picture was picked: sorting thousands
       // of links before every single check was slow.)
       if (R.qSorted !== R.scoreQ.length + ':' + R.sel) {
-        R.scoreQ.sort((a, b) => (b.pic === R.sel) - (a.pic === R.sel) || a.pic - b.pic || b.exact - a.exact);
+        // Links on your approved sites are checked last for each picture (they are still checked:
+        // their copies go into All copies found as Licensed).
+        const al = new Map(R.scoreQ.map(l => [l, RS_LISTS.isAllowed(l.site, l.url) ? 1 : 0]));
+        R.scoreQ.sort((a, b) => (b.pic === R.sel) - (a.pic === R.sel) || a.pic - b.pic || al.get(a) - al.get(b) || b.exact - a.exact);
         R.qSorted = (R.scoreQ.length - 1) + ':' + R.sel;
       } else R.qSorted = (R.scoreQ.length - 1) + ':' + R.sel;
       const l = R.scoreQ.shift();
       if (l.sv === SCORE_VERSION) continue;
+      // Links on your hidden sites are never shown, so they are not downloaded or checked. If you
+      // show a site again, its links are checked then (unpark).
+      if (!l.rescued && RS_LISTS.isHidden(l.site, l.url)) { R.parked.add(l); TIMES.skipped++; timesSoon(); continue; }
       const p = job.pics[l.pic];
       await scoreLink(l);
       saveScoresSoon(job.pics[l.pic]);
@@ -1183,7 +1240,7 @@ async function initResults() {
 
   // Lists changed on another PageProof page: show the change here straight away.
   api.storage.onChanged.addListener((ch, area) => {
-    if (area === 'local' && (ch.rsHidden || ch.rsAllowed || ch.rsRejected)) RS_LISTS.load().then(() => renderResults());
+    if (area === 'local' && (ch.rsHidden || ch.rsAllowed || ch.rsRejected)) RS_LISTS.load().then(() => { unpark(); renderResults(); });
   });
   try { const me = await api.tabs.getCurrent(); R.myTab = me.id; R.winId = me.windowId; } catch (e) { /* ignore */ }
   if (R.myTab && !job.auto && !job.bg) api.storage.local.set({ rsOpenJob: { id: job.id, tab: R.myTab } });

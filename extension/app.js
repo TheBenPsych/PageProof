@@ -590,6 +590,10 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['A faster photo checker', 'The part that checks each found picture against your photo now runs in WebAssembly, a faster language built into Chrome and Edge. Same answers as before, worked out about twice as fast (the pairing-up step about 5 times). Nothing to install.'],
+  ['Mirror check with half the work', 'To catch copies flipped left to right, PageProof now flips your photo once and reuses it, instead of flipping every found picture and starting over.'],
+  ['Hidden sites are not checked', 'Links on your hidden sites are no longer downloaded or checked, since you never see them. Show a site again and its links are checked then. Links on approved sites are checked last.'],
+  ['Where the time goes', 'Settings › Is everything working? now shows how long the search sites, downloads and photo checks take on this computer, and which one is the slow part.'],
   ['A check before you save', 'Pressing Save evidence pack first checks what people forget: an empty case number or name, a page that looks blocked, your photo missing from the capture, or a wrong computer clock. If all is fine it saves straight away; if not, you see a short list with Fix buttons and Save anyway.'],
   ['Is your photo on the capture?', 'When you capture a page from Copies found, PageProof looks for your client\'s photo on the captured screens and ticks it off ("on screen 2"), or warns you before you save if it isn\'t there.'],
   ['Blocked page warning', 'If a capture shows a login wall, "page not found", "access denied", a robot check or an empty page, a red box says so straight away, with Capture again.'],
