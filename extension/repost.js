@@ -190,6 +190,7 @@ const PP_REPOST = (() => {
     const base = { at: new Date().toISOString(), onProfile };
     let wall = false;
     for (const pg of pages) {
+      if (PP_SOCIAL.halt && PP_SOCIAL.halt.on) break;
       let tab, res;
       try {
         tab = await PP_SOCIAL.openQuiet(pg.url);

@@ -104,6 +104,19 @@ const FB = `<!doctype html><html><body><div role="main">
   ok(/Share of/.test(await page.textContent(`[data-id="${full.id}"]`).catch(() => '') || await page.evaluate(id => rpTags(FCD.copies.find(c => c.id === id)), full.id)), 'The row says "Share of …"');
   const box = await page.evaluate(id => rpBox(FCD.copies.find(c => c.id === id)), full.id);
   ok(/Open the original post/.test(box) && /pfbid0BBB/.test(box), 'The copy\'s panel links the original post');
+  // Pause (or Keep searching off) stops the automatic checks, like the account reader (4.30.2).
+  const paused = await page.evaluate(async () => {
+    await api.storage.local.set({ fcKeep: { on: true, hours: 'all' }, fcPause: Date.now() });
+    const c = FCD.copies.find(x => isSoc(x) && !x.rp && x.status === 'new') || FCD.copies.find(x => x.status === 'new' && !x.rp);
+    const r = await FC.DB.get('copies', c.id); r.site = 'facebook.com'; r.url = 'https://www.facebook.com/AnotherSamplePage/'; delete r.acct; await FC.DB.put('copies', r);
+    FCD = null; await loadFC();
+    let opened = 0; const was = PP_SOCIAL.openQuiet; PP_SOCIAL.openQuiet = async () => { opened++; return { id: -1 }; };
+    await rpQueue();
+    PP_SOCIAL.openQuiet = was;
+    await api.storage.local.remove(['fcPause', 'fcKeep']);
+    return { opened, rp: !!(await FC.DB.get('copies', c.id)).rp };
+  });
+  ok(paused.opened === 0 && !paused.rp, 'While paused, nothing is opened or checked');
   await page.evaluate(() => api.storage.local.remove('ppShowReposts'));
   await ctx.close();
   console.log(fails ? fails + ' FAILED' : 'ALL PASS');
