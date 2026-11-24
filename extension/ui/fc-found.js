@@ -289,13 +289,21 @@ async function lineUpWith(ours, url) {
 // are stepped through with their Next button.
 async function readPostPicsInTab() {
   const wait = ms => new Promise(r => setTimeout(r, ms));
-  const roots = [...document.querySelectorAll('[role="dialog"] [role="article"], [role="main"] [role="article"], article')];
-  const root = roots.find(r => !r.parentElement || !r.parentElement.closest('[role="article"], article')) || document.querySelector('[role="main"], main') || document.body;
+  // The post itself: the outermost article that links to this post's own address (on X, the
+  // tweets above a reply and the replies below are articles too; on Instagram and Facebook the
+  // "More posts from…" grid and suggested posts sit outside it).
+  const idOf = h => { try { const u = new URL(h, location.href); const m = u.pathname.match(/\/(?:p|reel|reels|tv|status|posts|videos|permalink|photo)\/([^/?#]+)/i) || u.pathname.match(/\/(\d{6,})\/?$/); return m ? m[1] : (u.searchParams.get('story_fbid') || u.searchParams.get('fbid') || ''); } catch (e) { return ''; } };
+  const me = idOf(location.href);
+  const roots = [...document.querySelectorAll('[role="dialog"] [role="article"], [role="main"] [role="article"], article')].filter(r => !r.parentElement || !r.parentElement.closest('[role="article"], article'));
+  const root = (me && roots.find(r => [...r.querySelectorAll('a[href]')].some(a => idOf(a.href) === me))) || roots[0] || document.querySelector('[role="main"], main') || document.body;
   const out = [];
   const grab = () => {
     for (const el of root.querySelectorAll('img, video')) {
       const inner = el.closest('[role="article"], article');
-      if (inner && inner !== root && root.contains(inner)) continue;                      // a comment
+      if (inner && inner !== root && root.contains(inner)) continue;                      // a comment or a reply
+      // A picture that links to ANOTHER post ("More posts from…", suggested and related posts).
+      const lk = el.closest('a[href]'); const other = lk && idOf(lk.href);
+      if (other && me && other !== me && !/\/photo/i.test(lk.href)) continue;
       if (el.closest('a[href*="l.facebook.com"], a[href*="l.instagram.com"], a[href*="lm.facebook.com"], [role="complementary"], header, [role="banner"]')) continue;
       const u = el.tagName === 'VIDEO' ? el.poster : (el.currentSrc || el.src);
       const w = el.naturalWidth || el.videoWidth || el.width || 0, h = el.naturalHeight || el.videoHeight || el.height || 0;
