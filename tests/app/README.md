@@ -22,6 +22,7 @@ pretend Google Drive folder, pretend copies found). No real photos, clients or w
 | `checks-410.js` | Every photo searched at least once: 1 in 3 searches go to never-searched photos even when newer photos are due, ★ priority clients first then clients take turns, ⚑ High still first, the counts (POOL and broken photos apart), the client-finished note, Keep searching, Home and the weekly summary |
 | `checks-415.js` | Mistake-proofing: Before you save, blocked page box, your photo found on the capture, capture pauses on a tab switch, held keys and "That was quick", Stolen copies kept by Hide and Remove, setup folder notes, greyed-out buttons say why, the Keep searching tab coming back, no Still online check |
 | `checks-414.js` | The 5-item menu, Home's What to do now list, the status line (turns red with Fix it), one blue button per page header, Evidence library picture cards and List switch, Needs a capture (a saved pack of the same page or Already captured takes a copy off), one copy for one page under several addresses, closing cookie and newsletter pop-ups (never Subscribe, never a log-in box), the Settings switch |
+| `checks-416.js` | The fast photo checker (WebAssembly) starts on a PageProof page and in the background photo-check worker, finds exactly the same details as the JavaScript one, and Is everything working shows Where the time goes |
 | `speed.js` | Every main page draws quickly with 50,000 photos and 5,000 copies |
 
 To run them yourself (needs Node.js):

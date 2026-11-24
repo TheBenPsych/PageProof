@@ -103,10 +103,47 @@ async function supportDetails() {
     'Keep searching: ' + (k.on ? 'on' : 'off') + ', pace ' + k.pace + ', hours ' + (k.hours === 'all' ? 'all day' : (k.from ?? 8) + ' to ' + (k.to ?? 18) + (k.weekdays !== false ? ' weekdays' : '')) + ', ' + k.perDay + ' a day' + (k.fiftyAuto ? ' starting by itself at ' + k.fiftyTime : ''),
     'Today: ' + ((st.fcToday || {}).searched || 0) + ' photos searched, ' + ((st.fcToday || {}).found || 0) + ' new copies',
     'Search sites: ' + RS_JOB.ENGINES.map(e => e + ' ' + JSON.stringify({ lastGood: eng[e] && eng[e].ok ? agoText(eng[e].ok) : 'never', emptyInARow: (eng[e] || {}).zeros || 0, noAnswerInARow: (eng[e] || {}).fails || 0, resting: !!(eng[e] && eng[e].until > Date.now()) })).join('; '), '',
+    'Where the time goes (last 7 days, average each)',
+    ...(await (async () => { const t = await timeSums(); if (!t) return ['  Nothing measured yet.']; return [
+      '  Fast checker (WebAssembly): ' + (t.fast == null ? 'not known' : t.fast ? 'on' : 'off'),
+      ...[['search', 'Search site, one photo'], ['dl', 'Download a found picture'], ['check', 'Check a found picture'], ['wait', 'Wait for a free checker']].map(([k, l]) => '  ' + l + ': ' + (t.avg(k) == null ? '–' : msText(t.avg(k))) + ' (' + t.sum[k][0] + ' times)'),
+      '  Hidden-site links skipped: ' + t.sum.skipped]; })()), '',
     'The lights',
     ...lights.map(([c, title, text]) => '  [' + ({ ok: 'green', warn: 'yellow', bad: 'red', grey: 'grey' }[c]) + '] ' + title + ': ' + text),
   ];
   return lines.join('\n');
+}
+
+// ---------------------------------------------------------------- where the time goes (4.16)
+// Written by the search results page (revsearch.js timeAdd): per day, how many and how long.
+async function timeSums() {
+  const st = (await api.storage.local.get('rsTiming')).rsTiming;
+  if (!st || !st.days) return null;
+  const sum = { search: [0, 0], dl: [0, 0], check: [0, 0], wait: [0, 0], skipped: 0 };
+  for (const d of Object.values(st.days)) { for (const k of ['search', 'dl', 'check', 'wait']) { sum[k][0] += d[k][0]; sum[k][1] += d[k][1]; } sum.skipped += d.skipped || 0; }
+  const avg = k => sum[k][0] ? Math.round(sum[k][1] / sum[k][0]) : null;
+  return { sum, avg, fast: st.fast, checks: st.checks || 1 };
+}
+function timeSlowest(t) {
+  const c = t.avg('check'), w = t.avg('wait'), d = t.avg('dl');
+  if (c == null) return '';
+  if (w != null && w > c) return 'On this computer the photo checks are the slow part: pictures wait for a free checker.';
+  if (d != null && d > c * t.checks) return 'On this computer the internet is the slow part: the checker waits for pictures to download.';
+  return 'Downloads and photo checks keep pace with each other on this computer.';
+}
+async function timeCard() {
+  const t = await timeSums();
+  const row = (label, k, what) => { const a = t && t.avg(k); return `<div class="row" style="gap:12px;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:nowrap"><span style="flex:1">${label}</span><b>${a == null ? '–' : msText(a) + ' ' + what}</b><span class="faint" style="width:110px;text-align:right">${t ? t.sum[k][0].toLocaleString() + ' times' : ''}</span></div>`; };
+  return `<section class="card pad" style="display:flex;flex-direction:column;gap:4px">
+    <div class="row"><h2>Where the time goes</h2><span class="tag ${t && t.fast === false ? 'warn' : 'ok'}" style="margin-left:auto">${!t || t.fast == null ? 'Not measured yet' : t.fast ? 'Fast checker on' : 'Fast checker off'}</span></div>
+    <p class="muted" style="margin:0 0 6px;font-size:13.5px">How long each step of a search takes on this computer, over the last 7 days.${t ? ' ' + timeSlowest(t) : ' It fills in after the next search.'}</p>
+    ${row('Search sites (one photo on one site)', 'search', 'each')}
+    ${row('Downloading a found picture', 'dl', 'each')}
+    ${row('Checking a found picture against your photo', 'check', 'each')}
+    ${row('Waiting for a free checker', 'wait', 'each')}
+    <div class="row" style="gap:12px;padding:10px 0;flex-wrap:nowrap"><span style="flex:1">Links on your hidden sites, skipped without downloading</span><b>${t ? t.sum.skipped.toLocaleString() : '–'}</b><span style="width:110px"></span></div>
+    ${t && t.fast === false ? '<p class="muted" style="margin:4px 0 0;font-size:13.5px">The fast checker could not start in this browser, so the slower one is used. Results are the same.</p>' : ''}
+  </section>`;
 }
 
 // ---------------------------------------------------------------- how much room PageProof takes
@@ -182,6 +219,7 @@ V.health = async () => {
       <span style="width:14px;height:14px;border-radius:50%;flex-shrink:0;background:${LIGHT[c]}" role="img" aria-label="${{ ok: 'Working', warn: 'Needs a look', bad: 'Stopped', grey: 'Not in use' }[c]}"></span>
       <div style="flex:1;min-width:0"><b>${esc(title)}</b><div class="muted" style="font-size:13.5px">${esc(text)}</div></div>${btn || ''}</div>`).join('')}
   </section>
+  ${await timeCard()}
   ${storageCard()}
   ${state.support ? `<section class="card pad" style="display:flex;flex-direction:column;gap:10px"><div class="row"><h2>Details for support</h2><span class="tag ok" style="margin-left:auto">Copied</span></div>
     <p class="muted" style="margin:0;font-size:14px">This is exactly what was copied. Paste it into a message. It has numbers and settings only: no photo names, client names, sites or folder paths.</p>
