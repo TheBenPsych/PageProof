@@ -125,6 +125,10 @@
     }
     return out;
   }
+  // Bing (4.x fix): only its "Pages with this image" list (.vs-erci) is read. Those are pages
+  // that show the same picture, each with Bing's own copy of it as a preview. Bing's "Visual
+  // matches" / related grid under it (.iacfmit) is look-alike photos (other players, other
+  // games): it is never read, and neither is the rest of the page.
   function bingLinks() {
     const out = [];
     for (const it of document.querySelectorAll('.vs-erci')) {
@@ -135,14 +139,19 @@
       out.push({ url, title: clean(t ? t.textContent : a.textContent), thumb: imgSrc(it.querySelector('.vs-eri img')) || imgSrc(it.querySelector('img:not([src*="favicon"])')),
         ...sizeIn((it.querySelector('.vs-eod') || it).textContent), exact: true });
     }
-    for (const it of document.querySelectorAll('.iacfmit')) {
-      const a = it.querySelector('.iacf_tt a') || it.querySelector('a.iacf_imglnk');
-      const url = a && external(a.href);
-      if (!url) continue;
-      out.push({ url, title: clean(a.getAttribute('title') || a.textContent), thumb: imgSrc(it.querySelector('img')), exact: false });
+    // Bing changed the list's look: still only the links inside that one section.
+    const sec = document.querySelector('.vs-ema');
+    if (!out.length && sec) {
+      for (const a of sec.querySelectorAll('a[href]')) {
+        const url = external(a.href);
+        if (url) out.push({ url, title: clean(a.textContent), thumb: imgSrc(a.querySelector('img:not([src*="favicon"])')), exact: true });
+      }
     }
     return out;
   }
+  // Bing's own results page is showing (its "Pages with this image" tab is there), so no links
+  // means Bing found no pages with this picture, not that Bing is broken.
+  const bingPageOk = () => !!(document.querySelector('.vs-ema') || document.querySelector('a[href*="vsa=3"]'));
   // Works on any layout: every link that leaves the search site, with the text and picture
   // nearest to it. Used for Google, and as a backup when the other sites change their pages.
   function genericLinks(exact) {
@@ -209,11 +218,12 @@
       // Visual matches can be long and mostly look-alikes: keep the top 60. The line-up check hides the different photos.
       links = exact.concat(genericLinks(false).slice(0, 60));
     }
-    if (!links.length) links = genericLinks(engine !== 'bing');
+    // Never on Bing: the rest of its page is look-alike photos and related pages, not matches.
+    if (!links.length && engine !== 'bing') links = genericLinks(true);
     // Drop duplicates and tiny junk.
     const seen = new Set();
     links = links.filter(l => l.url && !seen.has(l.url) && seen.add(l.url)).slice(0, 150);
-    await send({ type: 'rsResults', links, pageUrl: location.href });
+    await send({ type: 'rsResults', links, pageUrl: location.href, pageOk: engine === 'bing' && bingPageOk() });
   }
 
   // ---------- which step are we on? ----------
