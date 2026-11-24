@@ -527,6 +527,7 @@ async function drawer(list) {
   const pub = PP_CHECKS.pubDate(p);
   const hits = PP_CHECKS.rules(c, kind, c.pf);
   const capturedAt = [c.url, ...(c.alts || [])].map(u => PP_CHECKS.captureOf(logR.log, u)).find(Boolean) || c.packAt || null;
+  if (typeof acctOnOpen === 'function' && isSoc(c) && c.acct) acctOnOpen(c).then(r => { if (r && state.open === c.id) { FCD_STALE = true; render(true); } }).catch(() => {});
   if (needsPostCheck(c) && !POST_BUSY.has(c.id)) postCheck(c).then(() => { if (state.open === c.id) render(true); }).catch(() => {});
   else if (!c.pf && !PF_BUSY.has(c.id)) readTheirPage(c).then(() => { if (state.open === c.id) render(true); }).catch(() => {});
   const ck = checksParts(c, reg, kind, hits, pub, capturedAt);

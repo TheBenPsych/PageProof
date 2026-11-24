@@ -29,7 +29,17 @@ async function stale() {
 }
 const time = t => new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 
+// The account details reader (main PageProof page, 4.30.2) says how far it is in fcAcctRead.
+function acctLine() {
+  const a = S.acct;
+  if (!a || Date.now() - (a.beat || 0) > 10 * 60000 || !a.total) return '';
+  if (a.state === 'reading' || a.state === 'resting') return ' Reading account details ' + Math.min(a.done + 1, a.total) + ' of ' + a.total + '.';
+  if (a.state === 'held' && a.why === 'site' && a.sites && a.sites.length) return ' Account details: ' + a.sites.map(x => x === 'x' ? 'X' : x).join(', ') + ' showed empty pages, so ' + (a.sites.length > 1 ? 'they are' : 'it is') + ' left alone until ' + time(a.until) + '.';
+  return '';
+}
 async function status(state, text, extra = {}) {
+  S.lastText = text; S.lastExtra = extra;
+  if (state !== 'paused' && state !== 'off') text += acctLine();
   const st = { state, text, beat: Date.now(), win: S.win, tabId: S.me, jobTab: S.tab, ver: MY_VER, ...extra };
   S.lastSt = st;
   await api.storage.local.set({ fcStatus: st });
@@ -50,11 +60,36 @@ const computerBusy = () => ppBusy(S);
 // "finished" at the end. 5 minutes of silence also counts as finished (its page was closed), so a
 // slow moment on a busy computer no longer lets Keep searching start in the middle of it.
 const fiftyRunning = f => !!(f && f.beat && f.running !== false && Date.now() - f.beat < 5 * 60000);
-function inHours(k, d = new Date()) {
-  if (k.hours === 'all') return true;
-  const day = d.getDay(), hr = d.getHours() + d.getMinutes() / 60;
-  if (k.weekdays !== false && (day === 0 || day === 6)) return false;
-  return hr >= (k.from ?? 8) && hr < (k.to ?? 18);
+const inHours = (k, d) => FC.inHours(k, d);
+
+// 4.30.2 (Ben): Pause stops everything at once. The one-photo search closes with its search site
+// tabs, a big search (today's 50, New search...) stops and closes its tabs too, and the account
+// details reader closes its tab (ui/fc-social.js). Nothing is lost: the photo that was being
+// searched is still due, and the big search keeps the photos it finished and carries on with the
+// rest after Resume.
+async function pauseAll() {
+  // The photo that was being searched goes back in line (first after Resume).
+  if (S.job && S.current) S.skip.delete(S.current.id);
+  await stopJob('paused');
+  await bgHold();
+}
+async function bgHold() {
+  if (!BG.id) return;
+  const id = BG.id, text = BG.text;
+  if (BG.frame) BG.frame.remove();
+  Object.assign(BG, { id: null, frame: null, text: '' });
+  $('big').hidden = true;
+  try {
+    const all = await api.storage.local.get(null);
+    for (const [k, v] of Object.entries(all)) if (k.startsWith('rsTabL:') && v === id) { await api.tabs.remove(+k.slice(7)).catch(() => {}); await api.storage.local.remove(k); }
+  } catch (e) { /* nothing marked */ }
+  S.held = { id, text };
+  await api.storage.local.set({ fcFifty: { id, beat: 0, running: false } }).catch(() => {});
+}
+async function pausedText(tally) {
+  const waiting = (await bgList()).length;
+  const big = S.held && S.held.text ? ' The big search stopped at ' + S.held.text + ' and carries on from there.' : waiting ? ' ' + waiting + (waiting === 1 ? ' big search waits' : ' big searches wait') + ' too.' : '';
+  return 'Paused. Nothing is searched or checked, and no tabs open, until you press Resume. Then it picks up where it stopped.' + big + ' ' + tally + '.';
 }
 
 async function stopJob(why) {
@@ -110,9 +145,10 @@ async function step() {
   const st = await api.storage.local.get(['fcPause', 'fcFifty', 'fcToday']);
   const today = st.fcToday && st.fcToday.day === new Date().toDateString() ? st.fcToday : { searched: 0, found: 0 };
   const tally = today.searched + ' photos searched today' + (today.found ? ', ' + today.found + ' new copies' : '');
-  if (BG.id) return status('fifty', 'A big search is running in this tab' + (BG.text ? ' (' + BG.text + ')' : '') + '. ' + (k.on && !st.fcPause ? 'Keep searching carries on by itself when it finishes.' : 'You can leave this tab and carry on working.'));
+  if (st.fcPause) { await pauseAll(); return status('paused', await pausedText(tally)); }
+  S.held = null;
+  if (BG.id) return status('fifty', 'A big search is running in this tab' + (BG.text ? ' (' + BG.text + ')' : '') + '. ' + (k.on ? 'Keep searching carries on by itself when it finishes.' : 'You can leave this tab and carry on working.'));
   if (!k.on) { await stopJob(); return status('off', 'Keep searching is off. Turn it on in Find copies › Keep searching.'); }
-  if (st.fcPause) { await stopJob(); return status('paused', 'Paused. Press Resume and it picks up with the next photo. ' + tally + '.'); }
   // A search is running: wait for it (at most 12 minutes).
   if (S.job) {
     if (Date.now() - S.started > 12 * 60000) await stopJob('took too long');
@@ -158,6 +194,8 @@ async function step() {
     // Could not be opened: it goes on the Skipped photos list (with the reason) and the line moves on.
     return status('waiting', pic.soft ? 'Google Drive did not hand over ' + p.name + '. It is tried again later.' : 'Skipped ' + p.name + '. See why in Find copies › Skipped photos.');
   }
+  // Pause pressed while the photo was being read: it is not searched (and stays due).
+  if ((await api.storage.local.get('fcPause')).fcPause) { S.skip.delete(p.id); return; }
   const job = await RS_JOB.create([pic], { kind: 'keep', auto: true });
   if (!job) return status('resting', restText || 'No search sites are switched on. Tick them in Find copies › New search.');
   S.job = job.id; S.started = Date.now(); S.last = Date.now();
@@ -168,6 +206,7 @@ async function step() {
   let t;
   try { t = await api.tabs.create({ ...opts, pinned: true }); } catch (e) { t = await api.tabs.create(opts); }
   S.tab = t.id;
+  if ((await api.storage.local.get('fcPause')).fcPause) { await stopJob('paused'); return; }
   await status('running', 'Searching one photo. ' + tally + '.', { current: S.current });
 }
 
@@ -190,6 +229,7 @@ function bgDone() {
 let bgBusy = false;
 async function bgNext() {
   if (bgBusy || reloading) return;
+  if ((await api.storage.local.get('fcPause')).fcPause) return;
   bgBusy = true;
   try {
     await fiftyWanted();
@@ -200,6 +240,7 @@ async function bgNext() {
       if (!job || (job.finished && job.pics.every(p => p.ingested || !job.engines.some(e => p.runs[e].state === 'done')))) { await bgDrop(id); continue; }
       // Keep searching's one-photo search steps aside (it starts again after this one).
       await stopJob('a big search starts');
+      if ((await api.storage.local.get('fcPause')).fcPause) return;
       Object.assign(BG, { id, since: Date.now(), text: '' });
       const f = document.createElement('iframe');
       f.src = 'revsearch.html?job=' + encodeURIComponent(id) + '&bg=1';
@@ -280,6 +321,12 @@ api.storage.onChanged.addListener(ch => {
   if (ch.fcQueueDirty) { FC.resetQueue(); S.skip = new Set(S.current && S.job ? [S.current.id] : []); }
   if (ch.fcKeep && ch.fcKeep.newValue && !ch.fcKeep.newValue.on) { stopJob().finally(closeIfIdle); return; }
   if (ch.fcBgJobs || ch.fcFiftyWant) bgNext();
+  // Pause: stop at once (even in the middle of a step). Resume: carry on straight away.
+  if (ch.fcPause) {
+    if (ch.fcPause.newValue) pauseAll().then(async () => { const t = (await api.storage.local.get('fcToday')).fcToday; const n = t && t.day === new Date().toDateString() ? t.searched : 0; status('paused', await pausedText(n + ' photos searched today')); });
+    else { S.held = null; bgNext(); }
+  }
+  if (ch.fcAcctRead) { S.acct = ch.fcAcctRead.newValue; if (S.lastSt && !S.ticking) status(S.lastSt.state, S.lastText, S.lastExtra || {}); }
   if (ch.fcKeep || ch.fcPause) tick();
 });
 // Every hour the line is worked out again from scratch.
@@ -310,10 +357,14 @@ $('open').onclick = e => { e.preventDefault(); api.tabs.create({ url: api.runtim
   try { const me = api.runtime.getURL('runner.html'); const others = (await api.tabs.query({})).filter(t => t.id !== S.me && (t.url || '').startsWith(me)); if (others.length) { await api.storage.local.set({ ppRunnerQuit: Date.now() }); await new Promise(r => setTimeout(r, 300)); } for (const t of others) if (t.id !== S.me && (t.url || '').startsWith(me)) api.tabs.remove(t.id).catch(() => {}); } catch (e) { /* no tab list */ }
   if (!(await api.storage.local.get('ppRunVer')).ppRunVer) await api.storage.local.set({ ppRunVer: MY_VER });
   await RS_LISTS.load().catch(() => {});
+  S.acct = (await api.storage.local.get('fcAcctRead')).fcAcctRead || null;
   FC.movePics().catch(() => {});
   // 4.15: closing this tab asks first ("Leave site?"). The browser only shows that box after
   // someone has clicked in the tab. PageProof itself closing or reloading it never asks.
-  addEventListener('beforeunload', e => { if (!reloading && !S.quit) { e.preventDefault(); e.returnValue = ''; } });
+  // 4.30.2: the browser only shows "Leave site?" after someone clicked in the tab, and logs an error
+  // (shown on edge://extensions) when a page asks without that click. So it only asks after one.
+  const clicked = () => !navigator.userActivation || navigator.userActivation.hasBeenActive;
+  addEventListener('beforeunload', e => { if (!reloading && !S.quit && clicked()) { e.preventDefault(); e.returnValue = ''; } });
   api.storage.onChanged.addListener(ch => { if (ch.ppRunnerQuit) S.quit = true; });
   tick();
   setInterval(tick, 30000);

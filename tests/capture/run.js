@@ -4,6 +4,7 @@
 //   node tests/capture/run.js            all pages
 //   node tests/capture/run.js 12 39      only pages whose name starts with 12 or 39
 //   SAVE=1 node tests/capture/run.js     also saves the joined pictures in tests/capture/out/
+//   SHARD=2/3 node tests/capture/run.js  only every 3rd page starting at the 2nd (GitHub runs 3 side by side)
 const { chromium } = require('playwright');
 const fs = require('fs'), path = require('path');
 const DIR = __dirname, EXT = process.env.EXT_DIR || path.join(DIR, '..', '..', 'extension');
@@ -118,6 +119,8 @@ async function check(ctx, rec, markers, save) {
   require('./make-pages.js');   // (re)build the test pages first
   const only = process.argv.slice(2);
   const files = fs.readdirSync(path.join(DIR, 'pages')).filter(f => f.endsWith('.html') && (!only.length || only.some(o => f.startsWith(o)))).sort();
+  const sh = /^(\d+)\/(\d+)$/.exec(process.env.SHARD || '');
+  if (sh) files.splice(0, files.length, ...files.filter((f, i) => i % +sh[2] === +sh[1] - 1));
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
   // Pages are served from a pretend site. /slow/R-G-B.svg is a square of that colour that takes 1.2 seconds to arrive.

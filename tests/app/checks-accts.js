@@ -53,7 +53,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     };
   });
   ok(unit.nums === '12500,1204,1200000,3000000000,48200', 'Follower numbers like 12.5K, 1.2M and 48 200 are read right (' + unit.nums + ')');
-  ok(/facebook\.com\/harborlightoutfitters\/about_profile_transparency/.test(unit.pages) && /x\.com\/DailyExNews\/about/.test(unit.pages), 'Facebook Page transparency and X "About this account" are read too');
+  ok(/facebook\.com\/harborlightoutfitters\/about_profile_transparency/.test(unit.pages) && !/x\.com\/DailyExNews\/about/.test(unit.pages), 'Facebook Page transparency is read too; X "About this account" is not opened (4.30.2, Ben: the bio has it all)');
   ok(unit.ig.followers === 9812 && unit.ig.verified === 'no' && unit.ig.type === 'Business' && unit.ig.typeSure === 'sure' && unit.ig.country === 'United States' && unit.ig.created === 'March 2019' && unit.ig.oldNames[0] === '@pinecrest_old',
     'Instagram: followers, not verified, Business (Bakery), based in, date joined, old names');
   ok(unit.fb.followers === 52000 && unit.fb.verified === 'meta' && unit.fb.company === 'Harbor Light Outfitters LLC' && /ME 04101/.test(unit.fb.address) && unit.fb.country === 'United States' && unit.fb.type === 'Business' && unit.fb.website === 'https://harborlight.example/',
@@ -108,8 +108,10 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.evaluate(() => { FCD = null; state.fFilter = 'All'; return render(true); }); await page.waitForTimeout(600);
   await page.click('.bigtabs [data-v="social"]'); await page.waitForTimeout(500);
   await page.evaluate(() => { state.fView = 'list'; state.fFilter = 'All'; return render(true); });
+  // 4.30.2: it only reads while Keep searching is on, not paused, inside its hours.
+  await page.evaluate(() => { globalThis.PP_INFO_GAP = 1500; globalThis.PP_SITE_GAP = 0; return api.storage.local.set({ fcKeep: { on: true, hours: 'all' } }); });
   await page.evaluate(() => infoQueue());
-  // The reader goes one account at a time by itself (4 s apart).
+  // The reader goes one account at a time by itself.
   for (let i = 0; i < 40; i++) { await page.waitForTimeout(1000); const n = await page.evaluate(async () => Object.keys((await FC.meta.get('acctInfo')) || {}).length); if (n >= 5) break; }
   await page.waitForTimeout(3500);
   const info = await page.evaluate(async () => ({ reads: window.READS.slice(), all: (await FC.meta.get('acctInfo')) || {} }));

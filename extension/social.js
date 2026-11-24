@@ -335,12 +335,15 @@ const PP_SOCIAL = (() => {
   // account" opens from the profile's menu, so the reader clicks it there.
   function profilePages(acct) {
     if (!acct || !acct.url) return [];
-    const out = [{ url: acct.url, kind: 'profile', click: acct.plat === 'instagram.com' ? 'ig-about' : '' }];
+    // 4.30.2 (Ben): X, Instagram and Threads put everything useful in the bio on the profile itself;
+    // their "About this account" almost never adds anything, so only the profile is opened (one
+    // page per account, which also keeps them from blocking you). Facebook keeps its Page
+    // transparency page: it often names the owner and the country.
+    const out = [{ url: acct.url, kind: 'profile' }];
     if (acct.plat === 'facebook.com' && !/\/groups\//.test(acct.url)) {
       const id = /(?:^|\/)(?:id\.)?(\d{6,})$/.exec(acct.key || '');
       out.push({ url: id ? 'https://www.facebook.com/profile.php?id=' + id[1] + '&sk=about_profile_transparency' : acct.url.replace(/\/+$/, '') + '/about_profile_transparency', kind: 'transparency' });
     }
-    if (acct.plat === 'x.com' || acct.plat === 'twitter.com') out.push({ url: 'https://x.com/' + bareName(acct) + '/about', kind: 'transparency' });
     return out;
   }
   // Runs INSIDE the profile's tab (self-contained). Returns the page's tags, the text, the short
@@ -431,6 +434,7 @@ const PP_SOCIAL = (() => {
     const opts = { url, active: false, ...(win != null ? { windowId: win } : {}) };
     let tab;
     try { tab = await api.tabs.create({ ...opts, pinned: true }); } catch (e) { tab = await api.tabs.create(opts); }
+    QUIET.add(tab.id);
     await new Promise(res => {
       const t = setTimeout(done, ms);
       function done() { clearTimeout(t); api.tabs.onUpdated.removeListener(on); res(); }
@@ -443,11 +447,17 @@ const PP_SOCIAL = (() => {
     });
     return tab;
   }
-  const closeQuiet = tab => { if (tab) api.tabs.remove(tab.id).catch(() => {}); };
+  const closeQuiet = tab => { if (tab) { QUIET.delete(tab.id); api.tabs.remove(tab.id).catch(() => {}); } };
+  // 4.30.2 (Ben): Pause or Off closes every quiet tab straight away, and a read in progress stops
+  // (it is not counted as a failed read, so it is simply done again after Resume).
+  const QUIET = new Set();
+  const halt = { on: false };
+  function stopQuiet() { halt.on = true; for (const id of QUIET) api.tabs.remove(id).catch(() => {}); QUIET.clear(); }
   // Opens each page in a quiet pinned tab of your own browser, reads it, and closes it.
   async function readProfile(acct) {
     const out = [];
     for (const p of profilePages(acct)) {
+      if (halt.on) break;
       let tab;
       try {
         tab = await openQuiet(p.url);
@@ -713,6 +723,6 @@ const PP_SOCIAL = (() => {
   const shortNum = n => n == null ? '' : n >= 1e9 ? (n / 1e9).toFixed(n >= 1e10 ? 0 : 1).replace(/\.0$/, '') + 'B' : n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e4 ? 0 : 1).replace(/\.0$/, '') + 'k' : String(n);
 
   return { SITES, ready, listed, isSocial, platform, postKind, fromUrl, fromTyped, isShort, unshort, publicInfo, hasPublic: url => !!OEMBED[listed(host(url))], fromTags, shapeOf, pageSigns, askFor, setMine, mine: () => mine, mineFor, ELSEWHERE, plainName, bareName, host,
-    big, quickType, kindOf, cardPic, personName, isGovText, profilePages, readProfileInTab, readProfile, openQuiet, closeQuiet, profileFacts, addShopSign, FOL_BANDS, folBand, shortNum };
+    big, quickType, kindOf, cardPic, personName, isGovText, profilePages, readProfileInTab, readProfile, openQuiet, closeQuiet, stopQuiet, halt, profileFacts, addShopSign, FOL_BANDS, folBand, shortNum };
 })();
 if (typeof self !== 'undefined') self.PP_SOCIAL = PP_SOCIAL;

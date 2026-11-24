@@ -545,6 +545,149 @@ const PP_ALIGN = (() => {
     return res;
   }
 
+  // ---------- 9. the same moment, or another shot of the same place? ----------
+  // Two photos of the same building, or of people in front of the same logo wall, can line up
+  // over much of the picture. But a copy is the SAME pixels: once lined up, every small part
+  // sits exactly in place. Another shot was taken from a slightly different spot, so things
+  // at different distances (columns and the wall behind them, a sign pole, a person) shift
+  // against each other by different amounts (parallax), and the light and fine detail differ.
+  // This compares small blocks at the copy's own sharpness (the original is shrunk to the
+  // copy's size first, so a blurry enlarged copy is not marked down for being blurry), finds
+  // how far each block has to move to fit best, and how closely it fits there.
+  function solveN(M, v, n) {   // n x n linear system (Gauss with pivoting)
+    const A = M.map((r, i) => [...r, v[i]]);
+    for (let c = 0; c < n; c++) {
+      let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+      if (Math.abs(A[p][c]) < 1e-12) return null;
+      [A[c], A[p]] = [A[p], A[c]];
+      for (let r = 0; r < n; r++) if (r !== c) { const f = A[r][c] / A[c][c]; for (let k = c; k <= n; k++) A[r][k] -= f * A[c][k]; }
+    }
+    return A.map((r, i) => r[n] / r[i]);
+  }
+  // Best plane-to-plane fit (a homography: size, turn, stretch and slant). What it can't explain
+  // is things at different distances moving differently.
+  function fitPlane(P) {
+    const M = Array.from({ length: 8 }, () => new Array(8).fill(0)), v = new Array(8).fill(0);
+    for (const p of P) {
+      const X = p.x + p.dx, Y = p.y + p.dy;
+      for (const [row, rhs] of [[[p.x, p.y, 1, 0, 0, 0, -p.x * X, -p.y * X], X], [[0, 0, 0, p.x, p.y, 1, -p.x * Y, -p.y * Y], Y]]) {
+        for (let i = 0; i < 8; i++) { v[i] += row[i] * rhs; for (let j = 0; j < 8; j++) M[i][j] += row[i] * row[j]; }
+      }
+    }
+    return solveN(M, v, 8);
+  }
+  // Fine detail only (what a slight blur takes away), at the copy's own sharpness, compared in
+  // small squares. lines2: the share of squares with real 2-D detail (a corner, a letter, a
+  // window; not one straight edge) that line up. graphic: the share of those lined-up squares
+  // that are printed graphics (two flat colours with a sharp edge: logos, signs, lettering).
+  function detail(Abm, Bbm, T, o = {}) {
+    const { bw, bh } = sizes(T, Bbm), up = Math.max(bw / Bbm.width, bh / Bbm.height), L = Math.max(Abm.width, Abm.height);
+    const f = Math.max(Math.min(480 / L, (o.k || 1) / up), Math.min(1, 160 / L));
+    const a0 = grayAt(Abm, f), rb = render(Bbm, T, a0.w, a0.h, f), w = a0.w, h = a0.h;
+    const ab = blur(a0, o.r || 2), bb = blur(rb, o.r || 2);
+    const S = o.S || 10, minV = o.minV || 20, thr = o.thr || 0.5;
+    let tex = 0, mat = 0, sumR = 0, t2 = 0, m2 = 0, g2 = 0;
+    const hp = new Float32Array(w * h); for (let i = 0; i < hp.length; i++) hp[i] = a0.g[i] - ab.g[i];
+    const vals = new Float32Array(S * S);
+    for (let ty = 0; ty + S <= h; ty += S) for (let tx = 0; tx + S <= w; tx += S) {
+      let n = 0, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0, out = false;
+      for (let y = ty; y < ty + S && !out; y++) for (let x = tx; x < tx + S; x++) {
+        const i = y * w + x; if (!rb.m[i]) { out = true; break; }
+        const p = hp[i], q = rb.g[i] - bb.g[i]; n++; sa += p; sb += q; saa += p * p; sbb += q * q; sab += p * q;
+      }
+      if (out) continue;
+      const ma = sa / n, mb = sb / n, va = saa / n - ma * ma, vb = sbb / n - mb * mb;
+      if (va < minV && vb < minV) continue;
+      tex++;
+      const r = va > 1 && vb > 1 ? (sab / n - ma * mb) / Math.sqrt(va * vb) : 0;
+      if (r > thr) { mat++; sumR += r; }
+      // 2-D detail in the original (a corner, a window, a letter), not just one straight edge:
+      // a straight edge (a column side) lines up with any other straight edge slid along it.
+      let xx = 0, yy = 0, xy = 0;
+      for (let y = Math.max(1, ty); y < Math.min(h - 1, ty + S); y++) for (let x = Math.max(1, tx); x < Math.min(w - 1, tx + S); x++) {
+        const i = y * w + x, gx = hp[i + 1] - hp[i - 1], gy = hp[i + w] - hp[i - w]; xx += gx * gx; yy += gy * gy; xy += gx * gy;
+      }
+      const tr = xx + yy, dt = Math.sqrt((xx - yy) ** 2 + 4 * xy * xy), lmin = (tr - dt) / 2, lmax = (tr + dt) / 2;
+      const two = va >= minV && lmin > 0.12 * lmax;
+      // printed graphic (logo, sign, text): two flat colours with sharp edges between them
+      let k = 0; for (let y = ty; y < ty + S; y++) for (let x = tx; x < tx + S; x++) vals[k++] = a0.g[y * w + x];
+      const sv = Array.from(vals).sort((p, q) => p - q); let tot = 0, tq = 0; for (const v of sv) { tot += v; tq += v * v; }
+      const N = sv.length, mu = tot / N, vt = tq / N - mu * mu; let best = 0, c = 0;
+      for (let i = 0; i < N - 1; i++) { c += sv[i]; const w0 = (i + 1) / N, m0 = c / (i + 1), m1 = (tot - c) / (N - i - 1); best = Math.max(best, w0 * (1 - w0) * (m0 - m1) ** 2); }
+      const graphic = vt > 50 && best / vt > 0.8;
+      if (two) { t2++; if (r > thr) { m2++; if (graphic) g2++; } }
+    }
+    return { tex, mat, lines: tex ? mat / tex : 0, str: mat ? sumR / mat : 0, f, t2, m2, lines2: t2 ? m2 / t2 : 0, graphic: m2 ? g2 / m2 : 0 };
+  }
+  function moment(Abm, Bbm, T) {
+    const { bw, bh } = sizes(T, Bbm), up = Math.max(bw / Bbm.width, bh / Bbm.height), L = Math.max(Abm.width, Abm.height);
+    const f = Math.max(Math.min(480 / L, 1 / up), Math.min(1, 200 / L));
+    const a = blur(grayAt(Abm, f), 1), rb = render(Bbm, T, a.w, a.h, f), b = blur(rb, 1), w = a.w, h = a.h;
+    const S = 16, R = 4, step = 8, n = S * S, P = [];
+    for (let ty = R; ty + S + R <= h; ty += step) for (let tx = R; tx + S + R <= w; tx += step) {
+      let ok = true;
+      for (let y = ty - R; y < ty + S + R && ok; y += 2) for (let x = tx - R; x < tx + S + R; x += 2) if (!rb.m[y * w + x]) { ok = false; break; }
+      if (!ok) continue;
+      let sa = 0, saa = 0;
+      for (let y = ty; y < ty + S; y++) for (let x = tx; x < tx + S; x++) { const p = a.g[y * w + x]; sa += p; saa += p * p; }
+      const ma = sa / n, va = saa / n - ma * ma;
+      if (va < 60) continue;                                   // plain: nothing to go on
+      {  // a straight edge alone can't tell how far it moved along itself: skip those blocks
+        let xx = 0, yy = 0, xy = 0;
+        for (let y = ty; y < ty + S; y++) for (let x = tx; x < tx + S; x++) { const i = y * w + x, gx = a.g[i + 1] - a.g[i - 1], gy = a.g[i + w] - a.g[i - w]; xx += gx * gx; yy += gy * gy; xy += gx * gy; }
+        const tr = xx + yy, dt = Math.sqrt((xx - yy) ** 2 + 4 * xy * xy);
+        if ((tr - dt) / 2 < 0.15 * (tr + dt) / 2) continue;
+      }
+      const G = new Float32Array((2 * R + 1) ** 2);
+      let best = -2, bx = 0, by = 0;
+      for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+        let sb = 0, sbb = 0, sab = 0;
+        for (let y = ty; y < ty + S; y++) { const ra = y * w, rbb = (y + dy) * w + dx; for (let x = tx; x < tx + S; x++) { const q = b.g[rbb + x]; sb += q; sbb += q * q; sab += a.g[ra + x] * q; } }
+        const mb = sb / n, vb = sbb / n - mb * mb, r = vb > 20 ? (sab / n - ma * mb) / Math.sqrt(va * vb) : -1;
+        G[(dy + R) * (2 * R + 1) + dx + R] = r;
+        if (r > best) { best = r; bx = dx; by = dy; }
+      }
+      if (best < 0.7 || Math.abs(bx) === R || Math.abs(by) === R) continue;
+      const g = (dx, dy) => G[(dy + R) * (2 * R + 1) + dx + R];
+      const sub = (m, c, p) => { const d = m - 2 * c + p; return d < 0 ? Math.max(-0.5, Math.min(0.5, 0.5 * (m - p) / d)) : 0; };
+      P.push({ x: tx + S / 2, y: ty + S / 2, dx: bx + sub(g(bx - 1, by), best, g(bx + 1, by)), dy: by + sub(g(bx, by - 1), best, g(bx, by + 1)), r: best, r0: g(0, 0) });
+    }
+    const res = { blocks: P.length, px: 1 / f };
+    if (P.length < 12) return res;
+    // fit the plane on the blocks that agree best (drop the worst fifth, three times)
+    let use = P, H = null;
+    for (let it = 0; it < 4; it++) {
+      H = fitPlane(use.map(p => ({ x: p.x / w - 0.5, y: p.y / w - 0.5, dx: p.dx / w, dy: p.dy / w })));
+      if (!H) return res;
+      for (const p of P) {
+        const x = p.x / w - 0.5, y = p.y / w - 0.5, d = H[6] * x + H[7] * y + 1;
+        p.e = Math.hypot(((H[0] * x + H[1] * y + H[2]) / d - x) * w - p.dx, ((H[3] * x + H[4] * y + H[5]) / d - y) * w - p.dy);
+      }
+      use = [...P].sort((p, q) => p.e - q.e).slice(0, Math.max(12, Math.round(use.length * 0.8)));
+    }
+    const es = P.map(p => p.e).sort((x, y) => x - y), rs = P.map(p => p.r).sort((x, y) => x - y);
+    res.medErr = es[es.length >> 1];
+    res.moved = P.filter(p => p.e > 0.75).length / P.length;   // share of parts that shift against the rest
+    res.fit = rs[rs.length >> 1];                                // how closely a part fits once in place
+    res.fit10 = rs[Math.floor(rs.length * 0.1)];
+    return res;
+  }
+
+  // The verdict from both. logos: what lines up is (nearly) only printed logos, signs or lettering,
+  // with the rest different (a sponsor wall, a red carpet backdrop, a shop sign, a logo file).
+  // place: another shot of the same place (parts shift against each other and don't fit closely).
+  // photo: the share of the photo itself that lines up once those are taken out (0-1).
+  function shot(Abm, Bbm, T) {
+    const d = detail(Abm, Bbm, T), m = moment(Abm, Bbm, T);
+    const logos = d.m2 >= 6 && d.graphic >= 0.8 && d.lines2 < 0.85;
+    const place = !logos && m.blocks >= 20 && m.moved >= 0.5 && m.fit10 < 0.93;
+    return {
+      logos, place,
+      photo: logos ? d.lines2 * (1 - d.graphic) : place ? d.lines2 * (1 - m.moved) : null,
+      graphic: d.graphic, detailLines: d.lines2, moved: m.moved || 0, fit: m.fit10 || 0, blocks: m.blocks,
+    };
+  }
+
   // ---------- 7. one spot (a face, a logo) compared on its own ----------
   // box = { x, y, w, h } in the original's pixels. The same spot is cut from the lined-up copy,
   // allowing it to have moved a little (AI edits often nudge people), and the two cut-outs are
@@ -1116,5 +1259,5 @@ fn cy(y: i32) -> u32 { return u32(clamp(y, 0, i32(p.h) - 1)); }
     return best();
   }
 
-  return { align, score, changes, spot, repeats, grayOf, place, drawCopy, bounds, reshape, sizes, mapPoint, ready, fast: () => !!W, gpu: gpuInUse, gpuWhy: () => GPU.why + (Object.keys(CAL).length ? ' [' + Object.entries(CAL).map(([k, c]) => k + ' ' + (c.off ? 'off' : 'on') + (c.tries ? ' ' + Math.round(c.g / c.tries) + '/' + Math.round(c.c / c.tries) + ' ms' : '')).join(', ') + ']' : ''), _t: { features, match, W: () => W, grayOf, refine, refineGPU, gpuReady, featuresGPU, matchGPU, CAL } };
+  return { align, score, changes, spot, repeats, shot, grayOf, place, drawCopy, bounds, reshape, sizes, mapPoint, ready, fast: () => !!W, gpu: gpuInUse, gpuWhy: () => GPU.why + (Object.keys(CAL).length ? ' [' + Object.entries(CAL).map(([k, c]) => k + ' ' + (c.off ? 'off' : 'on') + (c.tries ? ' ' + Math.round(c.g / c.tries) + '/' + Math.round(c.c / c.tries) + ' ms' : '')).join(', ') + ']' : ''), _t: { features, match, W: () => W, grayOf, refine, refineGPU, gpuReady, featuresGPU, matchGPU, CAL } };
 })();
