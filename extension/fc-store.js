@@ -1116,7 +1116,7 @@ const FC = (() => {
     list = list || (typeof RS_LISTS !== 'undefined' ? RS_LISTS.hidden : []);
     if (RS_SITE.entryFor(c.site, c.url, list)) return true;
     const k = c.acct && c.acct.key;
-    return !!k && (list.includes(k) || list.includes(RS_SITE.tidy(k)));
+    return !!k && (RS_SITE.has(list, k) || RS_SITE.has(list, RS_SITE.tidy(k)));
   }
   // Is this account approved (for every client, or for this copy's client)?
   function acctApproved(acct, client) {

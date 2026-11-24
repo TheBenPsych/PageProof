@@ -46,7 +46,7 @@ Object.assign(ACTS, {
     const o = FCD.owners.find(x => x.key === v);
     if (!o) return;
     await RS_LISTS.load();
-    const added = o.sites.filter(s => !RS_LISTS.hidden.includes(s) && !RS_LISTS.wholeSocial(s));
+    const added = o.sites.filter(s => !RS_SITE.has(RS_LISTS.hidden, s) && !RS_LISTS.wholeSocial(s));
     for (const s of added) await RS_LISTS.add('hidden', s);
     HIST.push({ label: 'All ' + o.name + ' sites hidden', undo: async () => { await RS_LISTS.load(); for (const s of added) await RS_LISTS.remove('hidden', s); } });
     dropFC(); toast(plural(added.length, 'site') + ' of ' + o.name + ' hidden.', undoLast); render(true);
