@@ -38,18 +38,18 @@ const DIR = process.argv[2], filter = process.argv[3] || '';
     const lines = r.lines || 0;
     // Different photos: low score and (almost) no area marked as the same photo.
     // Another shot of the same place / only logos lining up counts as found out too.
-    if (!m.G) { ok = (!r.lines || r.lines < 0.25) && !(r.same > 0.1) || !!r.backdrop || !!(r.sh && (r.sh.logos || r.sh.place)); verdict = 'negative'; }
+    if (!m.G) { ok = (!r.lines || r.lines < 0.25) && !(r.same > 0.1) || !!r.backdrop || !!(r.sh && (r.sh.logos || r.sh.place || r.sh.emblem || r.sh.slice || r.sh.pattern)); verdict = 'negative'; }
     // AI-edited post (big added object + caption band): the untouched part must show as the same photo.
     else if (m.copy.includes('ai-added')) ok = !r.none && r.n > 0 && r.max < 8 && r.same >= 0.3 && r.same <= 0.9 && r.untouched >= 0.6;
     else if (m.copy.includes('perspective')) ok = !r.none && lines >= 0.5;
     else ok = !r.none && r.n > 0 && r.max < 8 && lines >= 0.25;
     if (m.G && r.backdrop) ok = false;   // a real copy must never be called 'only the backdrop'
-    if (m.G && r.sh && (r.sh.logos || r.sh.place)) ok = false;   // ...nor another shot / only logos
+    if (m.G && r.sh && (r.sh.logos || r.sh.place || r.sh.emblem || r.sh.slice || r.sh.pattern)) ok = false;   // ...nor another shot / only logos
     // Known limit: another shot of a building or scene, shrunk to a tiny thumbnail or taken a step
     // away, can still look like a copy (too little detail left to see the parallax). Shown, not failed.
     const known = !m.G && !ok && /^(court-|stereo-)/.test(m.copy) && /tiny|close/.test(m.copy);
     if (ok || known) pass++; else fail.push(m.copy);
-    console.log((ok ? 'PASS ' : known ? 'KNOWN' : 'FAIL ') + m.copy.padEnd(42) + ' ' + JSON.stringify({ how: r.how, inl: r.inl, s: r.s && +r.s.toFixed(3), w: r.w && +r.w.toFixed(3), r: r.r && +r.r.toFixed(2), k: r.k && +r.k.toFixed(3), flip: r.flip, lines: +(lines).toFixed(2), rep: r.rep, bd: r.backdrop, same: r.same != null ? +r.same.toFixed(2) : undefined, untouched: r.untouched != null ? +r.untouched.toFixed(2) : undefined, str: r.str && +r.str.toFixed(2), sh: r.sh && [r.sh.logos ? 'LOGOS' : r.sh.place ? 'PLACE' : '-', +r.sh.graphic.toFixed(2), +r.sh.detailLines.toFixed(2), +r.sh.moved.toFixed(2), +r.sh.fit.toFixed(2)], med: r.med && +r.med.toFixed(1), max: r.max && +r.max.toFixed(1), ms: Math.round(r.ms) }));
+    console.log((ok ? 'PASS ' : known ? 'KNOWN' : 'FAIL ') + m.copy.padEnd(42) + ' ' + JSON.stringify({ how: r.how, inl: r.inl, s: r.s && +r.s.toFixed(3), w: r.w && +r.w.toFixed(3), r: r.r && +r.r.toFixed(2), k: r.k && +r.k.toFixed(3), flip: r.flip, lines: +(lines).toFixed(2), rep: r.rep, bd: r.backdrop, same: r.same != null ? +r.same.toFixed(2) : undefined, untouched: r.untouched != null ? +r.untouched.toFixed(2) : undefined, str: r.str && +r.str.toFixed(2), sh: r.sh && [r.sh.logos ? 'LOGOS' : r.sh.emblem ? 'EMBLEM' : r.sh.slice ? 'SLICE' : r.sh.pattern ? 'PATTERN' : r.sh.place ? 'PLACE' : '-', +r.sh.shareA.toFixed(2), +r.sh.shareB.toFixed(2), +r.sh.spot.toFixed(2), r.sh.outM + '/' + r.sh.outT, +r.sh.area.toFixed(2), 'u' + (+(r.sh.uniqueLines || 0).toFixed(2)) + '/p' + (+(r.sh.patternShare || 0).toFixed(2)), +r.sh.graphic.toFixed(2), +r.sh.detailLines.toFixed(2), +r.sh.moved.toFixed(2), +r.sh.fit.toFixed(2)], med: r.med && +r.med.toFixed(1), max: r.max && +r.max.toFixed(1), ms: Math.round(r.ms) }));
   }
   console.log(`\n${pass}/${man.length} passed, avg ${Math.round(tms / man.length)} ms`); if (fail.length) console.log('failed:', fail.join(', '));
   await b.close();

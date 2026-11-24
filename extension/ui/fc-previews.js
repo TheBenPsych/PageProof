@@ -130,7 +130,8 @@ const FC_PREV = (() => {
   // 4.31: copies found before the "only logos / same place" check are checked once more, with
   // the same check as new searches. Another photo of the same place moves to Removed (Put back
   // works). Copies you already answered or added by hand are never touched.
-  const SHOT_CHECK = 6;
+  // 4.38: checked once more for "only a seal or crest / a small slice / a pattern" (SHOT_CHECK 7).
+  const SHOT_CHECK = 7;
   let RECHECK_WAIT = 15000;
   async function recheckOne(c) {
     const { file } = await photoFile(c.photo);
@@ -162,13 +163,13 @@ const FC_PREV = (() => {
       const fresh = await FC.DB.get('copies', c.id);
       if (!fresh || fresh.status !== 'new') continue;          // answered meanwhile: leave it
       done[c.id] = out ? SHOT_CHECK : new Date().toISOString();
-      if (out && !out.none && (out.logos || out.place || out.backdrop)
+      if (out && !out.none && (out.logos || out.place || out.backdrop || out.spot)
         && await FC.checkerRemove(c.id, out.photo !== null && out.photo !== undefined ? Math.round(out.photo * 100) : undefined)) gone++;
       if (++n % 10 === 0) await FC.meta.set('shotChecked', done);
       await sleep(400);
     }
     if (n) await FC.meta.set('shotChecked', done);
-    if (gone && typeof toast === 'function') toast(gone + (gone === 1 ? ' copy was another photo' : ' copies were other photos') + ' of the same place (only logos or the building lined up), so ' + (gone === 1 ? 'it was' : 'they were') + ' moved to Removed. Put back is still there.');
+    if (gone && typeof toast === 'function') toast(gone + (gone === 1 ? ' copy was another photo' : ' copies were other photos') + ' (only logos, a seal, a pattern or the building lined up), so ' + (gone === 1 ? 'it was' : 'they were') + ' moved to Removed. Put back is still there.');
   }
 
   async function start() {

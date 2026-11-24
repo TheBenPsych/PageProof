@@ -92,7 +92,7 @@ const PP_SELFTEST = (() => {
         if (!w) {
           await PP_ALIGN.ready;
           const best = await PP_ALIGN.align(A, bmp, undefined, { fast: true });
-          if (best && best.sc.lines >= 0.3) { const Sh = PP_ALIGN.shot(A, bmp, best); best.backdrop = PP_ALIGN.repeats(A, bmp, best).backdropOnly && Sh.graphic >= 0.6; Object.assign(best, { logos: Sh.logos, place: Sh.place, photo: Sh.photo }); }
+          if (best && best.sc.lines >= 0.3) { const Sh = PP_ALIGN.shot(A, bmp, best); Object.assign(best, { backdrop: Sh.backdrop, logos: Sh.logos, place: Sh.place, spot: Sh.emblem || Sh.slice || Sh.pattern, photo: Sh.photo }); }
           return { best, fast: PP_ALIGN.fast(), gpu: PP_ALIGN.gpu() };
         }
         const id = next++;
