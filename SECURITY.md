@@ -17,6 +17,11 @@ PageProof reads the photos folder you connect (Google Drive for desktop) and not
 - Its own files (site lists, found-copies.txt, settings backup) go only in the
   Documents › PageProof folder you pick. It refuses a folder that is inside your photos
   folder, or holds it, and stops writing if that ever becomes true.
+- Backups and team lists (4.18) go only into folders in **your own My Drive** that you pick
+  (My Drive › PageProof Backup and the PageProof Team folder). PageProof refuses the company's
+  shared drive, any folder inside or around your photos folder, and its own Install folder.
+  Each person's PageProof writes only its own file in the team folder (team-<random id>.json)
+  and only reads the others.
 - To search for copies, a smaller copy of each photo is sent to Google Lens, Yandex and Bing
   (the search sites you have turned on). That copy is redrawn from the pixels, so it carries
   none of the photo's hidden data, and it is always called photo.jpg. Folder paths, client

@@ -411,6 +411,24 @@ Photos with `_POOL_` in their name are never searched by Keep searching.
 
 **One at a time** now has **Hide site** next to Approve site, with the same choices (only this account, only this sub-site, the whole site).
 
+## 22. Backups and team lists (4.18)
+
+Both use **Google Drive for desktop** and your own **My Drive**. PageProof never writes to the company's shared drive.
+
+**Backups.** Settings › **Backups** › **Pick My Drive**. In the window, click **Google Drive**, then **My Drive**, then **Select Folder**. PageProof makes a **PageProof Backup** folder there and saves one backup a day (Monday to Friday, 8 AM to 6 PM). The last 14 are kept. Only you can see them.
+- **Back up now** saves one straight away. The line under it says when the last backup was. It turns red after 3 work days without one.
+- **Restore a backup:** press **Look at it** next to a date. PageProof shows the numbers now and after restoring. Press **Restore**. Your data right now is saved first as a **Before a restore** backup, so you can always go back.
+
+**Team lists** share hidden and approved sites and accounts with your team.
+- *Team lead, once:* Settings › **Team lists** › **Make the team folder in My Drive**. Then on drive.google.com, right-click **PageProof Team** › **Share** › **Share**, add each teammate's work email as **Editor**, and press **Send**. **Copy the steps for your team** copies the teammate steps below.
+- *Each teammate, once:* on drive.google.com, open **Shared with me**, right-click **PageProof Team** › **Organize** › **Add shortcut** › **My Drive** › **Add**. Wait a minute, then in PageProof press **Pick the PageProof Team folder** (Google Drive › My Drive › PageProof Team).
+- Press **Check it works**. It says who else is sharing.
+- In **Hidden and approved sites**, entries from the team say who added them ("Team · Sam"). **Show for me** shows a site a teammate hid on your computer only.
+- If one person hid a site and another approved it, Home and Team lists say **The team disagrees**. Pick **Keep it hidden** or **Keep it approved**, and that answer goes to everyone.
+- If Google Drive for desktop is closed or signed out, Home says **Google Drive isn't syncing**. Your backup and changes wait and go out by themselves when Drive is back.
+
+**New computer?** Settings › Backups › **Moving to a new computer** walks you through it: back up on the old one, install PageProof on the new one, then restore from first-time setup step 3.
+
 ## Quick troubleshooting
 
 | Problem | What to do |
