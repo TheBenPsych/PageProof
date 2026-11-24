@@ -659,6 +659,7 @@ async function checkInWorker(p, bmp) {
   if (res.err) return { stuck: true };                // the picture was handed over, so no second try here
   timeAdd('check', Date.now() - tc);
   if (res.fast !== undefined) TIMES.fast = res.fast;
+  if (res.gpu !== undefined && res.gpu !== null) { TIMES.gpu = res.gpu; TIMES.gpuWhy = res.gpuWhy || ''; }
   return res.out;
 }
 
@@ -752,7 +753,7 @@ function unpark() {
 }
 // "Where the time goes" (Settings › Is everything working?): how long each kind of work takes
 // on this computer, added up per day for the last 7 days. Numbers only.
-const TIMES = { search: [0, 0], dl: [0, 0], check: [0, 0], wait: [0, 0], skipped: 0, fast: null };
+const TIMES = { search: [0, 0], dl: [0, 0], check: [0, 0], wait: [0, 0], skipped: 0, fast: null, gpu: null, gpuWhy: '' };
 function timeAdd(k, ms) { TIMES[k][0]++; TIMES[k][1] += Math.max(0, ms); timesSoon(); }
 let timesT = null;
 function timesSoon() {
@@ -765,6 +766,7 @@ function timesSoon() {
       for (const k of ['search', 'dl', 'check', 'wait']) { d[k][0] += TIMES[k][0]; d[k][1] += TIMES[k][1]; TIMES[k] = [0, 0]; }
       d.skipped += TIMES.skipped; TIMES.skipped = 0;
       if (TIMES.fast !== null) st.fast = TIMES.fast;
+      if (TIMES.gpu !== null) { st.gpu = TIMES.gpu; st.gpuWhy = TIMES.gpuWhy; }
       st.checks = POOL_SIZE; st.at = Date.now();
       for (const k of Object.keys(st.days).sort().slice(0, -7)) delete st.days[k];
       await api.storage.local.set({ rsTiming: st });
