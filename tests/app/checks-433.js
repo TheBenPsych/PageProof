@@ -1,4 +1,4 @@
-// Checks for 4.33: a match made on the search site's small preview only counts when the photo is
+// Checks for 4.32: a match made on the search site's small preview only counts when the photo is
 // one of THEIR PAGE's own pictures, never one in comments, link previews or "related" boxes.
 // Pretend sites only (answered by the test, the internet is never used).
 const { start } = require('./h.js');
@@ -60,6 +60,16 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const tp = await ctx.newPage(); await tp.goto('https://post.example/p'); await tp.waitForTimeout(300);
   const got = await tp.evaluate(`(${fn})()`);
   ok(got.includes('https://cdn.example/cover.jpg') && got.includes('https://cdn.example/1.jpg') && got.includes('https://cdn.example/3.jpg') && !got.some(u => /avatar|preview|comment/.test(u)), 'Signed-in post reader: post pictures, video cover and the album\'s next picture; no comments, link previews or account picture (' + got.map(u => u.split('/').pop()).join(', ') + ')');
+  // X-style: the tweet above (a reply's parent), the tweet itself, a reply, and a "more posts" grid.
+  await ctx.route('https://post.example/someone/status/555', route => route.fulfill({ status: 200, contentType: 'text/html', body: `<html><body><main role="main">
+    <article><a href="/other/status/444">parent</a><img src="https://cdn.example/parent.jpg" width="600" height="400"></article>
+    <article><a href="/someone/status/555">time</a><img src="https://cdn.example/main.jpg" width="600" height="400"><a href="/someone/status/999"><img src="https://cdn.example/quoted-other.jpg" width="600" height="400"></a></article>
+    <article><a href="/reply/status/777">reply</a><img src="https://cdn.example/reply.jpg" width="600" height="400"></article>
+    <div><a href="/p/MORE1"><img src="https://cdn.example/grid.jpg" width="300" height="300"></a></div>
+  </main></body></html>` }));
+  const tp2 = await ctx.newPage(); await tp2.goto('https://post.example/someone/status/555'); await tp2.waitForTimeout(300);
+  const got2 = await tp2.evaluate(`(${fn})()`);
+  ok(got2.join() === 'https://cdn.example/main.jpg', 'Signed-in post reader picks the post itself: not the tweet above, replies, other linked posts or the "more posts" grid (' + got2.map(u => u.split('/').pop()).join(', ') + ')');
   await ctx.close();
   console.log(fails ? fails + ' FAILED' : 'ALL PASSED');
   process.exit(fails ? 1 : 0);

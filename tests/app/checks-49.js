@@ -20,8 +20,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   // ---- the link reader on its own
   const parsed = await page.evaluate(() => [
     'https://www.instagram.com/p/C9xQ2fLsA1k/', 'https://www.instagram.com/harbor.light/p/AAA/', 'https://www.tiktok.com/@quickclips/video/1', 'https://x.com/morningwire/status/1',
-    'https://www.facebook.com/story.php?story_fbid=1&id=1000123', 'https://www.facebook.com/share/p/1Bq8/', 'https://www.reddit.com/user/someone/comments/x/'].map(u => (PP_SOCIAL.fromUrl(u) || {}).key || ''));
-  ok(parsed.join(',') === ',instagram.com/harbor.light,tiktok.com/@quickclips,x.com/morningwire,facebook.com/id.1000123,,reddit.com/user/someone', 'Accounts read from links, none invented for /p/ and share links (' + parsed.join(',') + ')');
+    'https://www.facebook.com/story.php?story_fbid=1&id=1000123', 'https://www.facebook.com/share/p/1Bq8/'].map(u => (PP_SOCIAL.fromUrl(u) || {}).key || ''));
+  ok(parsed.join(',') === ',instagram.com/harbor.light,tiktok.com/@quickclips,x.com/morningwire,facebook.com/id.1000123,', 'Accounts read from links, none invented for /p/ and share links (' + parsed.join(',') + ')');
   ok(await page.evaluate(() => PP_SOCIAL.isSocial('m.facebook.com') && PP_SOCIAL.isSocial('pinterest.co.uk') && !PP_SOCIAL.isSocial('site1.com') && PP_SOCIAL.isShort('https://vm.tiktok.com/ZMh7/') && !!PP_SOCIAL.shapeOf('https://photoverse.example/@jane/123456789')), 'Social sites, short links and profile-shaped links are recognised');
 
   // ---- pretend social copies
@@ -169,18 +169,18 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(back.fClient === 'Client B Media', 'Back on Websites, its own filters are still there');
   ok(!back.ask, 'No "is this social?" question any more');
   const fixed = await page.evaluate(() => ({
-    yes: ['m.facebook.com', 'youtu.be', 'twitter.com', 'x.com', 'threads.com', 'threads.net', 'www.behance.net', 'jane.substack.com', 'nextdoor.co.uk', 'truthsocial.com', 'player.vimeo.com', 'bsky.app', 'lnkd.in', 'pin.it', 'old.reddit.com', 'story.snapchat.com', 'foo.tumblr.com', 'vm.tiktok.com', 'instagr.am'].filter(s => !PP_SOCIAL.isSocial(s)),
-    no: ['blog.naver.com', 'note.com', 'twitch.tv', 'quora.com', 'medium.com', 'flickr.com', 'kick.com', 'patreon.com', 't.me', 'discord.com'].filter(s => PP_SOCIAL.isSocial(s)),
+    yes: ['m.facebook.com', 'youtu.be', 'twitter.com', 'x.com', 'threads.com', 'threads.net', 'www.behance.net', 'jane.substack.com', 'nextdoor.co.uk', 'truthsocial.com', 'player.vimeo.com', 'bsky.app', 'lnkd.in', 'pin.it', 'story.snapchat.com', 'foo.tumblr.com', 'vm.tiktok.com', 'instagr.am'].filter(s => !PP_SOCIAL.isSocial(s)),
+    no: ['blog.naver.com', 'note.com', 'twitch.tv', 'quora.com', 'medium.com', 'flickr.com', 'kick.com', 'patreon.com', 't.me', 'discord.com', 'reddit.com', 'old.reddit.com'].filter(s => PP_SOCIAL.isSocial(s)),
     plats: new Set(Object.values(PP_SOCIAL.SITES).map(x => x[0])).size,
     whole: [RS_LISTS.wholeSocial('instagram.com'), RS_LISTS.wholeSocial('twitch.tv'), RS_LISTS.wholeSocial('blog.naver.com')].join(),
   }));
-  ok(!fixed.yes.length && !fixed.no.length && fixed.plats === 17, 'Only the 17 platforms count as social (wrong: ' + fixed.yes.concat(fixed.no).join(', ') + '; ' + fixed.plats + ' platforms)');
+  ok(!fixed.yes.length && !fixed.no.length && fixed.plats === 16, 'Only the 16 platforms count as social (wrong: ' + fixed.yes.concat(fixed.no).join(', ') + '; ' + fixed.plats + ' platforms)');
   ok(fixed.whole === 'true,false,false', 'Instagram can only be hidden per account; Twitch and Naver Blog can be hidden as a whole site (' + fixed.whole + ')');
 
   // ---- Settings › Social sites
   await page.evaluate(() => { state.hidTab = 'social'; state.hidQ = ''; }); await go('hidden'); await page.waitForTimeout(500);
   const set2 = await page.evaluate(() => document.querySelector('main, #app, body').textContent.replace(/\s+/g, ' '));
-  ok(/Only these 17 platforms count as social media/.test(set2) && /Behance/.test(set2) && /youtu\.be/.test(set2), 'Settings lists the 17 platforms and their web addresses');
+  ok(/Only these 16 platforms count as social media/.test(set2) && /Behance/.test(set2) && /youtu\.be/.test(set2), 'Settings lists the 16 platforms and their web addresses');
   const snap = await page.evaluate(() => FC.settingsSnapshot());
   ok(snap.accounts, 'Typed accounts are in the settings backup');
 

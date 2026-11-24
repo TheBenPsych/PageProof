@@ -252,14 +252,20 @@ async function readTheirPage(c, again) {
 // 4.30: is the photo really in the post? Google Lens can show your client's photo next to a
 // Facebook or Instagram link even when the post shows something else (a video, another picture):
 // it matched a picture elsewhere on that page. Only the post's own pictures count (Ben).
-// 4.33: first the post's main picture (or video cover) from its public page; if that isn't the
+// 4.35: first the post's main picture (or video cover) from its public page; if that isn't the
 // photo, the post is opened in your signed-in browser (a quiet pinned tab) and EVERY picture of it
 // is checked, so a photo that is the 3rd picture of an album is not missed. Comments, link
 // previews and suggested posts are left out. Only when every picture is clearly different does
 // the copy go to Removed by itself ("Not seen in the post"; Put back still works).
 const POSTCHK_V = 2;
 const POST_BUSY = new Set();
-const needsPostCheck = c => isSoc(c) && c.status !== 'removed' && c.onPage !== 'seen' && !/^https?:/i.test(c.img || '') && (!c.postChk || c.postChk.v !== POSTCHK_V);
+const POST_HELD = new Map();     // copy id -> when a check was held by Pause (not tried again for a minute)
+// 4.32: a link to an account page has no "post's own picture" (its picture is the profile photo),
+// so it is never checked or removed this way. The repost check finds the exact post instead.
+const acctPageLink = c => typeof PP_REPOST !== 'undefined' && PP_REPOST.profileOnly(c);
+const needsPostCheck = c => isSoc(c) && !(Date.now() - (POST_HELD.get(c.id) || 0) < 60000) && !acctPageLink(c)
+  && (c.status !== 'removed' || (c.removedBy === 'postcheck' && slidesDue(c)))
+  && (slidesDue(c) || (c.onPage !== 'seen' && !/^https?:/i.test(c.img || '') && (!c.postChk || c.postChk.v !== POSTCHK_V)));
 async function bitmapOf(blob, max = 640) {
   const bm = await createImageBitmap(blob);
   const f = Math.min(1, max / Math.max(bm.width, bm.height));
@@ -289,13 +295,21 @@ async function lineUpWith(ours, url) {
 // are stepped through with their Next button.
 async function readPostPicsInTab() {
   const wait = ms => new Promise(r => setTimeout(r, ms));
-  const roots = [...document.querySelectorAll('[role="dialog"] [role="article"], [role="main"] [role="article"], article')];
-  const root = roots.find(r => !r.parentElement || !r.parentElement.closest('[role="article"], article')) || document.querySelector('[role="main"], main') || document.body;
+  // The post itself: the outermost article that links to this post's own address (on X, the
+  // tweets above a reply and the replies below are articles too; on Instagram and Facebook the
+  // "More posts from…" grid and suggested posts sit outside it).
+  const idOf = h => { try { const u = new URL(h, location.href); const m = u.pathname.match(/\/(?:p|reel|reels|tv|status|posts|videos|permalink|photo)\/([^/?#]+)/i) || u.pathname.match(/\/(\d{6,})\/?$/); return m ? m[1] : (u.searchParams.get('story_fbid') || u.searchParams.get('fbid') || ''); } catch (e) { return ''; } };
+  const me = idOf(location.href);
+  const roots = [...document.querySelectorAll('[role="dialog"] [role="article"], [role="main"] [role="article"], article')].filter(r => !r.parentElement || !r.parentElement.closest('[role="article"], article'));
+  const root = (me && roots.find(r => [...r.querySelectorAll('a[href]')].some(a => idOf(a.href) === me))) || roots[0] || document.querySelector('[role="main"], main') || document.body;
   const out = [];
   const grab = () => {
     for (const el of root.querySelectorAll('img, video')) {
       const inner = el.closest('[role="article"], article');
-      if (inner && inner !== root && root.contains(inner)) continue;                      // a comment
+      if (inner && inner !== root && root.contains(inner)) continue;                      // a comment or a reply
+      // A picture that links to ANOTHER post ("More posts from…", suggested and related posts).
+      const lk = el.closest('a[href]'); const other = lk && idOf(lk.href);
+      if (other && me && other !== me && !/\/photo/i.test(lk.href)) continue;
       if (el.closest('a[href*="l.facebook.com"], a[href*="l.instagram.com"], a[href*="lm.facebook.com"], [role="complementary"], header, [role="banner"]')) continue;
       // 4.35: link preview cards (a shared article's picture) on X, LinkedIn and Facebook.
       if (el.closest('[data-testid="card.wrapper"], [data-testid="card.layoutLarge.media"], .feed-shared-article, .update-components-article, [class*="article-card" i], a[href*="lnkd.in"], a[href*="/redir/redirect"], a[href*="t.co/"]')) continue;
@@ -316,14 +330,19 @@ async function readPostPicsInTab() {
 }
 async function postInBrowser(c, ours) {
   if (!globalThis.PP_SOCIAL || !PP_SOCIAL.openQuiet || !api.scripting) return null;
+  // Quiet tabs follow Keep searching (4.30.2): none while it is paused, off or outside its hours.
+  try { if (!(await FC.quietOK()).ok) return { held: true }; } catch (e) { /* no check: carry on */ }
+  PP_SOCIAL.halt.on = false;
   let tab;
   try {
     tab = await PP_SOCIAL.openQuiet(c.url);
+    if (PP_SOCIAL.halt.on) return { held: true };
     await new Promise(r => setTimeout(r, 3000));      // the sites draw the post after loading
     const [res] = await api.scripting.executeScript({ target: { tabId: tab.id }, func: readPostPicsInTab });
     const urls = (res && res.result) || [];
     if (!urls.length) return null;                     // signed out, or the post is gone
     let n = 0, unsure = false;
+    if (PP_SOCIAL.halt.on) return { held: true };       // paused while the post was open
     for (const u of urls) {
       const m = await lineUpWith(ours, u);
       if (!m) continue;
@@ -351,8 +370,12 @@ async function postCheck(c, opts = {}) {
       if (res.state === 'seen' && (PP_SOCIAL.cardPic(pf.pic) || (pf.card && pf.card.pic === pf.pic))) { res.state = 'card'; res.cardSite = (pf.card && pf.card.site) || ''; }
     }
     // Not the main picture (or no picture readable): look at every picture of the post.
-    if (ours && res.state !== 'seen' && res.state !== 'card' && opts.browser !== false) {
+    // (TikTok photo posts are read slide by slide by slidesInto below instead.)
+    const tiktokSlides = typeof PP_TIKTOK !== 'undefined' && PP_TIKTOK.isPhotoPost(c.url);
+    if (ours && res.state !== 'seen' && res.state !== 'card' && opts.browser !== false && !tiktokSlides) {
       const b = await postInBrowser(c, ours);
+      // Paused, off or outside the hours: nothing is saved, so the post is checked after Resume.
+      if (b && b.held) { POST_HELD.set(c.id, Date.now()); return null; }
       if (b) {
         res.browser = b.state; res.n = b.n;
         if (b.state === 'seen') { res.state = 'seen'; res.pct = b.pct; res.pic = b.pic; }
@@ -360,6 +383,7 @@ async function postCheck(c, opts = {}) {
         else res.state = 'unsure';
       }
     }
+    await slidesInto(c, res);         // TikTok slideshows: every slide, and which one it is
     const cc = await FC.DB.get('copies', c.id);
     if (cc) { cc.postChk = res; await FC.DB.put('copies', cc); }
     c.postChk = res; FCD_STALE = true;
@@ -395,7 +419,7 @@ async function cardSweep() {
   for (const c of xs) await cardRemove(c).catch(() => {});
   return xs.length;
 }
-const notInPost = c => isSoc(c) && c.postChk && c.postChk.state === 'notSeen' && !/^https?:/i.test(c.img || '');
+const notInPost = c => isSoc(c) && !acctPageLink(c) && c.postChk && c.postChk.state === 'notSeen' && !/^https?:/i.test(c.img || '');
 const NOT_IN_POST = c => `${c.postChk.browser === 'notSeen' ? `None of the post's ${c.postChk.n > 1 ? c.postChk.n + ' pictures' : 'pictures'} is your client's photo` : `The post's own ${c.postChk.video ? 'video cover' : 'picture'} is a different photo`}. Google matched a picture somewhere else on that page (a comment, a link preview, a suggested post), and only the post's own pictures count.${c.removedBy === 'postcheck' ? ' So PageProof moved it to Removed. Put it back if you see the photo in the post.' : ' Open the post and look before marking Stolen.'}`;
 const ruleRow = h => `<div class="rrow ${h.lvl}"><span class="tag ${PP_CHECKS.LVL[h.lvl][1]}">${PP_CHECKS.LVL[h.lvl][0]}</span><span>${esc(h.text)}</span></div>`;
 function kindSelect(c, kind, id) {
@@ -544,6 +568,8 @@ async function drawer(list) {
   else if (!soc) fine.push('Site looks normal');
   if (c.credit === 'removed') look.push(['copy', 'nocredit', 'Credit removed', 'Your client\'s photo carries a copyright line in its hidden data. Their copy has none.']);
   else if (c.credit === 'kept') fine.push('Credit kept');
+  if (soc && c.rp && c.rp.state === 'repost') look.push(['warn', 'repeat', `${rpWord(c)} of ${origName(c)}'s post`, 'This account only passed someone else\'s post along. The original poster is the lead. See The post tab.', 'dtab', 'The post', 'page']);
+  else if (soc && PP_REPOST.profileOnly(c) && !(c.rp && c.rp.post)) look.push(['warn', 'warn', 'Link goes to the account page, not the post', RP_BUSY.has(c.id) ? 'Finding the post now…' : 'PageProof looks for the exact post in your browser. See The post tab.', 'dtab', 'The post', 'page']);
   if (soc && !c.acct) look.push(['warn', 'who', 'Account not found yet', 'The link doesn\'t show who posted it. Set it in the Account tab.', 'dtab', 'Account', 'acct']);
   if (c.spam) look.push(['warn', 'warn', 'Looks like a spam blog', c.spam.join(' · ') + '. Nothing was answered for you.', 'spamhide', 'Hide all of ' + esc(FC.baseOf(c.site)), esc(FC.baseOf(c.site))]);
   if (c.known) look.push(['bad', 'repeat', 'On your stolen-before list', 'This exact page is on your list of links stolen before.']);
@@ -583,6 +609,7 @@ async function drawer(list) {
     <dl class="facts">
       <dt>Client</dt><dd>${c.clientName ? esc(c.clientName) : `<span style="color:var(--warn);font-weight:600">Client unknown</span> <select data-act="setclient" aria-label="Set the client" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:13px;padding:2px 4px"><option value="">Set…</option>${clients.map(n => `<option>${esc(n)}</option>`).join('')}</select>`}</dd>
       <dt>Photo</dt><dd>${esc(c.photoName)}${p && p.w ? `<br><span class="muted" style="font-size:13px">${p.w} × ${p.h}</span>` : ''}</dd>
+      ${picLinkRow(c)}
       <dt>How it's used</dt><dd>${esc(FC.USE[c.use][0])}<br><span class="muted" style="font-size:13px">${esc(FC.USE[c.use][1])}</span></dd>
       <dt>Seen</dt><dd>${shortDate(c.firstSeen)}${c.lastSeen && c.lastSeen !== c.firstSeen ? ' → ' + shortDate(c.lastSeen) : ''}, ${c.times > 1 ? c.times + ' times' : 'once'}${c.by ? `<br><span class="muted" style="font-size:13px">First found by ${esc(c.by)}${c.engines && c.engines.length ? ' on ' + c.engines.map(e => ({ google: 'Google Lens', yandex: 'Yandex', bing: 'Bing' }[e] || esc(e))).join(', ') : ''}</span>` : ''}</dd>
       <dt>Their picture</dt><dd>${/^https?:/i.test(c.img || '') ? `From their page: <a class="mono" style="font-size:12px;overflow-wrap:anywhere" href="${safeUrl(c.img)}" target="_blank" rel="noreferrer">${esc(c.img.replace(/^https?:\/\/(www\.)?/, '').slice(0, 90))}</a>` : `The search site's small preview <span class="muted" style="font-size:13px">(PageProof did not get the picture from their page itself)</span>${!isSoc(c) && c.onPage === 'unknown' ? '<br><span class="muted" style="font-size:13px">Their page could not be read, so this stays a Maybe until you look.</span>' : ''}`}${isSoc(c) ? `<br><span class="muted" style="font-size:13px">${POST_BUSY.has(c.id) || !c.postChk ? 'Checking the post\'s own picture…' : c.postChk.state === 'seen' ? `The post's own picture matches (${c.postChk.pct}% lines up).` : c.postChk.state === 'notSeen' ? `<b style="color:var(--bad)">${c.postChk.browser === 'notSeen' ? 'None of the post\'s pictures is this photo.' : `The post's own ${c.postChk.video ? 'video cover' : 'picture'} is a different photo.`}</b>` : c.postChk.state === 'unsure' ? 'The post\'s picture looks close but not clearly the same. Compare closely.' : 'The post\'s own pictures could not be read (sign in to Facebook or Instagram in this browser so PageProof can look).'}${c.postChk && c.postChk.pic ? ` <a href="${safeUrl(c.postChk.pic)}" target="_blank" rel="noreferrer">See it</a>` : ''}${c.postChk ? ` · <a href="#" data-act="postagain">Check again</a>` : ''}</span>` : ''}</dd>
@@ -897,7 +924,7 @@ function siteStrip(base, xs) {
     <div class="sbtns"><a class="btn sm" href="${safeUrl('https://' + base)}" target="_blank" rel="noreferrer" data-act="openlink">Home page</a><button class="btn sm" data-act="stripok" data-v="${esc(c.id)}">Approve site</button>${RS_LISTS.wholeSocial(base) ? '' : `<button class="btn sm" data-act="hidesite" data-v="${esc(base)}">Hide site</button>`}<button class="btn sm" data-act="gowho" data-v="${esc(c.id)}">Who's behind it</button></div></div>`;
 }
 V.found.guard = async () => ((await FC.drive()).done ? null : 'connect');
-V.found.after = () => { if (typeof FC_PREV !== 'undefined') FC_PREV.start(); loadOurs(); bindHover(); ppPagePic(); ppKeptLine(); socQueue(); infoQueue(); };
+V.found.after = () => { if (typeof FC_PREV !== 'undefined') FC_PREV.start(); loadOurs(); bindHover(); ppPagePic(); ppKeptLine(); socQueue(); infoQueue(); if (typeof rpQueue === 'function') rpQueue(); };
 
 // Hovering a copy's thumbnail shows it next to your client's photo.
 // Only one card ever exists. It goes away when the mouse leaves the pictures, and also when the
@@ -1320,7 +1347,7 @@ Object.assign(ACTS, {
   },
   putback: async () => { const c = FCD.copies.find(x => x.id === state.open); await answerCopies([state.open], 'new', (c ? c.site : 'Copy') + ' put back'); toastUndo('Put back as new.'); render(true); },
   changeans: async () => { const c = FCD.copies.find(x => x.id === state.open); await answerCopies([state.open], 'new', (c ? c.site : 'Copy') + ' answer cleared'); toastUndo('Answer cleared. Choose a new one.'); render(true); },
-  copytext: async v => { try { await navigator.clipboard.writeText(v); toast('Copied ' + (v.length > 40 ? 'the full path' : v)); } catch (e) { toast('Could not copy. Select the text and press Ctrl+C.'); } },
+  copytext: async v => { try { await navigator.clipboard.writeText(v); toast('Copied ' + (v.length > 40 ? (/^https?:/i.test(v) ? 'the link' : 'the full path') : v)); } catch (e) { toast('Could not copy. Select the text and press Ctrl+C.'); } },
   addreg: async v => {
     const i = document.getElementById('regIn');
     if (!i || !(await FC.setReg(v, i.value))) return toast('Type a number like VA 1-234-567 or 1-12345678901.');
@@ -1426,7 +1453,7 @@ async function matchReport(c, caseNo) {
     const p = FCD.photos.get(c.photo);
     const blob = await ourBlob(p);
     const r = await PP_EVIDENCE.make({ blob, name: c.photoName, w: p && p.w, h: p && p.h, hash: (p && p.hash) || await RS_UTIL.sha256(blob), client: c.clientName, path: await FC.pathOf(p), reg: p ? await FC.regFor(p) : null },
-      { ...c, use: FC.USE[c.use][0], acctInfo: infoOf(c) }, { caseNo, collector: await getName(), owner: await ownerSummary(c.site), checks: await reportChecks(c, p) });
+      { ...c, use: FC.USE[c.use][0], acctInfo: infoOf(c), pic: picLink(c) }, { caseNo, collector: await getName(), owner: await ownerSummary(c.site), checks: await reportChecks(c, p) });
     const a = document.createElement('a'); a.href = URL.createObjectURL(r.blob); a.download = r.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
     await FC.logReport({ id: r.id, file: r.name, url: c.url, site: c.site, photo: c.photoName, client: c.clientName, caseNo });
     if (r.credit) { const cc = await FC.DB.get('copies', c.id); if (cc) { cc.credit = r.credit; await FC.DB.put('copies', cc); } }
@@ -1452,8 +1479,10 @@ async function captureCopy(c) {
     }
     if (!pic && p) pic = await FC.thumbOf(p);
   } catch (e) { /* the check is skipped */ }
-  await api.storage.local.set({ fcCapFor: { url: c.url, id: c.id, at: Date.now(), pic } });
-  await api.runtime.sendMessage({ type: 'captureUrl', url: c.url }).catch(() => {});
+  // 4.32: when the link was an account page and the exact post was found, capture the post.
+  const capUrl = (c.rp && c.rp.post) || c.url;
+  await api.storage.local.set({ fcCapFor: { url: capUrl, id: c.id, at: Date.now(), pic } });
+  await api.runtime.sendMessage({ type: 'captureUrl', url: capUrl }).catch(() => {});
   toast('Opening ' + c.site + ' to capture it. When you save the evidence pack, the match report PDF is saved too.');
 }
 // The capture page asks for the match report after saving a pack (fcReportReq). Only one open

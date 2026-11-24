@@ -527,7 +527,7 @@ async function rememberSeen(p) {
 }
 // Match results are remembered per picture, so a link already checked is never downloaded
 // and compared again in a later search.
-const SAVE_FIELDS = ['pct', 'inl', 'tiles', 'str', 'mid', 'w', 'h', 'from', 'onPage', 'pv', 'img'];   // 4.33: and what their page check found
+const SAVE_FIELDS = ['pct', 'inl', 'tiles', 'str', 'mid', 'w', 'h', 'from', 'onPage', 'pv', 'img'];   // 4.35: and what their page check found
 function addScores(rec, p) {
   rec.scores = rec.scores || {};
   for (const l of p.links) if (l.sv === SCORE_VERSION && l.pct >= 0 && !l.fromMemory) {
@@ -748,7 +748,7 @@ async function scoreLink(l) {
     Object.assign(l, m, { from: 'image' });
     return;
   }
-  // 4.33: only the search site's small preview was checked (Google never gives the picture's
+  // 4.35: only the search site's small preview was checked (Google never gives the picture's
   // own address). pageCheck() then looks for the photo on their page itself.
   if (quick) { Object.assign(l, quick, { from: 'preview' }); return; }
   const tb = l.thumb ? await fetchPicture(l.thumb) : null;
@@ -784,7 +784,7 @@ function baseVerdict(l) {
   if (l.inl >= 11 && l.tiles >= 12 && l.pct >= 40) return 'maybe';
   return 'no';
 }
-// 4.33 (Ben): a match only counts when the photo is on their page itself, never only in a
+// 4.35 (Ben): a match only counts when the photo is on their page itself, never only in a
 // comment, a link preview, a "related posts" box or a suggested post. A match made on the search
 // site's preview waits ("Checking…") until their page is read:
 //   seen     the photo is one of the page's own pictures: kept, with that picture's address

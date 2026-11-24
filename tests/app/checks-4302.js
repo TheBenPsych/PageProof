@@ -32,6 +32,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     PP_SOCIAL.readProfile = async a => { window.READS.push(a.key); await new Promise(r => setTimeout(r, 50)); return [{ kind: 'profile', text: 'Example\n2K followers\n', data: [] }]; };
     PP_CHECKS.readPage = async () => ({ ok: false, at: new Date().toISOString(), why: 'stubbed' });
     PP_SOCIAL.unshort = async () => ''; PP_SOCIAL.publicInfo = async () => null;
+    if (typeof PP_REPOST !== 'undefined') PP_REPOST.due = () => false;   // the repost check (its own checks) stays out of these tab counts
     return api.storage.local.set({ ppAcctRead: true });
   });
   const acct = () => page.evaluate(async () => ({ reads: window.READS.length, st: (await api.storage.local.get('fcAcctRead')).fcAcctRead || {} }));
@@ -62,6 +63,10 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(/"total":3/.test(seen), 'It says how far it is (' + seen.slice(0, 120) + ')');
 
   // ---- Pause closes a quiet tab at once
+  // (The post check opens quiet tabs of its own for social copies: let it finish and count those
+  // posts as checked, so only this check's tab is counted.)
+  await page.evaluate(async () => { for (let i = 0; i < 100 && typeof POST_BUSY !== 'undefined' && POST_BUSY.size; i++) await new Promise(r => setTimeout(r, 200)); if (typeof POSTCHK_V !== 'undefined') { const all = await FC.allCopies(); for (const c of all) c.postChk = { v: POSTCHK_V, state: 'unknown' }; await FC.DB.putMany('copies', all); if (FCD) for (const c of FCD.copies) c.postChk = { v: POSTCHK_V, state: 'unknown' }; } });
+  await page.waitForTimeout(800);
   const before = (await ctx.pages()).length;
   await page.evaluate(() => { PP_SOCIAL.openQuiet('data:text/html,<title>x</title>hello', 20000); });
   await page.waitForTimeout(800);

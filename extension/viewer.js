@@ -488,6 +488,13 @@ async function start() {
   if (srv.source) files.push({ name: base + '_source.html', bytes: srv.source });
   saved.images.forEach((img, i) => files.push({ name: imageName(img, i), bytes: img.bytes, url: img.url }));
   if (imageData) files.push({ name: 'image-data.txt', bytes: new TextEncoder().encode(imageData.text) });
+  // TikTok photo posts: the link of every picture (slide) in the post.
+  if (rec.slides && rec.slides.slides && rec.slides.slides.length) {
+    const sl = rec.slides, exp = sl.slides.map(x => { try { return parseInt(new URL(x.url).searchParams.get('x-expires'), 10); } catch (e) { return 0; } }).find(n => n > 1e9);
+    files.push({ name: 'post-pictures.txt', bytes: new TextEncoder().encode(['PICTURES IN THIS POST', '='.repeat(21), '', 'Post: ' + rec.url, 'Capture ID: ' + (rec.captureId || '-'), sl.of + ' picture' + (sl.of > 1 ? 's' : '') + (sl.on ? ', picture ' + sl.on + ' was on screen when captured' : ''), '',
+      ...sl.slides.map(x => 'Picture ' + x.n + ' of ' + sl.of + (x.w ? ' (' + x.w + ' x ' + x.h + ')' : '') + '\r\n  ' + x.url + '\r\n'),
+      exp ? 'The site signs these links, so they stop working on ' + new Date(exp * 1000).toUTCString() + '. The picture files themselves are in the images/ folder.' : 'The picture files themselves are in the images/ folder.'].join('\r\n')) });
+  }
   const hosting = await hostingJob;
   if (hosting) {
     for (const f of hosting.files) files.push({ name: f.name, bytes: new TextEncoder().encode(f.text) });
@@ -599,7 +606,7 @@ async function start() {
       ...good.flatMap(t => [{ name: 'timestamps/' + t.file + '.tsr', bytes: t.reply }, { name: 'timestamps/' + t.file + '.tsq', bytes: t.query }]),
       { name: 'capture-details.txt', bytes: new TextEncoder().encode(text) },
       { name: 'README.txt', bytes: new TextEncoder().encode(ppReadme({ captureId: rec.captureId, version: rec.version, url: rec.url, time: rec.time, base,
-        hasSource: !!srv.source, imageCount: saved.images.length, imageData: imageData && imageData.line, stamps: good, notes: rec.notes, hasLookups: !!(hosting && hosting.files && hosting.files.length) })) }
+        hasSource: !!srv.source, imageCount: saved.images.length, imageData: imageData && imageData.line, postPictures: rec.slides && rec.slides.of, stamps: good, notes: rec.notes, hasLookups: !!(hosting && hosting.files && hosting.files.length) })) }
     ];
     const zip = PP_ZIP([...files, ...extra].map(f => ({ name: f.name, bytes: f.bytes })), new Date(rec.time));
     // Name: CaseID_domain_date_time_CaptureID.zip (case ID first when entered).
