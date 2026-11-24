@@ -408,25 +408,16 @@ const RS_IMPORTS = {
     return n;
   },
   // For a file added before 4.22 (nothing was remembered then): which sites in the list did that file add?
-  // "Add from a file" put the new sites at the END of the list, in the file's order, and skipped sites
-  // already there. So the import is the last run of the list made of the file's sites in the file's order.
-  // Sites from the file that sit earlier in the list were there before, and stay.
+  // 4.23.1: every entry that came from the file comes out, except whole sites and endings
+  // (patch.com, .gov) that were on the list before the file's first page: those are the kind you
+  // hide by hand, so they stay. (4.22 guessed from the order of the list, and on a real list that
+  // had been synced and backed up the order was no longer the file's, so most entries stayed.)
   fromFile(text, list) {
-    let best = { added: [], before: [] };
-    for (const parsed of [RS_LISTS.parse(text), RS_IMPORTS.parseFile(text), RS_STOLEN.parse(text)]) {
-      const pos = new Map(parsed.map((s, i) => [s, i]));
-      let i = list.length - 1, seen = false, last = Infinity;
-      const added = [];
-      for (; i >= 0; i--) {
-        const p = pos.get(list[i]);
-        if (p === undefined) { if (seen) break; continue; }   // sites added after the import are skipped
-        if (p > last) break;                                  // out of file order: was there before
-        last = p; seen = true; added.push(list[i]);
-      }
-      const before = list.slice(0, i + 1).filter(s => pos.has(s));
-      if (added.length > best.added.length) best = { added: added.reverse(), before };
-    }
-    return best;
+    const inFile = new Set([...RS_LISTS.parse(text), ...RS_IMPORTS.parseFile(text), ...RS_STOLEN.parse(text)]);
+    const firstPage = list.findIndex(s => inFile.has(s) && s.includes('/'));
+    const added = [], before = [];
+    list.forEach((s, i) => { if (!inFile.has(s)) return; if (!s.includes('/') && (firstPage < 0 || i < firstPage)) before.push(s); else added.push(s); });
+    return { added, before };
   },
 };
 
