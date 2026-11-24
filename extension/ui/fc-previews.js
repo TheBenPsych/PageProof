@@ -7,6 +7,7 @@
 //    looks at its pictures and keeps the one that lines up with your photo (the same check as
 //    "Same photo"). If none lines up well enough, the placeholder stays: a wrong picture is worse.
 // Each copy is tried at most once a week. Nothing is uploaded anywhere.
+// Then (4.31) copies still waiting for an answer get the newer photo check once (recheck below).
 const FC_PREV = (() => {
   let running = false, worker = null, wid = 1;
   const waits = new Map();
@@ -126,6 +127,50 @@ const FC_PREV = (() => {
     return changed;
   }
 
+  // 4.31: copies found before the "only logos / same place" check are checked once more, with
+  // the same check as new searches. Another photo of the same place moves to Removed (Put back
+  // works). Copies you already answered or added by hand are never touched.
+  const SHOT_CHECK = 6;
+  let RECHECK_WAIT = 15000;
+  async function recheckOne(c) {
+    const { file } = await photoFile(c.photo);
+    if (!file) return null;
+    const blob = await get(c.img);
+    if (!blob) return null;
+    const key = 'r' + wid++;
+    try {
+      const ob = await bitmap640(file);
+      await ask({ type: 'orig', key, bmp: ob }, [ob]);
+      const bmp = await bitmap640(blob);
+      if (Math.min(bmp.width, bmp.height) < 80) { bmp.close && bmp.close(); return { none: true }; }
+      const r = await ask({ type: 'check', id: wid++, key, bmp }, [bmp]);
+      return r && r.out ? r.out : null;
+    } catch (e) { return null; } finally { ask({ type: 'forget', key }); }
+  }
+  // Which copies had the check, kept apart from the copies themselves (no rewrite of every row,
+  // so the list doesn't redraw while you look at it): copy id -> version, or the date it failed.
+  async function recheck() {
+    await sleep(RECHECK_WAIT);                         // let Copies found settle first
+    if (!document.body.isConnected) return;
+    const now = Date.now(), done = (await FC.meta.get('shotChecked')) || {};
+    const old = (await FC.allCopies()).filter(c => c.status === 'new' && !/by hand/.test(c.by || '') && /^https?:/i.test(c.img || '')
+      && done[c.id] !== SHOT_CHECK && !(typeof done[c.id] === 'string' && now - Date.parse(done[c.id]) < AGAIN));
+    let gone = 0, n = 0;
+    for (const c of old) {
+      if (document.hidden) await new Promise(r => { const f = () => { if (!document.hidden) { document.removeEventListener('visibilitychange', f); r(); } }; document.addEventListener('visibilitychange', f); });
+      const out = await recheckOne(c);
+      const fresh = await FC.DB.get('copies', c.id);
+      if (!fresh || fresh.status !== 'new') continue;          // answered meanwhile: leave it
+      done[c.id] = out ? SHOT_CHECK : new Date().toISOString();
+      if (out && !out.none && (out.logos || out.place || out.backdrop)
+        && await FC.checkerRemove(c.id, out.photo !== null && out.photo !== undefined ? Math.round(out.photo * 100) : undefined)) gone++;
+      if (++n % 10 === 0) await FC.meta.set('shotChecked', done);
+      await sleep(400);
+    }
+    if (n) await FC.meta.set('shotChecked', done);
+    if (gone && typeof toast === 'function') toast(gone + (gone === 1 ? ' copy was another photo' : ' copies were other photos') + ' of the same place (only logos or the building lined up), so ' + (gone === 1 ? 'it was' : 'they were') + ' moved to Removed. Put back is still there.');
+  }
+
   async function start() {
     if (running) return;
     running = true;
@@ -150,6 +195,7 @@ const FC_PREV = (() => {
         await sleep(800);
       }
       if (n % 4) FC.touch('copies');
+      await recheck();
     } catch (e) { /* try again next time Copies found opens */ }
     finally { running = false; if (worker) { try { worker.terminate(); } catch (x) { /* gone */ } worker = null; } }
   }
@@ -176,5 +222,5 @@ const FC_PREV = (() => {
     } finally { ask({ type: 'forget', key }); }
     return best;
   }
-  return { start, candidates, bestOf };
+  return { start, candidates, bestOf, set recheckWait(ms) { RECHECK_WAIT = ms; } };
 })();

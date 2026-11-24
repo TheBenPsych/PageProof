@@ -185,5 +185,10 @@ for name, src, box, sc, dx, dy, sl in [('wall-other-person', 'chelsea.png', (420
 # a real copy of the wall shot: cropped round the person, a headline added
 img, G = make(wo, S(1.2) @ T(-80, -40), (700, 760)); text(img, 'PRESS DAY', 600, 70)
 img.save(f'{OUT}/wall__real-copy-crop-headline.png'); manifest.append({'orig': 'wall.png', 'copy': 'wall__real-copy-crop-headline.png', 'G': G[:2].tolist()})
+# Different photos of the same place (a building from a few steps apart, a press wall with the
+# same person another moment, a stereo pair), each also as a tiny news thumbnail.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from make_same_place import add_cases
+add_cases(OUT, D, manifest, wall, make, S, T, jpeg)
 json.dump(manifest, open(f'{OUT}/manifest.json', 'w'))
 print(len(manifest))
