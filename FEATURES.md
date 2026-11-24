@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.35.0** (24 Nov 2026).
+Last updated: version **4.36.0** (24 Nov 2026).
 
 ---
 
@@ -120,6 +120,9 @@ Last updated: version **4.35.0** (24 Nov 2026).
 - **Reposts and shares spotted and hidden.** Facebook shares, X reposts and quotes, Instagram, Threads, TikTok and Bluesky reposts and Tumblr reblogs are tagged "Share of …" / "Repost of …", hidden until you tick Show reposts and shares, and point to the original post and account as the lead. Never answered for you. (4.32)
 - **Exact post found when the link is only an account page.** PageProof scrolls the account page in a quiet background tab (following Pause, hours and per-site limits), lines each post's pictures up with your client's photo and links the post that holds it. Capture captures that post. (4.32)
 - **Every picture of a social post checked.** When a post's main picture isn't the photo, the post is opened in your signed-in browser and every picture (albums, video covers) is looked at, leaving out comments, replies, link previews and "More posts" grids. Only then is a match moved to Removed (Put back works). (4.35)
+- **Personal accounts hidden.** Copies from someone's own account (just a person's name, no company, website or contact details; a Facebook profile with friends, a LinkedIn /in/ profile, an X name-only account under 100k followers) are hidden until you tick Show personal accounts. Stolen copies always stay. "Type is wrong?" sets an account's type by hand. (4.36)
+- **Politicians caught more often.** Also "serving … District", "(R-Ohio)", committee badges, @Rep… / @Sen… handles and "Rep." in the post title, even before the profile is read. (4.36)
+- **Link previews are not copies.** A match that is only the picture in a link preview card (a LinkedIn, X or Facebook post sharing an article) is thrown out during the search, or moved to Removed ("Only in a link preview", Put back works). (4.36)
 
 ## 7. Everyday tools
 
@@ -227,3 +230,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.33 | 24 Nov | Picture links on every copy; TikTok slideshows checked slide by slide |
 | 4.34 | 24 Nov | Reddit and forums dropped from searches; social list is 16 platforms |
 | 4.35 | 24 Nov | Photo must be on their page itself (checked during the search, every picture of social posts) |
+| 4.36 | 24 Nov | Personal accounts hidden, politicians caught more often, link previews are not copies |
