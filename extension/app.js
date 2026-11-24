@@ -555,26 +555,28 @@ Object.assign(ACTS, {
 document.getElementById('hidLoad').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (!f) return;
-  await RS_LISTS.load();
-  const kind = state.hidTab === 'allowed' ? 'allowed' : 'hidden';
-  const have = new Set(RS_LISTS[kind]), added = [];
-  for (const s of RS_IMPORTS.parseFile(await f.text())) if (!have.has(s) && !(kind === 'hidden' && RS_LISTS.wholeSocial(s))) { have.add(s); RS_LISTS[kind].push(s); added.push(s); }
-  await RS_LISTS.save();
+  const kind = state.hidTab === 'allowed' ? 'allowed' : state.hidTab === 'stolen' ? 'stolen' : 'hidden';
+  const L = kind === 'stolen' ? RS_STOLEN : RS_LISTS;
+  await L.load();
+  const arr = RS_IMPORTS.arr(kind), have = new Set(arr), added = [], text = await f.text();
+  for (const s of (kind === 'stolen' ? RS_STOLEN.parse(text) : RS_IMPORTS.parseFile(text))) if (!have.has(s) && !(kind === 'hidden' && RS_LISTS.wholeSocial(s))) { have.add(s); arr.push(s); added.push(s); }
+  await L.save();
   if (added.length) await RS_IMPORTS.record({ op: 'add', kind, name: f.name, sites: added });
   const n = added.length;
-  toast(n.toLocaleString() + ' ' + (n === 1 ? 'site' : 'sites') + ' added', n ? async () => { const l = await RS_IMPORTS.all(); if (l[0]) await RS_IMPORTS.toggle(l[0].id); render(true); } : null);
+  toast(n.toLocaleString() + ' ' + (kind === 'stolen' ? (n === 1 ? 'link' : 'links') : n === 1 ? 'site' : 'sites') + ' added', n ? async () => { const l = await RS_IMPORTS.all(); if (l[0]) await RS_IMPORTS.toggle(l[0].id); render(true); } : null);
   render(true);
 });
 // 4.22: take out the sites a file added (for files added before PageProof remembered imports).
 document.getElementById('hidUnload').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (!f) return;
-  await RS_LISTS.load();
-  const kind = state.hidTab === 'allowed' ? 'allowed' : 'hidden';
-  const { added, before } = RS_IMPORTS.fromFile(await f.text(), RS_LISTS[kind]);
+  const kind = state.hidTab === 'allowed' ? 'allowed' : state.hidTab === 'stolen' ? 'stolen' : 'hidden';
+  const L = kind === 'stolen' ? RS_STOLEN : RS_LISTS;
+  await L.load();
+  const { added, before } = RS_IMPORTS.fromFile(await f.text(), RS_IMPORTS.arr(kind));
   if (!added.length) return toast('None of the sites in ' + f.name + ' were added to this list by that file.');
   const n = RS_IMPORTS.takeOut(kind, added);
-  await RS_LISTS.save();
+  await L.save();
   await RS_IMPORTS.record({ op: 'remove', kind, name: f.name, sites: added });
   toast('Took out ' + n.toLocaleString() + ' sites added by ' + f.name + (before.length ? '. ' + before.length.toLocaleString() + ' were there before it, so they stay.' : '.'), async () => { const l = await RS_IMPORTS.all(); if (l[0]) await RS_IMPORTS.toggle(l[0].id); render(true); });
   render(true);
@@ -614,6 +616,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Quick again with a long hidden list', 'A hidden sites list with tens of thousands of pages made every PageProof page slow: each copy was checked against every page on the list. Now it is looked up in one step, about 100 times faster, so a big list no longer slows down clicks, scrolling or Copies found.'],
   ['Undo a file you added', 'Hidden and approved sites now lists every file you added with "Add from a file", each with Undo this import. Undo takes out only the sites that file added, so sites that were on the list before stay. For a file added before this version, press "Take out the sites in a file" and pick the same file. A line with several links separated by commas now counts as several links.'],
   ['Searching matched to your computer', 'The computer check now sets every part of a search on this computer: photo checks at a time (up to 6 on a very strong computer), search tabs open, and found pictures downloaded and opened at once. A new speed level in Settings › Your computer counts from the next search. How often the search sites are asked does not change, so a stronger computer never means more robot checks.'],
   ['Big searches ease off when you are busy', 'While the computer is flat out, memory is nearly full or a laptop is low on battery, today\'s 50 and searches you start slow down to one photo check and one search tab instead of carrying on at full speed. They still finish, and go back to full speed a minute after the computer calms down. Is everything working shows how often it happened.'],

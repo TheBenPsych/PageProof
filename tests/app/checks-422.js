@@ -35,6 +35,20 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   h = await hidden();
   ok(h.join() === 'patch.com,old-one.com,later.com', 'Take out the sites in a file takes out only that old import (sites from before and after stay)');
   ok((await page.$$('[data-act="impundo"]')).length === 1, 'The take-out is listed and can be put back');
+  // 3. 4.22.1: a hidden list of 25,000 pages stays quick (Ben's list made every page slow).
+  const ms = await page.evaluate(() => {
+    const list = [];
+    for (let i = 0; i < 25000; i++) list.push(['facebook.com', 'instagram.com', 'news' + (i % 500) + '.com'][i % 3] + '/page/' + i);
+    list.push('facebook.com/hidden-account');
+    const t0 = performance.now(); let hits = 0;
+    for (let i = 0; i < 9000; i++) {
+      const site = ['facebook.com', 'instagram.com', 'news7.com'][i % 3];
+      if (RS_SITE.entryFor(site, 'https://www.' + site + '/other/' + i, list)) hits++;
+    }
+    const hit = RS_SITE.entryFor('facebook.com', 'https://m.facebook.com/hidden-account/posts/5', list);
+    return { ms: performance.now() - t0, hits, hit };
+  });
+  ok(ms.ms < 1500 && ms.hits === 0 && ms.hit === 'facebook.com/hidden-account', `9,000 copies checked against 25,000 hidden pages in ${Math.round(ms.ms)} ms, still finds a hidden account`);
   await ctx.close();
   console.log(fails ? fails + ' FAILED' : 'ALL PASS');
   process.exit(fails ? 1 : 0);
