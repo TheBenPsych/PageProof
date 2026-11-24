@@ -3,7 +3,7 @@
 // A check that fails is tried once more, because a slow test computer can make one stumble.
 const { spawnSync } = require('child_process');
 const path = require('path');
-const FILES = ['checks-setup.js', 'checks-restore.js', 'checks-answers.js', 'checks-rows.js', 'checks-previews.js', 'checks-new.js', 'checks-look.js', 'checks-43.js', 'checks-44.js', 'checks-47.js', 'checks-badge.js', 'checks-49.js', 'checks-410.js', 'checks-accts.js', 'checks-411.js', 'checks-414.js', 'checks-415.js', 'checks-416.js', 'checks-418.js', 'checks-421.js', 'checks-422.js', 'checks-423.js', 'checks-424.js', 'checks-postcheck.js', 'checks-433.js', 'speed.js'];
+const FILES = ['checks-setup.js', 'checks-restore.js', 'checks-answers.js', 'checks-rows.js', 'checks-previews.js', 'checks-new.js', 'checks-look.js', 'checks-43.js', 'checks-44.js', 'checks-47.js', 'checks-badge.js', 'checks-49.js', 'checks-410.js', 'checks-accts.js', 'checks-411.js', 'checks-414.js', 'checks-415.js', 'checks-416.js', 'checks-418.js', 'checks-421.js', 'checks-422.js', 'checks-423.js', 'checks-424.js', 'checks-postcheck.js', 'checks-433.js', 'checks-435.js', 'speed.js'];
 let bad = 0;
 for (const f of FILES) {
   let ok = false;

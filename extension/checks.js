@@ -154,8 +154,27 @@ const PP_CHECKS = (() => {
       // can be checked against what the post really shows.
       type: meta('og:type'),
       pic: (() => { const v = meta('og:image') || meta('twitter:image'); try { return v ? new URL(v, final).href : ''; } catch (e) { return ''; } })(),
+      // 4.35: the post only shares another site's article (a link preview card), and which site.
+      card: linkCard(doc, html, final, meta('og:image') || meta('twitter:image')),
       siteName: meta('og:site_name'), title: clean(meta('og:title') || (doc.querySelector('title') || {}).textContent || '').slice(0, 160),
     };
+  }
+  // 4.35 (Ben): a social post that shares an article shows a link preview card (the article's
+  // title, picture and site). Its picture is the article's, not one the account posted. Returns
+  // { site, pic, only } or null: only = the post has no picture of its own besides the card.
+  function linkCard(doc, html, url, ogPic) {
+    let host = ''; try { host = new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return null; }
+    if (!/(^|\.)(linkedin\.com|x\.com|twitter\.com|facebook\.com|threads\.net|threads\.com|bsky\.app)$/.test(host)) return null;
+    const isCard = typeof PP_SOCIAL !== 'undefined' && PP_SOCIAL.cardPic ? PP_SOCIAL.cardPic : () => '';
+    const own = /feedshare-|\/media\/[A-Za-z0-9_-]+\.(?:jpg|png)|pbs\.twimg\.com\/media\//i;
+    let site = '';
+    // LinkedIn's public post page: the shared article's link goes through linkedin.com/redir/redirect?url=… or lnkd.in.
+    const a = [...doc.querySelectorAll('a[href]')].find(x => /article|card|share-link|external/i.test((x.getAttribute('data-tracking-control-name') || '') + ' ' + (x.className || '')) && /redir\/redirect|lnkd\.in|l\.facebook\.com|t\.co\//.test(x.getAttribute('href') || ''));
+    if (a) { try { const u = new URL(a.getAttribute('href'), url); site = (u.searchParams.get('url') || u.searchParams.get('u') || ''); site = site ? new URL(site).hostname.replace(/^www\./, '') : ''; } catch (e) { /* no site */ } }
+    const cardImg = isCard(ogPic) ? ogPic : (String(html).match(/https:\/\/media\.licdn\.com\/dms\/image\/[^"'\s<>]*articleshare-[^"'\s<>]*/i) || String(html).match(/https:\/\/pbs\.twimg\.com\/card_img\/[^"'\s<>]*/i) || [''])[0].replace(/&amp;/g, '&');
+    if (!cardImg && !a) return null;
+    if (!site) { const t = doc.querySelector('meta[property="og:description"]'); const m = /\b([a-z0-9-]+\.(?:com|net|org|co\.uk|news))\b/i.exec((t && t.getAttribute('content')) || ''); if (m && !/linkedin|lnkd|twitter|facebook/i.test(m[1])) site = m[1].toLowerCase(); }
+    return { site, pic: cardImg, only: !!cardImg && !own.test(String(html)) };
   }
   // The tags a social post page carries about itself (who posted it, caption, date).
   function socTags(doc, html, url) {

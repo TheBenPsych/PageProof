@@ -7,7 +7,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > and as one line in the timeline. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.30.1** (24 Nov 2026).
+Last updated: version **4.35.0** (24 Nov 2026).
 
 ---
 
@@ -108,6 +108,9 @@ Last updated: version **4.30.1** (24 Nov 2026).
 - **Kinds of check mark, drawn like the site.** X blue = Paid (bought), X gold = Verified organisation, grey = Government, Instagram/Facebook = Meta check (paid or earned look the same), others = Verified. Filter "Really verified (not bought)". (4.27)
 - **Government accounts hidden.** Anyone in or running for public office (Congresswoman, Councilman, "for Council", campaign or .gov sites, grey check) is type Government and hidden unless you tick Show government. (4.27)
 - **Real names on accounts.** "Jamie Rivera" (made-up example) instead of the number from the link, with the handle small beside it (Facebook numbers, YouTube channel IDs and more). Country filled from Facebook Page transparency or the place on the profile. (4.27)
+- **Personal accounts hidden.** Copies from someone's own account (just a person's name, no company, website or contact details: a Facebook profile with friends, a LinkedIn /in/ profile, an X account with only a name and under 100k followers) are hidden until you tick Show personal accounts. Stolen copies always stay. "Type is wrong?" sets an account's type by hand. (4.35)
+- **Politicians caught more often.** Also "serving … District", "(R-Ohio)", committee badges, @Rep… / @Sen… handles and "Rep." in the post title, even before the profile is read. (4.35)
+- **Link previews are not copies.** A match that is only the picture in a link preview card (a LinkedIn, X or Facebook post sharing an article) is thrown out during the search, or moved to Removed ("Only in a link preview", Put back works). (4.35)
 - **Never your own name on someone else's account.** Instagram, Threads and TikTok pages also carry the signed-in person's own details (name, followers). PageProof now reads only the viewed account's own part of the page, and Facebook's hidden page data is not used at all. Accounts read before this fix are read again by themselves. (4.30.1)
 - **Only the post's own picture counts.** Google Lens can show your client's photo next to a Facebook or Instagram link when the post itself shows something else (a video, another photo). PageProof now lines up the post's own picture (or video cover) with your client's photo; a clearly different picture sends the match to Removed by itself ("Not seen in the post", Put back still works). The panel also says where "Theirs" came from: the search site's small preview or a picture from their page. (4.30)
 - **Social media means the 17 main platforms only** (YouTube, Facebook, Instagram, TikTok, X, LinkedIn, Pinterest, Threads, Reddit, Snapchat, Tumblr, Bluesky, Substack, Nextdoor, Truth Social, Vimeo, Behance). Every other site is a normal website again, so country filters and whole-site hiding work on it. No more "is this social?" questions. (4.25)
@@ -207,3 +210,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.27 | 24 Nov | X details fixed, check kinds, Government hidden, countries to show, real account names |
 | 4.30 | 24 Nov | Social matches only count when the post's own picture is the photo; "Theirs" source shown |
 | 4.30.1 | 24 Nov | Fix: Instagram accounts showed your own name; viewer's details left out, accounts read again |
+| 4.35 | 24 Nov | Personal accounts hidden, politicians caught more often, link previews are not copies |

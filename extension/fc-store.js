@@ -1152,20 +1152,32 @@ const FC = (() => {
   // 4.24: also leaves out website copies from countries not shown, and government accounts
   // (unless Show government is on), the same as Copies found.
   async function countNew() {
-    const st = await api.storage.local.get(HID ? ['fcShownCountries', 'ppShowGov'] : ['rsHidden', 'fcShownCountries', 'ppShowGov']);
+    const st = await api.storage.local.get(HID ? ['fcShownCountries', 'ppShowGov', 'ppShowPerson'] : ['rsHidden', 'fcShownCountries', 'ppShowGov', 'ppShowPerson']);
     if (!HID) HID = st.rsHidden || [];
     const hidden = HID, shown = Array.isArray(st.fcShownCountries) ? st.fcShownCountries : SHOWN_START;
     const every = await allCopies(), fresh = every.filter(c => c.status === 'new');
     // 4.24: spam blog copies are hidden on Copies found until you show them, so they don't count here.
     const spam = spamMarks(every);
-    let info = {};
-    if (!st.ppShowGov && fresh.some(c => c.acct)) info = (await meta.get('acctInfo').catch(() => null)) || {};
+    let info = {}, mine = {}, links = new Map();
+    const kinds = typeof PP_SOCIAL !== 'undefined' && PP_SOCIAL.kindOf;
+    if ((!st.ppShowGov || !st.ppShowPerson) && fresh.some(c => c.acct)) {
+      info = (await meta.get('acctInfo').catch(() => null)) || {};
+      mine = (await meta.get('acctType').catch(() => null)) || {};
+      for (const g of ((await meta.get('acctLinks').catch(() => null)) || [])) for (const k of g) links.set(k, g[0]);
+    }
     return fresh.filter(c => {
       if (spam.has(c.id) || hiddenCopy(c, hidden)) return false;
       const ct = c.country || countryOf(c.site);
       if (c.use !== 'social' && ct && !shown.includes(ct)) return false;
-      const i = c.acct && info[c.acct.key];
-      return !(i && i.v && i.type === 'Government' && !(/^(instagram\.com|facebook\.com|threads\.net|threads\.com|tiktok\.com)$/.test(c.acct.plat || '') && i.v < 4));
+      if (!c.acct) return true;
+      const i = info[c.acct.key];
+      // 4.35: government and personal accounts, worked out the same way as Copies found. Details
+      // that could hold the viewer's own data (X before 4.24, Meta/TikTok before 4.30.1) are not used.
+      const stale = i && i.ok && ((/^(x|twitter)\.com$/.test(c.acct.plat || '') && !i.v) || (/^(instagram\.com|facebook\.com|threads\.net|threads\.com|tiktok\.com)$/.test(c.acct.plat || '') && (i.v || 0) < 4));
+      const t = kinds ? (kinds(c.acct, stale ? null : i, c.title, mine[links.get(c.acct.key) || c.acct.key]) || {}).type : i && i.v && !stale && i.type;
+      if (t === 'Government' && !st.ppShowGov) return false;
+      if (t === 'Person' && !st.ppShowPerson) return false;
+      return true;
     }).length;
   }
   // Is this copy on a hidden site, or posted by a hidden account? (4.9: an Instagram /p/ link has
@@ -1828,14 +1840,14 @@ const FC = (() => {
     return list;
   }
   async function settingsSnapshot() {
-    const st = await api.storage.local.get(['lastCase', 'ppTheme', 'rsSettings', 'fcKeep', 'fcDrive', 'fcShownCountries', 'ppShowGov', 'ppHw', 'ppSocialSites']);
+    const st = await api.storage.local.get(['lastCase', 'ppTheme', 'rsSettings', 'fcKeep', 'fcDrive', 'fcShownCountries', 'ppShowGov', 'ppShowPerson', 'ppHw', 'ppSocialSites']);
     const clients = await DB.all('clients');
     const flags = await flagList();
     const regs = Object.fromEntries(Object.entries((await meta.get('regs')) || {}).filter(([, v]) => v.manual));
     return { app: 'PageProof', version: api.runtime.getManifest().version, saved: new Date().toISOString(), name: (st.lastCase || {}).collector || '', theme: st.ppTheme || 'light',
-      search: st.rsSettings || null, keep: st.fcKeep || null, drive: st.fcDrive || null, shownCountries: Array.isArray(st.fcShownCountries) ? st.fcShownCountries : SHOWN_START, showGov: !!st.ppShowGov, hardware: st.ppHw || null,
+      search: st.rsSettings || null, keep: st.fcKeep || null, drive: st.fcDrive || null, shownCountries: Array.isArray(st.fcShownCountries) ? st.fcShownCountries : SHOWN_START, showGov: !!st.ppShowGov, showPerson: !!st.ppShowPerson, hardware: st.ppHw || null,
       clients: clients.map(c => ({ name: c.name, searching: c.searching, priority: !!c.priority, licensed: c.licensed || [], licensedAcc: c.licensedAcc || [] })), flags, regs, picked: await picked(),
-      socialSites: st.ppSocialSites || {}, accounts: (await meta.get('acctKept')) || {}, acctLinks: (await meta.get('acctLinks')) || [] };
+      socialSites: st.ppSocialSites || {}, accounts: (await meta.get('acctKept')) || {}, acctLinks: (await meta.get('acctLinks')) || [], acctType: (await meta.get('acctType')) || {} };
   }
   async function writeSettings() {
     try { await RS_DOCS.writeText('pageproof-settings.json', JSON.stringify(await settingsSnapshot(), null, 1)); await api.storage.local.set({ ppBackupAt: new Date().toISOString() }); } catch (e) { /* folder not set up */ }
@@ -1861,11 +1873,13 @@ const FC = (() => {
     if (j.drive && typeof j.drive === 'object') set.fcDrive = { label: str(j.drive.label) || 'G:\\Shared drives\\Photos', done: false };
     if (Array.isArray(j.shownCountries)) set.fcShownCountries = j.shownCountries.map(str).filter(Boolean);
     if (typeof j.showGov === 'boolean') set.ppShowGov = j.showGov;
+    if (typeof j.showPerson === 'boolean') set.ppShowPerson = j.showPerson;
     if (j.socialSites && typeof j.socialSites === 'object') set.ppSocialSites = Object.fromEntries(Object.entries(j.socialSites).filter(([k, v]) => typeof k === 'string' && (v === 'social' || v === 'web')).map(([k, v]) => [k.slice(0, 200), v]));
     if (j.hardware && typeof j.hardware === 'object') set.ppHw = { choice: ['auto', 'Light', 'Normal', 'Strong'].includes(j.hardware.choice) ? j.hardware.choice : 'auto' };
     await api.storage.local.set(set);
     if (Array.isArray(j.clients)) await DB.putMany('clients', j.clients.filter(c => c && typeof c.name === 'string').map(c => ({ name: tidyClient(c.name), searching: c.searching === true ? true : c.searching === false ? false : null, priority: !!c.priority, licensed: Array.isArray(c.licensed) ? c.licensed.map(str) : [], licensedAcc: Array.isArray(c.licensedAcc) ? c.licensedAcc.map(str) : [], photos: 0 })));
     if (j.accounts && typeof j.accounts === 'object') { const a = {}; for (const [k, v] of Object.entries(j.accounts)) if (v && typeof v.key === 'string') a[str(k)] = { key: str(v.key), handle: str(v.handle), url: /^https?:\/\//.test(v.url || '') ? str(v.url) : '', plat: str(v.plat), from: v.from === 'browser' ? 'browser' : 'you' }; await meta.set('acctKept', a); }
+    if (j.acctType && typeof j.acctType === 'object') { const TY = ['Business', 'Creator', 'Organisation', 'Government', 'News or media', 'Fan page', 'Group', 'Person']; await meta.set('acctType', Object.fromEntries(Object.entries(j.acctType).filter(([k, v]) => typeof k === 'string' && TY.includes(v)).map(([k, v]) => [str(k), v]))); }
     if (Array.isArray(j.acctLinks)) await meta.set('acctLinks', j.acctLinks.filter(Array.isArray).map(g => g.filter(k => typeof k === 'string').map(str)).filter(g => g.length > 1));
     if (Array.isArray(j.picked)) await meta.set('picked', j.picked.filter(r => typeof r === 'string' && r && !r.split('/').includes('..')).map(r => r.slice(0, 1000)));
     if (Array.isArray(j.flags)) await meta.set('pendingFlags', j.flags.filter(f => Array.isArray(f) && typeof f[0] === 'string').map(f => [f[0].slice(0, 2000), ['hi', 'pop'].includes(f[1]) ? f[1] : '', f[2] ? 1 : 0]));
