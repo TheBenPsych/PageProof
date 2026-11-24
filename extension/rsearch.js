@@ -166,7 +166,13 @@
       const heading = box.querySelector('h3, h2, [role="heading"]');
       const text = clean(heading ? heading.textContent : (a.getAttribute('aria-label') || a.textContent));
       if (text.length > cur.title.length && !/^https?:/.test(text)) cur.title = text;
-      if (!cur.thumb) cur.thumb = imgSrc([...box.querySelectorAll('img')].find(i => !/favicon/i.test(i.src) && (i.naturalWidth || i.width || 0) > 40));
+      // 4.30: a picture inside a link to somewhere else belongs to that other result (or to
+      // Google's own preview of your upload), never to this link.
+      if (!cur.thumb) cur.thumb = imgSrc([...box.querySelectorAll('img')].find(i => {
+        if (/favicon/i.test(i.src) || (i.naturalWidth || i.width || 0) <= 40) return false;
+        const own = i.closest('a[href]');
+        return !own || own === a || extOf(own) === url;
+      }));
       if (!cur.w) Object.assign(cur, sizeIn(box.textContent));
       byUrl.set(url, cur);
     }
