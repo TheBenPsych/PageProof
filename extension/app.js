@@ -184,7 +184,7 @@ function homeTiles(s) {
 // One line of Home's "What to do now" list: a coloured dot, what it is, and one button.
 function jobRow(j) {
   const b = j.btn ? (j.btn.href ? `<a class="btn${j.btn.main ? ' primary' : ''}" href="${j.btn.href}"${j.btn.act ? ` data-act="${j.btn.act}"` : ''}>${j.btn.label}</a>` : `<button class="btn${j.btn.main ? ' primary' : ''}" data-act="${j.btn.act}"${j.btn.v != null ? ` data-v="${esc(j.btn.v)}"` : ''}>${j.btn.label}</button>`) : '';
-  const b2 = j.btn2 ? `<button class="btn ghost" data-act="${j.btn2.act}">${j.btn2.label}</button>` : '';
+  const b2 = j.btn2 ? `<button class="btn ghost" data-act="${j.btn2.act}"${j.btn2.v != null ? ` data-v="${esc(j.btn2.v)}"` : ''}>${j.btn2.label}</button>` : '';
   return `<div class="job lvl-${j.lvl}"${j.id ? ` id="${j.id}"` : ''}${j.lvl === 'bad' ? ' role="alert"' : ''}><span class="jdot">${ic(j.icon || (j.lvl === 'ok' ? 'check' : 'warn'), 16, j.lvl === 'ok' ? 3 : 2)}</span><div class="jt"><b>${j.title}</b>${j.sub ? `<span>${j.sub}</span>` : ''}</div><div class="jb">${b}${b2}</div></div>`;
 }
 // Home's jobs (most urgent first) and the small cards under them: Keep searching, every photo
