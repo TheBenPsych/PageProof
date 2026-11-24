@@ -490,7 +490,7 @@ V.hidden = async () => {
   // 4.9: which sites are social media (their copies go on the Social media tab of Copies found).
   if (tab === 'social') {
     await PP_SOCIAL.ready;
-    // 4.25.0: a fixed list of 17 platforms. Every other site goes on the Websites tab.
+    // 4.25.0: a fixed list of platforms (16 now: Reddit was taken out, it is a forum). Every other site goes on the Websites tab.
     const plats = new Map();
     for (const [d, [name]] of Object.entries(PP_SOCIAL.SITES)) { if (!plats.has(name)) plats.set(name, []); plats.get(name).push(d); }
     const rows = [...plats].filter(([n, ds]) => !q || n.toLowerCase().includes(q) || ds.some(d => d.includes(q)));

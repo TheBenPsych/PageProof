@@ -1,0 +1,5 @@
+type: new
+title: Reddit and forums taken out
+news: Your team never goes after forums, so Reddit is gone: it is no longer a social media platform (16 now), and links from reddit.com, old.reddit.com, redd.it, i.redd.it and preview.redd.it are dropped from searches. Clear forum addresses go too: forum.*, forums.* or boards.* sites, and pages under /forum/, /forums/ or /threads/ or made by phpBB, vBulletin or Discourse. Reddit and forum copies found before are off Copies found. Copies you already marked Stolen stay.
+timeline: Reddit and forums dropped from searches; social list is 16 platforms
+feature 4: **Reddit and forums never show.** Your team never pursues forums, so every Reddit link (reddit.com, old.reddit.com, redd.it, i.redd.it, preview.redd.it, redditmedia.com) is dropped from searches. Clear forum addresses go too: forum.*, forums.* or boards.* sites, pages under /forum/, /forums/ or /threads/, phpBB / vBulletin / Simple Machines pages (viewtopic.php, showthread.php...) and Discourse topics (/t/title/123). Copies found before are off Copies found; ones already marked Stolen stay.

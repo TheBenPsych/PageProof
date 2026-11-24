@@ -32,6 +32,7 @@ pretend Google Drive folder, pretend copies found). No real photos, clients or w
 | `checks-424.js` | Spam blogs: random-looking addresses on throwaway sites get a Spam blog tag, their answers are not changed, they stay out of Copies found, One at a time and the new-copies number until you press Show them, the Spam blogs quick filter, Hide all hides the whole sites (new made-up addresses too), Undo |
 | `checks-430.js` | A Facebook or Instagram match only counts when the post's own picture is the client's photo: a post showing a different picture goes to Removed by itself, an unreadable post is left alone, and the panel says where "Theirs" came from |
 | `checks-431.js` | Another photo of the same place is not a copy: a different shot in front of the same logo wall is found out and its % shows low, a real copy still lines up, unanswered copies already in Copies found are checked again (the other shot moves to Removed, a real copy stays, answered ones are left alone) and Put back works |
+| `checks-forums.js` | Reddit and forums: every Reddit address and clear forum addresses are caught (Threads and normal news pages are not), a search drops them, copies found before are off Copies found, Stolen ones stay, Reddit is not social media |
 | `speed.js` | Every main page draws quickly with 50,000 photos and 5,000 copies |
 
 To run them yourself (needs Node.js):
