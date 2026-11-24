@@ -43,7 +43,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           LAST=$(git tag -l 'v*' --sort=-v:refname | head -1)
           NOTES=$(ls changes/*.md 2>/dev/null | grep -vi '/readme.md$' | wc -l)
-          if [ -n "$LAST" ] && [ "$MANUAL" != true ] && [ "$NOTES" = 0 ] && git diff --quiet "$LAST" HEAD -- extension; then
+          if [ -n "$LAST" ] && [ "$MANUAL" != true ] && [ "$NOTES" = 0 ] && git diff --quiet "$LAST" HEAD -- extension tools/windows; then
             echo "Nothing in PageProof changed since $LAST (docs or tests only), so no new download."
             echo "skip=true" >> $GITHUB_OUTPUT; exit 0
           fi
@@ -69,7 +69,7 @@ jobs:
         if: steps.v.outputs.skip != 'true'
         run: |
           rm -rf ff && cp -r extension ff
-          python3 -c "import json;p='ff/manifest.json';m=json.load(open(p));m.pop('key',None);m['background']={'scripts':['db.js','rs-store.js','social.js','fc-store.js','background.js']};m['permissions']=[x for x in m['permissions'] if x not in ('sidePanel','system.cpu','system.memory')];sp=m.pop('side_panel',None);m['sidebar_action']={'default_panel':'sidepanel.html','default_title':'PageProof'};json.dump(m,open(p,'w'),indent=2)"
+          python3 -c "import json;p='ff/manifest.json';m=json.load(open(p));m.pop('key',None);m['background']={'scripts':['db.js','rs-store.js','social.js','fc-store.js','tiktok.js','background.js']};m['permissions']=[x for x in m['permissions'] if x not in ('sidePanel','system.cpu','system.memory')];sp=m.pop('side_panel',None);m['sidebar_action']={'default_panel':'sidepanel.html','default_title':'PageProof'};json.dump(m,open(p,'w'),indent=2)"
           cd ff && zip -qr ../PageProof-Firefox.zip . -x '.*'
       - name: Publish the "latest" release
         if: steps.v.outputs.skip != 'true'
@@ -78,4 +78,4 @@ jobs:
           VERSION: ${{ steps.v.outputs.version }}
         run: |
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest PageProof.zip PageProof-Firefox.zip --target main --title "Latest build: $VERSION" --notes "Version $VERSION. Chrome and Edge: download PageProof.zip below. Firefox: download PageProof-Firefox.zip. Then unzip it into Documents › PageProof › Install and press Reload on PageProof's card in chrome://extensions (see the README)."
+          gh release create latest PageProof.zip PageProof-Firefox.zip tools/windows/Update-PageProof.cmd --target main --title "Latest build: $VERSION" --notes "Version $VERSION. Chrome and Edge: download PageProof.zip below. Firefox: download PageProof-Firefox.zip. Then unzip it into Documents › PageProof › Install and press Reload on PageProof's card in chrome://extensions (see the README). Windows, quicker: download Update-PageProof.cmd once, keep it in Documents › PageProof, and double-click it to install or update."

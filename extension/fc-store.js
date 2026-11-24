@@ -1169,7 +1169,7 @@ const FC = (() => {
   // 4.24: also leaves out website copies from countries not shown, and government accounts
   // (unless Show government is on), the same as Copies found.
   async function countNew() {
-    const st = await api.storage.local.get(HID ? ['fcShownCountries', 'ppShowGov'] : ['rsHidden', 'fcShownCountries', 'ppShowGov']);
+    const st = await api.storage.local.get(HID ? ['fcShownCountries', 'ppShowGov', 'ppShowReposts'] : ['rsHidden', 'fcShownCountries', 'ppShowGov', 'ppShowReposts']);
     if (!HID) HID = st.rsHidden || [];
     const hidden = HID, shown = Array.isArray(st.fcShownCountries) ? st.fcShownCountries : SHOWN_START;
     const every = await allCopies(), fresh = every.filter(c => c.status === 'new');
@@ -1179,6 +1179,8 @@ const FC = (() => {
     if (!st.ppShowGov && fresh.some(c => c.acct)) info = (await meta.get('acctInfo').catch(() => null)) || {};
     return fresh.filter(c => {
       if (spam.has(c.id) || hiddenCopy(c, hidden)) return false;
+      // 4.32: reposts and shares of someone else's post are hidden until you show them.
+      if (!st.ppShowReposts && c.rp && c.rp.state === 'repost') return false;
       const ct = c.country || countryOf(c.site);
       if (c.use !== 'social' && ct && !shown.includes(ct)) return false;
       const i = c.acct && info[c.acct.key];
@@ -1192,6 +1194,8 @@ const FC = (() => {
     // 4.15 (Ben's idea 11): copies you marked Stolen are never hidden by a hidden site or account.
     if (c && c.status === 'stolen') return false;
     list = list || (typeof RS_LISTS !== 'undefined' ? RS_LISTS.hidden : []);
+    // Forums (Reddit...) are never pursued, so their copies never show.
+    if (typeof RS_FORUM !== 'undefined' && RS_FORUM.is(c.site, c.url)) return true;
     if (RS_SITE.entryFor(c.site, c.url, list)) return true;
     const k = c.acct && c.acct.key;
     return !!k && (RS_SITE.has(list, k) || RS_SITE.has(list, RS_SITE.tidy(k)));
@@ -1282,6 +1286,8 @@ const FC = (() => {
     let fresh = 0;
     const oldList = [...old.values()];
     for (const l of links) {
+      // A link from a forum (Reddit...) is dropped: Ben's team never pursues forums.
+      if (typeof RS_FORUM !== 'undefined' && RS_FORUM.is(l.site, l.url)) continue;
       const id = p.id + '|' + l.key;
       // The same page under another address (phone version, tracking bits) is that copy (4.14).
       let c = old.get(id);

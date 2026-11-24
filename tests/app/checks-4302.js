@@ -32,6 +32,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     PP_SOCIAL.readProfile = async a => { window.READS.push(a.key); await new Promise(r => setTimeout(r, 50)); return [{ kind: 'profile', text: 'Example\n2K followers\n', data: [] }]; };
     PP_CHECKS.readPage = async () => ({ ok: false, at: new Date().toISOString(), why: 'stubbed' });
     PP_SOCIAL.unshort = async () => ''; PP_SOCIAL.publicInfo = async () => null;
+    if (typeof PP_REPOST !== 'undefined') PP_REPOST.due = () => false;   // the repost check (its own checks) stays out of these tab counts
     return api.storage.local.set({ ppAcctRead: true });
   });
   const acct = () => page.evaluate(async () => ({ reads: window.READS.length, st: (await api.storage.local.get('fcAcctRead')).fcAcctRead || {} }));
