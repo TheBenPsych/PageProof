@@ -253,6 +253,10 @@ function passAcct(c) {
   if (state.fCountry !== 'Any' && countryOfAcct(c) !== state.fCountry) return false;
   return true;
 }
+// 4.36.x (Ben: "Socials shows 9 matches but I see none"): copies hidden by the Show government,
+// Show reposts and shares and Show personal accounts ticks. The Social media tab number and the
+// Quick filter numbers leave them out, so a number never counts copies you can't see.
+const ruleHidden = c => !!c && isSoc(c) && ((!state.fGov && state.fType !== 'Government' && typeOf(c) === 'Government') || (!state.fRepost && !!c.rp && c.rp.state === 'repost') || (!state.fPerson && state.fType !== 'Person' && typeOf(c) === 'Person' && c.status !== 'stolen'));
 // passAcct, leaving one filter out (for the numbers in its own menu).
 function passAcctBut(c, k) { const was = state[k]; state[k] = 'Any'; try { return passAcct(c); } finally { state[k] = was; } }
 function acctFilterLine(dd, xsAll) {
@@ -260,7 +264,9 @@ function acctFilterLine(dd, xsAll) {
   const xs = state.fRepost ? xsAll : xsAll.filter(c => !(c.rp && c.rp.state === 'repost'));
   const n = (k, test) => xs.filter(c => passAcctBut(c, k) && test(c)).length;
   const countries = [...new Set(xs.map(countryOfAcct).filter(x => x !== 'nk'))].sort();
-  const busy = FCD && FCD.accts ? [...FCD.accts.values()].filter(e => e.copies.length && !(FCD.acctInfo || {})[e.key]).length : 0;
+  // Only accounts the reader will really read (a copy still waiting for an answer); answered and
+  // removed ones are read when you open a copy, so they don't count as "still being read".
+  const busy = FCD && FCD.accts ? [...FCD.accts.values()].filter(e => e.copies.some(x => x.status === 'new') && !(FCD.acctInfo || {})[e.key]).length : 0;
   return `<div class="acctfilters" aria-label="Account filters">
     ${dd('fVer', 'Verified', [['Any', 'Any'], ['real', 'Really verified (not bought)', n('fVer', c => REAL_V.includes(verOf(c))) + ' copies'], ['paid', 'Paid check (X blue, Meta Verified)', n('fVer', c => verOf(c) === 'paid') + ''], ['gold', 'Organisation (X gold check)', n('fVer', c => verOf(c) === 'gold') + ''], ['grey', 'Government (grey check)', n('fVer', c => verOf(c) === 'grey') + ''], ['meta', 'Instagram/Facebook check', n('fVer', c => verOf(c) === 'meta') + ''], ['yes', 'Verified by the site', n('fVer', c => verOf(c) === 'yes') + ''], ['no', 'No check', n('fVer', c => verOf(c) === 'no') + ''], ['nk', 'Not known', n('fVer', c => verOf(c) === 'nk') + '']], state.fVer, false, 'Any')}
     ${dd('fFol', 'Followers', [['Any', 'Any'], ...PP_SOCIAL.FOL_BANDS.map(([, , l], i) => [String(i), l, n('fFol', c => PP_SOCIAL.folBand(folOf(c)) === String(i)) + '']), ['nk', 'Not known', n('fFol', c => folOf(c) == null) + '']], state.fFol, false, 'Any')}
