@@ -8,6 +8,11 @@ api.storage.local.get('ppShowGov').then(st => { if (st && st.ppShowGov) state.fG
 
 const isSoc = c => c.use === 'social';
 const isXAcct = a => !!a && /^(x|twitter)\.com$/.test(a.plat || '');
+// 4.30.1: details read before the viewer's own data was left out are not shown (they could be
+// YOUR name and followers): X before 4.24, Instagram, Facebook, Threads and TikTok before 4.30.1.
+// Those accounts are read again by themselves.
+const isMetaAcct = a => !!a && /^(instagram\.com|facebook\.com|threads\.net|threads\.com|tiktok\.com)$/.test(a.plat || '');
+const staleInfo = (i, a) => !!i && i.ok && ((isXAcct(a) && !i.v) || (isMetaAcct(a) && (i.v || 0) < 4));
 const inTab = c => (state.fTab === 'social') === isSoc(c);
 const platOf = c => PP_SOCIAL.platform(c.site);
 const platBadge = (c, size = 20) => { const p = platOf(c); return `<span class="plat" style="--pc:${p.color};width:${size}px;height:${size}px;font-size:${Math.round(size * 0.45)}px" title="${esc(p.name)}" aria-label="${esc(p.name)}">${esc(p.short)}</span>`; };
@@ -21,7 +26,7 @@ const sureTag = a => a.from === 'you' ? '<span class="tag grey">set by you</span
 function acctName(a) {
   if (!a) return '';
   const i = FCD && FCD.acctInfo && FCD.acctInfo[a.key];
-  const n = String((i && i.ok && i.name && !(isXAcct(a) && !i.v) && i.name) || a.name || '').trim();
+  const n = String((i && i.ok && i.name && !staleInfo(i, a) && i.name) || a.name || '').trim();
   const plain = s => String(s || '').toLowerCase().replace(/^@/, '').replace(/[\s._-]/g, '');
   return n && plain(n) !== plain(PP_SOCIAL.bareName(a)) && plain(n) !== plain(a.handle) ? n : '';
 }
@@ -86,7 +91,7 @@ async function socIndex(copies) {
 // 3 days. One account at a time while PageProof is open. Nothing to type in.
 // 4.24: details read before the X fixes are not shown for X (they could be the viewer's own
 // followers and the site's footer); every account is read again once, the X ones first.
-const infoOf = c => { const i = (c && c.acct && FCD && FCD.acctInfo && FCD.acctInfo[c.acct.key]) || null; return i && !i.v && isXAcct(c.acct) ? null : i; };
+const infoOf = c => { const i = (c && c.acct && FCD && FCD.acctInfo && FCD.acctInfo[c.acct.key]) || null; return staleInfo(i, c.acct) ? null : i; };
 const INFO_BUSY = new Set();
 async function readAcctInfo(acct) {
   if (!acct || INFO_BUSY.has(acct.key)) return null;
@@ -109,7 +114,7 @@ async function readAcctInfo(acct) {
     return all[acct.key];
   } finally { INFO_BUSY.delete(acct.key); }
 }
-const infoDue = i => !i || (i.ok && !i.v) || (i.ok ? Date.now() - Date.parse(i.at) > 30 * 864e5 && (!i.failAt || Date.now() - Date.parse(i.failAt) > 3 * 864e5) : Date.now() - Date.parse(i.failAt || i.at || 0) > 3 * 864e5);
+const infoDue = (i, a) => !i || (i.ok && !i.v) || staleInfo(i, a) || (i.ok ? Date.now() - Date.parse(i.at) > 30 * 864e5 && (!i.failAt || Date.now() - Date.parse(i.failAt) > 3 * 864e5) : Date.now() - Date.parse(i.failAt || i.at || 0) > 3 * 864e5);
 let infoQueueOn = false;
 async function infoQueue() {
   if (infoQueueOn || !FCD) return;
@@ -121,8 +126,8 @@ async function infoQueue() {
       if (!FCD) await loadFC();
       const info = FCD.acctInfo || {};
       // Accounts with new copies first, then the rest; each account once.
-      const todo = [...FCD.accts.values()].filter(e => e.copies.length && !INFO_BUSY.has(e.key) && infoDue(info[e.key]))
-        .sort((a, b) => (isXAcct(b.acct) && info[b.key] && !info[b.key].v ? 1 : 0) - (isXAcct(a.acct) && info[a.key] && !info[a.key].v ? 1 : 0) || b.copies.filter(x => x.status === 'new').length - a.copies.filter(x => x.status === 'new').length)[0];
+      const todo = [...FCD.accts.values()].filter(e => e.copies.length && !INFO_BUSY.has(e.key) && infoDue(info[e.key], e.acct))
+        .sort((a, b) => (staleInfo(info[b.key], b.acct) ? 1 : 0) - (staleInfo(info[a.key], a.acct) ? 1 : 0) || b.copies.filter(x => x.status === 'new').length - a.copies.filter(x => x.status === 'new').length)[0];
       if (!todo) break;
       await readAcctInfo(todo.acct).catch(() => null);
       socRedrawSoon();
