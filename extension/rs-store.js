@@ -264,6 +264,14 @@ const RS_LISTS = {
       await api.storage.local.set({ ppSocialUnhid: [...new Set(old.concat(whole))] });
       await RS_LISTS.save();
     }
+    // 4.25.0: sites shown again by 4.9.4 that are NOT on the fixed social list (Twitch, Flickr,
+    // Naver Blog...) are hidden again, once, as you had them.
+    const st2 = globalThis.PP_SOCIAL ? await api.storage.local.get(['ppSocialUnhid', 'ppSocialRehid']) : {};
+    if (!st2.ppSocialRehid && globalThis.PP_SOCIAL) {
+      const back = (st2.ppSocialUnhid || []).filter(d => !RS_LISTS.wholeSocial(d) && !RS_LISTS.hidden.includes(d));
+      if (back.length) { RS_LISTS.hidden = RS_LISTS.hidden.concat(back); await RS_LISTS.save(); }
+      await api.storage.local.set({ ppSocialRehid: back.length ? back : true, ppSocialUnhid: (st2.ppSocialUnhid || []).filter(d => RS_LISTS.wholeSocial(d)) });
+    }
     await RS_REJECT.load();
     return RS_LISTS;
   },
@@ -280,10 +288,9 @@ const RS_LISTS = {
     const e = String(entry || '');
     const S = globalThis.PP_SOCIAL;
     if (!S || !e || e.includes('/') || e.startsWith('.')) return false;
-    if (S.mineFor(e) === 'web') return false;
+    // 4.25.0: only the 17 fixed social platforms. Any other site can be hidden whole again.
     const L = S.listed(e);
-    if (L) return e === L || !S.fromUrl('https://' + e + '/');
-    return S.mineFor(e) === 'social';
+    return !!L && (e === L || !S.fromUrl('https://' + e + '/'));
   },
   async add(kind, site) {
     site = RS_SITE.tidy(site);
