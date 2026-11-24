@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.31.1** (24 Nov 2026).
+Last updated: version **4.32.0** (24 Nov 2026).
 
 ---
 
@@ -113,6 +113,8 @@ Last updated: version **4.31.1** (24 Nov 2026).
 - **Never your own name on someone else's account.** Instagram, Threads and TikTok pages also carry the signed-in person's own details (name, followers). PageProof now reads only the viewed account's own part of the page, and Facebook's hidden page data is not used at all. Accounts read before this fix are read again by themselves. (4.30.1)
 - **Only the post's own picture counts.** Google Lens can show your client's photo next to a Facebook or Instagram link when the post itself shows something else (a video, another photo). PageProof now lines up the post's own picture (or video cover) with your client's photo; a clearly different picture sends the match to Removed by itself ("Not seen in the post", Put back still works). The panel also says where "Theirs" came from: the search site's small preview or a picture from their page. (4.30)
 - **Social media means the 17 main platforms only** (YouTube, Facebook, Instagram, TikTok, X, LinkedIn, Pinterest, Threads, Reddit, Snapchat, Tumblr, Bluesky, Substack, Nextdoor, Truth Social, Vimeo, Behance). Every other site is a normal website again, so country filters and whole-site hiding work on it. No more "is this social?" questions. (4.25)
+- **Reposts and shares spotted and hidden.** Facebook shares, X reposts and quotes, Instagram, Threads, TikTok and Bluesky reposts and Tumblr reblogs are tagged "Share of …" / "Repost of …", hidden until you tick Show reposts and shares, and point to the original post and account as the lead. Never answered for you. (4.32)
+- **Exact post found when the link is only an account page.** PageProof scrolls the account page in a quiet background tab (following Pause, hours and per-site limits), lines each post's pictures up with your client's photo and links the post that holds it. Capture captures that post. (4.32)
 
 ## 7. Everyday tools
 
@@ -214,3 +216,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.30.2 | 24 Nov | Pause and Off stop everything at once (big searches, account reader, their tabs); Resume picks up where it stopped |
 | 4.31 | 24 Nov | Logos and buildings no longer count as copies (only-logos and same-place checks) |
 | 4.31.1 | 24 Nov | Fix: New versions reach the download page in about a minute |
+| 4.32 | 24 Nov | Reposts and shares spotted and hidden, original poster as lead, exact post found on account-page links |
