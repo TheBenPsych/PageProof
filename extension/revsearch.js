@@ -509,6 +509,7 @@ function onResults(t, msg) {
   const run = p.runs[t.engine];
   run.count = (msg.links || []).length;
   run.pageUrl = msg.pageUrl;
+  run.pageOk = !!msg.pageOk;            // Bing showed its real results page (0 links = nothing found)
   rememberSeen(p);
   finishTask(t, 'done');
   scoreAll();
@@ -1010,7 +1011,7 @@ function maybeIngest(p) {
   if (!p || p.ingested || !picDone(p) || R.watch) return;
   // What each search site gave back, for "is this site still working?" (-1 = no answer).
   const health = {};
-  for (const e of job.engines) { const st = p.runs[e].state; if (st === 'done') health[e] = p.links.filter(l => (l.engines || []).includes(e)).length; else if (st === 'fail') health[e] = -1; }
+  for (const e of job.engines) { const st = p.runs[e].state; if (st === 'done') { const n = p.links.filter(l => (l.engines || []).includes(e)).length; if (n || !p.runs[e].pageOk) health[e] = n; } else if (st === 'fail') health[e] = -1; }
   if (!job.engines.some(e => p.runs[e].state === 'done')) {                // nothing actually searched
     if (!p.healthNoted && Object.keys(health).length) { p.healthNoted = true; FC.engineResults(health, null, false).catch(() => {}); }
     return;
