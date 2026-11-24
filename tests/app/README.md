@@ -25,6 +25,7 @@ pretend Google Drive folder, pretend copies found). No real photos, clients or w
 | `checks-416.js` | The fast photo checker (WebAssembly) starts on a PageProof page and in the background photo-check worker, finds exactly the same details as the JavaScript one, and Is everything working shows Where the time goes |
 | `checks-418.js` | Backups to your own Google Drive (Back up now, the last-backup line turning red after 3 work days, no preview pictures), safe restore (a "before restore" copy first, photos link and Keep searching kept), team lists (each person's own file, newest answer wins, who added it, Show for me, the team disagrees and Keep it approved), the Back up and share setup step, Moving to a new computer, and Home's "Google Drive isn't syncing" |
 | `checks-421.js` | The computer check sets photo checks, search tabs, downloads and pictures opened for each kind of computer (up to 6 checks on a very strong one, one core always left free), and a big search eases off to one check and one tab while the computer is busy, then goes back to full speed |
+| `checks-422.js` | Hidden and approved sites: Add from a file is remembered under Files you added, Undo this import takes out only what it added, Add them again, and Take out the sites in a file for files added before 4.22 |
 | `speed.js` | Every main page draws quickly with 50,000 photos and 5,000 copies |
 
 To run them yourself (needs Node.js):
