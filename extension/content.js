@@ -13,6 +13,10 @@
   let startTotal = 0;     // how tall the page was when capture began (to stop endless scrolling)
   const unclamped = [];   // descriptions we un-shortened, so we can put them back
   let single = false;     // feeds that show one post per screen (Instagram Reels, TikTok): capture only the one on screen
+  let locked = false;     // 4.17: the page can't be scrolled (a pop-up window is open and the site locked the page behind it)
+  let endEl = null, endGap = 0; // 4.17: the last thing on the page when capture began, to tell pictures loading in from endless new posts
+  const unstuck = [];     // 4.17: "sticky" bars and headings turned back into ordinary parts of the page, so they show once, in place
+  let calm = null;        // 4.17: the style that switches off fade-in and slide-in animations while the capture runs
 
   const instant = { behavior: 'instant' };
   const scroller = () => document.scrollingElement || document.documentElement;
@@ -54,7 +58,7 @@
   function placeBadges() {
     for (const t of targets) {
       const r = t.el.getBoundingClientRect();
-      const out = r.bottom < 0 || r.top > window.innerHeight || r.width === 0;
+      const out = r.bottom < 0 || r.top > window.innerHeight || r.width === 0 || getComputedStyle(t.el).visibility === 'hidden';
       t.badge.style.display = out ? 'none' : 'block';
       // Sit just above the box where possible, so the label doesn't cover what's inside it.
       t.badge.style.left = Math.max(0, r.left) + 'px';
@@ -251,6 +255,20 @@
     return /\b(y|block|both)\b/.test(t);
   }
 
+  // 4.17: is this big scrolling box the page itself? A details panel that slid in from the side
+  // (like a business search result opening on the right) is NOT: it becomes a numbered section,
+  // and the page around it is kept as it looks, instead of a narrow strip with blank space beside it.
+  function looksLikePage(el, vw) {
+    const r = el.getBoundingClientRect();
+    return r.width >= 0.6 * vw && r.left <= 0.25 * vw;
+  }
+
+  // 4.17: pages with a pop-up window open often lock the page behind it so it can't scroll.
+  function rootLocked() {
+    const h = getComputedStyle(document.documentElement).overflowY, b = document.body ? getComputedStyle(document.body).overflowY : '';
+    return /hidden|clip/.test(h) || (/hidden|clip/.test(b) && h === 'visible');
+  }
+
   function prepare(wantHtml) {
     const se = scroller();
     start = { x: window.scrollX, y: window.scrollY };
@@ -303,7 +321,12 @@
     // big box. Treat that box as the page itself, not as a separate section.
     const vw = document.documentElement.clientWidth, vh = window.innerHeight;
     pageEl = null;
-    if (found.length && se.scrollHeight <= vh + 5 && visibleArea(found[0]) >= 0.4 * vw * vh) {
+    const body = document.body;
+    // 4.17: some sites make <body> itself the scrolling box (the window stays still).
+    if (body && se !== body && se.scrollHeight <= vh + 5 && /(auto|scroll|overlay)/.test(getComputedStyle(body).overflowY) && body.scrollHeight - body.clientHeight >= 20) {
+      pageEl = body;
+      pageElStart = body.scrollTop;
+    } else if (found.length && se.scrollHeight <= vh + 5 && visibleArea(found[0]) >= 0.4 * vw * vh && looksLikePage(found[0], vw)) {
       pageEl = found.shift();
       pageElStart = pageEl.scrollTop;
     }
@@ -319,6 +342,7 @@
       pageElStart = pageEl.scrollTop;
     }
 
+    locked = !single && !pageEl && se.scrollHeight > vh + 5 && rootLocked();
     found = found.filter(el => visibleArea(el) > 0 || el.getBoundingClientRect().height > 0).slice(0, MAX_SECTIONS);
     targets = found.map(el => {
       const ax = scrollAxes(el);
@@ -334,6 +358,8 @@
 
     targets.forEach((t, i) => { t.n = i + 1; t.outline = t.el.style.outline; });
     startTotal = pageEl ? pageEl.scrollHeight : Math.max(se.scrollHeight, document.body ? document.body.scrollHeight : 0);
+    findEnd();
+    calmOn();
 
     // Mark each one with a numbered label so the main capture points to its section below.
     for (const t of targets) {
@@ -357,6 +383,7 @@
       background: pageBackground(),
       innerWidth: window.innerWidth,
       single,
+      locked,
       sections: targets.map(t => ({ n: t.n, kind: t.kind, label: t.label, axes: t.axes, options: t.options })),
       html,
       blocked: blockedSigns()
@@ -385,15 +412,65 @@
   }
 
   // Allow some growth (pictures loading in), but not endless new articles.
-  const cap = (h, view) => Math.max(h * 1.25, h + view);
+  // 4.17: pictures loading in can make a page much more than a quarter taller. So the end follows
+  // whatever was LAST on the page when capture began: things added after it (new posts) are left
+  // out, but anything above it growing taller just pushes it (and the end) further down.
+  const cap = (h, view) => (endEl && endEl.isConnected ? Math.max(h, endNow()) : Math.max(h * 1.25, h + view));
+  function findEnd() {
+    endEl = null;
+    const box = pageEl || document.body;
+    if (!box) return;
+    let el = box;
+    for (let depth = 0; depth < 40; depth++) {
+      const kids = [...el.children].filter(c => {
+        if (badges.includes(c) || /^(SCRIPT|STYLE|LINK|META|TEMPLATE|NOSCRIPT)$/.test(c.tagName)) return false;
+        const cs = getComputedStyle(c), r = c.getBoundingClientRect();
+        return cs.display !== 'none' && r.height > 0 && cs.position !== 'fixed' && cs.position !== 'absolute';
+      });
+      if (!kids.length) break;
+      el = kids.reduce((a, b) => (b.getBoundingClientRect().bottom >= a.getBoundingClientRect().bottom ? b : a));
+    }
+    if (el === box) return;
+    const gap = startTotal - docBottom(el);
+    // Only trust it if it really sat at the end (within half a screen of the bottom).
+    if (gap < -2 || gap > 0.5 * (pageEl ? pageEl.clientHeight : window.innerHeight)) return;
+    endEl = el;
+    endGap = Math.max(0, gap);
+  }
+  function docBottom(el) {
+    const r = el.getBoundingClientRect();
+    if (pageEl) return r.bottom - pageEl.getBoundingClientRect().top - pageEl.clientTop + pageEl.scrollTop;
+    return r.bottom + window.scrollY;
+  }
+  function endNow() {
+    if (!endEl || !endEl.isConnected) return 0;
+    return Math.ceil(docBottom(endEl) + endGap);
+  }
+
+  // 4.17: wide bars stuck to the bottom of the screen (cookie bars, "Add to cart", chat bars) cover
+  // the last bit of the first screen. Leave that bit for the next screen, where the bar is hidden.
+  function bottomCover() {
+    const vw = document.documentElement.clientWidth, vh = window.innerHeight;
+    let top = vh;
+    for (const el of document.querySelectorAll('body *')) {
+      const cs = getComputedStyle(el);
+      if (cs.position !== 'fixed' && cs.position !== 'sticky') continue;
+      if (badges.includes(el) || cs.visibility === 'hidden' || cs.display === 'none' || +cs.opacity === 0) continue;
+      if (targets.some(t => el.contains(t.el)) || (pageEl && el.contains(pageEl))) continue;
+      const r = el.getBoundingClientRect();
+      if (r.bottom < vh - 2 || r.top < vh * 0.6 || r.width < 0.5 * vw || r.height < 8) continue;
+      top = Math.min(top, Math.max(0, Math.floor(r.top)));
+    }
+    return vh - top;
+  }
 
   // Scroll the main page to y and say which part of the screen to keep,
   // where it goes in the final picture, and where to scroll next.
   function scrollPage(y) {
     const vw = document.documentElement.clientWidth, vh = window.innerHeight;
     let res;
-    if (single) {
-      // Leave the feed exactly where it is: one screen only.
+    if (single || locked) {
+      // Leave the feed exactly where it is: one screen only. (Or the page is locked behind a pop-up window.)
       res = { crop: { x: 0, y: 0, w: vw, h: vh }, destY: 0, total: vh, next: vh, done: true, grew: false };
     } else if (!pageEl) {
       const se = scroller();
@@ -401,7 +478,8 @@
       const live = Math.max(se.scrollHeight, document.body ? document.body.scrollHeight : 0);
       const total = Math.min(live, cap(startTotal, vh));
       const at = window.scrollY;
-      res = { crop: { x: 0, y: 0, w: vw, h: vh }, destY: at, total, next: at + vh, done: at + vh >= total - 1, grew: live > total };
+      const cover = at + vh >= total - 1 ? 0 : bottomCover();
+      res = { crop: { x: 0, y: 0, w: vw, h: vh - cover }, destY: at, total, next: at + vh - cover, done: at + vh >= total - 1, grew: live > total };
     } else {
       pageEl.scrollTo({ top: y, ...instant });
       const limit = Math.min(pageEl.scrollHeight, cap(startTotal, pageEl.clientHeight));
@@ -424,15 +502,103 @@
 
   // After the first screenshot, hide headers/bars that stick to the screen,
   // so they don't repeat in every slice. Keep anything holding a section.
+  // 4.17: "sticky" things (headings in long lists, table column titles, side columns) are turned
+  // back into ordinary parts of the page instead of hidden, so each shows once in its own place
+  // (hiding them left blank bands all down the page). Fixed side panels that slid in are hidden
+  // too (their contents are captured as a numbered section, where they are shown again).
+  // Big empty backgrounds and dimmed backdrops stay, so later screens don't turn blank.
   function hideFixed() {
+    const vw = document.documentElement.clientWidth, vh = window.innerHeight;
     for (const el of document.querySelectorAll('body *')) {
-      if (badges.includes(el) || hidden.some(h => h[0] === el)) continue;
+      if (badges.includes(el) || hidden.some(h => h[0] === el) || unstuck.some(u => u[0] === el)) continue;
       const pos = getComputedStyle(el).position;
       if (pos !== 'fixed' && pos !== 'sticky') continue;
-      if (targets.some(t => el.contains(t.el)) || (pageEl && el.contains(pageEl))) continue;
+      if (pageEl && el.contains(pageEl)) continue;
+      if (pos === 'sticky') {
+        unstuck.push([el, el.getAttribute('style')]);
+        for (const [k, v] of [['position', 'relative'], ['top', 'auto'], ['bottom', 'auto'], ['left', 'auto'], ['right', 'auto'], ['inset', 'auto']]) el.style.setProperty(k, v, 'important');
+        continue;
+      }
+      if (isBackdrop(el, vw, vh)) continue;
       hidden.push([el, el.style.visibility]);
       el.style.setProperty('visibility', 'hidden', 'important');
     }
+  }
+  // A big fixed layer with nothing to read in it: a background picture/colour or a dimmed backdrop.
+  function isBackdrop(el, vw, vh) {
+    const r = el.getBoundingClientRect();
+    if (r.width * r.height < 0.5 * vw * vh) return false;
+    if (targets.some(t => el.contains(t.el))) return false;
+    return !(el.innerText || '').trim() && !el.querySelector('input, button, a[href], select, textarea, iframe');
+  }
+  // Put back anything hidden that holds this section, so the section can be photographed.
+  function showFor(el) {
+    for (let i = hidden.length - 1; i >= 0; i--) {
+      const [h, v] = hidden[i];
+      if (h.contains(el)) { h.style.visibility = v; hidden.splice(i, 1); }
+    }
+  }
+
+  // 4.17: fade-ins and slide-ins (boxes that glide in from the sides as you scroll) are finished
+  // straight away while the capture runs, so no screen catches them half-way (blank or faded).
+  function calmOn() {
+    if (calm) return;
+    calm = document.createElement('style');
+    calm.textContent = '*,*::before,*::after{transition-duration:0s!important;transition-delay:0s!important;animation-duration:0s!important;animation-delay:0s!important;animation-iteration-count:1!important;scroll-behavior:auto!important}';
+    document.documentElement.appendChild(calm);
+    finishAnims();
+  }
+  function finishAnims() {
+    try {
+      for (const a of document.getAnimations()) {
+        const end = a.effect && a.effect.getComputedTiming().endTime;
+        if (end && isFinite(end) && a.playState === 'running') a.finish();
+      }
+    } catch (e) { /* older browser */ }
+  }
+  const frames = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  // 4.17: after each scroll, wait (up to 3 seconds) for pictures on screen to finish loading and the
+  // page to stop changing, so late pictures don't come out blank.
+  async function settle() {
+    const t0 = Date.now(), vw = document.documentElement.clientWidth, vh = window.innerHeight;
+    let last = Date.now();
+    const mo = new MutationObserver(() => { last = Date.now(); });
+    try { mo.observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['src', 'srcset', 'style', 'class'] }); } catch (e) { /* none */ }
+    const onScreen = el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw; };
+    // Pictures set as backgrounds: load each one on screen again (it comes from the browser's
+    // memory once the page has it), and wait for that.
+    const bgs = new Map();
+    const bgScan = () => {
+      for (const el of document.querySelectorAll('body *')) {
+        if (bgs.size >= 80) break;
+        const bi = el.style.backgroundImage || (el.childElementCount < 4 ? getComputedStyle(el).backgroundImage : '');
+        const m = bi && bi.match(/url\(["']?([^"')]+)["']?\)/);
+        if (!m || bgs.has(m[1]) || m[1].startsWith('data:') || !onScreen(el)) continue;
+        const im = new Image(); im.src = m[1]; bgs.set(m[1], im);
+      }
+    };
+    try {
+      for (;;) {
+        finishAnims();
+        if (Date.now() - t0 < 1500) bgScan();
+        const waiting = [...document.images].some(i => !i.complete && onScreen(i)) || [...bgs.values()].some(i => !i.complete);
+        if ((!waiting && Date.now() - last >= 250) || Date.now() - t0 > 3000) break;
+        await new Promise(r => setTimeout(r, 80));
+      }
+    } finally { mo.disconnect(); }
+    finishAnims();
+    await frames();
+    return true;
+  }
+
+  // 4.17: after the last screen's pictures loaded, is there now more page below it? (Pictures
+  // loading in on the last screen can push the end down.)
+  function moreBelow(bottom) {
+    if (single || locked) return false;
+    let total;
+    if (pageEl) total = Math.min(pageEl.scrollHeight, cap(startTotal, pageEl.clientHeight)) + Math.max(0, pageEl.getBoundingClientRect().top);
+    else { const se = scroller(); total = Math.min(Math.max(se.scrollHeight, document.body ? document.body.scrollHeight : 0), cap(startTotal, window.innerHeight)); }
+    return total > bottom + 1;
   }
 
   function grewNow() {
@@ -453,7 +619,7 @@
   function scrollSection(n, left, top, first) {
     const t = targets.find(x => x.n === n);
     if (!t || !t.el.isConnected) return null;
-    if (first) t.el.scrollIntoView({ block: 'start', inline: 'nearest', ...instant });
+    if (first) { showFor(t.el); t.el.scrollIntoView({ block: 'start', inline: 'nearest', ...instant }); }
     t.el.scrollTo({ left, top, ...instant });
     const r = t.el.getBoundingClientRect();
     const innerLeft = r.left + t.el.clientLeft;
@@ -479,6 +645,10 @@
     removeBadges();
     hidden.forEach(([el, v]) => { el.style.visibility = v; });
     hidden.length = 0;
+    unstuck.forEach(([el, st]) => { if (st === null) el.removeAttribute('style'); else el.setAttribute('style', st); });
+    unstuck.length = 0;
+    if (calm) { calm.remove(); calm = null; }
+    locked = false; endEl = null;
     unclamped.forEach(([el, st]) => { if (st === null) el.removeAttribute('style'); else el.setAttribute('style', st); });
     unclamped.length = 0;
     targets.forEach(t => {
@@ -540,5 +710,5 @@
   const touchedAt = () => touched;
   function ovNote(text) { if (ovText) ovText.textContent = text; }
 
-  window.__pageproof = { closePopups, expandMore, unclamp, prepare, scrollPage, hideFixed, removeBadges, scrollSection, grewNow, restore, ovShow, ovHide, ovRemove, guardOn, guardOff, touchedAt, ovNote };
+  window.__pageproof = { settle, moreBelow, closePopups, expandMore, unclamp, prepare, scrollPage, hideFixed, removeBadges, scrollSection, grewNow, restore, ovShow, ovHide, ovRemove, guardOn, guardOff, touchedAt, ovNote };
 })();

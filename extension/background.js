@@ -167,6 +167,7 @@ async function capture(tab, auto) {
 
   if (popups.length) record.notes.push('Before the first screen, PageProof closed ' + (popups.length === 1 ? 'a pop-up' : popups.length + ' pop-ups') + ' covering the page, using the site\'s own buttons: ' + popups.join('; ') + '. Nothing else on the page was changed.');
   if (expanded) record.notes.push('PageProof clicked "more" to show the full post description.');
+  if (info.locked) record.notes.push('A pop-up window was open and the site had locked the page behind it so it could not be scrolled, so the capture shows the screen as it was, with any scroll box inside the pop-up written out as a numbered section below.');
   if (info.single) record.notes.push('This page shows one post per screen (like Instagram Reels), so only the post on screen was captured, not the ones after it.');
 
   const server = serverCheck(info.url);
@@ -182,12 +183,14 @@ async function capture(tab, auto) {
       await sleep(i === 0 ? SETTLE_MS * 2 : SETTLE_MS);
       // Some sites (like Google) only make their top bar "stick" after you scroll, so check again before every later screen.
       if (i > 0) await inPage(tabId, 'hideFixed');
+      await inPage(tabId, 'settle').catch(() => {});   // 4.17: pictures on screen loaded, slide-ins finished
       const shot = await shoot(windowId, tabId);
       record.main.tiles.push({ src: shot, crop: at.crop, destX: at.crop.x, destY: at.destY });
       record.main.height = Math.max(record.main.height, at.total, at.destY + at.crop.h);
       if (i === 0) await inPage(tabId, 'hideFixed');
       if (at.grew && !record.notes.some(n => n.includes('kept loading'))) record.notes.push('This page kept loading more content as it scrolled (endless scrolling), so the capture stopped where the page ended when you clicked.');
-      if (stopRequested || at.done || at.next <= prevNext) break;
+      if (stopRequested || at.next <= prevNext) break;
+      if (at.done && !(await inPage(tabId, 'moreBelow', at.destY + at.crop.h).catch(() => false))) break;
       prevNext = at.next;
       y = at.next;
       if (i === MAX_PAGE_SHOTS - 1) record.notes.push('This page was very long, so the capture stops after ' + MAX_PAGE_SHOTS + ' screens.');
@@ -226,6 +229,7 @@ async function capture(tab, auto) {
             at = await inPage(tabId, 'scrollSection', s.n, left, top, shots === 1);
             if (!at) break rows;
             await sleep(SETTLE_MS);
+            await inPage(tabId, 'settle').catch(() => {});
             add(await shoot(windowId, tabId), at, at.contentX, at.contentY);
             if (at.scrollLeft >= at.maxX - 1) break;
             left = at.scrollLeft + at.crop.w;

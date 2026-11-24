@@ -1,3 +1,5 @@
 *.zip
 .DS_Store
 tools/wasm/align.wasm
+tests/capture/pages/
+tests/capture/out/
