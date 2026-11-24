@@ -280,6 +280,74 @@ const RS_LISTS = {
   isAllowed: (site, url) => !!RS_SITE.entryFor(site, url, RS_LISTS.allowed),
 };
 
+// ---------- 4.22: files you added to a list, and undoing them ----------
+// Each "Add from a file" (and each "Take out the sites in a file") is remembered with the exact
+// sites it changed, so it can be undone later without touching sites that were there before.
+const RS_IMPORTS = {
+  KEY: 'rsImports', KEEP: 6,
+  // One link per line. A line holding several links ("https://a.com/x, https://b.com/y") counts as several.
+  parseFile(text) {
+    const out = [];
+    for (const line of String(text || '').split(/\r?\n/)) for (const part of line.split(/,\s*(?=[a-z]+:\/\/)/i)) out.push(part);
+    return RS_LISTS.parse(out.join('\n'));
+  },
+  async all() {
+    const api = globalThis.browser || globalThis.chrome;
+    return (await api.storage.local.get(RS_IMPORTS.KEY))[RS_IMPORTS.KEY] || [];
+  },
+  async record(e) {
+    const api = globalThis.browser || globalThis.chrome;
+    const list = await RS_IMPORTS.all();
+    list.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: Date.now(), undone: 0, ...e });
+    await api.storage.local.set({ [RS_IMPORTS.KEY]: list.slice(0, RS_IMPORTS.KEEP) });
+  },
+  // Undo (or redo) one entry. Returns how many sites changed.
+  async toggle(id) {
+    const api = globalThis.browser || globalThis.chrome;
+    const list = await RS_IMPORTS.all();
+    const e = list.find(x => x.id === id);
+    if (!e) return 0;
+    await RS_LISTS.load();
+    const takeOut = (e.op === 'add') === !e.undone;
+    const n = takeOut ? RS_IMPORTS.takeOut(e.kind, e.sites) : RS_IMPORTS.putIn(e.kind, e.sites);
+    await RS_LISTS.save();
+    e.undone = e.undone ? 0 : Date.now();
+    await api.storage.local.set({ [RS_IMPORTS.KEY]: list });
+    return n;
+  },
+  takeOut(kind, sites) {
+    const gone = new Set(sites), before = RS_LISTS[kind].length;
+    RS_LISTS[kind] = RS_LISTS[kind].filter(d => !gone.has(d));
+    return before - RS_LISTS[kind].length;
+  },
+  putIn(kind, sites) {
+    const have = new Set(RS_LISTS[kind]); let n = 0;
+    for (const s of sites) if (!have.has(s) && !(kind === 'hidden' && RS_LISTS.wholeSocial(s))) { have.add(s); RS_LISTS[kind].push(s); n++; }
+    return n;
+  },
+  // For a file added before 4.22 (nothing was remembered then): which sites in the list did that file add?
+  // "Add from a file" put the new sites at the END of the list, in the file's order, and skipped sites
+  // already there. So the import is the last run of the list made of the file's sites in the file's order.
+  // Sites from the file that sit earlier in the list were there before, and stay.
+  fromFile(text, list) {
+    let best = { added: [], before: [] };
+    for (const parsed of [RS_LISTS.parse(text), RS_IMPORTS.parseFile(text)]) {
+      const pos = new Map(parsed.map((s, i) => [s, i]));
+      let i = list.length - 1, seen = false, last = Infinity;
+      const added = [];
+      for (; i >= 0; i--) {
+        const p = pos.get(list[i]);
+        if (p === undefined) { if (seen) break; continue; }   // sites added after the import are skipped
+        if (p > last) break;                                  // out of file order: was there before
+        last = p; seen = true; added.push(list[i]);
+      }
+      const before = list.slice(0, i + 1).filter(s => pos.has(s));
+      if (added.length > best.added.length) best = { added: added.reverse(), before };
+    }
+    return best;
+  },
+};
+
 // ---------- rejected links (the trash can) ----------
 // One line per link you have looked at and ruled out: "link | picture name".
 // Kept in rejected-links.txt next to the site lists, so it survives updates too.

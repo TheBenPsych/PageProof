@@ -528,8 +528,15 @@ V.hidden = async () => {
     </tbody></table></div>
     <div class="row faint" style="padding:10px 18px;border-top:1px solid var(--line);font-size:12.5px;gap:12px"><span>Showing ${page.length.toLocaleString()} of ${rows.length.toLocaleString()}.</span>${rows.length > page.length ? '<button class="btn" style="min-height:30px;font-size:13px;margin-left:auto" data-act="hidmore">Show more</button>' : ''}</div>
   </section>
+  ${flat ? '' : impCard((await RS_IMPORTS.all()).filter(e => e.kind === tab), tab)}
   <p class="faint" style="margin:0;font-size:12.5px">${RS_LISTS.fileState === 'granted' ? 'Saved in Documents › PageProof as hidden-sites.txt, allowed-sites.txt and rejected-links.txt.' : 'Saved in this browser. <a href="#settings">Set up the PageProof folder</a> to also keep them as text files that survive a reinstall.'}</p>`;
 };
+// 4.22: files added to this list, each with Undo this import.
+const impCard = (list, tab) => `<section class="card" style="overflow:hidden">
+  <div class="row" style="padding:14px 18px;border-bottom:1px solid var(--line);gap:10px"><b style="flex:1">Files you added</b><button class="btn" style="min-height:32px;font-size:13px" data-act="hidunload">Take out the sites in a file…</button></div>
+  ${list.map(e => { const live = (e.op === 'add') === !e.undone; return `<div class="row" style="padding:12px 18px;border-bottom:1px solid var(--line);gap:12px;flex-wrap:nowrap"><span style="flex:1;min-width:0"><b style="overflow-wrap:anywhere">${esc(e.name)}</b><br><span class="muted" style="font-size:13px">${e.op === 'add' ? 'Added' : 'Took out'} ${e.sites.length.toLocaleString()} sites · ${fmtDate(e.at)}${e.undone ? ' · <b>undone ' + fmtDate(e.undone) + '</b>' : ''}</span></span><button class="btn${live && e.op === 'add' ? ' primary' : ''}" style="min-height:32px;font-size:13px;white-space:nowrap" data-act="impundo" data-v="${esc(e.id)}">${e.op === 'add' ? (live ? '↶ Undo this import' : 'Add them again') : (live ? '↶ Put them back' : 'Take them out again')}</button></div>`; }).join('')}
+  <p class="faint" style="margin:0;padding:10px 18px;font-size:12.5px">${list.length ? 'Undo takes out only the sites that file added. Sites that were on the list before stay.' : 'No files added yet.'} Added a file before PageProof kept this list? Press "Take out the sites in a file" and pick the same file: only the sites it added come out.</p>
+</section>`;
 V.hidden.after = () => {
   const i = document.getElementById('hidq');
   i.oninput = () => { state.hidQ = i.value; state.hidMore = 0; render(true).then(() => { const j = document.getElementById('hidq'); j.focus(); j.setSelectionRange(j.value.length, j.value.length); }); };
@@ -550,10 +557,26 @@ document.getElementById('hidLoad').addEventListener('change', async e => {
   if (!f) return;
   await RS_LISTS.load();
   const kind = state.hidTab === 'allowed' ? 'allowed' : 'hidden';
-  const have = new Set(RS_LISTS[kind]); let n = 0;
-  for (const s of RS_LISTS.parse(await f.text())) if (!have.has(s)) { have.add(s); RS_LISTS[kind].push(s); n++; }
+  const have = new Set(RS_LISTS[kind]), added = [];
+  for (const s of RS_IMPORTS.parseFile(await f.text())) if (!have.has(s) && !(kind === 'hidden' && RS_LISTS.wholeSocial(s))) { have.add(s); RS_LISTS[kind].push(s); added.push(s); }
   await RS_LISTS.save();
-  toast(n + ' ' + (n === 1 ? 'site' : 'sites') + ' added');
+  if (added.length) await RS_IMPORTS.record({ op: 'add', kind, name: f.name, sites: added });
+  const n = added.length;
+  toast(n.toLocaleString() + ' ' + (n === 1 ? 'site' : 'sites') + ' added', n ? async () => { const l = await RS_IMPORTS.all(); if (l[0]) await RS_IMPORTS.toggle(l[0].id); render(true); } : null);
+  render(true);
+});
+// 4.22: take out the sites a file added (for files added before PageProof remembered imports).
+document.getElementById('hidUnload').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  await RS_LISTS.load();
+  const kind = state.hidTab === 'allowed' ? 'allowed' : 'hidden';
+  const { added, before } = RS_IMPORTS.fromFile(await f.text(), RS_LISTS[kind]);
+  if (!added.length) return toast('None of the sites in ' + f.name + ' were added to this list by that file.');
+  const n = RS_IMPORTS.takeOut(kind, added);
+  await RS_LISTS.save();
+  await RS_IMPORTS.record({ op: 'remove', kind, name: f.name, sites: added });
+  toast('Took out ' + n.toLocaleString() + ' sites added by ' + f.name + (before.length ? '. ' + before.length.toLocaleString() + ' were there before it, so they stay.' : '.'), async () => { const l = await RS_IMPORTS.all(); if (l[0]) await RS_IMPORTS.toggle(l[0].id); render(true); });
   render(true);
 });
 
@@ -591,6 +614,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Undo a file you added', 'Hidden and approved sites now lists every file you added with "Add from a file", each with Undo this import. Undo takes out only the sites that file added, so sites that were on the list before stay. For a file added before this version, press "Take out the sites in a file" and pick the same file. A line with several links separated by commas now counts as several links.'],
   ['Searching matched to your computer', 'The computer check now sets every part of a search on this computer: photo checks at a time (up to 6 on a very strong computer), search tabs open, and found pictures downloaded and opened at once. A new speed level in Settings › Your computer counts from the next search. How often the search sites are asked does not change, so a stronger computer never means more robot checks.'],
   ['Big searches ease off when you are busy', 'While the computer is flat out, memory is nearly full or a laptop is low on battery, today\'s 50 and searches you start slow down to one photo check and one search tab instead of carrying on at full speed. They still finish, and go back to full speed a minute after the computer calms down. Is everything working shows how often it happened.'],
   ['Owner checks stay out of your way', 'When PageProof opens an account or post in your browser to see who is behind it, it now opens as a small pinned tab at the far left with the PageProof logo and "checking owner". It stays in the background, never jumps in front of your work, and closes by itself when the check is done.'],
@@ -879,6 +903,15 @@ async function act(a, v, el) {
     a2.download = RS_LISTS.FILES[kind]; a2.click();
   }
   else if (a === 'hidload') document.getElementById('hidLoad').click();
+  else if (a === 'hidunload') document.getElementById('hidUnload').click();
+  else if (a === 'impundo') {
+    const l = await RS_IMPORTS.all(), e = l.find(x => x.id === v);
+    if (!e) return;
+    const out = (e.op === 'add') === !e.undone;
+    const n = await RS_IMPORTS.toggle(v);
+    toast((out ? 'Took out ' : 'Put back ') + n.toLocaleString() + ' sites from ' + e.name, async () => { await RS_IMPORTS.toggle(v); render(true); });
+    render(true);
+  }
   else if (a === 'surestore') {
     if (!state.backup) return;
     await FC.restore(state.backup); state.backup = null;
