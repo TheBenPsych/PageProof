@@ -106,6 +106,7 @@ async function supportDetails() {
     'Where the time goes (last 7 days, average each)',
     ...(await (async () => { const t = await timeSums(); if (!t) return ['  Nothing measured yet.']; return [
       '  Fast checker (WebAssembly): ' + (t.fast == null ? 'not known' : t.fast ? 'on' : 'off'),
+      '  Graphics card: ' + (t.gpu == null ? 'not used yet' : t.gpu ? 'in use' : 'not available') + (t.gpuWhy ? ' (' + t.gpuWhy + ')' : ''),
       ...[['search', 'Search site, one photo'], ['dl', 'Download a found picture'], ['check', 'Check a found picture'], ['wait', 'Wait for a free checker']].map(([k, l]) => '  ' + l + ': ' + (t.avg(k) == null ? '–' : msText(t.avg(k))) + ' (' + t.sum[k][0] + ' times)'),
       '  Hidden-site links skipped: ' + t.sum.skipped]; })()), '',
     'The lights',
@@ -122,7 +123,7 @@ async function timeSums() {
   const sum = { search: [0, 0], dl: [0, 0], check: [0, 0], wait: [0, 0], skipped: 0 };
   for (const d of Object.values(st.days)) { for (const k of ['search', 'dl', 'check', 'wait']) { sum[k][0] += d[k][0]; sum[k][1] += d[k][1]; } sum.skipped += d.skipped || 0; }
   const avg = k => sum[k][0] ? Math.round(sum[k][1] / sum[k][0]) : null;
-  return { sum, avg, fast: st.fast, checks: st.checks || 1 };
+  return { sum, avg, fast: st.fast, gpu: st.gpu, gpuWhy: st.gpuWhy || '', checks: st.checks || 1 };
 }
 function timeSlowest(t) {
   const c = t.avg('check'), w = t.avg('wait'), d = t.avg('dl');
@@ -142,6 +143,7 @@ async function timeCard() {
     ${row('Checking a found picture against your photo', 'check', 'each')}
     ${row('Waiting for a free checker', 'wait', 'each')}
     <div class="row" style="gap:12px;padding:10px 0;flex-wrap:nowrap"><span style="flex:1">Links on your hidden sites, skipped without downloading</span><b>${t ? t.sum.skipped.toLocaleString() : '–'}</b><span style="width:110px"></span></div>
+    <div class="row" style="gap:12px;padding:10px 0;border-top:1px solid var(--line);flex-wrap:nowrap"><span style="flex:1">Graphics card (lines up real copies faster)</span><b>${!t || t.gpu == null ? 'Not used yet' : t.gpu ? 'In use' : 'Not available on this computer'}</b><span style="width:110px"></span></div>
     ${t && t.fast === false ? '<p class="muted" style="margin:4px 0 0;font-size:13.5px">The fast checker could not start in this browser, so the slower one is used. Results are the same.</p>' : ''}
   </section>`;
 }
