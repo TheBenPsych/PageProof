@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.36.1** (24 Nov 2026).
+Last updated: version **4.36.2** (24 Nov 2026).
 
 ---
 
@@ -233,3 +233,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.35 | 24 Nov | Photo must be on their page itself (checked during the search, every picture of social posts) |
 | 4.36 | 24 Nov | Personal accounts hidden, politicians caught more often, link previews are not copies |
 | 4.36.1 | 24 Nov | Fix: Bing reads only "Pages with this image" |
+| 4.36.2 | 24 Nov | Fix: Social media tab number leaves out hidden copies |
