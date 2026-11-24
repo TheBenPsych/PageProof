@@ -1422,7 +1422,7 @@ const FC = (() => {
       return bad.length;
     });
   }
-  // 4.28: the photo check found an unanswered copy is another photo of the same place (only
+  // 4.31: the photo check found an unanswered copy is another photo of the same place (only
   // logos / lettering line up, or a building from a few steps away). It goes to Removed, where
   // Put back still works. Only copies still waiting for an answer, never ones added by hand.
   async function checkerRemove(id, pct) {

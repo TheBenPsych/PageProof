@@ -1,4 +1,4 @@
-// 4.28: another photo of the same place is not a copy. A different shot in front of the same
+// 4.31: another photo of the same place is not a copy. A different shot in front of the same
 // sponsor wall lines up only on the printed logos: the photo check must say so, and a copy like
 // that already sitting unanswered in Copies found must be checked again and moved to Removed
 // (Put back works). A real (resized) copy of the same photo must stay.
@@ -11,7 +11,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const page = await ctx.newPage();
   page.on('pageerror', e => { fails++; console.log('PAGEERROR', String(e).slice(0, 300)); });
   await page.goto(url('app.html#help')); await page.waitForTimeout(800);
-  await page.addScriptTag({ url: url('align.js') });   // the photo check (Copies found uses it in a worker)
+  if (!await page.evaluate(() => typeof PP_ALIGN !== 'undefined')) await page.addScriptTag({ url: url('align.js') });   // the photo check (Copies found uses it in a worker)
   // A made-up press wall (logo boxes printed over and over) with someone standing in front.
   const pics = await page.evaluate(async () => {
     const shot = async (dx, dy, seed, w = 1200, h = 800) => {

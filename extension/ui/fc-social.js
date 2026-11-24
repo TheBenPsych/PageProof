@@ -257,7 +257,17 @@ async function socQueue() {
       if (route() !== 'found' && route() !== 'review') break;
       if (!FCD) await loadFC();
       const todo = FCD.copies.filter(c => isSoc(c) && !c.acct && c.status !== 'removed' && !FIND_BUSY.has(c.id) && (!c.acctTry || Date.now() - c.acctTry > 3 * 864e5)).slice(0, 2);
-      if (!todo.length) break;
+      if (!todo.length) {
+        // 4.30: then each new social copy's own picture is checked against your client's photo
+        // (one at a time), so "Not seen in the post" shows in the list without opening it.
+        const chk = FCD.copies.find(c => c.status === 'new' && needsPostCheck(c) && !POST_BUSY.has(c.id) && !(c.postTry && Date.now() - c.postTry < 864e5));
+        if (!chk) break;
+        chk.postTry = Date.now();
+        await postCheck(chk).catch(() => null);
+        socRedrawSoon();
+        await new Promise(r => setTimeout(r, 800));
+        continue;
+      }
       await Promise.all(todo.map(c => findAcct(c).catch(() => null).then(() => { c.acctTry = Date.now(); })));
       socRedrawSoon();
       await new Promise(r => setTimeout(r, 800));
