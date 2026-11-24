@@ -263,6 +263,11 @@ Object.assign(ACTS, {
 });
 
 // ---------------------------------------------------------------- Clients and photos
+// UI overhaul (batch 4): a round badge with a client's (or company's) initials, the same colour every time.
+const AV_COLS = ['#2E6BE6', '#7C3AED', '#0F8A6A', '#C2410C', '#BE185D', '#0E7490', '#4D7C0F', '#9333EA', '#B45309', '#1D4ED8'];
+const avColor = n => { let h = 0; for (const ch of String(n)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return AV_COLS[h % AV_COLS.length]; };
+const initials = n => String(n || '?').replace(/^(the)\s+/i, '').split(/[\s&,.\-_/]+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+const avatar = (n, size) => `<span class="cav" style="background:${avColor(n)}${size ? `;width:${size}px;height:${size}px;font-size:${Math.round(size * 0.38)}px` : ''}" aria-hidden="true">${esc(initials(n))}</span>`;
 V.clients = async () => {
   const clients = await FC.DB.all('clients');
   const copies = await FC.allCopies();
@@ -274,6 +279,7 @@ V.clients = async () => {
     .sort((a, b) => state.cSort === 'new' ? (nNew[b.name] || 0) - (nNew[a.name] || 0) : state.cSort === 'photos' ? (b.photos || 0) - (a.photos || 0) : (b.priority - a.priority) || a.name.localeCompare(b.name));
   const sc = await FC.meta.get('scan');
   const nSkipped = (await FC.skipped()).length;
+  const F1 = ((await FC.coverage().catch(() => null)) || {}).first || {}, once = (F1.clients || {});
   return `${head('Find copies', 'Clients and photos', 'Every client folder in your shared Google Drive. Pick which clients you search for, and star the ones that matter most.', `${nSkipped ? `<a class="btn" href="#skipped">Skipped photos <span class="pill-n" style="background:var(--warn);margin:0">${nSkipped > 999 ? '999+' : nSkipped}</span></a>` : ''}<button class="btn" data-act="cscan"${FC.SCAN.busy ? ' disabled data-why="PageProof is already looking for new photos. Wait for it to finish."' : ''}>${ic('refresh', 16)} ${FC.SCAN.busy ? 'Looking…' : 'Look for new photos'}</button><a class="btn" href="#connect" data-act="csreset">Change folder</a>`)}
   ${await driveBanner()}
   ${state.scanText ? `<div class="scanbar"><span class="spin"></span>${esc(state.scanText)}</div>` : sc ? `<p class="faint" style="margin:0;font-size:13px">Last looked ${fmtDate(sc.at)}${sc.added ? ' · ' + sc.added + ' new photos' : ''}. PageProof looks in this and last quarter's folders every hour, and every folder once a week on a weekday (8 AM to 6 PM).</p>` : ''}
@@ -283,14 +289,15 @@ V.clients = async () => {
       <div class="row" style="gap:8px;margin-left:auto"><input type="search" id="cQ" class="chip" style="min-height:36px;padding:0 10px;font-size:14px" placeholder="Search clients" value="${esc(state.cQ)}" aria-label="Search clients">
       <label class="mini">Sort<select data-act="csort">${[['name', 'Priority, then A–Z'], ['new', 'Most new copies'], ['photos', 'Most photos']].map(([k, l]) => `<option value="${k}" ${state.cSort === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
     </div>
-    <div class="scroll"><table class="ctable"><thead><tr><th style="width:34px"></th><th style="width:34px" title="Priority">★</th><th>Client</th><th>Photos</th><th>Copies found</th><th>New</th><th>Searching</th><th></th></tr></thead><tbody>
-    ${list.map(c => `<tr><td><input type="checkbox" data-act="cpick" data-v="${esc(c.name)}" ${state.cPicked.includes(c.name) ? 'checked' : ''} aria-label="Pick ${esc(c.name)}"></td>
-      <td><button class="starbtn${c.priority ? ' on' : ''}" data-act="cstar" data-v="${esc(c.name)}" aria-label="Priority" title="${c.priority ? 'Priority client: searched right after High priority photos' : 'Make a priority client'}">★</button></td>
-      <td><a class="cname" href="#photos" data-act="cphotos" data-v="${esc(c.name)}">${esc(c.name)}</a>${c.extra ? ' <span class="tag grey" style="font-size:11.5px">Own folder</span>' : ''}</td>
-      <td class="num">${(c.photos || 0).toLocaleString()}</td><td class="num">${nAll[c.name] || 0}</td>
+    <div class="scroll"><table class="ctable"><thead><tr><th style="width:34px"></th><th>Client</th><th class="r">Photos</th><th style="width:170px">Searched once</th><th class="r">Copies</th><th>New</th><th>Searching</th><th style="width:28px"></th></tr></thead><tbody>
+    ${list.map(c => { const [d, t] = once[c.name] || [0, 0], pct = t ? Math.floor(d / t * 100) : 0; return `<tr class="rowlink" data-act="cphotos" data-v="${esc(c.name)}" title="Open ${esc(c.name)}'s photos"><td><input type="checkbox" data-act="cpick" data-v="${esc(c.name)}" ${state.cPicked.includes(c.name) ? 'checked' : ''} aria-label="Pick ${esc(c.name)}"></td>
+      <td><div class="clname">${avatar(c.name)}<button class="starplain${c.priority ? ' on' : ''}" data-act="cstar" data-v="${esc(c.name)}" aria-pressed="${!!c.priority}" aria-label="Priority client" title="${c.priority ? 'Priority client: searched right after High priority photos' : 'Make a priority client'}">★</button><a class="cname" href="#photos" data-act="cphotos" data-v="${esc(c.name)}">${esc(c.name)}</a>${c.extra ? ' <span class="tag grey" style="font-size:11.5px">Own folder</span>' : ''}</div></td>
+      <td class="num r">${(c.photos || 0).toLocaleString()}</td>
+      <td>${t ? `<div class="oncebar" title="${d.toLocaleString()} of ${t.toLocaleString()} photos searched at least once"><span class="bar"><i style="width:${pct}%"${pct >= 100 ? ' class="done"' : ''}></i></span><b class="num">${pct}%</b></div>` : '<span class="faint">—</span>'}</td>
+      <td class="num r">${nAll[c.name] || 0}</td>
       <td>${nNew[c.name] ? `<a class="tag copy" href="#found" data-act="cfound" data-v="${esc(c.name)}">${nNew[c.name]} new</a>` : '<span class="faint">—</span>'}</td>
       <td><button class="swt${c.searching === true ? ' on' : ''}" data-act="csearch" data-v="${esc(c.name)}" role="switch" aria-checked="${c.searching === true}" aria-label="Search for ${esc(c.name)}"><i></i><span>${c.searching === true ? 'On' : 'Off'}</span></button></td>
-      <td><a class="btn ghost sm" href="#photos" data-act="cphotos" data-v="${esc(c.name)}">Photos ›</a></td></tr>`).join('') || '<tr><td colspan="8" class="muted" style="padding:24px;text-align:center">No clients here.</td></tr>'}
+      <td class="chev" aria-hidden="true">›</td></tr>`; }).join('') || '<tr><td colspan="8" class="muted" style="padding:24px;text-align:center">No clients here.</td></tr>'}
     </tbody></table></div>
   </section>
   ${state.cPicked.length ? `<div class="bulk"><b>${state.cPicked.length} picked</b><button class="btn" style="margin-left:auto" data-act="cbulk" data-v="start">Start searching</button><button class="btn" data-act="cbulk" data-v="stop">Stop searching</button><button class="btn" data-act="cbulk" data-v="pri">★ Make priority</button><button class="btn" data-act="cbulk" data-v="norm">Make normal</button><button class="btn" data-act="cbulk" data-v="clear">Clear</button></div>` : ''}`;
@@ -364,18 +371,19 @@ V.photos = async () => {
     const r = regs.get(p.folder);
     return `<div class="pcard${state.phPicked.includes(p.id) ? ' on' : ''}">
       <label class="tick"><input type="checkbox" data-act="phpick" data-v="${esc(p.id)}" ${state.phPicked.includes(p.id) ? 'checked' : ''} aria-label="Pick ${esc(p.name)}"></label>
-      <div class="frame ours" style="aspect-ratio:3/2;border-radius:8px"><img data-lazy="${esc(p.id)}" src="${p.thumb ? safeImg(p.thumb) : p.th ? (FC.pics.seen(p.id) || lazyPic(p)) : 'icons/icon48.png'}" alt="" loading="lazy" style="object-fit:${p.thumb || p.th ? 'cover' : 'scale-down'}"></div>
+      <div class="frame ours ptile${p.thumb || p.th ? '' : ' noimg'}" style="aspect-ratio:3/2;border-radius:8px"><img data-lazy="${esc(p.id)}" src="${p.thumb ? safeImg(p.thumb) : p.th ? (FC.pics.seen(p.id) || lazyPic(p)) : 'icons/icon48.png'}" alt="" loading="lazy" style="object-fit:${p.thumb || p.th ? 'cover' : 'scale-down'}"><span class="nolab">Picture not loaded yet</span>
+        <span class="cflags"><button class="flagbtn${p.flag === 'hi' ? ' on hi' : ''}" data-act="phflag" data-v="${esc(p.id)}|hi" aria-pressed="${p.flag === 'hi'}" aria-label="High priority" title="High priority: searched next, then every 3 days">⚑</button><button class="flagbtn${p.flag === 'pop' ? ' on pop' : ''}" data-act="phflag" data-v="${esc(p.id)}|pop" aria-pressed="${p.flag === 'pop'}" aria-label="Popular" title="Popular: searched every 7 days">★</button></span></div>
       <b style="font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.name)}">${esc(p.name)}</b>
       <span class="faint" style="font-size:12px">${p.year || ''}${p.quarter ? ' Q' + p.quarter : ''}${p.searches ? ' · searched ' + plural(p.searches, 'time') : ' · not searched yet'}${p.copies ? ' · ' + plural(p.copies, 'copy', 'copies') : ''}</span>
-      <div class="row" style="gap:4px">${r && r.va ? `<span class="tag ok" style="font-size:11px">${esc(r.va)}</span>` : r && r.app ? `<span class="tag warn" style="font-size:11px">Applied</span>` : '<span class="tag grey" style="font-size:11px">No number</span>'}${p.doubleOf ? '<span class="tag grey" style="font-size:11px">Double</span>' : ''}${FC.isPool(p.name) ? '<span class="tag warn" style="font-size:11px" title="POOL: shared with other papers, so it is never searched. Rename it without POOL to search it.">POOL, not searched</span>' : ''}${p.empty >= 5 ? `<span class="tag grey" style="font-size:11px" title="${p.empty} searches found nothing: searched ${p.empty >= 10 ? 'every 3 months' : 'monthly'}">Quiet</span>` : ''}${due(p) ? `<span class="tag copy" style="font-size:11px">${due(p)}</span>` : ''}</div>
-      <div class="row" style="gap:4px"><button class="flagbtn${p.flag === 'hi' ? ' on hi' : ''}" data-act="phflag" data-v="${esc(p.id)}|hi" title="High priority: searched next, then every 3 days">⚑ High</button><button class="flagbtn${p.flag === 'pop' ? ' on pop' : ''}" data-act="phflag" data-v="${esc(p.id)}|pop" title="Popular: searched every 7 days">★ Popular</button>${p.doubleOf ? `<button class="flagbtn" data-act="phnotdouble" data-v="${esc(p.id)}" title="These are different photos">Not the same</button>` : ''}</div>
+      <div class="tdots">${r && r.va ? `<span class="td ok" title="Registered: ${esc(r.va)}">${esc(r.va)}</span>` : r && r.app ? `<span class="td warn" title="Registration applied for">Applied</span>` : '<span class="td grey" title="No registration number found">No number</span>'}${p.doubleOf ? '<span class="td grey" title="Looks the same as another photo of this client">Double</span>' : ''}${FC.isPool(p.name) ? '<span class="td warn" title="POOL: shared with other papers, so it is never searched. Rename it without POOL to search it.">POOL</span>' : ''}${p.empty >= 5 ? `<span class="td grey" title="${p.empty} searches found nothing: searched ${p.empty >= 10 ? 'every 3 months' : 'monthly'}">Quiet</span>` : ''}${due(p) ? `<span class="td copy" title="Due for a search">${due(p)}</span>` : ''}${p.doubleOf ? `<button class="td btnlike" data-act="phnotdouble" data-v="${esc(p.id)}" title="These are different photos">Not the same</button>` : ''}</div>
     </div>`;
   };
-  return `${head('Find copies › Clients and photos', 'Photos', 'Flag the photos that matter: ⚑ High priority are searched next and every 3 days, ★ Popular every 7 days.', `<a class="btn" href="#clients">All clients</a>`)}
+  return `<div class="head clhead"><div class="l"><div class="eyebrow">Clients and photos</div><div class="row" style="gap:14px;flex-wrap:nowrap;min-width:0">${avatar(state.phClient || '?', 52)}<div style="min-width:0">
+      <h1 class="clsel"><select data-act="phclient" aria-label="Client">${clients.map(c => `<option ${c.name === state.phClient ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></h1>
+      ${cl ? `<p class="lede" style="margin:2px 0 0">${all.length.toLocaleString()} photos · ${cl.searching === true ? '<span style="color:var(--ok);font-weight:600">Searching</span>' : 'Not searching'}${cl.priority ? ' · <span style="color:var(--warn);font-weight:600">★ Priority</span>' : ''}</p>` : ''}</div></div></div>
+    <div class="row headact"><span class="faint" style="font-size:12.5px;max-width:260px">⚑ High priority: searched next, then every 3 days. ★ Popular: every 7 days.</span><a class="btn" href="#clients">All clients</a></div></div>
   ${await driveBanner()}
   <div class="row" style="gap:10px">
-    <label class="mini">Client<select data-act="phclient">${clients.map(c => `<option ${c.name === state.phClient ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
-    ${cl ? `<span class="tag ${cl.searching === true ? 'ok' : 'grey'}">${cl.searching === true ? 'Searching' : 'Not searching'}</span>${cl.priority ? '<span class="tag warn">★ Priority</span>' : ''}<span class="muted" style="font-size:13.5px">${all.length.toLocaleString()} photos</span>` : ''}
     <input type="search" id="phQ" class="chip" style="min-height:36px;padding:0 10px;font-size:14px;margin-left:auto" placeholder="Find a photo by name" value="${esc(state.phQ)}" aria-label="Find a photo by name">
   </div>
   ${doubles.length ? `<div class="banner info"><span style="flex:1"><b>${plural(doubles.length, 'photo looks', 'photos look')} the same as another of this client's photos</b><br><span class="muted" style="font-size:13.5px">Doubles are searched once, and every copy is checked against both. If two are really different photos, click "Not the same".</span></span></div>` : ''}
@@ -394,7 +402,24 @@ V.photos = async () => {
   ${state.phPicked.length ? `<div class="bulk"><b>${state.phPicked.length} picked</b><button class="btn primary" style="margin-left:auto" data-act="phsearch">Search now</button><button class="btn" data-act="phbulkflag" data-v="hi">⚑ High priority</button><button class="btn" data-act="phbulkflag" data-v="pop">★ Popular</button><button class="btn" data-act="phbulkflag" data-v="">No flag</button><button class="btn" data-act="phclear">Clear</button></div>` : ''}`;
 };
 V.photos.guard = V.found.guard;
+// Rest the mouse on a photo for a moment: a bigger preview pops up beside it.
+function hoverPreviews() {
+  let tip = document.getElementById('hovpic'), timer = 0;
+  if (!tip) { tip = document.createElement('div'); tip.id = 'hovpic'; tip.className = 'hovpic'; tip.setAttribute('aria-hidden', 'true'); document.body.append(tip); }
+  const hide = () => { clearTimeout(timer); tip.classList.remove('on'); };
+  view.querySelectorAll('.pcard .ptile').forEach(fr => {
+    fr.onmouseenter = () => { clearTimeout(timer); timer = setTimeout(() => {
+      const img = fr.querySelector('img'); if (!img || fr.classList.contains('noimg') || !/^(data:|blob:)/.test(img.src)) return;
+      tip.innerHTML = ''; const big = new Image(); big.src = img.src; big.alt = ''; tip.append(big);
+      const r = fr.getBoundingClientRect(), w = 340, left = r.right + 12 + w < innerWidth ? r.right + 12 : Math.max(8, r.left - 12 - w);
+      tip.style.left = left + 'px'; tip.style.top = Math.max(8, Math.min(innerHeight - 260, r.top - 20)) + 'px'; tip.classList.add('on');
+    }, 700); };
+    fr.onmouseleave = hide;
+  });
+  window.addEventListener('scroll', hide, { passive: true, once: true });
+}
 V.photos.after = () => {
+  hoverPreviews();
   const i = document.getElementById('phQ');
   if (i) i.oninput = () => { state.phQ = i.value; state.phMore = 50; clearTimeout(i._t); i._t = setTimeout(() => render(true).then(() => { const j = document.getElementById('phQ'); if (j) { j.focus(); j.setSelectionRange(j.value.length, j.value.length); } }), 300); };
   lazyThumbs();
@@ -420,7 +445,7 @@ function lazyThumbs() {
         await FC.setThumb('photos', p, pic.thumb);
         const kept = PH && PH.list.find(x => x.id === p.id);
         if (kept) Object.assign(kept, { thumb: p.thumb, th: p.th, w: p.w, h: p.h, hash: p.hash, look: p.look });
-        img.src = pic.thumb; img.style.objectFit = 'cover';
+        img.src = pic.thumb; img.style.objectFit = 'cover'; if (img.parentElement) img.parentElement.classList.remove('noimg');
       })().catch(() => {}).finally(() => { busy--; pump(); });
     }
   };
@@ -542,6 +567,21 @@ function firstBlock(F, rate) {
 // ---------------------------------------------------------------- Keep searching and today's 50
 const STATE_TAG = { running: ['Searching', 'ok'], waiting: ['Resting between photos', 'ok'], off: ['Off', 'grey'], paused: ['Paused', 'grey'], hours: ['Outside your hours', 'grey'], fifty: ['Big search running', 'ok'],
   offline: ['Google Drive offline', 'bad'], allow: ['Needs one click', 'warn'], busy: ['Computer busy', 'warn'], resting: ['Search sites resting', 'warn'], setup: ['Not set up', 'warn'], idle: ['Nothing due right now', 'ok'], closed: ['Stopped', 'bad'] };
+// UI overhaul (batch 3): small helpers for Keep searching.
+const kInfo = t => `<span class="kinfo" tabindex="0" role="note" title="${esc(t)}" aria-label="${esc(t)}">ⓘ</span>`;
+const kClock = t => new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+// Google Lens, Yandex and Bing with a green, amber or red light.
+function kEngLights(broken, rest) {
+  const B = Object.fromEntries(broken), Rr = Object.fromEntries(rest);
+  return `<div class="englights" role="list" aria-label="Search sites">${['google', 'yandex', 'bing'].map(e => {
+    const [c, note] = B[e] ? ['bad', 'may have stopped · until ' + kClock(B[e])] : Rr[e] ? ['warn', 'rests until ' + kClock(Rr[e])] : ['ok', ''];
+    return `<span class="e" role="listitem" title="${esc(FC.ENGINE_NAME[e] + (note ? ': ' + note : ': working'))}"><i class="${c}"></i>${esc(FC.ENGINE_NAME[e])}${note ? `<small>${esc(note)}</small>` : ''}</span>`;
+  }).join('')}</div>`;
+}
+function kRing(done, total, z) {
+  const r = z / 2 - 5, c = 2 * Math.PI * r, f = total ? Math.min(1, done / total) : 0;
+  return `<span class="kring" style="width:${z}px;height:${z}px" role="img" aria-label="${done} of ${total} done"><svg width="${z}" height="${z}" viewBox="0 0 ${z} ${z}" aria-hidden="true"><circle cx="${z / 2}" cy="${z / 2}" r="${r}" fill="none" stroke="var(--line)" stroke-width="6"/><circle cx="${z / 2}" cy="${z / 2}" r="${r}" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-dasharray="${(c * f).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${z / 2} ${z / 2})"/></svg><b>${Math.round(f * 100)}%</b></span>`;
+}
 V.keep = async () => {
   if (routeArg('start50')) { history.replaceState(null, '', '#keep'); setTimeout(() => ACTS.fifty(), 300); }
   if (routeArg('clients')) { history.replaceState(null, '', '#keep'); setTimeout(() => { const el = document.getElementById('firstClients'); if (el) el.scrollIntoView({ block: 'start' }); }, 200); }
@@ -563,38 +603,49 @@ V.keep = async () => {
   const fifty = !!(store.fcFifty && store.fcFifty.beat && store.fcFifty.running !== false && Date.now() - store.fcFifty.beat < 5 * 60000);
   const hourOpts = Array.from({ length: 24 }, (_, h) => h);
   const hlabel = h => new Date(2000, 0, 1, h).toLocaleTimeString(undefined, { hour: 'numeric' });
+  let fiftyJob = null;
+  if (fifty && store.fcFifty.id) try {
+    const j = await RS_DB.get('jobs', store.fcFifty.id);
+    if (j && j.pics) { const d = j.pics.filter(p => Object.values(p.runs).every(r => !['wait', 'go', 'captcha'].includes(r.state))).length; fiftyJob = { done: d, total: j.pics.length, left: j.pics.length - d > 0 ? Math.max(1, Math.round((j.pics.length - d) * 0.6)) + ' min' : '' }; }
+  } catch (e) { /* no job yet */ }
   return `${head('Find copies', 'Keep searching', 'Searches your clients\' photos one at a time, all day, in a small pinned PageProof tab. It goes gently so the search sites don\'t block you.')}
   ${await driveBanner()}
   ${k.on && !store.fcPause && st && st.state === 'closed' ? keepClosedBanner() : ''}${await keepReopenedBanner()}
-  <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
-    <div class="row"><label class="switch"><input type="checkbox" data-act="keepon" ${k.on ? 'checked' : ''}><span></span></label><h2>Keep searching is ${k.on ? 'on' : 'off'}</h2><span class="tag ${tc}" style="margin-left:auto">${tl}</span></div>
-    ${k.on ? `<p class="muted" style="margin:0">${esc(alive ? st.text : st && st.state === 'closed' ? 'Stopped: its pinned tab was closed.' : 'Starting the search tab…')}</p>
-      ${alive && st.current ? `<div class="row" style="gap:10px"><img class="thumb" src="${safeImg(st.current.thumb) || 'icons/icon48.png'}" width="64" height="44" alt=""><div><b>${esc(st.current.name)}</b><div class="muted" style="font-size:13px">${esc(st.current.sub || '')}</div></div></div>` : ''}
-      <div class="row"><button class="btn" data-act="keeppause">${store.fcPause ? 'Resume' : 'Pause'}</button><button class="btn" data-act="keepshow">Show the search tab</button>${broken.length ? `<span style="font-size:13.5px;color:var(--bad)">May have stopped working, resting: ${broken.map(([e, t]) => esc(FC.ENGINE_NAME[e]) + ' until ' + new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })).join(', ')}. <a href="#health">Details</a></span>` : ''}${rest.length ? `<span class="muted" style="font-size:13.5px">Resting after a robot check: ${rest.map(([e, t]) => esc({ google: 'Google', yandex: 'Yandex', bing: 'Bing' }[e] || e) + ' until ' + new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })).join(', ')}</span>` : ''}</div>`
-    : '<p class="muted" style="margin:0">Turn it on and PageProof searches in the background while you work. You can stop it any time.</p>'}
-    <div class="grid g3">
-      <div class="stat"><b>${today.searched}</b><span>photos searched today</span></div>
-      <div class="stat"><b>${today.found}</b><span>new copies found today</span></div>
-      <div class="stat"><b>~${Math.round(perHour * hrs)}</b><span>photos a day at this pace</span></div>
+  <section class="card pad keeplive" style="display:flex;flex-direction:column;gap:14px">
+    <div class="row"><label class="switch"><input type="checkbox" data-act="keepon" aria-label="Keep searching" ${k.on ? 'checked' : ''}><span></span></label><h2>Keep searching is ${k.on ? 'on' : 'off'}</h2><span class="tag ${tc}" style="margin-left:auto">${tl}</span></div>
+    ${k.on ? `<div class="know${alive && st.current ? '' : ' empty'}">
+        ${alive && st.current ? `<img class="kthumb" src="${safeImg(st.current.thumb) || 'icons/icon48.png'}" alt="">` : `<span class="kthumb">${ic('find', 22)}</span>`}
+        <div class="kt"><b>${s === 'running' ? '<span class="kpulse" aria-hidden="true"></span>Searching now' : esc(tl)}</b>
+          <span>${alive && st.current ? esc(st.current.name) + (st.current.sub ? ' · ' + esc(st.current.sub) : '') : esc(alive ? st.text : st && st.state === 'closed' ? 'Stopped: its pinned tab was closed.' : 'Starting the search tab…')}</span></div>
+        ${kEngLights(broken, rest)}
+      </div>
+      <div class="row"><button class="btn" data-act="keeppause">${store.fcPause ? 'Resume' : 'Pause'}</button><button class="btn ghost" data-act="keepshow">Show the search tab</button>${broken.length ? '<a href="#health" style="font-size:13.5px">Why a search site may have stopped</a>' : ''}</div>`
+    : `<div class="row" style="gap:12px"><p class="muted" style="margin:0;flex:1 1 300px">Turn it on and PageProof searches in the background while you work. You can stop it any time.</p>${kEngLights(broken, rest)}</div>`}
+    <div class="ktiles">
+      <div class="ktile"><b class="num">${today.searched}</b><span>photos searched today</span></div>
+      <div class="ktile"><b class="num">${today.found}</b><span>new copies today</span></div>
+      <div class="ktile"><b class="num">~${Math.round(perHour * hrs)}</b><span>photos a day at this pace</span></div>
     </div>
-    ${await acctReadRow()}
   </section>
   <div class="grid g2">
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
-      <h2>Pace and hours</h2>
-      <div class="seg" role="radiogroup" aria-label="Pace">${Object.entries(FC.PACE).map(([p, m]) => `<button role="radio" aria-checked="${k.pace === p}" class="${k.pace === p ? 'on' : ''}" data-act="keepset" data-v="pace|${p}">${p}<span class="faint" style="font-size:12px;display:block">1 photo every ${m} min</span></button>`).join('')}</div>
-      <p class="faint" style="margin:0;font-size:13px">Your computer is <b>${esc(hw.level)}</b>${pace !== k.pace ? `, so PageProof goes at the ${pace} pace (1 photo every ${FC.PACE[pace]} minutes)` : ''}. <a href="#computer">Computer check</a></p>
+      <h2>How it searches</h2>
+      <div class="kline"><span class="kl">Pace ${kInfo('Gentle: 1 photo every ' + FC.PACE.Gentle + ' minutes. Steady: every ' + FC.PACE.Steady + '. Faster: every ' + FC.PACE.Faster + '. If a search site asks "are you a robot?", PageProof never tries to get past it: that site rests for an hour and the others carry on.')}</span>
+        <div class="seg" role="radiogroup" aria-label="Pace">${Object.entries(FC.PACE).map(([p, m]) => `<button role="radio" aria-checked="${k.pace === p}" class="${k.pace === p ? 'on' : ''}" data-act="keepset" data-v="pace|${p}" title="1 photo every ${m} minutes">${p}</button>`).join('')}</div></div>
+      ${pace !== k.pace ? `<p class="faint" style="margin:0;font-size:13px">Your computer is ${esc(hw.level)}, so it goes ${pace} (1 photo every ${FC.PACE[pace]} min). <a href="#computer">Computer check</a></p>` : ''}
       ${goalRow(k, F, hw)}
-      <div class="seg" role="radiogroup" aria-label="Hours">${[['work', 'Work hours'], ['all', 'All day and night']].map(([h, l]) => `<button role="radio" aria-checked="${k.hours === h}" class="${k.hours === h ? 'on' : ''}" data-act="keepset" data-v="hours|${h}">${l}</button>`).join('')}</div>
-      ${k.hours === 'work' ? `<div class="row"><label class="mini">From<select data-act="keepnum" data-v="from">${hourOpts.map(h => `<option value="${h}" ${k.from === h ? 'selected' : ''}>${hlabel(h)}</option>`).join('')}</select></label><label class="mini">To<select data-act="keepnum" data-v="to">${hourOpts.map(h => `<option value="${h}" ${k.to === h ? 'selected' : ''}>${hlabel(h)}</option>`).join('')}</select></label><label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="checkbox" data-act="keepwd" ${k.weekdays ? 'checked' : ''}> Weekdays only</label></div>` : ''}
-      <p class="faint" style="margin:0;font-size:13px">If a search site asks "are you a robot?", PageProof never tries to get past it. That site rests for an hour and the others carry on.</p>
+      <div class="kline"><span class="kl">Hours</span>
+        <div class="seg" role="radiogroup" aria-label="Hours">${[['work', 'Work hours'], ['all', 'All day and night']].map(([h, l]) => `<button role="radio" aria-checked="${k.hours === h}" class="${k.hours === h ? 'on' : ''}" data-act="keepset" data-v="hours|${h}">${l}</button>`).join('')}</div></div>
+      ${k.hours === 'work' ? `<div class="row" style="padding-left:114px"><label class="mini">From<select data-act="keepnum" data-v="from">${hourOpts.map(h => `<option value="${h}" ${k.from === h ? 'selected' : ''}>${hlabel(h)}</option>`).join('')}</select></label><label class="mini">To<select data-act="keepnum" data-v="to">${hourOpts.map(h => `<option value="${h}" ${k.to === h ? 'selected' : ''}>${hlabel(h)}</option>`).join('')}</select></label><label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="checkbox" data-act="keepwd" ${k.weekdays ? 'checked' : ''}> Weekdays only</label></div>` : ''}
+      ${await acctReadRow()}
     </section>
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
-      <div class="row"><h2>Today's 50</h2>${fifty ? '<span class="tag ok" style="margin-left:auto">Running now</span>' : ''}</div>
-      <p class="muted" style="margin:0;font-size:14px">A bigger batch at once. It runs quietly in the small pinned PageProof tab, so you can keep working and close this page (see how far it is in All searches). Keep searching carries on at half speed while it runs. The 50 are the next photos in line.</p>
-      <div class="row"><label class="mini">How many<select data-act="keepnum" data-v="perDay">${[10, 25, 50, 75, 100].map(n => `<option value="${n}" ${k.perDay === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label class="mini">Which photos<select data-act="keepset2" data-v="fiftyWhich"><option value="next" ${k.fiftyWhich !== 'first' ? 'selected' : ''}>Next in line</option><option value="first" ${k.fiftyWhich === 'first' ? 'selected' : ''}>Never searched first</option></select></label><button class="btn primary" data-act="fifty"${fifty ? ' disabled data-why="Today\'s check is already running. It carries on by itself."' : ''}>Check ${k.perDay} now</button></div>
+      <div class="row"><h2>Today's 50</h2>${kInfo('A bigger batch at once. It runs quietly in the small pinned PageProof tab, so you can keep working and close this page (see how far it is in All searches). Keep searching carries on at half speed while it runs. On this computer 50 photos take ' + hw.limits.fifty + '.')}${fifty ? '<span class="tag ok" style="margin-left:auto">Running now</span>' : ''}</div>
+      ${fifty && fiftyJob ? `<div class="row" style="gap:14px">${kRing(fiftyJob.done, fiftyJob.total, 62)}<div><b>${fiftyJob.done} of ${fiftyJob.total} photos searched</b><div class="muted" style="font-size:13.5px">${fiftyJob.left ? 'About ' + fiftyJob.left + ' left' : 'Finishing up'} · <a href="#searches">See it in All searches</a></div></div></div>` : `<p class="muted" style="margin:0;font-size:14px">Search a bigger batch now, in the background.</p>`}
+      <p class="faint" style="margin:0;font-size:13px">Keep searching carries on at half speed while it runs.</p>
+      <div class="kline"><span class="kl">Which photos</span><div class="chipset" role="radiogroup" aria-label="Which photos">${[['next', 'Next in line'], ['first', 'Never searched first']].map(([v, l]) => { const on = (k.fiftyWhich === 'first' ? 'first' : 'next') === v; return `<button role="radio" aria-checked="${on}" class="chip${on ? ' on' : ''}" data-act="fiftywhich" data-v="${v}">${on ? '✓ ' : ''}${l}</button>`; }).join('')}</div></div>
+      <div class="kline"><span class="kl">How many</span><select data-act="keepnum" data-v="perDay" aria-label="How many photos">${[10, 25, 50, 75, 100].map(n => `<option value="${n}" ${k.perDay === n ? 'selected' : ''}>${n}</option>`).join('')}</select><button class="btn primary" style="margin-left:auto" data-act="fifty"${fifty ? ' disabled data-why="Today\'s check is already running. It carries on by itself."' : ''}>Check ${k.perDay} now</button></div>
       <label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" data-act="keepauto" ${k.fiftyAuto ? 'checked' : ''}> Start by itself every weekday at <input type="time" value="${esc(k.fiftyTime)}" data-act="keeptime" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);padding:2px 6px"></label>
-      <p class="faint" style="margin:0;font-size:13px">On this computer 50 photos take ${esc(hw.limits.fifty)}.</p>
     </section>
   </div>
   <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
@@ -639,6 +690,7 @@ Object.assign(ACTS, {
   keepnum: async (v, el) => { await FC.setKeep({ [v]: +el.value }); render(true); },
   firstshare: async v => { await FC.setKeep({ firstShare: +v }); toast('1 in ' + v + ' searches now go to photos never searched.'); render(true); },
   keepset2: async (v, el) => { await FC.setKeep({ [v]: el.value }); render(true); },
+  fiftywhich: async v => { await FC.setKeep({ fiftyWhich: v === 'first' ? 'first' : 'next' }); render(true); },
   firstall: () => { state.firstAll = true; render(true); },
   firstseen: async () => { await api.storage.local.set({ fcFirstSeen: new Date().toISOString() }); const el = document.getElementById('firstDone'); if (el) el.remove(); },
   keepwd: async (v, el) => { await FC.setKeep({ weekdays: el.checked }); },
@@ -695,6 +747,6 @@ async function acctReadRow() {
     : fresh && a.state === 'held' && a.why === 'limit' ? 'Had enough for now: carries on at ' + t(a.until) + '.'
     : 'Reads each social account once a month, one a minute, inside your hours.';
   return `<div class="row" style="gap:10px;align-items:flex-start;border-top:1px solid var(--line);padding-top:12px"><label class="switch"><input type="checkbox" id="acctread" data-act="acctread" ${on ? 'checked' : ''}><span></span></label>
-    <div style="flex:1;min-width:0"><b>Read account details</b> <span class="muted" style="font-size:13.5px">${esc(now)}</span>
-    <div class="faint" style="font-size:12.5px">Followers, check mark, type and country, from each account's profile in a small pinned tab. X: at most one profile every 2 minutes and 30 a day. A site that shows empty pages twice is left alone for 6 hours.${resting.length ? ' Resting now: ' + esc(resting.join(', ')) + '.' : ''}</div></div></div>`;
+    <div style="flex:1;min-width:0"><b>Read account details</b> ${kInfo('Followers, check mark, type and country, from each social account\'s profile in a small pinned tab. X: at most one profile every 2 minutes and 30 a day. A site that shows empty pages twice is left alone for 6 hours.')}
+    <div class="muted" style="font-size:13px">${esc(now)}${resting.length ? ' Resting now: ' + esc(resting.join(', ')) + '.' : ''}</div></div></div>`;
 }
