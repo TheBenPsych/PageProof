@@ -70,7 +70,7 @@ One folder holds everything: **Documents › PageProof** keeps your saved work (
 3. Click **Load unpacked** and choose **Documents › PageProof › Install** (the folder with `manifest.json` in it).
 4. Click the puzzle-piece icon in the toolbar, then the pin next to PageProof so its icon is always visible.
 
-Chrome keeps it installed after a restart. To update later, download the new zip, unzip it into the same **Install** folder (say yes to replacing the files), and click the circular arrow on PageProof's card in `chrome://extensions`.
+Chrome keeps it installed after a restart. To update later, download the new zip, unzip it into the same **Install** folder (say yes to replacing the files), and click the circular arrow on PageProof's card in `chrome://extensions`. **Quicker:** double-click **Update PageProof.cmd** in Documents › PageProof (see [tools/windows](tools/windows/README.md)), then click that arrow.
 
 ### Step 2b: Firefox
 
