@@ -264,3 +264,4 @@ body.with-side #preview>canvas,body.with-side #preview>img{display:block;max-wid
 :root[data-theme="dark"] details.thrown > summary{color:var(--t-ink)}
 :root[data-theme="dark"] details.thrown .hint{color:var(--t-muted)}
 /* DARK-AUTO-END */
+:root[data-theme="dark"] .sumcard .ease{color:var(--t-warn)!important}

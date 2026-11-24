@@ -574,11 +574,12 @@ V.computer = async () => {
     <div class="hwlim">
       <div><b>${L.checks}</b><span>photo ${L.checks > 1 ? 'checks' : 'check'} at a time</span></div>
       <div><b>${L.tabs}</b><span>search ${L.tabs > 1 ? 'tabs' : 'tab'} open at once</span></div>
+      <div><b>${L.dl}</b><span>found pictures downloaded at once</span></div>
       <div><b>${L.pace}</b><span>fastest Keep searching pace</span></div>
       <div><b>${L.ram}</b><span>of memory</span></div></div>
     <span class="muted" style="font-size:13.5px">The daily 50 takes ${L.fifty} at this level.</span></div>
     <div class="dsec"><div class="dsh">It also backs off by itself</div>
-      <ul class="hwlist"><li>Pauses when the computer is busy for a minute (processor over 80%), and picks up again when it calms down.</li><li>Pauses on a laptop running on battery below 30%.</li><li>Waits while most of the memory is in use, for example during a video call.</li><li>Never goes over the limits above, even if you pick a faster pace.</li></ul></div>
+      <ul class="hwlist"><li>Keep searching pauses when the computer is busy for a minute (processor over 80%), and picks up again when it calms down.</li><li>Big searches (today's 50, a search you start) slow down to one photo check and one search tab while the computer is busy, so they still finish, and go back to full speed a minute after it calms down.</li><li>The same happens on a laptop running on battery below 30%, and while most of the memory is in use, for example during a video call.</li><li>Never goes over the limits above, even if you pick a faster pace or search speed.</li><li>This only sets how much work your computer does. How often Google, Yandex and Bing are asked stays at the safe search speed, so a stronger computer never causes more robot checks.</li></ul></div>
     <label class="field" style="max-width:420px">Speed level<select id="hwsel">${[['auto', `Let PageProof decide (${h.auto})`], ['Light', 'Light: older or busy computer'], ['Normal', 'Normal'], ['Strong', 'Strong: fast computer']].map(([k, l]) => `<option value="${k}" ${h.choice === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
   </section>`;
 };
@@ -590,6 +591,8 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Searching matched to your computer', 'The computer check now sets every part of a search on this computer: photo checks at a time (up to 6 on a very strong computer), search tabs open, and found pictures downloaded and opened at once. A new speed level in Settings › Your computer counts from the next search. How often the search sites are asked does not change, so a stronger computer never means more robot checks.'],
+  ['Big searches ease off when you are busy', 'While the computer is flat out, memory is nearly full or a laptop is low on battery, today\'s 50 and searches you start slow down to one photo check and one search tab instead of carrying on at full speed. They still finish, and go back to full speed a minute after the computer calms down. Is everything working shows how often it happened.'],
   ['Owner checks stay out of your way', 'When PageProof opens an account or post in your browser to see who is behind it, it now opens as a small pinned tab at the far left with the PageProof logo and "checking owner". It stays in the background, never jumps in front of your work, and closes by itself when the check is done.'],
   ['Full-page captures on tricky sites', 'Details panels that slide in from the side (like a business search result) no longer leave a narrow strip with blank space beside it: the page is kept as it looks and the panel is written out in full as a numbered section. Boxes that fade or slide in as you scroll, late pictures, sticky headings and column titles, "Add to cart" and cookie bars at the bottom, pop-up windows and pages that grow as pictures load now come out whole, with nothing blank or doubled.'],
   ['Daily backup to your own Google Drive', 'Once a day (Monday to Friday, 8 to 6) PageProof saves a copy of your work into My Drive › PageProof Backup: copies found, answers, hidden and approved sites, clients, settings and the capture log. Only you can see it. The last 14 are kept. Settings › Backups has Back up now and the time of the last backup, which turns red after 3 work days without one.'],
