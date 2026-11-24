@@ -58,7 +58,10 @@
       <button class="x" title="Close">×</button></div>`;
     root.querySelector('.x').onclick = () => host.remove();
     root.querySelectorAll('.l a').forEach(a => a.onclick = () => {
-      try { api.runtime.sendMessage(links[a.dataset.i].msg); } catch (e) { /* extension reloaded */ }
+      const k = links[a.dataset.i];
+      if (k.copy) { copy(k.copy); a.textContent = 'Copied'; return; }
+      if (k.open) { window.open(k.open, '_blank', 'noopener'); host.remove(); return; }
+      try { api.runtime.sendMessage(k.msg); } catch (e) { /* extension reloaded */ }
       host.remove();
     });
     const t = root.querySelector('.t');
@@ -69,5 +72,17 @@
   }
 
   const hide = () => { clearTimeout(timer); if (host) host.remove(); host = null; };
-  window.__ppRC = { point, toast, hide };
+  // Put text on the clipboard (PageProof may copy without a click; the page's own copy is the fallback).
+  function copy(text) {
+    let ok = false;
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+      document.documentElement.appendChild(ta); ta.select();
+      ok = document.execCommand('copy'); ta.remove();
+    } catch (e) { /* try the newer way */ }
+    if (!ok) try { navigator.clipboard.writeText(text); ok = true; } catch (e) { /* not allowed here */ }
+    return ok;
+  }
+  window.__ppRC = { point, toast, hide, copy };
 })();
