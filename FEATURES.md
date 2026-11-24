@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.33.0** (24 Nov 2026).
+Last updated: version **4.34.0** (24 Nov 2026).
 
 ---
 
@@ -81,6 +81,7 @@ Last updated: version **4.33.0** (24 Nov 2026).
 - **Photo checker uses the graphics card** (WebGPU) for finding details, pairing and lining up, but only when that PC's own timing shows it is faster. (4.17)
 - **Owner check tabs** open pinned in the background with the PageProof logo. (4.20)
 - **Computer check sets every part of a search** to suit the PC, and big searches ease off when the computer is busy. (4.21)
+- **Reddit and forums never show.** Your team never pursues forums, so every Reddit link (reddit.com, old.reddit.com, redd.it, i.redd.it, preview.redd.it, redditmedia.com) is dropped from searches. Clear forum addresses go too: forum.*, forums.* or boards.* sites, pages under /forum/, /forums/ or /threads/, phpBB / vBulletin / Simple Machines pages (viewtopic.php, showthread.php...) and Discourse topics (/t/title/123). Copies found before are off Copies found; ones already marked Stolen stay. (4.34)
 
 ## 5. Review the copies found
 
@@ -223,3 +224,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.32 | 24 Nov | Reposts and shares spotted and hidden, original poster as lead, exact post found on account-page links |
 | 4.32.1 | 24 Nov | Fix: Update-PageProof.cmd on the download page for the team |
 | 4.33 | 24 Nov | Picture links on every copy; TikTok slideshows checked slide by slide |
+| 4.34 | 24 Nov | Reddit and forums dropped from searches; social list is 16 platforms |
