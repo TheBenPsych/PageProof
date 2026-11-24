@@ -7,7 +7,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > and as one line in the timeline. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.24.0** (24 Nov 2026).
+Last updated: version **4.25.0** (24 Nov 2026).
 
 ---
 
@@ -54,6 +54,7 @@ Last updated: version **4.24.0** (24 Nov 2026).
 - **Automatic line-up** handles resized, cropped, zoomed, stretched, tilted and mirrored copies, and copies with headlines or logos on top. Checked by a built-in test set of 200+ distorted copies. (3.3.1, 3.4)
 - **Shows what an AI edit changed:** green for untouched, red for redrawn, "Same photo, heavily edited" verdict, Pick a spot for a close-up score, and Check nearby shots to see which of several similar frames the copy came from. (4.8)
 - **No false matches** from tiny shrunk guesses or press walls (sponsor backdrops with repeating logos). (4.2.2, 4.8.3)
+- **Logos and buildings no longer count as copies:** PageProof checks whether only logos match (sponsor walls, red carpets, signs) or whether it is another shot of the same place, and unanswered copies are re-checked once. (4.25)
 - **Mark up a copy:** highlight, box, circle, arrow, text, pick an area; copy to clipboard or save as PNG/PDF. Labelled "Marked-up copy" and never added to the pack. (3.0)
 
 ## 4. Find copies of client photos
@@ -194,3 +195,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.22 | 24 Nov | Undo a file added to hidden or approved sites; long lists fast |
 | 4.23 | 24 Nov | Stolen before links in Copies found |
 | 4.24 | 24 Nov | Spam blog copies hidden until you show them |
+| 4.25 | 24 Nov | Logos and buildings no longer count as copies |
