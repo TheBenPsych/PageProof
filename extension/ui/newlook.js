@@ -99,6 +99,7 @@ V.tools = async () => {
       ['owners', 'owner', 'Site owners', 'Sites that belong to one company.'],
       ['hidden', 'ban', 'Hidden and approved sites', 'Sites you never want, and sites that are allowed.'],
       ['health', 'check', 'Is everything working?', 'Lights for each part, and updates.'],
+      ['stats', 'eye', 'How PageProof is doing', 'Day-by-day stats, the checker test, and a file to send for help.'],
     ]],
   ];
   return `${head('', 'Tools', 'Everything else PageProof can do, in one place.')}

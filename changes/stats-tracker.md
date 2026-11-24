@@ -1,0 +1,5 @@
+type: new
+title: How PageProof is doing
+news: A new page, Settings › How PageProof is doing, keeps day-by-day stats for this computer: what searches found, how fast each step is, links thrown out and why, each search site (including how many of its pictures could not be checked), Keep searching on-time and pauses, Google Drive speed, photos covered and computer strain. A one-click Checker test runs made-up test pictures through the photo checker. "Save stats for Claude" saves one file (numbers and website names only, never client names, photo names or links), and a weekly file is saved by itself on Fridays. Anything that looks off shows at the top, on Home and on Is everything working.
+timeline: Stats page, Checker test and Save stats for Claude
+feature 9: **How PageProof is doing.** Day-by-day stats for this computer (found, speed, links thrown out and why, each search site, Keep searching on-time, Drive, photos covered, computer strain), "Something looks off" alerts, a Checker test with made-up pictures, and Save stats for Claude (one file, numbers and website names only) plus a weekly file on Fridays.

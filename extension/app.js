@@ -194,6 +194,11 @@ async function homeFinds() {
   if (store.fcDriveOffline) jobs.push({ lvl: 'bad', title: 'Can\'t reach Google Drive, so searching is paused', sub: 'Drive for desktop is signed out or not running. Searching picks up where it left off.', btn: { href: '#keep', label: 'Keep searching', main: 1 } });
   else if (ds === 'prompt') jobs.push({ lvl: 'warn', title: 'One click needed: let PageProof read your photos again', sub: 'Your browser asks once after it restarts.', btn: { act: 'driveallow', label: 'Allow', main: 1 } });
   if (k.on && !store.fcPause && st && st.state === 'closed') jobs.push({ lvl: 'bad', title: 'Keep searching is stopped', sub: 'Its pinned PageProof tab was closed, so no new photos are being searched.', btn: { act: 'keepshow', label: 'Start it again', main: 1 } });
+  // How PageProof is doing: something changed a lot compared with this computer's usual numbers.
+  try {
+    const al = typeof PP_REPORT !== 'undefined' ? (await PP_REPORT.model('7', { light: true })).alerts : [];
+    if (al.length) jobs.push({ lvl: al.some(a => a[0] === 'bad') ? 'bad' : 'warn', title: al.length === 1 ? al[0][1] : al.length + ' things look off in PageProof\'s stats', sub: al.length === 1 ? al[0][2] : al.map(a => a[1]).slice(0, 3).join('. ') + '.', btn: { href: '#stats', label: 'See the stats' } });
+  } catch (e) { /* stats are only a help */ }
   for (const [e, until] of Object.entries(await FC.brokenEngines())) jobs.push({ lvl: 'bad', title: `${FC.ENGINE_NAME[e]} may have stopped working`, sub: `It gave nothing for many photos in a row, so it rests until ${new Date(until).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}. The other search sites carry on.`, btn: { href: '#health', label: 'See details' } });
   // 4.15: the searching tab came back by itself, and the computer clock check.
   const reo = (await api.storage.local.get('fcReopened')).fcReopened;
@@ -460,6 +465,9 @@ V.settings = async () => {
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>Is everything working?</h2>
       <p class="muted" style="margin:0;font-size:14px">Green and red lights for Google Drive, Keep searching, each search site and your backup. One button copies the details to send for support.</p>
       <a class="btn" style="align-self:flex-start" href="#health">Check now</a></section>
+    <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>How PageProof is doing</h2>
+      <p class="muted" style="margin:0;font-size:14px">Day-by-day stats for this computer: what was found, how fast, what went wrong, and a checker test. Save them as a file to send to Claude for help.</p>
+      <a class="btn" style="align-self:flex-start" href="#stats">See the stats</a></section>
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>PageProof folder</h2>
       <p class="muted" style="margin:0;font-size:14px">Documents › PageProof. Holds your hidden and approved sites and rejected links as text files, so they survive updates and reinstalls.</p>
       ${docs === 'granted' ? `<span class="tag ok" style="align-self:flex-start">${ic('check', 13, 3)} Connected</span><button class="btn" style="align-self:flex-start" data-act="docschoose">Change folder</button>`

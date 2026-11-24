@@ -14,7 +14,7 @@ const PP_MENU = [
   { id: 'library', label: 'Evidence', href: 'library', badgeKey: 'toCapture',
     subs: [['All evidence', 'library'], ['Needs a capture', 'tocapture'], ['Capture a page', 'capture'], ['Verify a pack', 'verify'], ['All tools', 'tools'], ['Weekly summary', 'weekly']] },
   { id: 'settings', label: 'Settings', href: 'settings',
-    subs: [['Settings', 'settings'], ['Is everything working?', 'health'], ['Hidden and approved sites', 'hidden'], ['In your browser', 'browser'], ['Help and tutorial', 'help']] },
+    subs: [['Settings', 'settings'], ['Is everything working?', 'health'], ['How PageProof is doing', 'stats'], ['Hidden and approved sites', 'hidden'], ['In your browser', 'browser'], ['Help and tutorial', 'help']] },
 ];
 // 4.14: the menu went from 9 items to 5. Every older page still has its address and lights up the
 // item it now lives under.
@@ -23,7 +23,7 @@ const PP_ROUTES = {
   clients: ['clients', 'clients'], photos: ['clients', 'clients'], owners: ['clients', 'owners'], who: ['clients', 'owners'], skipped: ['clients', 'skipped'],
   library: ['library', 'library'], tocapture: ['library', 'tocapture'], capture: ['library', 'capture'], verify: ['library', 'verify'], weekly: ['library', 'weekly'],
   tools: ['library', 'tools'], inspect: ['library', 'tools'], compare: ['library', 'tools'], markup: ['library', 'tools'], files: ['library', 'tools'], openfiles: ['library', 'tools'], bnsave: ['library', 'tools'],
-  settings: ['settings', 'settings'], health: ['settings', 'health'], hidden: ['settings', 'hidden'], browser: ['settings', 'browser'], setup: ['settings', 'browser'], help: ['settings', 'help'],
+  settings: ['settings', 'settings'], health: ['settings', 'health'], stats: ['settings', 'stats'], hidden: ['settings', 'hidden'], browser: ['settings', 'browser'], setup: ['settings', 'browser'], help: ['settings', 'help'],
   computer: ['settings', 'settings'], whatsnew: ['settings', 'settings'], reconnect: ['settings', 'settings']
 };
 const PP_CRUMBS = {
@@ -33,7 +33,7 @@ const PP_CRUMBS = {
   who: 'Who\'s behind this site', keep: 'Keep searching', connect: 'Connect your photos', weekly: 'Evidence › Weekly summary', tocapture: 'Evidence › Needs a capture',
   inspect: 'Photo tools › Inspect a photo', compare: 'Photo tools › Compare two photos', markup: 'Photo tools › Mark up a copy', files: 'Photo tools › Convert files',
   openfiles: 'Photo tools › Open odd files', library: 'Evidence › All evidence', verify: 'Verify a pack', browser: 'Toolbar and side panel', settings: 'Settings',
-  hidden: 'Settings › Hidden and approved sites', computer: 'Settings › Your computer', whatsnew: 'Settings › What\'s new', health: 'Settings › Is everything working?', skipped: 'Skipped photos', bnsave: 'Save a Breaking News photo', setup: 'First-time setup', help: 'Help and tutorial'
+  hidden: 'Settings › Hidden and approved sites', computer: 'Settings › Your computer', whatsnew: 'Settings › What\'s new', health: 'Settings › Is everything working?', stats: 'Settings › How PageProof is doing', skipped: 'Skipped photos', bnsave: 'Save a Breaking News photo', setup: 'First-time setup', help: 'Help and tutorial'
 };
 const PP_BADGES = {};
 
