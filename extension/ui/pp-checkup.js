@@ -5,6 +5,7 @@
 //    Home then says "everything checked" or exactly what broke.
 //  - A ticked photo folder that Drive can't find any more (renamed, moved or deleted).
 //  - Photos that moved in Drive and kept their history.
+//  - 4.42: new folders in Google Drive (new clients?) that aren't ticked.
 // Loaded after app.js: it adds its lines to the top of Home's "What to do now" list.
 (() => {
   const SITES = [['Google Lens', 'https://www.google.com/imghp?hl=en'], ['Yandex', 'https://yandex.com/images/'], ['Bing', 'https://www.bing.com/images']];
@@ -90,6 +91,10 @@
       const miss = await FC.missingPicks();
       if (miss.length) out.push({ lvl: 'bad', id: 'jobMissing', title: miss.length === 1 ? 'A photo folder you ticked can\'t be found in Google Drive' : miss.length + ' photo folders you ticked can\'t be found in Google Drive',
         sub: esc(miss.slice(0, 3).map(m => m.rel.split('/').pop()).join(', ')) + (miss.length > 3 ? ' and more' : '') + '. Renamed or moved? Pick it again so its photos keep being searched.', btn: { href: '#connect', label: 'Pick it again', main: 1 } });
+      // 4.42: new client folders in Google Drive that nobody ticked yet.
+      const nf = await FC.newFolders();
+      if (nf.length) out.push({ lvl: 'info', id: 'jobNewFolders', icon: 'files', title: nf.length === 1 ? 'A new folder appeared in Google Drive' : nf.length + ' new folders appeared in Google Drive',
+        sub: esc(nf.slice(0, 3).map(f => f.id || f.rel.split('/').pop()).join(', ')) + (nf.length > 3 ? ' and more' : '') + '. New clients? Tick them so their photos are searched.', btn: { href: '#connect', label: 'Look at them', main: 1 }, btn2: { act: 'newfoldersseen', label: 'Not clients' } });
       const mv = await FC.movedNote();
       if (mv && !mv.seen && Date.now() - Date.parse(mv.at) < 7 * 864e5) out.push({ lvl: 'info', id: 'jobMoved', icon: 'check', title: mv.n.toLocaleString() + (mv.n === 1 ? ' photo was' : ' photos were') + ' moved or renamed in Google Drive',
         sub: 'PageProof recognised ' + (mv.n === 1 ? 'it' : 'them') + ', so their copies, answers and search dates were kept.', btn2: { act: 'movedseen', label: 'OK' } });
@@ -112,6 +117,7 @@
   Object.assign(ACTS, {
     checkupseen: async () => { const c = (await api.storage.local.get('ppCheckup')).ppCheckup; if (c) await api.storage.local.set({ ppCheckup: { ...c, seen: true } }); render(true); },
     checkupagain: async () => { await api.storage.local.remove('ppCheckup'); toast('Checking again. It takes about a minute.'); checkup(); },
+    newfoldersseen: async () => { await FC.newFoldersSeen(); render(true); },
     movedseen: async () => { const m = await FC.movedNote(); if (m) await FC.meta.set('movedNote', { ...m, seen: true }); render(true); },
   });
   globalThis.PP_CHECKUP = { run: checkup };

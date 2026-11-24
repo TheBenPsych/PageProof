@@ -8,6 +8,7 @@
 const FC = (() => {
   const api = globalThis.browser || globalThis.chrome;
   const DAY = 86400000;
+  const FRESH_MAX = 300;   // 4.42: more new photos than this at once is a bulk upload, not the fast lane
 
   // ---------------------------------------------------------------- database
   let dbp = null;
@@ -286,6 +287,46 @@ const FC = (() => {
     if (st.fcPause) return { ok: false, why: 'paused' };
     if (!inHours(k)) return { ok: false, why: 'hours' };
     return { ok: true };
+  }
+  // 4.42 (Ben's pick): a goal instead of a pace. "Every photo searched once by <date>": the work
+  // minutes left (your hours, weekdays) are shared out over the photos still never searched (each
+  // takes share searches, as 1 in share searches go to them). Never faster than Faster or this
+  // computer's limit, never slower than Gentle. Says if it is on track and, if not, when it would end.
+  function workMinutes(k, from, to) {
+    let n = 0;
+    const d = new Date(from);
+    for (let i = 0; i < 800 && d < to; i++) {
+      const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const open = k.hours === 'all' ? 0 : (k.from ?? 8), shut = k.hours === 'all' ? 24 : (k.to ?? 18);
+      const weekend = k.hours !== 'all' && k.weekdays !== false && (day.getDay() === 0 || day.getDay() === 6);
+      if (!weekend) {
+        const a = Math.max(+day + open * 3600000, +d), b = Math.min(+day + shut * 3600000, +to);
+        if (b > a) n += (b - a) / 60000;
+      }
+      d.setTime(+day + DAY + 3600000); d.setHours(0, 0, 0, 0);
+    }
+    return n;
+  }
+  function goalPlan(k, never, fastest = 'Faster', now = new Date()) {
+    if (!k.goal || !/^\d{4}-\d{2}-\d{2}$/.test(k.goal)) return null;
+    const share = [2, 3, 4].includes(k.firstShare) ? k.firstShare : 3;
+    const end = new Date(k.goal + 'T23:59:00');
+    const left = workMinutes(k, now, end);
+    const fast = PACE[fastest] || PACE.Faster, slow = PACE.Gentle;
+    if (!never) return { done: true, gap: null, never: 0, goal: k.goal };
+    const need = never * share;
+    const want = left / need;
+    const gap = Math.max(fast, Math.min(slow, want));
+    const hpd = Math.max(1, k.hours === 'all' ? 24 : (k.to ?? 18) - (k.from ?? 8));
+    const days = Math.max(1, Math.round(left / (hpd * 60)));
+    let eta = null;
+    if (want < fast) {
+      // When it would end at the fastest safe pace.
+      let mins = need * fast; const d = new Date(now);
+      for (let i = 0; i < 2000 && mins > 0; i++) { const next = new Date(+d + DAY); mins -= workMinutes(k, d, next); d.setTime(+next); }
+      eta = d.toISOString().slice(0, 10);
+    }
+    return { done: false, gap, onTrack: want >= fast, never, perDay: Math.ceil(never / days), eta, goal: k.goal, left: Math.round(left) };
   }
   async function setKeep(ch) { const k = { ...(await keep()), ...ch }; await api.storage.local.set({ fcKeep: k }); backupSoon(); return k; }
   async function drive() { return { label: 'G:\\Shared drives\\Photos', done: false, ...((await api.storage.local.get('fcDrive')).fcDrive || {}) }; }
@@ -582,7 +623,7 @@ const FC = (() => {
     return regs;
   }
   const YEAR_DIR = /^\s*(?:year|fy)?[\s._-]*(?:19|20)\d{2}(?!\d)/i;
-  const newness = p => (p.year || 0) * 1000 + (p.quarter || 0) * 200 + (p.day || 0);
+  const newness = p => p.year ? p.year * 1000 + (p.quarter || 0) * 200 + (p.day || 0) : (p.exifY || 0) * 1000 + (p.exifQ || 0) * 200;
   // This quarter and last quarter (for the hourly look for new photos).
   function recentQuarters(d = new Date()) {
     const y = d.getFullYear(), q = Math.floor(d.getMonth() / 3) + 1;
@@ -627,7 +668,7 @@ const FC = (() => {
         if (!full && client.searching !== true && ![...known.values()].some(c => c.from === cf.name && c.searching === true)) continue;
         const pre = 'd:' + (cf.extra ? '+' : '') + cf.rel + '/';
         pres.push(pre);
-        const seen = new Set(), batch = [], subs = {}, subsNew = {}, found = [];
+        const seen = new Set(), batch = [], subs = {}, subsNew = {}, found = [], newOnes = [];
         let n = 0, skipped = 0, mineNew = 0;
         if (progress) progress('Reading ' + cf.name + '…');
         const r = await walkClient(cf, f => { found.push(f); }, only, (rel, k, ignored) => { if (ignored) skipped++; });
@@ -652,7 +693,7 @@ const FC = (() => {
           if (p) { if (p.year !== f.year || p.quarter !== f.quarter || p.day !== f.day || p.gone || p.client !== who) { Object.assign(p, f, { gone: false, client: who }); p.order = newness(p); batch.push(p); } continue; }
           const np = { id, client: who, extra: !!cf.extra, ...f, flag: '', searches: 0, empty: 0, copies: 0, stolen: 0, added: gen };
           np.order = newness(np);
-          batch.push(np); added++;
+          batch.push(np); added++; newOnes.push(np);
           if (who === cf.name) mineNew++; else subsNew[who] = (subsNew[who] || 0) + 1;
         }
         // Clients named by a client_info.txt inside this folder: searched like the folder they're in.
@@ -660,6 +701,9 @@ const FC = (() => {
           const o = known.get(name) || (await DB.get('clients', name));
           await DB.put('clients', { ...(o || {}), name, searching: o ? o.searching : client.searching, priority: o ? !!o.priority : client.priority, photos: full ? cnt : ((o && o.photos) || 0) + (subsNew[name] || 0), licensed: o ? o.licensed || [] : [], from: cf.name, scanned: full || !o ? new Date().toISOString() : o.scanned });
         }
+        // 4.42 new photo fast lane: photos that arrive in a client PageProof already knows (not
+        // the first big read, not a whole new shoot library of hundreds) are searched first.
+        if (old && old.scanned && newOnes.length && newOnes.length <= FRESH_MAX) for (const np of newOnes) np.fresh = gen;
         client.ignored = skipped;
         for (const [k, v] of Object.entries(r)) regs[k] = { ...v, ...(regs[k] && regs[k].manual ? regs[k] : {}) };
         await DB.putMany('photos', batch);
@@ -726,6 +770,40 @@ const FC = (() => {
     return put.length;
   }
   async function missingPicks() { return (await meta.get('missingPicks')) || []; }
+  // 4.42 (Ben's pick): new client folders. Once a week the first two levels of the top folder are
+  // listed (names only, nothing inside is read) and compared with last week. A new folder that
+  // isn't ticked (or inside a ticked one) and has no client_info_ignore.txt shows on Home.
+  async function watchFolders() {
+    const names = [];
+    for (const t of await subfolders('')) {
+      names.push(t.rel);
+      try { for (const s2 of await subfolders(t.rel)) names.push(s2.rel); } catch (e) { /* that folder could not be listed */ }
+    }
+    const base = await meta.get('folderBase');
+    await meta.set('folderBase', names);
+    if (!Array.isArray(base)) return [];               // the first time it only remembers what is there
+    const pk = (await picked()) || [], had = new Set(base);
+    const covered = r => pk.some(x => r === x || r.startsWith(x + '/') || x.startsWith(r + '/'));
+    let fresh = names.filter(n => !had.has(n) && !covered(n));
+    fresh = fresh.filter(n => !fresh.some(o => o !== n && n.startsWith(o + '/')));     // a new group: just the group
+    const out = [];
+    for (const rel of fresh.slice(0, 40)) {
+      const info = await folderInfo(rel).catch(() => ({}));
+      if (info.ignore) continue;
+      out.push({ rel, id: info.id || '', at: new Date().toISOString() });
+    }
+    const was = ((await meta.get('newFolders')) || []).filter(f => names.includes(f.rel) && !covered(f.rel));
+    const all = was.concat(out.filter(o => !was.some(w => w.rel === o.rel)));
+    await meta.set('newFolders', all);
+    if (out.length && typeof PP_STATS !== 'undefined') PP_STATS.add('drive.newFolders', out.length);
+    return out;
+  }
+  async function newFolders() {
+    const pk = (await picked()) || [];
+    const covered = r => pk.some(x => r === x || r.startsWith(x + '/') || x.startsWith(r + '/'));
+    return ((await meta.get('newFolders')) || []).filter(f => !f.seen && !covered(f.rel));
+  }
+  async function newFoldersSeen() { await meta.set('newFolders', ((await meta.get('newFolders')) || []).map(f => ({ ...f, seen: true }))); }
   async function movedNote() { return meta.get('movedNote'); }
   // Just the client folders and a photo count for each (setup step 3). Fast-ish.
   async function quickClients(progress) {
@@ -819,8 +897,9 @@ const FC = (() => {
   // 4 Popular and stolen before (every 7 days) · 5 everything else · quiet photos last.
   const ageDays = iso => iso ? (Date.now() - Date.parse(iso)) / DAY : Infinity;
   function monthsOld(p, now = new Date()) {
-    if (!p.year) return 999;
-    const m = (now.getFullYear() - p.year) * 12 + now.getMonth() - ((p.quarter || 4) * 3 - 1);
+    const y = p.year || p.exifY, q = p.year ? p.quarter : p.exifQ;     // 4.42: EXIF date when the folders have none
+    if (!y) return 999;
+    const m = (now.getFullYear() - y) * 12 + now.getMonth() - ((q || 4) * 3 - 1);
     return Math.max(0, m);
   }
   // POOL photos (court photos shared with other papers, named like 10.29.26_POOL_Subject_Name.jpg)
@@ -834,6 +913,15 @@ const FC = (() => {
     // of file that can't be searched).
     if (p.unreadable) return { tier: 6, due: p.skip !== 'type' && since > 90, quiet: true };
     if (p.flag === 'hi' && (since > 3 || !p.lastSearched || (p.flagged && p.flagged > (p.lastSearched || '')))) return { tier: 0, due: true };
+    // 4.42 hot shoot: a photo from the same shoot as one just marked Stolen goes next (once).
+    if (p.hot && p.hot > (p.lastSearched || '')) return { tier: 0, due: true, hot: true };
+    // 4.42 new photo fast lane: a photo that arrived in Drive (not in the first big read) is
+    // searched within the hour, then again 3, 7 and 14 days after its first search.
+    if (p.fresh && !p.lastSearched) return { tier: 0, due: true, fresh: true };
+    if (p.fresh && p.firstAt) {
+      const a = ageDays(p.firstAt), cp = [14, 7, 3].find(d => a >= d);
+      if (a <= 30 && cp && Date.parse(p.lastSearched) < Date.parse(p.firstAt) + (cp - 0.5) * DAY) return { tier: 1, due: true, fresh: true };
+    }
     const quiet = p.empty >= 10 ? 90 : p.empty >= 5 ? 30 : 0;
     if (quiet && !p.flag) return { tier: 6, due: since > quiet, quiet: true };
     if ((p.flag === 'pop' || p.stolen > 0) && since > 7) return { tier: 3, due: true };
@@ -856,13 +944,15 @@ const FC = (() => {
     const t0 = Date.now();
     const clients = new Map((await DB.all('clients')).map(c => [c.name, c]));
     const photos = await DB.all('photos');
-    const out = [], fresh = new Map();
+    const out = [], fresh = new Map(), waitBurst = [];
     for (const p of photos) {
       if (p.gone || p.doubleOf) continue;
       const c = clients.get(p.client);
       if (!c || c.searching !== true) continue;
       // Never searched yet: the "every photo once" line (4.10, Ben).
-      if (!searchedOnce(p) && !cantSearch(p)) { if (!fresh.has(p.client)) fresh.set(p.client, []); fresh.get(p.client).push(p); }
+      // 4.42 bursts: a frame that looks almost the same as one already searched (with nothing found)
+      // waits until every other photo has had its first search.
+      if (!searchedOnce(p) && !cantSearch(p)) { if (p.burstWait) { waitBurst.push(p); continue; } if (!fresh.has(p.client)) fresh.set(p.client, []); fresh.get(p.client).push(p); }
       const pl = plan(p, c);
       // Only photos that are due. (Photos that are not due used to sit at the end of the line,
       // so once everything due was done, quiet photos, photos searched last week and TIFF/HEIC
@@ -873,7 +963,7 @@ const FC = (() => {
     // Inside each tier: never searched first, then newest folders, then searched longest ago.
     out.sort((a, b) => a.tier - b.tier || (!!a.last - !!b.last) || b.order - a.order || a.last.localeCompare(b.last));
     QUEUE = out; QUEUE_AT = Date.now();
-    FIRST = firstLine(fresh, clients);
+    FIRST = firstLine(fresh, clients).concat(waitBurst.sort((a, b) => (b.order || 0) - (a.order || 0)).map(p => p.id));
     perf('searchLine', Date.now() - t0, photos.length);
     return out;
   }
@@ -905,6 +995,13 @@ const FC = (() => {
     let turn = solo ? ((await api.storage.local.get('fcFirstTurn')).fcFirstTurn || 0) : 0;
     const used = new Set(skip);
     let qi = 0, fi = 0;
+    // 4.42 per-site lanes: Yandex and Bing's extra photos are re-searches only (photos searched
+    // before, not ⚑ High, new or hot), so every first search still gets all three sites.
+    if (opts.repeat) {
+      const ids = [];
+      for (const q of QUEUE) { if (ids.length >= n) break; if (q.tier > 0 && q.last && !used.has(q.id)) { ids.push(q.id); used.add(q.id); } }
+      return (await DB.getMany('photos', ids)).filter(Boolean);
+    }
     const nq = () => { while (qi < QUEUE.length && used.has(QUEUE[qi].id)) qi++; return QUEUE[qi]; };
     const nf = () => { while (fi < FIRST.length && used.has(FIRST[fi])) fi++; return FIRST[fi]; };
     const ids = [];
@@ -1007,7 +1104,27 @@ const FC = (() => {
   }
   // Open one photo from Drive, ready to search. Never throws: { error, soft } when it can't.
   // soft = nothing wrong with the photo (Drive can't be reached): it is simply tried again later.
-  async function readPhoto(p) {
+  // The date the camera wrote (EXIF DateTimeOriginal looks like 2026:11:22 14:03:11).
+  function exifDate(bytes) {
+    let t = '';
+    for (let i = 0; i < bytes.length; i += 8192) t += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+    const m = /((?:19|20)\d\d):(0[1-9]|1[0-2]):(0[1-9]|[12]\d|3[01]) [0-2]\d:[0-5]\d:[0-5]\d/.exec(t);
+    if (!m) return null;
+    const y = +m[1];
+    return y > new Date().getFullYear() ? null : { y, m: +m[2], d: +m[3] };
+  }
+  // Another frame of the same burst: same folder, looks almost the same, searched with nothing found.
+  const folderOf = id => String(id).slice(0, String(id).lastIndexOf('/') + 1);
+  async function burstSibling(p) {
+    if (!p.look) return null;
+    const dir = folderOf(p.id);
+    for (const o of await DB.prefix('photos', dir)) {
+      if (o.id === p.id || o.gone || !o.look || folderOf(o.id) !== dir || !searchedOnce(o) || o.copies || o.stolen) continue;
+      if (hamming(o.look, p.look) <= 10 && (!o.w || !p.w || Math.abs(o.w / o.h - p.w / p.h) < 0.2)) return o;
+    }
+    return null;
+  }
+  async function readPhoto(p, opts = {}) {
     const t0 = Date.now();
     if (/\.(tiff?|heic|heif)$/i.test(p.name || '')) { await noteSkip(p, 'type'); return { error: SKIP_WHY.type }; }
     let file;
@@ -1022,6 +1139,23 @@ const FC = (() => {
     try { pic = await RS_JOB.prepare(file, { fcId: p.id, folderKey: p.rel }); } catch (e) { pic = { error: String(e && e.message || e) }; }
     if (pic.error) { await noteSkip(p, 'broken'); return { error: SKIP_WHY.broken }; }
     if (p.unreadable || p.skip) { delete p.unreadable; delete p.skip; await DB.put('photos', p); await clearSkip([p.id]); }
+    // 4.42: a photo whose folders give no year gets its date from the camera (EXIF), once.
+    if (!p.year && !p.exifY && !p.exifTried) {
+      p.exifTried = 1;
+      try { const d = exifDate(new Uint8Array(await file.slice(0, 131072).arrayBuffer())); if (d) { p.exifY = d.y; p.exifQ = Math.ceil(d.m / 3); p.order = newness(p); } } catch (e) { /* no date */ }
+      await DB.put('photos', p); queueDirty(true);
+    }
+    // 4.42 bursts: a frame that looks almost the same as one from the same folder that was
+    // already searched and found nothing waits until every other photo has had its first search.
+    if (opts.burst && !searchedOnce(p) && !p.burstWait && !p.burstChecked && pic.blob) {
+      p.burstChecked = 1;
+      try {
+        p.look = p.look || await lookHash(pic.blob);
+        const sib = await burstSibling(p);
+        if (sib) { p.burstWait = sib.id; await DB.put('photos', p); queueDirty(true); if (typeof PP_STATS !== 'undefined') PP_STATS.add('keep.burstWait'); perf('openPhoto', Date.now() - t0, Math.round(file.size / 1024)); return { error: 'Looks the same as ' + sib.name + ' (same burst), which found nothing. It waits until every other photo has had its first search.', burst: true, soft: true }; }
+      } catch (e) { /* search it */ }
+      await DB.put('photos', p);
+    }
     perf('openPhoto', Date.now() - t0, Math.round(file.size / 1024));
     return pic;
   }
@@ -1401,6 +1535,10 @@ const FC = (() => {
     p.lastSearched = now;
     delete p.retry;
     p.empty = links.length ? 0 : (p.empty || 0) + 1;
+    // A hot shoot photo has had its turn.
+    if (p.hot) delete p.hot;
+    // 4.42 bursts: this frame found copies, so the frames that waited behind it go now.
+    if (fresh > 0) await wakeBurst(p).catch(() => {});
     p.copies = all.filter(c => c.status !== 'removed').length;
     p.stolen = all.filter(c => c.status === 'stolen').length;
     if (all.length && pic.thumb && !p.thumb && !p.th) { p.thumb = pic.thumb; const pr = splitPic(p); if (pr) await pics.putMany([pr]); }
@@ -1543,6 +1681,40 @@ const FC = (() => {
 
   // ---------------------------------------------------------------- your answers
   // Each change returns an "undo" that puts every touched copy back exactly as it was.
+  async function wakeBurst(p) {
+    const waiting = (await DB.prefix('photos', folderOf(p.id))).filter(o => o.burstWait && (o.burstWait === p.id || (p.look && o.look && hamming(o.look, p.look) <= 10)));
+    for (const o of waiting) { delete o.burstWait; o.hot = new Date().toISOString(); }
+    if (waiting.length) { await DB.putMany('photos', waiting); queueDirty(); }
+    return waiting.length;
+  }
+  // 4.42 hot shoots (Ben's pick): a photo marked Stolen means its shoot is being used. The other
+  // photos from the same folder and day (same day in the file name when the folder has many
+  // days) are searched next, once. Returns the photos it marked.
+  const dayInName = n => { const m = /(\d{1,2})[._-](\d{1,2})[._-](\d{2,4})/.exec(String(n || '')); return m ? m[1] + '.' + m[2] + '.' + m[3].slice(-2) : ''; };
+  async function heatShoot(photoIds) {
+    const at = new Date().toISOString(), marked = [];
+    for (const id of new Set(photoIds)) {
+      const p = await DB.get('photos', id);
+      if (!p) continue;
+      const day = p.day ? '' : dayInName(p.name);
+      for (const o of await DB.prefix('photos', folderOf(p.id))) {
+        if (o.id === p.id || o.gone || o.doubleOf || folderOf(o.id) !== folderOf(p.id) || cantSearch(o) || o.stolen) continue;
+        if (o.day !== p.day || (day && dayInName(o.name) !== day)) continue;
+        if (o.lastSearched && ageDays(o.lastSearched) < 1) continue;     // searched today already
+        if (marked.some(m => m.id === o.id)) continue;
+        marked.push({ id: o.id, was: o.hot || null });
+        o.hot = at; if (o.burstWait) { o.wasBurst = o.burstWait; delete o.burstWait; }
+        await DB.put('photos', o);
+        if (marked.length >= 60) break;
+      }
+    }
+    if (marked.length) { queueDirty(); if (typeof PP_STATS !== 'undefined') PP_STATS.add('keep.hotShoot'); }
+    return marked;
+  }
+  async function coolShoot(marked) {
+    for (const m of marked) { const o = await DB.get('photos', m.id); if (!o) continue; if (m.was) o.hot = m.was; else delete o.hot; if (o.wasBurst) { o.burstWait = o.wasBurst; delete o.wasBurst; } await DB.put('photos', o); }
+    if (marked.length) queueDirty();
+  }
   async function answer(ids, status, extra = {}) {
     const before = [];
     const now = new Date().toISOString();
@@ -1575,7 +1747,9 @@ const FC = (() => {
     await recount(touchedPhotos);
     backupCopiesSoon(); touch('copies');
     if (status === 'stolen') queueDirty();
-    return async () => {
+    const hot = status === 'stolen' ? await heatShoot(before.filter(c => c.status !== 'stolen').map(c => c.photo)).catch(() => []) : [];
+    const undo = async () => {
+      if (hot.length) await coolShoot(hot).catch(() => {});
       await DB.putMany('copies', before);
       if (status === 'removed') {
         try {
@@ -1587,6 +1761,8 @@ const FC = (() => {
       await recount(touchedPhotos);
       backupCopiesSoon(); touch('copies');
     };
+    undo.hot = hot.length;
+    return undo;
   }
   async function recount(photoIds) {
     for (const id of photoIds) {
@@ -1982,7 +2158,7 @@ const FC = (() => {
       const k = j.keep, hr = v => (Number.isInteger(v) && v >= 0 && v <= 23 ? v : null);
       set.fcKeep = { ...KEEP_DEFAULT, on: false, pace: PACE[k.pace] ? k.pace : KEEP_DEFAULT.pace, hours: k.hours === 'all' ? 'all' : 'work', from: hr(k.from) ?? KEEP_DEFAULT.from, to: hr(k.to) ?? KEEP_DEFAULT.to,
         weekdays: k.weekdays !== false, fiftyTime: /^\d\d:\d\d$/.test(k.fiftyTime || '') ? k.fiftyTime : KEEP_DEFAULT.fiftyTime, fiftyAuto: k.fiftyAuto === true, perDay: [10, 25, 50, 75, 100].includes(k.perDay) ? k.perDay : 50,
-        firstShare: [2, 3, 4].includes(k.firstShare) ? k.firstShare : 3, fiftyWhich: k.fiftyWhich === 'first' ? 'first' : 'next' };
+        firstShare: [2, 3, 4].includes(k.firstShare) ? k.firstShare : 3, fiftyWhich: k.fiftyWhich === 'first' ? 'first' : 'next', goal: /^\d{4}-\d{2}-\d{2}$/.test(k.goal || '') ? k.goal : '' };
     }
     if (j.drive && typeof j.drive === 'object') set.fcDrive = { label: str(j.drive.label) || 'G:\\Shared drives\\Photos', done: false };
     if (Array.isArray(j.shownCountries)) set.fcShownCountries = j.shownCountries.map(str).filter(Boolean);
@@ -2038,7 +2214,7 @@ const FC = (() => {
   }
 
   return { DB, meta, open, touch, pics, dropDotMatches, checkerRemove, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, inHours, quietOK, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
-    regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, setPicked, pickInside, SCAN, applyPendingFlags, missingPicks, movedNote, followMoves, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
+    regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, setPicked, pickInside, SCAN, applyPendingFlags, missingPicks, movedNote, followMoves, watchFolders, newFolders, newFoldersSeen, goalPlan, workMinutes, exifDate, heatShoot, coolShoot, burstSibling, wakeBurst, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setClients, logWeek, week, weekKey, firstNotes, searchedOnce,
     isPool, shownCountries, setShownCountries, SHOWN_START, ownerFor, pathOf, logReport, USE, useOf, riskOf, spamMarks, randomLabel, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
     backupSoon, backupCopiesSoon, writeSettings, writeCopies, readBackup, restore, restoreCopies, settingsSnapshot, monthsOld, newness, yearOf, quarterOf, dayOf };

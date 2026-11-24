@@ -493,6 +493,19 @@ Object.assign(ACTS, {
 // ---------------------------------------------------------------- every photo searched once (4.10)
 // How many first searches a day: Keep searching gives 1 in N of its photos to never-searched
 // photos, Today's 50 (if it starts by itself) too, or all 50 when set to "Never searched first".
+// 4.42 (Ben's pick): a goal instead of a pace. "Every photo searched once by <date>".
+function goalRow(k, F, hw) {
+  const g = FC.goalPlan(k, F.never, hw.limits.pace);
+  const day = iso => new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  const min = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
+  let line = '<span class="faint" style="font-size:13px">Or set a date and PageProof works out the pace for you (never faster than is safe).</span>';
+  if (g && g.done) line = '<span class="tag ok">Goal met</span> <span class="faint" style="font-size:13px">Every photo has had its first search, so the pace above is used again.</span>';
+  else if (g && g.onTrack) line = `<span class="tag ok">On track</span> <span class="faint" style="font-size:13px">${g.never.toLocaleString()} photos to go, about ${g.perDay.toLocaleString()} a work day: 1 photo every ${Math.round(g.gap * 10) / 10} minutes. This replaces the pace above.</span>`;
+  else if (g) line = `<span class="tag warn">Behind</span> <span class="faint" style="font-size:13px">${g.never.toLocaleString()} photos to go is too many for ${esc(day(g.goal))} at the fastest safe pace. At that pace it would be done about ${esc(day(g.eta))}. PageProof goes as fast as is safe meanwhile. Today's 50 helps catch up.</span>`;
+  return `<div style="display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:10px">
+    <div class="row" style="gap:8px"><label class="mini">Goal: every photo searched once by<input type="date" min="${min}" value="${esc(k.goal || '')}" data-act="keepgoal" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);padding:2px 6px"></label>${k.goal ? '<button class="btn sm" data-act="keepgoaloff">No goal</button>' : ''}</div>
+    <div>${line}</div></div>`;
+}
 function firstPerDay(k, hw, week) {
   const ORDER = ['Gentle', 'Steady', 'Faster'];
   const pace = ORDER[Math.min(ORDER.indexOf(k.pace), ORDER.indexOf(hw.limits.pace))] || 'Steady';
@@ -552,7 +565,7 @@ function firstBlock(F, rate) {
 }
 
 // ---------------------------------------------------------------- Keep searching and today's 50
-const STATE_TAG = { running: ['Searching', 'ok'], waiting: ['Resting between photos', 'ok'], off: ['Off', 'grey'], paused: ['Paused', 'grey'], hours: ['Outside your hours', 'grey'], fifty: ['Paused while a big search runs', 'warn'],
+const STATE_TAG = { running: ['Searching', 'ok'], waiting: ['Resting between photos', 'ok'], off: ['Off', 'grey'], paused: ['Paused', 'grey'], hours: ['Outside your hours', 'grey'], fifty: ['Big search running', 'ok'],
   offline: ['Google Drive offline', 'bad'], allow: ['Needs one click', 'warn'], busy: ['Computer busy', 'warn'], resting: ['Search sites resting', 'warn'], setup: ['Not set up', 'warn'], idle: ['Nothing due right now', 'ok'], closed: ['Stopped', 'bad'] };
 // UI overhaul (batch 3): small helpers for Keep searching.
 const kInfo = t => `<span class="kinfo" tabindex="0" role="note" title="${esc(t)}" aria-label="${esc(t)}">ⓘ</span>`;
@@ -620,16 +633,17 @@ V.keep = async () => {
       <div class="kline"><span class="kl">Pace ${kInfo('Gentle: 1 photo every ' + FC.PACE.Gentle + ' minutes. Steady: every ' + FC.PACE.Steady + '. Faster: every ' + FC.PACE.Faster + '. If a search site asks "are you a robot?", PageProof never tries to get past it: that site rests for an hour and the others carry on.')}</span>
         <div class="seg" role="radiogroup" aria-label="Pace">${Object.entries(FC.PACE).map(([p, m]) => `<button role="radio" aria-checked="${k.pace === p}" class="${k.pace === p ? 'on' : ''}" data-act="keepset" data-v="pace|${p}" title="1 photo every ${m} minutes">${p}</button>`).join('')}</div></div>
       ${pace !== k.pace ? `<p class="faint" style="margin:0;font-size:13px">Your computer is ${esc(hw.level)}, so it goes ${pace} (1 photo every ${FC.PACE[pace]} min). <a href="#computer">Computer check</a></p>` : ''}
+      ${goalRow(k, F, hw)}
       <div class="kline"><span class="kl">Hours</span>
-        <div class="seg" role="radiogroup" aria-label="Hours">${[['work', 'Work hours'], ['all', 'All day']].map(([h, l]) => `<button role="radio" aria-checked="${k.hours === h}" class="${k.hours === h ? 'on' : ''}" data-act="keepset" data-v="hours|${h}">${l}</button>`).join('')}</div></div>
+        <div class="seg" role="radiogroup" aria-label="Hours">${[['work', 'Work hours'], ['all', 'All day and night']].map(([h, l]) => `<button role="radio" aria-checked="${k.hours === h}" class="${k.hours === h ? 'on' : ''}" data-act="keepset" data-v="hours|${h}">${l}</button>`).join('')}</div></div>
       ${k.hours === 'work' ? `<div class="row" style="padding-left:114px"><label class="mini">From<select data-act="keepnum" data-v="from">${hourOpts.map(h => `<option value="${h}" ${k.from === h ? 'selected' : ''}>${hlabel(h)}</option>`).join('')}</select></label><label class="mini">To<select data-act="keepnum" data-v="to">${hourOpts.map(h => `<option value="${h}" ${k.to === h ? 'selected' : ''}>${hlabel(h)}</option>`).join('')}</select></label><label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="checkbox" data-act="keepwd" ${k.weekdays ? 'checked' : ''}> Weekdays only</label></div>` : ''}
       ${await acctReadRow()}
     </section>
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
-      <div class="row"><h2>Today's 50</h2>${kInfo('A bigger batch at once. It runs quietly in the small pinned PageProof tab, so you can keep working and close this page (see how far it is in All searches). Keep searching pauses while it runs, then carries on. On this computer 50 photos take ' + hw.limits.fifty + '.')}${fifty ? '<span class="tag ok" style="margin-left:auto">Running now</span>' : ''}</div>
+      <div class="row"><h2>Today's 50</h2>${kInfo('A bigger batch at once. It runs quietly in the small pinned PageProof tab, so you can keep working and close this page (see how far it is in All searches). Keep searching carries on at half speed while it runs. On this computer 50 photos take ' + hw.limits.fifty + '.')}${fifty ? '<span class="tag ok" style="margin-left:auto">Running now</span>' : ''}</div>
       ${fifty && fiftyJob ? `<div class="row" style="gap:14px">${kRing(fiftyJob.done, fiftyJob.total, 62)}<div><b>${fiftyJob.done} of ${fiftyJob.total} photos searched</b><div class="muted" style="font-size:13.5px">${fiftyJob.left ? 'About ' + fiftyJob.left + ' left' : 'Finishing up'} · <a href="#searches">See it in All searches</a></div></div></div>` : `<p class="muted" style="margin:0;font-size:14px">Search a bigger batch now, in the background.</p>`}
       <div class="kline"><span class="kl">Which photos</span><div class="chipset" role="radiogroup" aria-label="Which photos">${[['next', 'Next in line'], ['first', 'Never searched first']].map(([v, l]) => { const on = (k.fiftyWhich === 'first' ? 'first' : 'next') === v; return `<button role="radio" aria-checked="${on}" class="chip${on ? ' on' : ''}" data-act="fiftywhich" data-v="${v}">${on ? '✓ ' : ''}${l}</button>`; }).join('')}</div></div>
-      <div class="kline"><span class="kl">How many</span><select data-act="keepnum" data-v="perDay" aria-label="How many photos">${[10, 25, 50, 75, 100].map(n => `<option value="${n}" ${k.perDay === n ? 'selected' : ''}>${n}</option>`).join('')}</select><button class="btn primary" style="margin-left:auto" data-act="fifty"${fifty ? ' disabled data-why="Today\'s check is already running."' : ''}>Start ${k.perDay} now</button></div>
+      <div class="kline"><span class="kl">How many</span><select data-act="keepnum" data-v="perDay" aria-label="How many photos">${[10, 25, 50, 75, 100].map(n => `<option value="${n}" ${k.perDay === n ? 'selected' : ''}>${n}</option>`).join('')}</select><button class="btn primary" style="margin-left:auto" data-act="fifty"${fifty ? ' disabled data-why="Today\'s check is already running. It carries on by itself."' : ''}>Check ${k.perDay} now</button></div>
       <label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" data-act="keepauto" ${k.fiftyAuto ? 'checked' : ''}> Start by itself every weekday at <input type="time" value="${esc(k.fiftyTime)}" data-act="keeptime" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);padding:2px 6px"></label>
     </section>
   </div>
@@ -670,6 +684,8 @@ Object.assign(ACTS, {
   keeppause: async () => { const p = (await api.storage.local.get('fcPause')).fcPause; if (p) await api.storage.local.remove('fcPause'); else await api.storage.local.set({ fcPause: Date.now() }); render(true); },
   keepshow: async () => { await api.runtime.sendMessage({ type: 'fcKeepWake', show: true }).catch(() => {}); setTimeout(() => render(true), 1500); },
   keepset: async v => { const [f, x] = v.split('|'); await FC.setKeep({ [f]: x }); render(true); },
+  keepgoal: async (v, el) => { const d = el.value; if (/^\d{4}-\d{2}-\d{2}$/.test(d)) { await FC.setKeep({ goal: d }); toast('Goal set. PageProof works out the pace from now on.'); render(true); } },
+  keepgoaloff: async () => { await FC.setKeep({ goal: '' }); toast('No goal: the pace you picked is used.'); render(true); },
   keepnum: async (v, el) => { await FC.setKeep({ [v]: +el.value }); render(true); },
   firstshare: async v => { await FC.setKeep({ firstShare: +v }); toast('1 in ' + v + ' searches now go to photos never searched.'); render(true); },
   keepset2: async (v, el) => { await FC.setKeep({ [v]: el.value }); render(true); },
