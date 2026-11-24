@@ -93,12 +93,13 @@ async function render1(keep, me) {
   ppBadges();
 }
 window.addEventListener('hashchange', () => render());
+const ppDaysSince = iso => { const t = Date.parse(iso || ''); return isNaN(t) ? 0 : Math.max(0, Math.floor((Date.now() - t) / 86400000)); };
 // The number of new copies next to Find copies in the menu.
 async function ppBadges() {
   try {
     const n = await FC.countNew();
-    let t = 0; try { t = (await needsCapture()).up.length; } catch (e) { /* none */ }
-    if (PP_BADGES.newCopies !== n || PP_BADGES.toCapture !== t) { PP_BADGES.newCopies = n || 0; PP_BADGES.toCapture = t; ppRenderSide(PP_ROUTES[route()] ? route() : 'home'); }
+    let t = 0, loud = ''; try { const up = (await needsCapture()).up; t = up.length; const d = up.length ? ppDaysSince(up[0].answered || up[0].firstSeen) : 0; if (d >= 7) loud = `A stolen copy has waited ${d} days for a capture`; } catch (e) { /* none */ }
+    if (PP_BADGES.newCopies !== n || PP_BADGES.toCapture !== t || PP_BADGES.toCaptureUrgent !== loud) { PP_BADGES.newCopies = n || 0; PP_BADGES.toCapture = t; PP_BADGES.toCaptureUrgent = loud; ppRenderSide(PP_ROUTES[route()] ? route() : 'home'); }
   } catch (e) { /* no copies yet */ }
 }
 // Another PageProof page (the search window, Keep searching) changed something: redraw.
@@ -149,20 +150,37 @@ V.home = async () => {
   const fc = await homeFinds();
   const news = seen !== VERSION ? `<div class="banner info">${ic('ideas', 20)}<div style="flex:1 1 260px;min-width:0"><b>PageProof was updated to ${VERSION}</b> <span class="muted" style="font-size:13.5px">All your captures, settings and lists are still here.</span></div><a class="btn" href="#whatsnew">See what's new</a></div>` : '';
   const todo = fc.jobs.filter(j => j.lvl !== 'ok');
+  // 4.40: only the most urgent job keeps a solid blue button; the rest are plain.
+  let mainUsed = false;
+  for (const j of fc.jobs) if (j.btn && j.btn.main) { if (mainUsed) j.btn = { ...j.btn, main: 0 }; mainUsed = true; }
   return `${news}
   ${head(today, hello + (name ? ', ' + esc(name.split(' ')[0]) : ''), todo.length ? 'Here is what needs you, most urgent first.' : 'Nothing needs you right now. Searching carries on by itself.', `<button class="btn" data-act="tour">Take the tour</button>`)}
+  ${homeTiles(fc.stats)}
   <section class="card jobs" id="homeJobs" aria-label="What to do now">
     <div class="pad row jobhead"><h2>What to do now</h2><span class="faint" style="margin-left:auto;font-size:13px">${todo.length ? todo.length + ' to do' : 'All done'}</span></div>
     ${fc.jobs.map(jobRow).join('')}
     ${todo.length ? '' : `<div class="job lvl-ok" id="allDone"><span class="jdot">${ic('check', 16, 3)}</span><div class="jt"><b>All done for today</b><span>New copies will show up here as Keep searching finds them.</span></div></div>`}
   </section>
-  <section class="home3" aria-label="Start something new">
-    <a class="start" href="#capture"><span class="ic">${ic('capture', 22)}</span><b>Capture a page</b><span>The whole page as proof: PDF, web copy, fingerprints and trusted timestamps.</span></a>
-    <a class="start" href="#search"><span class="ic">${ic('find', 22)}</span><b>Find copies of a photo</b><span>Search Google Lens, Yandex and Bing for a few photos now.</span></a>
-    <a class="start" href="#tools"><span class="ic">${ic('tools', 22)}</span><b>Look closer at a photo</b><span>Read its hidden data, lay a copy over the original, or mark it up.</span></a>
+  <section class="home3 quick" aria-label="Start something new">
+    <a class="start" href="#capture"><span class="ic">${ic('capture', 18)}</span><span class="qt"><b>Capture a page</b><span>PDF, web copy, fingerprints, timestamps</span></span><span class="go" aria-hidden="true">›</span></a>
+    <a class="start" href="#search"><span class="ic">${ic('find', 18)}</span><span class="qt"><b>Find copies of a photo</b><span>Google Lens, Yandex and Bing</span></span><span class="go" aria-hidden="true">›</span></a>
+    <a class="start" href="#tools"><span class="ic">${ic('tools', 18)}</span><span class="qt"><b>Look closer at a photo</b><span>Hidden data, compare, mark up</span></span><span class="go" aria-hidden="true">›</span></a>
   </section>
   ${fc.more ? `<div class="home3 homemore">${fc.more}</div>` : ''}`;
 };
+// 4.40: four number tiles at the top of Home. Each one is a click to the matching list.
+function homeTiles(s) {
+  if (!s) return '';
+  const F = s.first || {}, pct = F.total ? Math.floor(F.done / F.total * 100) : null;
+  const ring = `<svg class="ring" width="52" height="52" viewBox="0 0 54 54" aria-hidden="true"><circle cx="27" cy="27" r="22" fill="none" stroke="var(--sunk)" stroke-width="7"/><circle cx="27" cy="27" r="22" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round" stroke-dasharray="${(138.2 * (pct || 0) / 100).toFixed(1)} 138.2" transform="rotate(-90 27 27)"/></svg>`;
+  const t = (href, icon, label, n, sub, extra = '') => `<a class="card htile" href="${href}"><span class="hl">${ic(icon, 14)}${label}</span><span class="hn num">${n}</span><span class="hs">${sub}</span>${extra}</a>`;
+  return `<section class="htiles" id="homeTiles" aria-label="Today in numbers">
+    ${t('#found', 'copies', 'New copies to answer', s.nNew.toLocaleString(), s.newToday ? `<b class="up">+${s.newToday.toLocaleString()}</b> in the last day` : 'none in the last day')}
+    ${t('#tocapture', 'capture', 'Stolen, need a capture', s.caps.toLocaleString(), s.caps ? (s.oldest ? `Oldest waited ${s.oldest} ${s.oldest === 1 ? 'day' : 'days'}` : 'Marked today') : 'All captured')}
+    ${t('#keep', 'find', 'Photos searched today', s.searched.toLocaleString(), s.found ? `${s.found} new ${s.found === 1 ? 'copy' : 'copies'} found` : 'no new copies yet')}
+    <a class="card htile hring" href="#keep?clients=1" id="homeFirstTile"><span><span class="hl">Every photo searched once</span><span class="hn num">${pct == null ? '…' : pct + '%'}</span><span class="hs">${F.total ? F.done.toLocaleString() + ' of ' + F.total.toLocaleString() : 'Counting your photos'}</span></span>${ring}</a>
+  </section>`;
+}
 // One line of Home's "What to do now" list: a coloured dot, what it is, and one button.
 function jobRow(j) {
   const b = j.btn ? (j.btn.href ? `<a class="btn${j.btn.main ? ' primary' : ''}" href="${j.btn.href}"${j.btn.act ? ` data-act="${j.btn.act}"` : ''}>${j.btn.label}</a>` : `<button class="btn${j.btn.main ? ' primary' : ''}" data-act="${j.btn.act}"${j.btn.v != null ? ` data-v="${esc(j.btn.v)}"` : ''}>${j.btn.label}</button>`) : '';
@@ -230,7 +248,16 @@ async function homeFinds() {
         return `<a class="toprow" href="#found?photo=${encodeURIComponent(id)}"><img src="${src}" alt=""><span style="min-width:0"><b>${esc(p.name || 'Photo')}</b><span class="faint" style="font-size:12.5px">${esc(p.client || 'Client unknown')}</span></span><span class="bar"><i style="width:${n / mx * 100}%;background:var(--copy)"></i></span><b class="num" style="text-align:right">${n}</b></a>`; }).join('')}
     </section>`;
   }
-  return { jobs, more: homeFirst(store.fcFirst, k, hw) + mostHtml };
+  // 4.40: new copies by client, so the bottom row of Home is always three cards.
+  let byHtml = '';
+  if (top.length) {
+    const mx = top[0][1];
+    byHtml = `<section class="card pad" id="homeByClient" style="display:flex;flex-direction:column;gap:8px"><div class="row"><h2>New copies by client</h2><a class="faint" href="#found" style="margin-left:auto;font-size:13px">See all</a></div>
+      ${top.slice(0, 5).map(([n, v]) => `<a class="byrow" href="#found?client=${encodeURIComponent(n)}"><span>${esc(n)}</span><span class="bar"><i style="width:${v / mx * 100}%"></i></span><b class="num">${v}</b></a>`).join('')}</section>`;
+  }
+  const dayAgo = Date.now() - 86400000;
+  const stats = { nNew, newToday: vis.filter(c => c.status === 'new' && Date.parse(c.firstSeen || '') > dayAgo).length, caps: caps.up.length, oldest: caps.up.length ? ppDaysSince(caps.up[0].answered || caps.up[0].firstSeen) : 0, searched: today.searched || 0, found: today.found || 0, first: store.fcFirst };
+  return { jobs, stats, more: homeFirst(store.fcFirst, k, hw) + mostHtml + byHtml };
 }
 function capJob(up) {
   return { lvl: 'warn', icon: 'capture', id: 'jobCapture', title: `${up.length} stolen ${up.length === 1 ? 'copy needs' : 'copies need'} a capture`, sub: 'Capture them before the site takes them down. Oldest first: ' + esc([...new Set(up.map(c => c.site))].slice(0, 3).join(', ')), btn: { href: '#tocapture', label: 'Capture them', main: 1 } };
@@ -255,6 +282,8 @@ V.home.after = async () => {
       await FC.coverage();
       const n = (await api.storage.local.get('fcFirst')).fcFirst, el = document.getElementById('homeFirst');
       if (el && n && state.shown === 'home') el.outerHTML = homeFirst(n, await FC.keep(), await ppHardware());
+      const tl = document.getElementById('homeFirstTile');
+      if (tl && n && n.total && state.shown === 'home') { const p = Math.floor(n.done / n.total * 100); tl.querySelector('.hn').textContent = p + '%'; tl.querySelector('.hs').textContent = n.done.toLocaleString() + ' of ' + n.total.toLocaleString(); const c = tl.querySelectorAll('circle')[1]; if (c) c.setAttribute('stroke-dasharray', (138.2 * p / 100).toFixed(1) + ' 138.2'); }
     }
   } catch (e) { /* counted next time */ }
   try { const c = (await api.commands.getAll()).find(x => x.name === 'capture-page'); if (c && c.shortcut) document.getElementById('shortcut').textContent = c.shortcut; } catch (e) { /* none */ }

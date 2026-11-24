@@ -1051,3 +1051,69 @@ h2 .ahandle{font-size:13px}
 .st-alert.warn{background:var(--warn-soft)} .st-alert.bad{background:var(--bad-soft)}
 @media (max-width:1000px){.st-two{grid-template-columns:1fr}.st-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:560px){.st-grid3{grid-template-columns:1fr}.st-bar{grid-template-columns:1fr 1fr 54px}}
+
+/* ===================================================================================
+   4.40 UI overhaul, batch 1: the frame and Home
+   =================================================================================== */
+:root{--side:var(--surface);--hi:transparent}
+:root[data-theme="dark"]{--side:#0E1016;--hi:rgba(255,255,255,.055)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--side:#0E1016;--hi:rgba(255,255,255,.055)}}
+/* calmer menu numbers: soft blue for new copies, soft amber for captures, solid only when urgent */
+.pill-n.blue{background:var(--accent-soft);color:var(--accent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 30%,transparent)}
+.pill-n.amber{background:var(--warn-soft);color:var(--warn);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--warn) 30%,transparent)}
+.pill-n.amber.loud{background:var(--warn);color:#fff;box-shadow:none}
+:root[data-theme="dark"] .pill-n.blue{color:var(--accent)} :root[data-theme="dark"] .pill-n.amber{color:var(--warn)} :root[data-theme="dark"] .pill-n.amber.loud{color:#000}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .pill-n.blue{color:var(--accent)} :root:not([data-theme="light"]) .pill-n.amber{color:var(--warn)} :root:not([data-theme="light"]) .pill-n.amber.loud{color:#000}}
+/* dark mode depth: the menu is a shade darker than the cards, cards get a faint top edge */
+.side{background:var(--side)}
+.card,.start,.htile{box-shadow:inset 0 1px 0 var(--hi),var(--shadow)}
+/* the status line now sits at the foot of the menu, one item per line */
+.statusline.sidestat{position:static;margin:10px 2px 0;flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:7px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:inset 0 1px 0 var(--hi)}
+.statusline.sidestat .si{white-space:normal;align-items:center;flex-wrap:wrap;row-gap:4px}
+.statusline.sidestat .sfix{margin-left:auto}
+.statusline.sidestat.bad{background:var(--bad-soft);border-color:color-mix(in srgb,var(--bad) 40%,var(--line))}
+/* tidier top bar: Undo, keys and light/dark as one small group; search shows the / key */
+.tgroup{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:visible}
+.tgroup .btn.tb{border:0;border-radius:0;min-height:36px;background:transparent;box-shadow:none}
+.tgroup>*+*{border-left:1px solid var(--line)}
+.tgroup .undo-wrap .btn.tb{min-width:42px;padding:0 10px;border-radius:9px 0 0 9px}
+.tgroup>.btn.tb:last-child{border-radius:0 9px 9px 0}
+.tgroup .btn.tb:hover:not(:disabled){background:var(--sunk)}
+.top .search .kbd{margin-left:auto;flex:none}
+.btn.tb.go{min-height:36px}
+/* Home: four number tiles */
+.htiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@container pg (min-width:820px){ .htiles{grid-template-columns:repeat(4,minmax(0,1fr))} }
+.htile{display:flex;flex-direction:column;gap:2px;padding:14px 16px;text-decoration:none;color:var(--ink);border-radius:14px;transition:transform .15s,border-color .15s}
+.htile:hover{border-color:var(--accent);transform:translateY(-2px)}
+.htile .hl{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.htile .hn{font:800 28px/1.15 var(--f-display)}
+.htile .hs{font-size:12.5px;color:var(--faint)}
+.htile .hs .up{color:var(--ok);font-weight:600}
+.htile.hring{flex-direction:row;align-items:center;justify-content:space-between;gap:8px}
+.htile.hring>span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.htile .ring{flex:none}
+/* What to do now: a coloured edge shows how urgent each job is */
+.job{box-shadow:inset 3px 0 0 transparent}
+.job.lvl-bad,#jobCapture{box-shadow:inset 3px 0 0 var(--bad)}
+.job.lvl-warn{box-shadow:inset 3px 0 0 var(--warn)}
+.job.lvl-info,#jobNew{box-shadow:inset 3px 0 0 var(--accent)}
+#jobCapture .jdot{background:var(--bad-soft);color:var(--bad)}
+#jobNew .jdot{background:var(--accent-soft);color:var(--accent)}
+/* slim quick actions instead of three tall tool cards */
+.home3.quick{gap:14px}
+.home3.quick .start{flex-direction:row;align-items:center;gap:12px;padding:12px 14px;min-height:0}
+.home3.quick .start .ic{width:36px;height:36px;border-radius:10px;margin:0;flex:none}
+.home3.quick .start .qt{display:flex;flex-direction:column;min-width:0}
+.home3.quick .start b{font-size:15px}
+.home3.quick .start .qt span{font-size:12.5px;color:var(--muted)}
+.home3.quick .start .go{margin-left:auto;color:var(--faint);font-size:20px}
+/* the bottom row is always full: the cards share the width, however many there are */
+@container pg (min-width:820px){ .home3.homemore{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))} }
+.byrow{display:grid;grid-template-columns:minmax(0,1fr) 40% 32px;gap:10px;align-items:center;font-size:13.5px;color:inherit;text-decoration:none;padding:3px 0}
+.byrow>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.byrow .bar{display:block;height:8px;border-radius:9px;background:var(--sunk);overflow:hidden}
+.byrow .bar i{display:block;height:100%;background:var(--accent);border-radius:9px}
+.byrow b{text-align:right}
+.byrow:hover span:first-child{color:var(--accent)}
+@media (prefers-reduced-motion:reduce){.htile{transition:none}.htile:hover{transform:none}}
