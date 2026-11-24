@@ -1100,9 +1100,13 @@ const FC = (() => {
   // 4.8.2: the "new copies" number (menu, toolbar dot, side panel) counts only the new copies
   // Copies found shows: copies on hidden sites or from hidden countries stay out of it. Before,
   // it counted every new copy in the store, so hidden ones kept the number up after "All caught up".
+  // 4.23.1: the hidden list is read once and kept until it changes (a long list made every page slow).
+  let HID = null;
+  try { api.storage.onChanged.addListener(ch => { if (ch.rsHidden) HID = null; }); } catch (e) { /* no storage events here */ }
   async function countNew() {
-    const st = await api.storage.local.get(['rsHidden', 'fcHiddenCountries']);
-    const hidden = st.rsHidden || [], countries = st.fcHiddenCountries || [];
+    const st = await api.storage.local.get(HID ? ['fcHiddenCountries'] : ['rsHidden', 'fcHiddenCountries']);
+    if (!HID) HID = st.rsHidden || [];
+    const hidden = HID, countries = st.fcHiddenCountries || [];
     const fresh = (await allCopies()).filter(c => c.status === 'new');
     if (!hidden.length && !countries.length) return fresh.length;
     return fresh.filter(c => !hiddenCopy(c, hidden) && !countries.includes(c.country || countryOf(c.site))).length;
