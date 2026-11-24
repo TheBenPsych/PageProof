@@ -75,6 +75,7 @@
     const input = await findInput(['#sb_fileinput', 'input[type=file][accept*="image"]', 'input[type=file]'],
       ['#sbi_b', '[aria-label*="Search using an image" i]', '[aria-label*="visual search" i]'], 10000);
     if (!input) throw new Error('Bing upload box not found');
+    sessionStorage.removeItem('ppBingHop');
     setFile(input, file);
   }
 
@@ -125,13 +126,16 @@
     }
     return out;
   }
-  // Bing (4.x fix): only its "Pages with this image" list (.vs-erci) is read. Those are pages
-  // that show the same picture, each with Bing's own copy of it as a preview. Bing's "Visual
-  // matches" / related grid under it (.iacfmit) is look-alike photos (other players, other
-  // games): it is never read, and neither is the rest of the page.
+  // Bing. Two lists are read off its results page:
+  //  1. "Pages with this image" (.vs-erci): pages Bing itself says show the same picture.
+  //  2. 4.37.1: "Visual matches" (.iacfmit), top 60, the same way Google's are read. Each one
+  //     carries the picture's own address (mediaurl), so PageProof's checker can compare it and
+  //     throw out the look-alikes as "Different photo". (4.36.1 left these out; before that they
+  //     were read without their pictures, which showed as "Picture blocked".)
+  // Nothing else on the page is read.
   function bingLinks() {
     const out = [];
-    for (const it of document.querySelectorAll('.vs-erci')) {
+    for (const it of bingDocs().flatMap(d => [...d.querySelectorAll('.vs-erci')])) {
       const a = it.querySelector('a.vs-erlink, a[href]');
       const url = a && external(a.href);
       if (!url) continue;
@@ -140,18 +144,40 @@
         ...sizeIn((it.querySelector('.vs-eod') || it).textContent), exact: true });
     }
     // Bing changed the list's look: still only the links inside that one section.
-    const sec = document.querySelector('.vs-ema');
+    const sec = bingDocs().map(d => d.querySelector('.vs-ema')).find(Boolean);
     if (!out.length && sec) {
       for (const a of sec.querySelectorAll('a[href]')) {
         const url = external(a.href);
         if (url) out.push({ url, title: clean(a.textContent), thumb: imgSrc(a.querySelector('img:not([src*="favicon"])')), exact: true });
       }
     }
+    if (location.pathname === '/search') out.push(...bingVisual().slice(0, 60));
+    return out;
+  }
+  function bingVisual() {
+    const out = [];
+    for (const it of document.querySelectorAll('.iacfmit')) {
+      const a = it.querySelector('a[m]');
+      let m = {};
+      try { m = JSON.parse(a ? a.getAttribute('m') : '{}') || {}; } catch (e) { /* no details */ }
+      let url = m.purl ? external(m.purl) : '';
+      if (!url) { const d = it.querySelector('a.iacf_dm, .iacf_info a[href]'); url = d ? external(d.href) : ''; }
+      if (!url) continue;
+      let img = m.murl || '';
+      if (!img) for (const h of [m.url, a && a.getAttribute('href')]) {
+        try { const v = h && new URL(h, location.href).searchParams.get('mediaurl'); if (v) { img = v; break; } } catch (e) { /* not an address */ }
+      }
+      if (!/^https?:/i.test(img)) img = '';
+      const q = h => { try { return new URL(String(h || ''), location.href).searchParams; } catch (e) { return new URLSearchParams(); } };
+      const sp = q(m.url || (a && a.getAttribute('href'))), w = +sp.get('expw'), h = +sp.get('exph');
+      out.push({ url, title: clean(m.t || (a && a.getAttribute('aria-label')) || ''), thumb: imgSrc(it.querySelector('img')), img,
+        ...(w > 0 && h > 0 ? { w, h } : {}), exact: false });
+    }
     return out;
   }
   // Bing's own results page is showing (its "Pages with this image" tab is there), so no links
   // means Bing found no pages with this picture, not that Bing is broken.
-  const bingPageOk = () => !!(document.querySelector('.vs-ema') || document.querySelector('a[href*="vsa=3"]'));
+  const bingPageOk = () => location.pathname === '/search' && !!(document.querySelector('.vs-ema') || document.querySelector('a[href*="vsa=3"]'));
   // Works on any layout: every link that leaves the search site, with the text and picture
   // nearest to it. Used for Google, and as a backup when the other sites change their pages.
   function genericLinks(exact) {
@@ -249,8 +275,38 @@
       if (u.searchParams.get('vsa') !== '3') { u.searchParams.set('vsa', '3'); location.replace(u.href); return 'moved'; }
       return 'read';
     }
-    if (u.pathname.startsWith('/images/search') && /detailv2/.test(u.search)) return 'read';
+    // 4.37.1: a picture search on Bing first opens the picture in a pop-up box (view=detailV2)
+    // over the Bing Images front page. The front page behind it is Bing's trending pictures
+    // (sports news and so on), not results: that is what was being read before. The real list
+    // is on Bing's results page (/search?...bcid...), reached from the box's "Visual search".
+    if (u.pathname.startsWith('/images/search') && /detailv2/i.test(u.search)) return bingHop();
     return 'wait';
+  }
+  const bingBox = () => { try { const f = document.querySelector('#OverlayIFrame'); return f && f.contentDocument; } catch (e) { return null; } };
+  const bingDocs = () => [document, bingBox()].filter(Boolean);
+  let hopSince = 0;
+  function bingHop() {
+    if (!hopSince) hopSince = Date.now();
+    // The box's own "Visual search" button: Bing's results page for this very picture.
+    const box = bingBox();
+    const btn = box && box.querySelector('.mivsb, [aria-label*="Visual search" i]');
+    const tries = +(sessionStorage.getItem('ppBingHop') || 0);
+    if (btn && tries < 2) {
+      if (Date.now() - hopSince < 1500) return 'wait';           // let the box finish loading
+      sessionStorage.setItem('ppBingHop', String(tries + 1));
+      btn.click(); hopSince = Date.now() + 6000; return 'wait';
+    }
+    // No button: a link in the box to that results page.
+    if (box) for (const a of box.querySelectorAll('a[href*="bcid="]')) {
+      try {
+        const t = new URL(a.getAttribute('href'), location.href);
+        if (t.hostname.endsWith('bing.com') && t.pathname === '/search' && t.searchParams.get('bcid')) {
+          t.searchParams.set('vsa', '3'); location.assign(t.href); return 'moved';
+        }
+      } catch (e) { /* not an address */ }
+    }
+    // Still here after 15 seconds: read whatever "Pages with this image" the box itself shows.
+    return Date.now() - hopSince > 15000 ? 'read' : 'wait';
   }
 
   // PageProof's search tabs show the PageProof logo and name in the tab bar, so it is clear they
