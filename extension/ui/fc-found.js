@@ -163,7 +163,7 @@ function passMain(c) {
 // The newer filters: the search box, found when, how strong the match is, photo year and quarter.
 function passMore(c) {
   if (state.fPhoto && c.photo !== state.fPhoto) return false;
-  // 4.44: "Look at these first" on Home (strong claims).
+  // 4.45: "Look at these first" on Home (strong claims).
   if (state.fStrong && !(typeof FC_RULES !== 'undefined' && FC_RULES.isStrong(c))) return false;
   if (state.fq && !(c.site + ' ' + c.url + ' ' + (c.acct ? c.acct.handle + ' ' + acctName(c.acct) : '') + ' ' + c.photoName + ' ' + (c.clientName || '') + ' ' + (c.title || '')).toLowerCase().includes(state.fq)) return false;
   if (state.fWhen !== 'any') {

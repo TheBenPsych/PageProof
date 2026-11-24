@@ -501,7 +501,7 @@ async function start() {
     showHosting(hosting);
   }
   files.push({ name: 'VERIFY-THIS-PACK.html', bytes: new TextEncoder().encode(await standaloneChecker()) });
-  // 4.44: the fingerprints and timestamps are made again when "who's behind it" pages are added.
+  // 4.45: the fingerprints and timestamps are made again when "who's behind it" pages are added.
   let fpText, fpBytes, fpHash, stamps, good, sealAt = -1;
   const seal = async () => {
   if (sealAt < 0) sealAt = notes.length; else notes.length = sealAt;      // sealed again: its notes are written again
@@ -539,7 +539,7 @@ async function start() {
   }
   };
   await seal();
-  const who = [];       // 4.44: the "who's behind it" pages in this pack
+  const who = [];       // 4.45: the "who's behind it" pages in this pack
 
 
   const detailsText = () => {
@@ -747,7 +747,7 @@ async function readyToSave() {
 }
 
 // ---------- 4.15: is the client's photo on this capture? (Ben's idea 2) ----------
-// 4.44 (Ben's pick): who's behind it. The pages that show who posted the copy: the account's
+// 4.45 (Ben's pick): who's behind it. The pages that show who posted the copy: the account's
 // profile on social sites; the About, Contact and Privacy pages on websites (found from the links
 // on the captured page). [{ kind, label, url, on }]
 function whoLinks(rec) {

@@ -98,7 +98,7 @@ const FC_RULES = (() => {
   async function weakNote() { return (await FC.meta.get('weakNote')) || null; }
   async function weakSeen() { const w = await weakNote(); if (w) await FC.meta.set('weakNote', { ...w, seen: true }); }
 
-  // ---------------------------------------------------------------- 4.44 strong claims (Home)
+  // ---------------------------------------------------------------- 4.45 strong claims (Home)
   // A new copy that is the same photo (Same, or 80% or more lines up) on a site you marked Stolen
   // before (or a page on your stolen before list), a shop, or with the client's credit taken off.
   function isStrong(c, stolenBases) {

@@ -264,7 +264,7 @@ async function capture(tab, auto) {
   }
 
   record.server = await server;
-  // 4.44: a "who's behind it" page (About, Contact, the account's profile) goes into the main
+  // 4.45: a "who's behind it" page (About, Contact, the account's profile) goes into the main
   // capture's pack, so it gets no viewer tab and no line of its own in the capture log.
   if (auto && auto.who) { record.who = auto.who; await PP_DB.put(record); return record.id; }
   await PP_DB.put(record);
@@ -676,7 +676,7 @@ async function openBreakingNews(item, info, tab) {
 }
 
 // ---------- Capture a link: open it in a new tab, wait for it to load, then capture ----------
-// 4.44 (Ben's pick): who's behind it, in the same pack. The capture page asks for these pages
+// 4.45 (Ben's pick): who's behind it, in the same pack. The capture page asks for these pages
 // (About, Contact, Privacy, or the account's profile); each is captured like any page, in its own
 // tab that closes again, and handed back to the capture page, which adds it to the pack.
 async function captureWho(list, near) {

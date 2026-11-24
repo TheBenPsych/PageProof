@@ -189,7 +189,7 @@ function jobRow(j) {
 }
 // Home's jobs (most urgent first) and the small cards under them: Keep searching, every photo
 // searched once, most copied photos.
-// 4.44 (Ben's pick): Home opens instantly, however big the lists get. What Home needs from every
+// 4.45 (Ben's pick): Home opens instantly, however big the lists get. What Home needs from every
 // copy found (counts by client, most copied photos, strong claims, stolen copies still to capture)
 // is kept as a small summary and only worked out again when copies, hidden sites or captures change.
 async function homeSum() {
@@ -264,7 +264,7 @@ async function homeFinds() {
   const clk = (await api.storage.local.get('ppClockOff')).ppClockOff;
   if (clk && Math.abs(clk.off) > 120 && Date.now() - clk.at < 14 * 86400000) jobs.push({ lvl: 'bad', title: `This computer's clock is ${Math.round(Math.abs(clk.off) / 60)} minutes ${clk.off > 0 ? 'fast' : 'slow'}`, sub: 'Times written in your evidence won\'t match the trusted timestamp. Fix: Windows Settings › Time &amp; language › Date &amp; time › turn on "Set time automatically" and press "Sync now".', btn: { href: '#health', label: 'Details' } });
   // 2. copies that need you
-  // 4.44 (Ben's pick): the strongest claims first, one click from Home.
+  // 4.45 (Ben's pick): the strongest claims first, one click from Home.
   if (S.strong) {
     const sb = Object.entries(S.strongBy).sort((a, b) => b[1] - a[1]);
     jobs.push({ lvl: 'bad', icon: 'copies', id: 'jobStrong', title: `${S.strong.toLocaleString()} ${S.strong === 1 ? 'copy looks' : 'copies look'} like a strong claim`,
