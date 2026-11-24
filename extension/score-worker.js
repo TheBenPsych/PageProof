@@ -20,10 +20,11 @@ self.onmessage = async e => {
     // Could count as a copy: check it isn't only a repeating press wall, a logo, or another shot
     // of the same building that lines up.
     if (best && best.sc.lines >= 0.3) {
-      const R = PP_ALIGN.repeats(A, m.bmp, best), Sh = PP_ALIGN.shot(A, m.bmp, best);
-      out.uniq = R.unique; out.rep = R.repeated; out.backdrop = R.backdropOnly && Sh.graphic >= 0.6;
-      // Another photo of the same place: only logos / lettering line up, or parts shift (parallax).
-      out.logos = Sh.logos; out.place = Sh.place; out.photo = Sh.photo;
+      const Sh = PP_ALIGN.shot(A, m.bmp, best);
+      out.uniq = Sh.rep.unique; out.rep = Sh.rep.repeated; out.backdrop = Sh.backdrop;
+      // Another photo: only logos / lettering line up, only a seal or crest, only a small slice,
+      // only a pattern (fence, tiled floor), or parts shift (another shot of the same place).
+      out.logos = Sh.logos; out.place = Sh.place; out.spot = Sh.emblem || Sh.slice || Sh.pattern; out.photo = Sh.photo;
     }
   } catch (x) { err = String(x && x.message || x); }
   try { m.bmp.close && m.bmp.close(); } catch (x) { /* already freed */ }

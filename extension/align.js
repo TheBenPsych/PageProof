@@ -492,7 +492,7 @@ const PP_ALIGN = (() => {
   // original. If (nearly) every square that lines up is a logo printed again elsewhere, only
   // the backdrop matches: backdropOnly. Fine detail only (a blurred copy is subtracted), so
   // smooth sky or walls count as "plain", neither repeated nor unique.
-  function repeats(Abm, Bbm, T, side = 240, S = 12) {
+  function repeats(Abm, Bbm, T, side = 240, S = 12, o = {}) {
     const f = side / Math.max(Abm.width, Abm.height);
     const a = grayAt(Abm, f), b = render(Bbm, T, a.w, a.h, f), w = a.w, h = a.h;
     const bl = blur(a, 2), hp = new Float32Array(w * h);
@@ -503,7 +503,7 @@ const PP_ALIGN = (() => {
     const box = (A2, x, y) => A2[(y + S) * (w + 1) + x + S] - A2[y * (w + 1) + x + S] - A2[(y + S) * (w + 1) + x] + A2[y * (w + 1) + x];
     const n = S * S;
     // the squares that line up (same test as score)
-    const matched = [];
+    const matched = [], missed = [];
     for (let ty = 0; ty + S <= h; ty += S) for (let tx = 0; tx + S <= w; tx += S) {
       let k = 0, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0, out = false;
       for (let y = ty; y < ty + S && !out; y++) for (let x = tx; x < tx + S; x++) {
@@ -514,15 +514,13 @@ const PP_ALIGN = (() => {
       const ma = sa / k, mb = sb / k, va = saa / k - ma * ma, vb = sbb / k - mb * mb;
       if (va < 25 && vb < 25) continue;
       const r = va > 4 && vb > 4 ? (sab / k - ma * mb) / Math.sqrt(va * vb) : 0;
-      if (r > 0.6) matched.push([tx, ty]);
+      if (r > 0.6) matched.push([tx, ty]); else missed.push([tx, ty]);
     }
-    const res = { checked: 0, repeated: 0, unique: 0, plain: 0, matched: matched.length };
-    const step = Math.max(1, Math.ceil(matched.length / 40));
-    for (let m = 0; m < matched.length; m += step) {
-      const [tx, ty] = matched[m];
+    const res = { checked: 0, repeated: 0, unique: 0, plain: 0, matched: matched.length, missed: missed.length, uniqueMissed: 0, checkedMissed: 0 };
+    // is this square's fine detail printed again somewhere else in the original?
+    const again = (tx, ty) => {
       const s0 = box(I, tx, ty), e0 = box(I2, tx, ty) - s0 * s0 / n;
-      if (e0 / n < 12) { res.plain++; continue; }       // no fine detail to go on
-      res.checked++;
+      if (e0 / n < 12) return null;       // no fine detail to go on
       const ncc = (x, y) => {
         const s1 = box(I, x, y), e1 = box(I2, x, y) - s1 * s1 / n; if (e1 / n < 6) return 0;
         let sab = 0;
@@ -538,7 +536,25 @@ const PP_ALIGN = (() => {
         if (Math.abs(x - tx) < S * 1.5 && Math.abs(y - ty) < S * 1.5) continue;
         best = Math.max(best, ncc(x, y));
       }
-      if (best > 0.75) res.repeated++; else res.unique++;
+      return best > 0.75;
+    };
+    const step = Math.max(1, Math.ceil(matched.length / 40));
+    for (let m = 0; m < matched.length; m += step) {
+      const rep = again(...matched[m]);
+      if (rep === null) { res.plain++; continue; }
+      res.checked++; if (rep) res.repeated++; else res.unique++;
+    }
+    // The one-of-a-kind parts that do NOT line up (a person in front of a fence or a tiled floor).
+    if (o.missed) {
+      const st2 = Math.max(1, Math.ceil(missed.length / 30));
+      for (let m = 0; m < missed.length; m += st2) {
+        const rep = again(...missed[m]); if (rep === null) continue;
+        res.checkedMissed++; if (!rep) res.uniqueMissed++;
+      }
+      // share of the one-of-a-kind detail that lines up (each count scaled up from its sample)
+      const um = res.checked ? res.unique / res.checked * matched.length : 0, ux = res.checkedMissed ? res.uniqueMissed / res.checkedMissed * missed.length : 0;
+      res.uniqueLines = um + ux ? um / (um + ux) : 0;
+      res.patternShare = res.checked ? res.repeated / res.checked : 0;
     }
     // Only the backdrop lines up: hardly any square that lines up is one of a kind.
     res.backdropOnly = res.checked >= 6 && res.unique <= Math.max(2, 0.2 * res.checked);
@@ -588,7 +604,7 @@ const PP_ALIGN = (() => {
     const S = o.S || 10, minV = o.minV || 20, thr = o.thr || 0.5;
     let tex = 0, mat = 0, sumR = 0, t2 = 0, m2 = 0, g2 = 0;
     const hp = new Float32Array(w * h); for (let i = 0; i < hp.length; i++) hp[i] = a0.g[i] - ab.g[i];
-    const vals = new Float32Array(S * S);
+    const vals = new Float32Array(S * S), L2 = o.tiles ? [] : null;
     for (let ty = 0; ty + S <= h; ty += S) for (let tx = 0; tx + S <= w; tx += S) {
       let n = 0, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0, out = false;
       for (let y = ty; y < ty + S && !out; y++) for (let x = tx; x < tx + S; x++) {
@@ -616,8 +632,22 @@ const PP_ALIGN = (() => {
       for (let i = 0; i < N - 1; i++) { c += sv[i]; const w0 = (i + 1) / N, m0 = c / (i + 1), m1 = (tot - c) / (N - i - 1); best = Math.max(best, w0 * (1 - w0) * (m0 - m1) ** 2); }
       const graphic = vt > 50 && best / vt > 0.8;
       if (two) { t2++; if (r > thr) { m2++; if (graphic) g2++; } }
+      if (two && L2) {
+        // for "one spot only": is something else in the copy here (photo detail, not a flat
+        // cover and not lettering)? A headline or a box over a real copy then doesn't count.
+        let cg = false;
+        if (vb >= minV) {
+          let k2 = 0; for (let y = ty; y < ty + S; y++) for (let x = tx; x < tx + S; x++) vals[k2++] = rb.g[y * w + x];
+          const sv2 = Array.from(vals).sort((p, q) => p - q); let t0 = 0, t1 = 0; for (const v of sv2) { t0 += v; t1 += v * v; }
+          const mu2 = t0 / N, vt2 = t1 / N - mu2 * mu2; let b2 = 0, c2 = 0;
+          for (let i = 0; i < N - 1; i++) { c2 += sv2[i]; const w0 = (i + 1) / N, m0 = c2 / (i + 1), m1 = (t0 - c2) / (N - i - 1); b2 = Math.max(b2, w0 * (1 - w0) * (m0 - m1) ** 2); }
+          cg = vt2 > 50 && b2 / vt2 > 0.8;
+        }
+        L2.push({ x: tx, y: ty, m: r > thr, g: graphic, other: vb >= minV && !cg });
+      }
     }
-    return { tex, mat, lines: tex ? mat / tex : 0, str: mat ? sumR / mat : 0, f, t2, m2, lines2: t2 ? m2 / t2 : 0, graphic: m2 ? g2 / m2 : 0 };
+    let inside = 0; for (let i = 0; i < rb.m.length; i++) inside += rb.m[i];
+    return { list: L2, S, gw: Math.floor(w / S), gh: Math.floor(h / S), shareA: inside / (w * h), shareB: Math.min(1, inside / Math.max(1, bw * bh * f * f)), tex, mat, lines: tex ? mat / tex : 0, str: mat ? sumR / mat : 0, f, t2, m2, lines2: t2 ? m2 / t2 : 0, graphic: m2 ? g2 / m2 : 0 };
   }
   function moment(Abm, Bbm, T) {
     const { bw, bh } = sizes(T, Bbm), up = Math.max(bw / Bbm.width, bh / Bbm.height), L = Math.max(Abm.width, Abm.height);
@@ -677,14 +707,57 @@ const PP_ALIGN = (() => {
   // with the rest different (a sponsor wall, a red carpet backdrop, a shop sign, a logo file).
   // place: another shot of the same place (parts shift against each other and don't fit closely).
   // photo: the share of the photo itself that lines up once those are taken out (0-1).
+  // One spot only: what lines up is one compact patch (a seal on a podium, a crest on the wall
+  // behind a speaker), and the detail all around it (the people, the room) does not.
+  function oneSpot(d) {
+    const L = d.list || [], gw = d.gw, gh = d.gh, at = new Map();
+    for (const t of L) at.set((t.y / d.S) * gw + t.x / d.S, t);
+    const seen = new Set(); let best = null;
+    for (const t of L) {
+      if (!t.m) continue; const k0 = (t.y / d.S) * gw + t.x / d.S; if (seen.has(k0)) continue;
+      const q = [k0], c = { n: 0, x0: 1e9, y0: 1e9, x1: -1, y1: -1 }; seen.add(k0);
+      while (q.length) {
+        const k = q.pop(), x = k % gw, y = (k - x) / gw; c.n++;
+        c.x0 = Math.min(c.x0, x); c.x1 = Math.max(c.x1, x); c.y0 = Math.min(c.y0, y); c.y1 = Math.max(c.y1, y);
+        for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) {      // gaps of one square are bridged
+          const nx = x + i, ny = y + j; if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) continue;
+          const nk = ny * gw + nx, u = at.get(nk); if (!u || !u.m || seen.has(nk)) continue; seen.add(nk); q.push(nk);
+        }
+      }
+      if (!best || c.n > best.n) best = c;
+    }
+    if (!best) return { spot: 0, outT: 0, outM: 0, area: 0 };
+    let outT = 0, outM = 0, inT = 0;
+    for (const t of L) {
+      const x = t.x / d.S, y = t.y / d.S, inn = x >= best.x0 - 1 && x <= best.x1 + 1 && y >= best.y0 - 1 && y <= best.y1 + 1;
+      if (inn) inT++; else if (t.other || t.m) { outT++; if (t.m) outM++; }
+    }
+    return { spot: d.m2 ? best.n / d.m2 : 0, outT, outM, inT, area: ((best.x1 - best.x0 + 3) * (best.y1 - best.y0 + 3)) / Math.max(1, gw * gh * d.shareA) };
+  }
+
+  // The verdict from all of them. logos: what lines up is (nearly) only printed logos, signs or
+  // lettering, with the rest different (a sponsor wall, a red carpet backdrop, a shop sign).
+  // emblem: only one compact spot lines up (a seal, a crest, a badge), the rest around it doesn't.
+  // slice: the shared part is only a small slice of BOTH pictures (a copy always shares most of
+  // one of them: it is cut from the original, or the original sits whole inside it).
+  // place: another shot of the same place (parts shift against each other and don't fit closely).
+  // photo: the share of the photo itself that lines up once those are taken out (0-1).
   function shot(Abm, Bbm, T) {
-    const d = detail(Abm, Bbm, T), m = moment(Abm, Bbm, T);
+    const d = detail(Abm, Bbm, T, { tiles: true }), m = moment(Abm, Bbm, T), sp = oneSpot(d), rp = repeats(Abm, Bbm, T, 240, 12, { missed: true });
+    const share = Math.max(d.shareA, d.shareB), fit = m.fit10 || 0, closeFit = m.blocks >= 12 && fit >= 0.93;
     const logos = d.m2 >= 6 && d.graphic >= 0.8 && d.lines2 < 0.85;
-    const place = !logos && m.blocks >= 20 && m.moved >= 0.5 && m.fit10 < 0.93;
+    const backdrop = !!rp.backdropOnly && d.graphic >= 0.6;
+    const emblem = !logos && d.m2 >= 4 && sp.spot >= 0.75 && sp.outT >= 8 && sp.outM / sp.outT < 0.25 && (!closeFit || sp.spot >= 0.9);
+    const slice = !logos && !emblem && (share < 0.5 || (share < 0.65 && !closeFit));
+    // a pattern (chain-link fence, checkered floor, tiled wall) lines up, the one-of-a-kind parts don't
+    const pattern = !logos && !emblem && !slice && rp.checkedMissed >= 6 && rp.patternShare >= 0.4 && rp.uniqueLines < 0.3 && d.lines2 < 0.3;
+    const place = !logos && !emblem && !slice && !pattern && m.blocks >= 20 && m.moved >= 0.5 && fit < 0.93;
     return {
-      logos, place,
-      photo: logos ? d.lines2 * (1 - d.graphic) : place ? d.lines2 * (1 - m.moved) : null,
-      graphic: d.graphic, detailLines: d.lines2, moved: m.moved || 0, fit: m.fit10 || 0, blocks: m.blocks,
+      logos, emblem, slice, pattern, place, backdrop, other: logos || emblem || slice || pattern || place || backdrop,
+      photo: logos ? d.lines2 * (1 - d.graphic) : emblem ? (sp.outT ? sp.outM / sp.outT : 0) : slice ? d.lines2 * Math.min(d.shareA, d.shareB) : pattern ? rp.uniqueLines : place ? d.lines2 * (1 - m.moved) : null,
+      graphic: d.graphic, detailLines: d.lines2, moved: m.moved || 0, fit, blocks: m.blocks,
+      shareA: d.shareA, shareB: d.shareB, spot: sp.spot, outT: sp.outT, outM: sp.outM, area: sp.area,
+      rep: rp, uniqueLines: rp.uniqueLines, patternShare: rp.patternShare,
     };
   }
 
@@ -1259,5 +1332,5 @@ fn cy(y: i32) -> u32 { return u32(clamp(y, 0, i32(p.h) - 1)); }
     return best();
   }
 
-  return { align, score, changes, spot, repeats, shot, grayOf, place, drawCopy, bounds, reshape, sizes, mapPoint, ready, fast: () => !!W, gpu: gpuInUse, gpuWhy: () => GPU.why + (Object.keys(CAL).length ? ' [' + Object.entries(CAL).map(([k, c]) => k + ' ' + (c.off ? 'off' : 'on') + (c.tries ? ' ' + Math.round(c.g / c.tries) + '/' + Math.round(c.c / c.tries) + ' ms' : '')).join(', ') + ']' : ''), _t: { features, match, W: () => W, grayOf, refine, refineGPU, gpuReady, featuresGPU, matchGPU, CAL } };
+  return { align, score, changes, spot, repeats, shot, grayOf, place, drawCopy, bounds, reshape, sizes, mapPoint, ready, fast: () => !!W, gpu: gpuInUse, gpuWhy: () => GPU.why + (Object.keys(CAL).length ? ' [' + Object.entries(CAL).map(([k, c]) => k + ' ' + (c.off ? 'off' : 'on') + (c.tries ? ' ' + Math.round(c.g / c.tries) + '/' + Math.round(c.c / c.tries) + ' ms' : '')).join(', ') + ']' : ''), _t: { detail, moment, features, match, W: () => W, grayOf, refine, refineGPU, gpuReady, featuresGPU, matchGPU, CAL } };
 })();

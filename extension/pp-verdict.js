@@ -7,7 +7,7 @@ const PP_VERDICT = {
   fields(best, sv) {
     // Only logos line up, or another shot of the same place: the % shown is what lines up of the
     // photo itself (without the logos / the parts that shift), so these show low, not 50-77%.
-    const other = !!(best && (best.logos || best.place) && best.photo !== null && best.photo !== undefined);
+    const other = !!(best && (best.logos || best.place || best.spot) && best.photo !== null && best.photo !== undefined);
     return {
       pct: best ? Math.max(0, Math.min(100, Math.round((other ? best.photo : best.sc.lines) * 100))) : 0,
       inl: best && best.inliers || 0,                       // matching details found in both pictures
@@ -20,11 +20,12 @@ const PP_VERDICT = {
       wall: best && best.backdrop ? 1 : 0,
       logos: best && best.logos ? 1 : 0,                    // only printed logos / lettering line up
       place: best && best.place ? 1 : 0,                    // another shot of the same place (parallax)
+      spot: best && best.spot ? 1 : 0,                      // only a seal / crest, a small slice, or a pattern (fence, floor)
       sv,
     };
   },
   // The worker's answer (score-worker.js) as a line-up result for fields().
-  fromWorker(w) { return w && !w.none ? { inliers: w.inliers, sc: w, backdrop: w.backdrop, logos: w.logos, place: w.place, photo: w.photo } : null; },
+  fromWorker(w) { return w && !w.none ? { inliers: w.inliers, sc: w, backdrop: w.backdrop, logos: w.logos, place: w.place, spot: w.spot, photo: w.photo } : null; },
   // Same photo, Maybe or Different, from the numbers alone ('cant' = could not be checked).
   // See revsearch.js (baseVerdict) for how these limits were found.
   score(l) {
@@ -33,6 +34,7 @@ const PP_VERDICT = {
     if (!(l.tiles >= 12)) return 'no';           // too few matching squares, whatever the %
     if (l.wall) return 'no';                     // only the repeating logos behind the people line up
     if (l.logos || l.place) return 'no';         // only logos / lettering, or another shot of the same place
+    if (l.spot) return 'no';                     // only a seal or crest, a small slice of both, or a fence / tiled floor
     if (l.mid !== null && l.mid !== undefined && l.mid < 0.35) return 'no';
     const midOk = l.mid === null || l.mid === undefined || l.mid >= 0.42;
     // Most of the shared area must line up. Copies with a big headline over them (about 55%)
