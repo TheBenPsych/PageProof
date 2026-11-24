@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.32.0** (24 Nov 2026).
+Last updated: version **4.32.1** (24 Nov 2026).
 
 ---
 
@@ -134,6 +134,7 @@ Last updated: version **4.32.0** (24 Nov 2026).
 - **Evidence library** with picture cards. (4.14)
 - **Hover help** on terms, and buttons that say why they're greyed out. (4.0, 4.15)
 - Fills wide screens and works in narrow windows. (4.2.3, 4.5)
+- **One-click install and update on Windows:** Update-PageProof.cmd on the download page puts the newest version into Documents › PageProof › Install for whoever runs it. (4.32.1)
 
 ## 9. Safety nets
 
@@ -217,3 +218,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.31 | 24 Nov | Logos and buildings no longer count as copies (only-logos and same-place checks) |
 | 4.31.1 | 24 Nov | Fix: New versions reach the download page in about a minute |
 | 4.32 | 24 Nov | Reposts and shares spotted and hidden, original poster as lead, exact post found on account-page links |
+| 4.32.1 | 24 Nov | Fix: Update-PageProof.cmd on the download page for the team |
