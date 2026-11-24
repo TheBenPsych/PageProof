@@ -44,8 +44,8 @@ jobs:
           fi
           FILES=$(git diff --name-only "$BASE"...HEAD 2>/dev/null || git diff --name-only "$BASE" HEAD)
           echo "Changed files:"; echo "$FILES"
-          # Browser checks: anything except docs, change notes, pictures and the capture test pages
-          APP=$(echo "$FILES" | grep -vE '(^|/)[^/]*\.md$|^changes/|^assets/|^tests/capture/' | grep -c . || true)
+          # Browser checks: anything except docs, change notes, pictures, the capture test pages and the Windows update file
+          APP=$(echo "$FILES" | grep -vE '(^|/)[^/]*\.md$|^changes/|^assets/|^tests/capture/|^tools/windows/' | grep -c . || true)
           # Full-page capture checks: only the capture code, the manifest, the capture tests or this file
           CAP=$(echo "$FILES" | grep -E '^extension/(content|background|viewer)\.js$|^extension/manifest\.json$|^tests/capture/|^\.github/workflows/checks\.yml$' | grep -c . || true)
           echo "app=$([ "$APP" -gt 0 ] && echo true || echo false)" >> $GITHUB_OUTPUT
