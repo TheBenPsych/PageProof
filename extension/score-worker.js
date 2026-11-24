@@ -10,6 +10,7 @@ self.onmessage = async e => {
   if (m.type === 'orig') { originals.set(m.key, m.bmp); return; }
   if (m.type === 'forget') { originals.delete(m.key); return; }   // not closed: a check may still be using it
   if (m.type !== 'check') return;
+  await PP_ALIGN.ready;                       // the fast checker (WebAssembly) loads in a moment
   const A = originals.get(m.key);
   let out = null, err = null;
   try {
@@ -20,5 +21,5 @@ self.onmessage = async e => {
     if (best && best.sc.lines >= 0.3) { const R = PP_ALIGN.repeats(A, m.bmp, best); out.uniq = R.unique; out.rep = R.repeated; out.backdrop = R.backdropOnly; }
   } catch (x) { err = String(x && x.message || x); }
   try { m.bmp.close && m.bmp.close(); } catch (x) { /* already freed */ }
-  self.postMessage({ id: m.id, out, err });
+  self.postMessage({ id: m.id, out, err, fast: PP_ALIGN.fast() });
 };
