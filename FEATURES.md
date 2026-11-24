@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.42.0** (24 Nov 2026).
+Last updated: version **4.43.0** (24 Nov 2026).
 
 ---
 
@@ -115,6 +115,11 @@ Last updated: version **4.42.0** (24 Nov 2026).
 - **Team lists:** hidden and approved sites shared through one PageProof Team folder, showing who added each one, with a flag when the team disagrees. (4.18)
 - **No double answers** from a held-down key, and a "too fast?" check. (4.15)
 - **Picture link and TikTok slides.** The copy panel shows the address of their picture itself (Copy link, Open), and the Evidence report lists it. TikTok slideshows are checked slide by slide ("Slide 3 of 4"). (4.33)
+- **Rule suggestions.** 5 Removes on one site this month suggest hiding it; 3 Licensed for one client suggest approving it for that client; a site named like the client asks if it is their own site. Undo, Not now and Never ask. (4.43)
+- **One row per page.** Several of your photos on one page show as one row ("3 of your photos on this page") with one answer for all, or Answer one by one. (4.43)
+- **Same story on many sites.** The same headline on 3 or more sites within 3 days shows as one row (often a news feed the client licenses). (4.43)
+- **Weak Maybes put themselves away.** A Maybe under 50% nobody answered in 30 days moves to Removed ("Weak Maybe, never answered"); not on sites with a Stolen copy; not learned as your answer. (4.43)
+- **Sweep a Stolen site.** Reads the site's sitemap slowly in your hours and compares its pictures with that client's photo fingerprints; matches show in New as "Found by sweep". No search site searches used. (4.43)
 
 ## 6. Social media accounts
 
@@ -259,3 +264,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.40 | 24 Nov | New look part 1: menu, top bar and Home |
 | 4.41 | 24 Nov | Safety nets: storage, search history in backups, moved photos, timestamp spares, error diary, update check-up |
 | 4.42 | 24 Nov | One search line, per-site lanes, new photo fast lane, goal date, hot shoots, bursts, camera dates, new client folders |
+| 4.43 | 24 Nov | Rule suggestions, own sites and partners, one row per page, same story groups, weak Maybes put away, sweep a Stolen site |
