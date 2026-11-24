@@ -1419,7 +1419,7 @@ const FC = (() => {
   async function checkerRemove(id, pct) {
     const c = await DB.get('copies', id);
     if (!c || c.status !== 'new' || /by hand/.test(c.by || '')) return false;
-    c.status = 'removed'; c.answered = new Date().toISOString(); c.removedBy = 'checker'; c.otherShot = 1; c.shotCheck = 6;   // Put back keeps it: never checked again
+    c.status = 'removed'; c.answered = new Date().toISOString(); c.removedBy = 'checker'; c.otherShot = 1;
     if (typeof pct === 'number') c.pct = pct;
     await DB.put('copies', c); await recount(new Set([c.photo])); backupCopiesSoon(); touch('copies');
     return true;

@@ -69,11 +69,11 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     await FC.DB.put('copies', mk('answered.com', base + '/other.jpg', { status: 'stolen' }));   // already answered: left alone
   }, { ours: pics.ours, base });
   await page.reload(); await page.waitForTimeout(800);
-  await page.evaluate(() => { location.hash = 'found'; });
+  await page.evaluate(() => { FC_PREV.recheckWait = 500; location.hash = 'found'; });
   let st = null;
   for (let i = 0; i < 60; i++) {
     await page.waitForTimeout(1000);
-    st = await page.evaluate(async () => Object.fromEntries((await FC.DB.all('copies')).map(c => [c.site, { status: c.status, by: c.removedBy || '', pct: c.pct, checked: c.shotCheck || 0 }])));
+    st = await page.evaluate(async () => { const done = (await FC.meta.get('shotChecked')) || {}; return Object.fromEntries((await FC.DB.all('copies')).map(c => [c.site, { status: c.status, by: c.removedBy || '', pct: c.pct, checked: done[c.id] || 0 }])); });
     if (st['other-shot.com'].status !== 'new' && st['real-copy.com'].checked) break;
   }
   ok(st['other-shot.com'].status === 'removed' && st['other-shot.com'].by === 'checker', 'An unanswered copy that is another shot moves to Removed ' + JSON.stringify(st['other-shot.com']));

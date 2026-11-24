@@ -131,6 +131,7 @@ const FC_PREV = (() => {
   // the same check as new searches. Another photo of the same place moves to Removed (Put back
   // works). Copies you already answered or added by hand are never touched.
   const SHOT_CHECK = 6;
+  let RECHECK_WAIT = 15000;
   async function recheckOne(c) {
     const { file } = await photoFile(c.photo);
     if (!file) return null;
@@ -146,24 +147,27 @@ const FC_PREV = (() => {
       return r && r.out ? r.out : null;
     } catch (e) { return null; } finally { ask({ type: 'forget', key }); }
   }
+  // Which copies had the check, kept apart from the copies themselves (no rewrite of every row,
+  // so the list doesn't redraw while you look at it): copy id -> version, or the date it failed.
   async function recheck() {
-    const now = Date.now();
-    const old = (await FC.allCopies()).filter(c => c.status === 'new' && (c.shotCheck || 0) < SHOT_CHECK && !/by hand/.test(c.by || '')
-      && /^https?:/i.test(c.img || '') && !(c.shotTried && now - Date.parse(c.shotTried) < AGAIN));
-    let gone = 0;
+    await sleep(RECHECK_WAIT);                         // let Copies found settle first
+    if (!document.body.isConnected) return;
+    const now = Date.now(), done = (await FC.meta.get('shotChecked')) || {};
+    const old = (await FC.allCopies()).filter(c => c.status === 'new' && !/by hand/.test(c.by || '') && /^https?:/i.test(c.img || '')
+      && done[c.id] !== SHOT_CHECK && !(typeof done[c.id] === 'string' && now - Date.parse(done[c.id]) < AGAIN));
+    let gone = 0, n = 0;
     for (const c of old) {
       if (document.hidden) await new Promise(r => { const f = () => { if (!document.hidden) { document.removeEventListener('visibilitychange', f); r(); } }; document.addEventListener('visibilitychange', f); });
       const out = await recheckOne(c);
       const fresh = await FC.DB.get('copies', c.id);
       if (!fresh || fresh.status !== 'new') continue;          // answered meanwhile: leave it
-      if (out && !out.none && (out.logos || out.place || out.backdrop)) {
-        if (await FC.checkerRemove(c.id, out.photo !== null && out.photo !== undefined ? Math.round(out.photo * 100) : undefined)) gone++;
-        continue;
-      }
-      if (out) fresh.shotCheck = SHOT_CHECK; else fresh.shotTried = new Date().toISOString();
-      await FC.DB.put('copies', fresh);
+      done[c.id] = out ? SHOT_CHECK : new Date().toISOString();
+      if (out && !out.none && (out.logos || out.place || out.backdrop)
+        && await FC.checkerRemove(c.id, out.photo !== null && out.photo !== undefined ? Math.round(out.photo * 100) : undefined)) gone++;
+      if (++n % 10 === 0) await FC.meta.set('shotChecked', done);
       await sleep(400);
     }
+    if (n) await FC.meta.set('shotChecked', done);
     if (gone && typeof toast === 'function') toast(gone + (gone === 1 ? ' copy was another photo' : ' copies were other photos') + ' of the same place (only logos or the building lined up), so ' + (gone === 1 ? 'it was' : 'they were') + ' moved to Removed. Put back is still there.');
   }
 
@@ -195,5 +199,5 @@ const FC_PREV = (() => {
     } catch (e) { /* try again next time Copies found opens */ }
     finally { running = false; if (worker) { try { worker.terminate(); } catch (x) { /* gone */ } worker = null; } }
   }
-  return { start, candidates };
+  return { start, candidates, set recheckWait(ms) { RECHECK_WAIT = ms; } };
 })();
