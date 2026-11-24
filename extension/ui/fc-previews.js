@@ -153,7 +153,7 @@ const FC_PREV = (() => {
     } catch (e) { /* try again next time Copies found opens */ }
     finally { running = false; if (worker) { try { worker.terminate(); } catch (x) { /* gone */ } worker = null; } }
   }
-  // 4.29: which of these pictures is your client's photo? Used to find the exact post on an
+  // 4.32: which of these pictures is your client's photo? Used to find the exact post on an
   // account page. Lines each one up with your photo (or, when Drive can't be read, with the small
   // copy of theirs). Returns { i, pct } for the best one, or null.
   async function bestOf(c, urls, enough = 70) {

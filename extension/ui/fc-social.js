@@ -163,7 +163,7 @@ function passAcct(c) {
 // passAcct, leaving one filter out (for the numbers in its own menu).
 function passAcctBut(c, k) { const was = state[k]; state[k] = 'Any'; try { return passAcct(c); } finally { state[k] = was; } }
 function acctFilterLine(dd, xsAll) {
-  // 4.29: xsAll includes hidden reposts (for their count); the other filters count only what shows.
+  // 4.32: xsAll includes hidden reposts (for their count); the other filters count only what shows.
   const xs = state.fRepost ? xsAll : xsAll.filter(c => !(c.rp && c.rp.state === 'repost'));
   const n = (k, test) => xs.filter(c => passAcctBut(c, k) && test(c)).length;
   const countries = [...new Set(xs.map(countryOfAcct).filter(x => x !== 'nk'))].sort();
@@ -261,7 +261,17 @@ async function socQueue() {
       if (route() !== 'found' && route() !== 'review') break;
       if (!FCD) await loadFC();
       const todo = FCD.copies.filter(c => isSoc(c) && !c.acct && c.status !== 'removed' && !FIND_BUSY.has(c.id) && (!c.acctTry || Date.now() - c.acctTry > 3 * 864e5)).slice(0, 2);
-      if (!todo.length) break;
+      if (!todo.length) {
+        // 4.30: then each new social copy's own picture is checked against your client's photo
+        // (one at a time), so "Not seen in the post" shows in the list without opening it.
+        const chk = FCD.copies.find(c => c.status === 'new' && needsPostCheck(c) && !POST_BUSY.has(c.id) && !(c.postTry && Date.now() - c.postTry < 864e5));
+        if (!chk) break;
+        chk.postTry = Date.now();
+        await postCheck(chk).catch(() => null);
+        socRedrawSoon();
+        await new Promise(r => setTimeout(r, 800));
+        continue;
+      }
       await Promise.all(todo.map(c => findAcct(c).catch(() => null).then(() => { c.acctTry = Date.now(); })));
       socRedrawSoon();
       await new Promise(r => setTimeout(r, 800));
@@ -511,7 +521,7 @@ function platChips(xs) {
 }
 function passMainNoAcct(c) { const k = ['fVer', 'fFol', 'fType', 'fCountry', 'fRepost'], was = k.map(x => state[x]); k.forEach(x => { state[x] = x === 'fRepost' ? true : 'Any'; }); try { return passMain(c); } finally { k.forEach((x, i) => { state[x] = was[i]; }); } }
 
-// ---------------------------------------------------------------- reposts and shares (4.29, Ben)
+// ---------------------------------------------------------------- reposts and shares (4.32, Ben)
 // A copy found on an account page is checked in your browser: PageProof finds the exact post, and
 // tells you when it is only a share or repost of someone else's post (repost.js). Reposts are hidden
 // unless "Show reposts and shares" is ticked, and point to the original post. Never answered for you.

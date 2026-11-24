@@ -249,6 +249,69 @@ async function readTheirPage(c, again) {
     return pf;
   } finally { PF_BUSY.delete(c.id); }
 }
+// 4.30: is the photo really in the post? Google Lens can show your client's photo next to a
+// Facebook or Instagram link even when the post shows something else (a video, another picture):
+// its small preview may come from a nearby result or another post on that page. For a social copy
+// matched on the search site's preview only, the post's own main picture (or video cover) is
+// lined up with your client's photo. A clearly different picture is flagged "Not seen in the post".
+const POSTCHK_V = 1;
+const POST_BUSY = new Set();
+// 4.32: a link to an account page has no "post's own picture" (its picture is the profile photo),
+// so it is never checked or removed this way. The repost check finds the exact post instead.
+const acctPageLink = c => typeof PP_REPOST !== 'undefined' && PP_REPOST.profileOnly(c);
+const needsPostCheck = c => isSoc(c) && c.status !== 'removed' && !acctPageLink(c) && (!c.postChk || c.postChk.v !== POSTCHK_V);
+async function bitmapOf(blob, max = 640) {
+  const bm = await createImageBitmap(blob);
+  const f = Math.min(1, max / Math.max(bm.width, bm.height));
+  if (f >= 1) return bm;
+  const small = await createImageBitmap(bm, { resizeWidth: Math.round(bm.width * f), resizeHeight: Math.round(bm.height * f), resizeQuality: 'high' });
+  try { bm.close(); } catch (e) { /* freed */ }
+  return small;
+}
+async function postCheck(c) {
+  if (POST_BUSY.has(c.id) || typeof PP_ALIGN === 'undefined') return null;
+  POST_BUSY.add(c.id);
+  const A = [];
+  try {
+    const pf = c.pf && c.pf.ok && 'pic' in c.pf ? c.pf : await readTheirPage(c, true).catch(() => null);
+    let res = { v: POSTCHK_V, at: new Date().toISOString(), pic: '', state: 'unknown' };
+    if (pf && pf.ok && pf.pic) {
+      res.pic = pf.pic;
+      try {
+        const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 15000);
+        const r = await fetch(pf.pic, { credentials: 'omit', referrerPolicy: 'no-referrer', signal: ctl.signal });
+        clearTimeout(t);
+        if (r.ok) {
+          const p = FCD && FCD.photos.get(c.photo);
+          const ours = await bitmapOf(await ourBlob(p)); A.push(ours);
+          const theirs = await bitmapOf(await r.blob()); A.push(theirs);
+          const best = await PP_ALIGN.align(ours, theirs, undefined, { fast: true });
+          const pct = best ? Math.max(0, Math.min(100, Math.round(best.sc.lines * 100))) : 0;
+          const inl = best ? best.inliers || 0 : 0;
+          res.pct = pct;
+          // Clearly the same photo, clearly not, or in between (no flag: a burst shot from the same spot).
+          res.state = inl >= 12 && pct >= 60 ? 'seen' : inl < 10 || pct < 40 ? 'notSeen' : 'unsure';
+          res.video = /^video/i.test(pf.type || '') || /\/(reel|videos?|watch)\b/i.test(pf.url || c.url || '');
+        }
+      } catch (e) { res.err = String(e && e.message || e).slice(0, 120); }
+    }
+    const cc = await FC.DB.get('copies', c.id);
+    if (cc) { cc.postChk = res; await FC.DB.put('copies', cc); }
+    c.postChk = res; FCD_STALE = true;
+    // Ben (4.30): only the post's own picture counts, never a picture in its comments or links.
+    // A new copy whose post clearly shows a different photo goes to Removed (Put back still works).
+    if (res.state === 'notSeen' && notInPost(c) && c.status === 'new' && !/by hand/.test(c.by || '')) {
+      await FC.answer([c.id], 'removed', { removedBy: 'postcheck' });
+      c.status = 'removed'; c.removedBy = 'postcheck';
+    }
+    return res;
+  } finally {
+    for (const b of A) { try { b.close(); } catch (e) { /* freed */ } }
+    POST_BUSY.delete(c.id);
+  }
+}
+const notInPost = c => isSoc(c) && !acctPageLink(c) && c.postChk && c.postChk.state === 'notSeen' && !/^https?:/i.test(c.img || '');
+const NOT_IN_POST = c => `The post's own ${c.postChk.video ? 'video cover' : 'picture'} is a different photo. Google matched a picture somewhere else on that page (a comment, a link preview, a suggested post), and only the post's own picture counts.${c.removedBy === 'postcheck' ? ' So PageProof moved it to Removed. Put it back if your client\'s photo is in the post after all (for example a later picture in a multi-picture post).' : ' Open the post and look before marking Stolen.'}`;
 const ruleRow = h => `<div class="rrow ${h.lvl}"><span class="tag ${PP_CHECKS.LVL[h.lvl][1]}">${PP_CHECKS.LVL[h.lvl][0]}</span><span>${esc(h.text)}</span></div>`;
 function kindSelect(c, kind, id) {
   const guess = kind ? '' : PP_CHECKS.guessKind(c, c.pf, FCD && FCD.facts.get(c.site));
@@ -305,6 +368,7 @@ function dmgCell(c) {
 // Small warning icons for a row (4.7): the words show when you hover.
 function signals(c) {
   const s = [];
+  if (notInPost(c)) s.push(['bad', 'warn', 'Not seen in the post: ' + NOT_IN_POST(c)]);
   if (c.match === 'maybe') s.push(['warn', 'maybe', 'Maybe the same photo. Look closely.']);
   if (c.risk.level === 'sus') s.push(['bad', 'warn', 'Suspicious site' + (c.risk.why.length ? ': ' + c.risk.why.join(', ') : '')]);
   else if (c.risk.level === 'watch') s.push(['warn', 'warn', 'Worth a look' + (c.risk.why.length ? ': ' + c.risk.why.join(', ') : '')]);
@@ -377,13 +441,15 @@ async function drawer(list) {
   const pub = PP_CHECKS.pubDate(p);
   const hits = PP_CHECKS.rules(c, kind, c.pf);
   const capturedAt = [c.url, ...(c.alts || [])].map(u => PP_CHECKS.captureOf(logR.log, u)).find(Boolean) || c.packAt || null;
-  if (!c.pf && !PF_BUSY.has(c.id)) readTheirPage(c).then(() => { if (state.open === c.id) render(true); }).catch(() => {});
+  if (needsPostCheck(c) && !POST_BUSY.has(c.id)) postCheck(c).then(() => { if (state.open === c.id) render(true); }).catch(() => {});
+  else if (!c.pf && !PF_BUSY.has(c.id)) readTheirPage(c).then(() => { if (state.open === c.id) render(true); }).catch(() => {});
   const ck = checksParts(c, reg, kind, hits, pub, capturedAt);
   const sz = c.w && p && p.w ? (Math.abs(c.w / c.h - p.w / p.h) / (p.w / p.h) > 0.06 ? 'cropped' : (c.w * c.h) / (p.w * p.h) > 1.15 ? 'bigger than your client\'s' : (c.w * c.h) / (p.w * p.h) < 0.85 ? 'smaller' : 'same size') : '';
   const idx = list.indexOf(c.id);
   const last = HIST[HIST.length - 1];
   // "Look at these": only problems, each with where to go next. The rest folds into one green line.
   const look = [], fine = [];
+  if (notInPost(c)) look.push(['bad', 'warn', 'Not seen in the post', NOT_IN_POST(c), 'openpost', 'Open post']);
   if (c.match === 'maybe') look.push(['warn', 'maybe', 'Maybe the same photo', 'The checker is not sure. Compare them closely.', 'compare', 'Compare']);
   if (c.risk.level === 'sus') look.push(['bad', 'warn', 'Suspicious site', c.risk.why.join(' · '), 'dtab', 'Site', 'site']);
   else if (c.risk.level === 'watch') look.push(['warn', 'warn', 'Worth a look', c.risk.why.join(' · '), 'dtab', 'Site', 'site']);
@@ -433,6 +499,7 @@ async function drawer(list) {
       <dt>Photo</dt><dd>${esc(c.photoName)}${p && p.w ? `<br><span class="muted" style="font-size:13px">${p.w} × ${p.h}</span>` : ''}</dd>
       <dt>How it's used</dt><dd>${esc(FC.USE[c.use][0])}<br><span class="muted" style="font-size:13px">${esc(FC.USE[c.use][1])}</span></dd>
       <dt>Seen</dt><dd>${shortDate(c.firstSeen)}${c.lastSeen && c.lastSeen !== c.firstSeen ? ' → ' + shortDate(c.lastSeen) : ''}, ${c.times > 1 ? c.times + ' times' : 'once'}${c.by ? `<br><span class="muted" style="font-size:13px">First found by ${esc(c.by)}${c.engines && c.engines.length ? ' on ' + c.engines.map(e => ({ google: 'Google Lens', yandex: 'Yandex', bing: 'Bing' }[e] || esc(e))).join(', ') : ''}</span>` : ''}</dd>
+      <dt>Their picture</dt><dd>${/^https?:/i.test(c.img || '') ? `From their page: <a class="mono" style="font-size:12px;overflow-wrap:anywhere" href="${safeUrl(c.img)}" target="_blank" rel="noreferrer">${esc(c.img.replace(/^https?:\/\/(www\.)?/, '').slice(0, 90))}</a>` : `The search site's small preview <span class="muted" style="font-size:13px">(PageProof did not get the picture from their page itself)</span>`}${isSoc(c) ? `<br><span class="muted" style="font-size:13px">${POST_BUSY.has(c.id) || !c.postChk ? 'Checking the post\'s own picture…' : c.postChk.state === 'seen' ? `The post's own picture matches (${c.postChk.pct}% lines up).` : c.postChk.state === 'notSeen' ? `<b style="color:var(--bad)">The post's own ${c.postChk.video ? 'video cover' : 'picture'} is a different photo.</b>` : 'The post\'s own picture could not be read (Facebook and Instagram often need a sign-in).'}${c.postChk && c.postChk.pic ? ` <a href="${safeUrl(c.postChk.pic)}" target="_blank" rel="noreferrer">See it</a>` : ''}${c.postChk ? ` · <a href="#" data-act="postagain">Check again</a>` : ''}</span>` : ''}</dd>
       ${doubles.length > 1 ? `<dt>Double</dt><dd><div style="border:1px solid var(--accent);background:var(--accent-soft);border-radius:10px;padding:8px 10px;font-size:13.5px"><b>You have ${doubles.length} versions of this photo</b>${doubles.map(d => `<br>${esc(d.name)}${d.w ? ' (' + d.w + ' × ' + d.h + ')' : ''}${d.id === p.id ? ' · <b>this one</b>' : ''}`).join('')}<br><b style="color:var(--copy)">Note them all in the claim.</b></div></dd>` : ''}
     </dl>
     ${keptBoxHtml(c)}
@@ -494,6 +561,7 @@ const MATCH = { any: 'All', exact: 'Exact', strong: 'Strong', loose: 'Loose' };
 const matchKind = c => (c.pct >= 95 && c.match === 'same' ? 'exact' : c.pct >= 80 ? 'strong' : 'loose');
 const flagWords = c => {
   const f = [];
+  if (notInPost(c)) f.push(['bad', 'Not seen in the post', NOT_IN_POST(c)]);
   if (c.risk.level === 'sus') f.push(['bad', 'Suspicious site', c.risk.why.join(', ')]);
   if (c.risk.level === 'watch') f.push(['warn', 'Worth a look', c.risk.why.join(', ')]);
   if (c.credit === 'removed') f.push(['copy', 'Credit removed', 'Your client\'s photo has a copyright line in its hidden data and their copy does not']);
@@ -1195,6 +1263,17 @@ Object.assign(ACTS, {
     toastUndo(k ? FC.baseOf(c.site) + ' is a ' + PP_CHECKS.KIND_NAME[k].toLowerCase() + '. Saved for every copy there.' : 'Kind of site cleared.');
     render(true);
   },
+  openpost: () => {
+    const c = FCD.copies.find(x => x.id === state.open);
+    if (c && /^https?:/i.test(c.url || '')) api.tabs.create({ url: c.url });
+  },
+  postagain: async () => {
+    const c = FCD.copies.find(x => x.id === state.open);
+    if (!c) return;
+    const p = postCheck(c); render(true);
+    await p.catch(() => {});
+    if (state.open === c.id) render(true);
+  },
   readpage: async () => {
     const c = FCD.copies.find(x => x.id === state.open);
     if (!c) return;
@@ -1286,7 +1365,7 @@ async function captureCopy(c) {
     }
     if (!pic && p) pic = await FC.thumbOf(p);
   } catch (e) { /* the check is skipped */ }
-  // 4.29: when the link was an account page and the exact post was found, capture the post.
+  // 4.32: when the link was an account page and the exact post was found, capture the post.
   const capUrl = (c.rp && c.rp.post) || c.url;
   await api.storage.local.set({ fcCapFor: { url: capUrl, id: c.id, at: Date.now(), pic } });
   await api.runtime.sendMessage({ type: 'captureUrl', url: capUrl }).catch(() => {});

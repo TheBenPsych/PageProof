@@ -1162,7 +1162,7 @@ const FC = (() => {
     if (!st.ppShowGov && fresh.some(c => c.acct)) info = (await meta.get('acctInfo').catch(() => null)) || {};
     return fresh.filter(c => {
       if (spam.has(c.id) || hiddenCopy(c, hidden)) return false;
-      // 4.29: reposts and shares of someone else's post are hidden until you show them.
+      // 4.32: reposts and shares of someone else's post are hidden until you show them.
       if (!st.ppShowReposts && c.rp && c.rp.state === 'repost') return false;
       const ct = c.country || countryOf(c.site);
       if (c.use !== 'social' && ct && !shown.includes(ct)) return false;

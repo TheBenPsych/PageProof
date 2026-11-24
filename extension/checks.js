@@ -150,6 +150,10 @@ const PP_CHECKS = (() => {
       soc, embeds,
       at, ok: true, url: final, imgFound, credit, agency: am ? am[1].replace(/\b\w/g, x => x.toUpperCase()) : '',
       sells: { product, cart, price: price ? String(price).slice(0, 24) : '' }, ads, yt, embedPost,
+      // 4.30: the page's own main picture (a post's photo or video cover), so a social match
+      // can be checked against what the post really shows.
+      type: meta('og:type'),
+      pic: (() => { const v = meta('og:image') || meta('twitter:image'); try { return v ? new URL(v, final).href : ''; } catch (e) { return ''; } })(),
       siteName: meta('og:site_name'), title: clean(meta('og:title') || (doc.querySelector('title') || {}).textContent || '').slice(0, 160),
     };
   }

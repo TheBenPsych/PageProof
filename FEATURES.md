@@ -7,7 +7,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > and as one line in the timeline. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.29.0** (24 Nov 2026).
+Last updated: version **4.32.0** (24 Nov 2026).
 
 ---
 
@@ -104,12 +104,13 @@ Last updated: version **4.29.0** (24 Nov 2026).
 - **Websites and Social media tabs.** On social sites, Stolen, Hide and Approve work per **account**, not the whole site. About 80 social sites known, new ones spotted automatically. A whole social site can never be hidden. (4.9, 4.9.5)
 - **Account finder** from the link, short links, public post info, page tags or your own browser. **Same person** joins accounts across platforms. (4.9)
 - **Followers, Verified, account type, country and company** read automatically (no typing by hand), with filters and sorting. (4.12)
-- **Reposts and shares spotted and hidden.** Facebook shares, X reposts and quotes, Instagram, Threads, TikTok and Bluesky reposts and Tumblr reblogs are tagged "Share of …" / "Repost of …", hidden until you tick Show reposts and shares, and point to the original post and account as the lead. Never answered for you. (4.29)
-- **Exact post found when the link is only an account page.** PageProof scrolls the account page in a quiet background tab, lines each post's pictures up with your client's photo and links the post that holds it. Capture captures that post. (4.29)
+- **Reposts and shares spotted and hidden.** Facebook shares, X reposts and quotes, Instagram, Threads, TikTok and Bluesky reposts and Tumblr reblogs are tagged "Share of …" / "Repost of …", hidden until you tick Show reposts and shares, and point to the original post and account as the lead. Never answered for you. (4.32)
+- **Exact post found when the link is only an account page.** PageProof scrolls the account page in a quiet background tab, lines each post's pictures up with your client's photo and links the post that holds it. Capture captures that post. (4.32)
 - **X details read right.** Followers, check mark and type come from the account itself, not your own account or X's page footer ("X Corp."). (4.27)
 - **Kinds of check mark, drawn like the site.** X blue = Paid (bought), X gold = Verified organisation, grey = Government, Instagram/Facebook = Meta check (paid or earned look the same), others = Verified. Filter "Really verified (not bought)". (4.27)
 - **Government accounts hidden.** Anyone in or running for public office (Congresswoman, Councilman, "for Council", campaign or .gov sites, grey check) is type Government and hidden unless you tick Show government. (4.27)
 - **Real names on accounts.** "Matt Thibodeau" instead of the number from the link, with the handle small beside it (Facebook numbers, YouTube channel IDs and more). Country filled from Facebook Page transparency or the place on the profile. (4.27)
+- **Only the post's own picture counts.** Google Lens can show your client's photo next to a Facebook or Instagram link when the post itself shows something else (a video, another photo). PageProof now lines up the post's own picture (or video cover) with your client's photo; a clearly different picture sends the match to Removed by itself ("Not seen in the post", Put back still works). The panel also says where "Theirs" came from: the search site's small preview or a picture from their page. (4.30)
 - **Social media means the 17 main platforms only** (YouTube, Facebook, Instagram, TikTok, X, LinkedIn, Pinterest, Threads, Reddit, Snapchat, Tumblr, Bluesky, Substack, Nextdoor, Truth Social, Vimeo, Behance). Every other site is a normal website again, so country filters and whole-site hiding work on it. No more "is this social?" questions. (4.25)
 
 ## 7. Everyday tools
@@ -205,4 +206,5 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.24 | 24 Nov | Spam blog copies hidden until you show them |
 | 4.25 | 24 Nov | Social media means the 17 main platforms only |
 | 4.27 | 24 Nov | X details fixed, check kinds, Government hidden, countries to show, real account names |
-| 4.29 | 24 Nov | Reposts and shares spotted and hidden, original poster as lead, exact post found on account-page links |
+| 4.30 | 24 Nov | Social matches only count when the post's own picture is the photo; "Theirs" source shown |
+| 4.32 | 24 Nov | Reposts and shares spotted and hidden, original poster as lead, exact post found on account-page links |
