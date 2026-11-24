@@ -1,4 +1,4 @@
-// 4.25: another photo of the same place is not a copy. A different shot in front of the same
+// 4.26: another photo of the same place is not a copy. A different shot in front of the same
 // sponsor wall lines up only on the printed logos: the photo check must say so, and a copy like
 // that already sitting unanswered in Copies found must be checked again and moved to Removed
 // (Put back works). A real (resized) copy of the same photo must stay.

@@ -490,19 +490,20 @@ V.hidden = async () => {
   // 4.9: which sites are social media (their copies go on the Social media tab of Copies found).
   if (tab === 'social') {
     await PP_SOCIAL.ready;
-    const mine = Object.entries(PP_SOCIAL.mine()).filter(([k]) => k.includes(q)).sort();
-    const built = [...new Set(Object.values(PP_SOCIAL.SITES).map(x => x[0]))].sort((a, b) => a.localeCompare(b));
+    // 4.25.0: a fixed list of 17 platforms. Every other site goes on the Websites tab.
+    const plats = new Map();
+    for (const [d, [name]] of Object.entries(PP_SOCIAL.SITES)) { if (!plats.has(name)) plats.set(name, []); plats.get(name).push(d); }
+    const rows = [...plats].filter(([n, ds]) => !q || n.toLowerCase().includes(q) || ds.some(d => d.includes(q)));
     const readOn = (await api.storage.local.get('ppAcctRead')).ppAcctRead !== false;
     return `${head('Settings', 'Hidden and approved sites', 'Hidden sites never show up in any search. Approved sites may use the photos: copies found there are marked Licensed by themselves.')}
     <section class="card" style="overflow:hidden">
-      <div class="toolbar"><div class="tabs" role="tablist">${[['hidden', 'Hidden sites'], ['allowed', 'Approved for every client'], ['client', 'Approved for one client'], ['rejected', 'Rejected links'], ['social', 'Social sites']].map(([k, l]) => `<button role="tab" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}" data-act="hidtab" data-v="${k}">${l}</button>`).join('')}</div></div>
+      <div class="toolbar"><div class="tabs" role="tablist">${[['hidden', 'Hidden sites'], ['allowed', 'Approved for every client'], ['client', 'Approved for one client'], ['rejected', 'Rejected links'], ['stolen', 'Stolen before links'], ['social', 'Social sites']].map(([k, l]) => `<button role="tab" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}" data-act="hidtab" data-v="${k}">${l}</button>`).join('')}</div></div>
       <div class="row" style="gap:10px;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--bg)">
-        <input id="hidq" class="chip" style="min-height:38px;padding:0 12px;font-size:14px;flex:1 1 260px" placeholder="Find or add a site, like photoverse.social" value="${esc(state.hidQ)}" aria-label="Find or add a site">
-        <button class="btn primary" data-act="socadd" data-v="social">＋ It's social media</button><button class="btn" data-act="socadd" data-v="web">It's a website</button></div>
-      <div class="scroll"><table><thead><tr><th>Site</th><th>Goes on</th><th></th></tr></thead><tbody>
-        ${mine.map(([k, v]) => `<tr><td><b class="mono" style="font-size:13px">${esc(k)}</b></td><td><span class="tag ${v === 'social' ? 'blue' : 'grey'}">${v === 'social' ? 'Social media' : 'Websites'}</span></td><td style="text-align:right"><button class="btn" style="min-height:30px" data-act="socforget" data-v="${esc(k)}">Forget my choice</button></td></tr>`).join('') || '<tr><td colspan="3" class="faint">You haven\'t marked any sites yet. PageProof asks you about a new social site the first time it sees one.</td></tr>'}
+        <input id="hidq" class="chip" style="min-height:38px;padding:0 12px;font-size:14px;flex:1 1 260px" placeholder="Find a platform, like vimeo" value="${esc(state.hidQ)}" aria-label="Find a platform"></div>
+      <p class="muted" style="margin:0;padding:12px 18px;font-size:13.5px;border-bottom:1px solid var(--line)">Only these ${plats.size} platforms count as social media. Every other site (blogs, video sites, forums, chat apps...) shows on the Websites tab like any website, and can be hidden as a whole site.</p>
+      <div class="scroll"><table><thead><tr><th>Platform</th><th>Web addresses it covers</th></tr></thead><tbody>
+        ${rows.map(([n, ds]) => `<tr><td><b>${esc(n)}</b></td><td class="mono" style="font-size:12.5px">${esc(ds.join(', '))}${n === 'Pinterest' || n === 'Nextdoor' ? ' <span class="faint">+ country sites</span>' : ''}<br><span class="faint">and their mobile and sub-sites (m., mobile., www.)</span></td></tr>`).join('') || '<tr><td colspan="2" class="faint">No platform matches. That site counts as a website.</td></tr>'}
       </tbody></table></div>
-      <details style="padding:12px 18px;border-top:1px solid var(--line)"><summary><b>${built.length} social sites PageProof already knows</b></summary><p class="muted" style="font-size:13px;margin:8px 0 0">${esc(built.join(', '))}</p></details>
     </section>
     <section class="card pad"><label class="row" style="gap:10px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="acctread" data-act="acctread" ${readOn ? 'checked' : ''} style="margin-top:4px"><span><b>Read account details by itself</b><br><span class="muted" style="font-size:13px">Followers, verified, account type, country and owner company. PageProof opens each account's profile in a background tab of your browser for a few seconds, one account at a time, once a month. Off: only when you press "Read again now" on an account.</span></span></label></section>
     <p class="faint" style="margin:0;font-size:12.5px">Copies on social sites go on the Social media tab of Copies found, where Stolen, Hide and Approve work per account. Saved with your settings backup.</p>`;
@@ -513,7 +514,7 @@ V.hidden = async () => {
   await RS_STOLEN.load();
   const list = tab === 'rejected' ? RS_REJECT.items.map(r => r.url) : tab === 'client' ? perClient.sort().reverse() : tab === 'stolen' ? RS_STOLEN.items : RS_LISTS[tab];
   const rows = [...list].reverse().filter(s => s.toLowerCase().includes(q) && (tab === 'rejected' || tab === 'client' || tab === 'stolen' || state.hidKind === 'All' || kindOf(s) === state.hidKind));
-  const T = [['hidden', 'Hidden sites', RS_LISTS.hidden.length], ['allowed', 'Approved for every client', RS_LISTS.allowed.length], ['client', 'Approved for one client', perClient.length], ['rejected', 'Rejected links', RS_REJECT.items.length], ['stolen', 'Stolen before links', RS_STOLEN.items.length], ['social', 'Social sites', Object.keys(PP_SOCIAL.mine()).length]];
+  const T = [['hidden', 'Hidden sites', RS_LISTS.hidden.length], ['allowed', 'Approved for every client', RS_LISTS.allowed.length], ['client', 'Approved for one client', perClient.length], ['rejected', 'Rejected links', RS_REJECT.items.length], ['stolen', 'Stolen before links', RS_STOLEN.items.length], ['social', 'Social sites', new Set(Object.values(PP_SOCIAL.SITES).map(x => x[0])).size]];
   const flat = tab === 'rejected' || tab === 'client' || tab === 'stolen';
   const page = rows.slice(0, state.hidMore || 100);
   return `${head('Settings', 'Hidden and approved sites', 'Hidden sites never show up in any search. Approved sites may use the photos: copies found there are marked Licensed by themselves.', `<button class="btn" data-act="hidsave">${ic('down', 18)} Download list</button><button class="btn" data-act="hidload">Add from a file</button>`)}
@@ -542,7 +543,7 @@ const impCard = (list, tab) => `<section class="card" style="overflow:hidden">
 V.hidden.after = () => {
   const i = document.getElementById('hidq');
   i.oninput = () => { state.hidQ = i.value; state.hidMore = 0; render(true).then(() => { const j = document.getElementById('hidq'); j.focus(); j.setSelectionRange(j.value.length, j.value.length); }); };
-  i.onkeydown = e => { if (e.key === 'Enter' && state.hidTab === 'social') act('socadd', 'social'); else if (e.key === 'Enter' && !['rejected', 'client'].includes(state.hidTab)) act('hidadd'); };
+  i.onkeydown = e => { if (e.key === 'Enter' && state.hidTab === 'social') return; else if (e.key === 'Enter' && !['rejected', 'client'].includes(state.hidTab)) act('hidadd'); };
 };
 Object.assign(ACTS, {
   socadd: async v => {
@@ -619,6 +620,7 @@ V.computer.after = () => {
 // =====================================================================================
 const NEWS = [
   ['Logos and buildings no longer count as copies', 'Two different photos can line up where they show the same printed things: the sponsor wall behind a coach, a red carpet backdrop, a shop sign, or a famous building. The photo check now looks at what lines up. If it is only logos, signs or lettering, it says "Different photo, only the logos match". If the scene lines up but things at different distances shift against each other (columns and the wall behind them, a pole), it says "Different photo of the same place". Both are thrown out of searches, and their % now shows only what lines up of the photo itself, so they show low. Copies already in Copies found that you have not answered are checked again quietly while the page is open; the ones that turn out to be another photo move to Removed, where Put back still works.'],
+  ['Social media means the 17 main platforms only', 'Only YouTube, Facebook, Instagram, TikTok, X, LinkedIn, Pinterest, Threads, Reddit, Snapchat, Tumblr, Bluesky, Substack, Nextdoor, Truth Social, Vimeo and Behance go on the Social media tab (with their mobile and short links, like m.facebook.com, youtu.be, twitter.com and threads.com). Every other site, like Naver Blog, note, Twitch, Quora, Medium or Flickr, now shows on the Websites tab like any website: country filter, and Hide site hides the whole site again. Copies found before moved over by themselves. Sites on your hidden list that were shown again in 4.9.5 because they counted as social are hidden again. The list is in Settings › Hidden and approved sites › Social sites.'],
   ['Spam blogs hidden', 'Copies on spam blog farms (random addresses on throwaway sites, like ab3cd9.madeupname.blog) are now kept out of Copies found and One at a time, and get a grey Spam blog tag. A line above the list says how many are hidden, with Show them, Only them, and Hide all of those sites (the whole site, so its next made-up addresses stay out too, with Undo). Nothing is answered for you.'],
   ['Take out the sites in a file: takes out all of them', 'Take out the sites in a file now takes out every page that came from the file. Only whole sites (like patch.com) that were hidden before the file stay, since those are the ones you hide by hand. Before, it guessed from the order of the list and left most of a big file in.'],
   ['Stolen before links', 'Bring in your list of links stolen before: Settings › Hidden and approved sites › Stolen before links › Add from a file. A copy found on one of those exact pages gets a red Stolen before tag in Copies found, and other pages on the same site (or by the same social account) count as a repeat offender and come first. The Stolen before quick filter shows only them, and More filters can hide them. Nothing is answered by itself.'],
