@@ -511,10 +511,12 @@ async function start() {
   setStatus([...notes, 'Getting trusted timestamps...'].join(' '));
   const stamps = await PP_TSA.stampAll(new Uint8Array(await crypto.subtle.digest('SHA-256', fpBytes)));
   const good = stamps.filter(t => !t.error);
-  proof('pfStamp', !good.length ? 'bad' : good.length < stamps.length ? 'part' : 'ok',
-    good.length ? good.length + ' of ' + stamps.length + ' trusted timestamps' : 'No trusted timestamp (services did not answer)');
+  // 4.39: a slow service is asked again, and spares stand in for any that still don't answer.
+  const want = stamps.filter(t => !t.spare).length, missing = stamps.filter(t => t.error && !t.spare), spare = good.filter(t => t.spare);
+  proof('pfStamp', !good.length ? 'bad' : good.length < want ? 'part' : 'ok',
+    good.length ? Math.min(good.length, want) + ' of ' + want + ' trusted timestamps' + (spare.length ? ' (' + spare.map(t => t.service).join(' and ') + ' stood in)' : '') : 'No trusted timestamp (services did not answer)');
   if (!good.length) notes.push('No trusted timestamp could be added (' + stamps.map(t => t.service + ': ' + t.error).join('; ') + '). Everything else is saved.');
-  else if (good.length < stamps.length) notes.push('Timestamped by ' + good.map(t => t.service).join(' and ') + ' (' + stamps.filter(t => t.error).map(t => t.service).join(', ') + ' did not answer).');
+  else if (missing.length) notes.push('Timestamped by ' + good.map(t => t.service).join(', ') + ' (' + missing.map(t => t.service).join(', ') + ' did not answer after 3 tries' + (spare.length ? ', so ' + spare.map(t => t.service).join(' and ') + ' stood in' : '') + ').');
   setStatus(notes.join(' '));
   // 4.15 idea 5: the trusted timestamps carry the time servers' own clocks. If this computer's
   // clock is more than 2 minutes off, the times written in the pack won't match them.

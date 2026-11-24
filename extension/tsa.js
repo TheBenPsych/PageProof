@@ -8,6 +8,13 @@ const PP_TSA = (() => {
     { name: 'Sectigo', file: 'sectigo', url: 'http://timestamp.sectigo.com' },
     { name: 'FreeTSA', file: 'freetsa', url: 'https://freetsa.org/tsr' }
   ];
+  // Spares (4.39, Ben's pick): asked only when one of the three above still has no answer after
+  // two more tries, so a pack is not left with fewer stamps because one service was slow.
+  const SPARES = [
+    { name: 'GlobalSign', file: 'globalsign', url: 'http://timestamp.globalsign.com/tsa/r6advanced1' },
+    { name: 'Entrust', file: 'entrust', url: 'http://timestamp.entrust.net/TSS/RFC3161sha2TS' }
+  ];
+  const wait = ms => new Promise(r => setTimeout(r, ms));
 
   const concat = arrs => {
     const out = new Uint8Array(arrs.reduce((n, a) => n + a.length, 0));
@@ -82,9 +89,35 @@ const PP_TSA = (() => {
     }
   }
 
-  // Returns one result per service: { service, url, time, query, reply } or { service, url, error }.
+  // Returns one result per service: { service, url, time, query, reply, tries } or { service, url, error }.
+  // A service that doesn't answer is asked again twice (after 3 and 8 seconds). If one still has
+  // no answer, the spare services are asked, one by one, until there are as many stamps as
+  // services (4.39). Failed services stay in the list with their error, so the pack says which.
   async function stampAll(hash) {
-    return Promise.all((globalThis.PP_TSA_SERVICES || SERVICES).map(svc => stampOne(svc, hash)));
+    const main = globalThis.PP_TSA_SERVICES || SERVICES;
+    const spares = globalThis.PP_TSA_SPARES || (globalThis.PP_TSA_SERVICES ? [] : SPARES);
+    const gaps = globalThis.PP_TSA_WAITS || [3000, 8000];
+    const once = async svc => {
+      let r;
+      for (let i = 0; i <= gaps.length; i++) {
+        if (i) await wait(gaps[i - 1]);
+        r = await stampOne(svc, hash);
+        r.tries = i + 1;
+        if (!r.error) break;
+      }
+      return r;
+    };
+    const out = await Promise.all(main.map(once));
+    let good = out.filter(t => !t.error).length;
+    for (const svc of spares) {
+      if (good >= main.length) break;
+      const r = await once(svc);
+      r.spare = true;
+      out.push(r);
+      if (!r.error) good++;
+    }
+    if (typeof PP_STATS !== 'undefined') { PP_STATS.add('tsa.packs'); for (const t of out) PP_STATS.add('tsa.' + (t.error ? 'fail' : t.tries > 1 ? 'retryOk' : 'ok')); if (out.some(t => t.spare && !t.error)) PP_STATS.add('tsa.spareUsed'); }
+    return out;
   }
 
   return { stampAll, readReply };

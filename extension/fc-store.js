@@ -510,7 +510,13 @@ const FC = (() => {
       const picks = await picked();
       const list = [];
       // Only ticked folders. (Nothing ticked = nothing read: never the whole drive.)
-      for (const rel of picks || []) { try { list.push([rel, await dirAt(rel)]); } catch (e) { /* folder gone or Drive offline */ } }
+      // 4.39: a ticked folder that Drive says is not there any more (renamed, moved or deleted) is
+      // written down, so Home and Clients can say so instead of the client quietly going quiet.
+      const missing = [];
+      for (const rel of picks || []) { try { list.push([rel, await dirAt(rel)]); } catch (e) { if (e && (e.name === 'NotFoundError' || /not (be )?found/i.test(e.message || ''))) missing.push(rel); /* else Drive offline */ } }
+      const was = (await meta.get('missingPicks')) || [];
+      const now = missing.map(rel => was.find(m => m.rel === rel) || { rel, since: new Date().toISOString() });
+      if (JSON.stringify(now) !== JSON.stringify(was)) await meta.set('missingPicks', now);
       for (const [rel, h] of list) {
         const parts = rel.split('/');
         let base = null, baseName = '', name = parts[parts.length - 1], folderRel = rel;
@@ -603,6 +609,8 @@ const FC = (() => {
       const st = await driveState(true);
       if (st !== 'granted') return { state: st };
       const folders = await clientFolders();
+      const alias = (await meta.get('photoAlias')) || {};
+      const pres = [];
       const known = new Map((await DB.all('clients')).map(c => [c.name, c]));
       const regs = (await meta.get('regs')) || {};
       const gen = Date.now();
@@ -618,6 +626,7 @@ const FC = (() => {
         // clients (each named by its client_info.txt) is still read if any of those is searched.
         if (!full && client.searching !== true && ![...known.values()].some(c => c.from === cf.name && c.searching === true)) continue;
         const pre = 'd:' + (cf.extra ? '+' : '') + cf.rel + '/';
+        pres.push(pre);
         const seen = new Set(), batch = [], subs = {}, subsNew = {}, found = [];
         let n = 0, skipped = 0, mineNew = 0;
         if (progress) progress('Reading ' + cf.name + '…');
@@ -625,10 +634,15 @@ const FC = (() => {
         // What's already known about these photos, so flags and search history stay. The weekly
         // check reads all of this client's photos (to spot the ones that are gone); the hourly
         // look only reads the few it found, not the whole library.
+        // 4.39: photos that moved (folder renamed or moved) keep their first address as their id.
+        for (const f of found) { const id0 = 'd:' + (cf.extra ? '+' : '') + f.rel; f.id = alias[id0] || id0; }
         const have = full ? new Map((await DB.prefix('photos', pre)).map(p => [p.id, p]))
-          : new Map((await DB.getMany('photos', found.map(f => 'd:' + (cf.extra ? '+' : '') + f.rel))).filter(Boolean).map(p => [p.id, p]));
+          : new Map((await DB.getMany('photos', found.map(f => f.id))).filter(Boolean).map(p => [p.id, p]));
+        const away = found.filter(f => f.id !== 'd:' + (cf.extra ? '+' : '') + f.rel && !have.has(f.id));
+        if (away.length) for (const p of (await DB.getMany('photos', away.map(f => f.id))).filter(Boolean)) have.set(p.id, p);
         for (const f of found) {
-          const id = 'd:' + (cf.extra ? '+' : '') + f.rel;
+          const id = f.id;
+          delete f.id;
           // A client_info.txt further down names a different client for those photos.
           const who = f.client || cf.name;
           delete f.client;
@@ -662,15 +676,57 @@ const FC = (() => {
         await DB.put('clients', client);
       }
       await meta.set('regs', regs);
-      await meta.set('scan', { at: new Date().toISOString(), full, added, removed, total });
+      let moved = 0;
+      if (full && (added || removed)) { moved = await followMoves(gen, pres, alias).catch(e => { console.warn('PageProof moved photos:', e); return 0; }); added -= moved; removed = Math.max(0, removed - moved); }
+      await meta.set('scan', { at: new Date().toISOString(), full, added, removed, total, moved });
       if (full) await meta.set('fullScan', new Date().toISOString());
       queueDirty();
       await findDoubles().catch(() => {});
+      await applyPendingFlags().catch(() => {});
       touch('photos');
       perf(full ? 'readEveryFolder' : 'readNewFolders', Date.now() - scanT0, total);
-      return { clients: folders.length, photos: total, added, removed };
+      return { clients: folders.length, photos: total, added, removed, moved };
     } finally { SCAN.busy = false; }
   }
+  // 4.39 (Ben's pick): a photo that disappeared from its old place and turned up in a new one
+  // (same file name, one of a kind on both sides) is the same photo moved. The new address is
+  // pointed at the old record, so its copies, answers, flags and search dates all stay, and it
+  // is not searched again as if it were new. Only full checks do this (they see what is gone).
+  async function followMoves(gen, pres, alias) {
+    const all = await DB.all('photos');
+    const young = p => p.added === gen || (Date.now() - (p.added || 0) < 8 * DAY && !p.searches && !p.copies && !p.lastSearched);
+    const fresh = all.filter(p => !p.gone && young(p) && !Object.values(alias).includes(p.id));
+    if (!fresh.length) return 0;
+    const under = p => pres.some(x => p.id.startsWith(x)) || Object.values(alias).includes(p.id);
+    const olds = all.filter(p => !young(p) && !p.movedTo && (p.gone || !under(p)) && (p.searches || p.lastSearched || p.copies || p.flag));
+    if (!olds.length) return 0;
+    const key = p => String(p.name || '').toLowerCase();
+    const count = list => { const m = new Map(); for (const p of list) m.set(key(p), (m.get(key(p)) || 0) + 1); return m; };
+    const nf = count(fresh), no = count(olds.concat(all.filter(p => !p.gone && !young(p) && under(p))));
+    const byName = new Map(olds.map(p => [key(p), p]));
+    const put = [], del = [];
+    for (const n of fresh) {
+      const k = key(n);
+      if (!k || nf.get(k) !== 1 || no.get(k) !== 1) continue;
+      const o = byName.get(k);
+      if (!o || !!o.extra !== !!n.extra) continue;
+      alias[n.id] = o.id;
+      for (const [a, b] of Object.entries(alias)) if (b === n.id) alias[a] = o.id;
+      Object.assign(o, { rel: n.rel, name: n.name, folder: n.folder, year: n.year, quarter: n.quarter, day: n.day, client: n.client, extra: n.extra, gone: false, movedAt: new Date().toISOString() });
+      o.order = newness(o);
+      if (n.lastSearched > (o.lastSearched || '')) o.lastSearched = n.lastSearched;
+      o.searches = (o.searches || 0) + (n.searches || 0);
+      put.push(o); del.push(n.id);
+    }
+    if (!put.length) return 0;
+    await DB.putMany('photos', put);
+    await DB.delMany('photos', del);
+    await meta.set('photoAlias', alias);
+    await meta.set('movedNote', { at: new Date().toISOString(), n: put.length, seen: false });
+    return put.length;
+  }
+  async function missingPicks() { return (await meta.get('missingPicks')) || []; }
+  async function movedNote() { return meta.get('movedNote'); }
   // Just the client folders and a photo count for each (setup step 3). Fast-ish.
   async function quickClients(progress) {
     const folders = await clientFolders();
@@ -1887,6 +1943,16 @@ const FC = (() => {
     }
     return list;
   }
+  // 4.39 (Ben's pick): which photos were searched, and when, so a restore or a new computer
+  // carries on instead of searching every photo again. [id, last searched, searches, empty
+  // searches, first searched]. Rebuilt at most every 6 hours (it reads every photo).
+  async function histList() {
+    const c = await meta.get('histBackup');
+    if (c && Array.isArray(c.list) && Date.now() - c.at < 6 * 3600000) return c.list;
+    const list = (await DB.all('photos')).filter(p => p.lastSearched && !p.unreadable).map(p => [p.id, p.lastSearched, p.searches || 0, p.empty || 0, p.firstAt || '']);
+    await meta.set('histBackup', { at: Date.now(), list });
+    return list;
+  }
   async function settingsSnapshot() {
     const st = await api.storage.local.get(['lastCase', 'ppTheme', 'rsSettings', 'fcKeep', 'fcDrive', 'fcShownCountries', 'ppShowGov', 'ppShowPerson', 'ppHw', 'ppSocialSites']);
     const clients = await DB.all('clients');
@@ -1894,7 +1960,7 @@ const FC = (() => {
     const regs = Object.fromEntries(Object.entries((await meta.get('regs')) || {}).filter(([, v]) => v.manual));
     return { app: 'PageProof', version: api.runtime.getManifest().version, saved: new Date().toISOString(), name: (st.lastCase || {}).collector || '', theme: st.ppTheme || 'light',
       search: st.rsSettings || null, keep: st.fcKeep || null, drive: st.fcDrive || null, shownCountries: Array.isArray(st.fcShownCountries) ? st.fcShownCountries : SHOWN_START, showGov: !!st.ppShowGov, showPerson: !!st.ppShowPerson, hardware: st.ppHw || null,
-      clients: clients.map(c => ({ name: c.name, searching: c.searching, priority: !!c.priority, licensed: c.licensed || [], licensedAcc: c.licensedAcc || [] })), flags, regs, picked: await picked(),
+      clients: clients.map(c => ({ name: c.name, searching: c.searching, priority: !!c.priority, licensed: c.licensed || [], licensedAcc: c.licensedAcc || [] })), flags, regs, picked: await picked(), hist: await histList(), alias: (await meta.get('photoAlias')) || {},
       socialSites: st.ppSocialSites || {}, accounts: (await meta.get('acctKept')) || {}, acctLinks: (await meta.get('acctLinks')) || [], acctType: (await meta.get('acctType')) || {} };
   }
   async function writeSettings() {
@@ -1931,21 +1997,48 @@ const FC = (() => {
     if (Array.isArray(j.acctLinks)) await meta.set('acctLinks', j.acctLinks.filter(Array.isArray).map(g => g.filter(k => typeof k === 'string').map(str)).filter(g => g.length > 1));
     if (Array.isArray(j.picked)) await meta.set('picked', j.picked.filter(r => typeof r === 'string' && r && !r.split('/').includes('..')).map(r => r.slice(0, 1000)));
     if (Array.isArray(j.flags)) await meta.set('pendingFlags', j.flags.filter(f => Array.isArray(f) && typeof f[0] === 'string').map(f => [f[0].slice(0, 2000), ['hi', 'pop'].includes(f[1]) ? f[1] : '', f[2] ? 1 : 0]));
+    if (Array.isArray(j.hist)) {
+      const iso = v => (typeof v === 'string' && /^\d{4}-\d\d-\d\dT/.test(v) ? v.slice(0, 30) : '');
+      const n = v => (Number.isFinite(v) && v >= 0 ? Math.min(v, 1e6) : 0);
+      await meta.set('pendingHist', j.hist.filter(h => Array.isArray(h) && typeof h[0] === 'string' && iso(h[1])).map(h => [h[0].slice(0, 2000), iso(h[1]), n(h[2]), n(h[3]), iso(h[4])]));
+    }
+    if (j.alias && typeof j.alias === 'object') { const a = (await meta.get('photoAlias')) || {}; for (const [k, v] of Object.entries(j.alias)) if (typeof k === 'string' && typeof v === 'string') a[k.slice(0, 2000)] = v.slice(0, 2000); await meta.set('photoAlias', a); }
     if (j.regs && typeof j.regs === 'object') { const regs = (await meta.get('regs')) || {}; for (const [k, v] of Object.entries(j.regs)) if (v && typeof v === 'object') regs[str(k)] = { va: str(v.va), app: str(v.app), from: 'Typed in by you for this folder', manual: true }; await meta.set('regs', regs); }
     await restoreCopies();
+    await applyPendingFlags().catch(() => {});
   }
   // Flags restored from a backup are put back on the photos once the folders are read again.
   async function applyPendingFlags() {
+    const alias = (await meta.get('photoAlias')) || {};
     const list = await meta.get('pendingFlags');
-    if (!list || !list.length) return;
-    const left = [];
-    for (const [id, flag, nd] of list) { const p = await DB.get('photos', id); if (p) { p.flag = flag; if (nd) p.notDouble = true; await DB.put('photos', p); } else left.push([id, flag, nd]); }
-    await meta.set('pendingFlags', left);
-    if (left.length !== list.length) backupSoon(true);
+    if (list && list.length) {
+      const left = [];
+      for (const [id, flag, nd] of list) { const p = await DB.get('photos', alias[id] || id); if (p) { p.flag = flag; if (nd) p.notDouble = true; await DB.put('photos', p); } else left.push([id, flag, nd]); }
+      await meta.set('pendingFlags', left);
+      if (left.length !== list.length) backupSoon(true);
+    }
+    // 4.39: search history from a backup. The newer of the two dates wins, so a photo searched
+    // here since the backup keeps its own date.
+    const hist = await meta.get('pendingHist');
+    if (hist && hist.length) {
+      const left = [], put = [];
+      const recs = await DB.getMany('photos', hist.map(h => alias[h[0]] || h[0]));
+      hist.forEach((h, i) => {
+        const p = recs[i];
+        if (!p) { left.push(h); return; }
+        if ((h[1] || '') > (p.lastSearched || '')) { p.lastSearched = h[1]; p.empty = h[3]; }
+        p.searches = Math.max(p.searches || 0, h[2] || 0);
+        if (h[4] && (!p.firstAt || h[4] < p.firstAt)) p.firstAt = h[4];
+        put.push(p);
+      });
+      await DB.putMany('photos', put);
+      await meta.set('pendingHist', left);
+      if (put.length) { queueDirty(); COVER = null; }
+    }
   }
 
   return { DB, meta, open, touch, pics, dropDotMatches, checkerRemove, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, inHours, quietOK, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
-    regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, setPicked, pickInside, SCAN, applyPendingFlags, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
+    regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, setPicked, pickInside, SCAN, applyPendingFlags, missingPicks, movedNote, followMoves, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setClients, logWeek, week, weekKey, firstNotes, searchedOnce,
     isPool, shownCountries, setShownCountries, SHOWN_START, ownerFor, pathOf, logReport, USE, useOf, riskOf, spamMarks, randomLabel, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
     backupSoon, backupCopiesSoon, writeSettings, writeCopies, readBackup, restore, restoreCopies, settingsSnapshot, monthsOld, newness, yearOf, quarterOf, dayOf };
