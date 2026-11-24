@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.37.0** (24 Nov 2026).
+Last updated: version **4.37.1** (24 Nov 2026).
 
 ---
 
@@ -163,6 +163,7 @@ Last updated: version **4.37.0** (24 Nov 2026).
 - **New versions in about a minute:** the download link is updated a minute after each change, and the automatic checks run side by side before it. (4.31.1)
 - **Bing only brings back real matches.** Only Bing's "Pages with this image" list is read, never its look-alike photos. (4.36.1)
 - **How PageProof is doing.** Day-by-day stats for this computer (found, speed, links thrown out and why, each search site, Keep searching on-time, Drive, photos covered, computer strain), "Something looks off" alerts, a Checker test with made-up pictures, and Save stats for Claude (one file, numbers and website names only) plus a weekly file on Fridays. (4.37)
+- **Bing finds copies again.** Bing's "Pages with this image" and top 60 "Visual matches" are read, each with its picture, and checked like Google's. (4.37.1)
 
 ---
 
@@ -236,3 +237,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.36.1 | 24 Nov | Fix: Bing reads only "Pages with this image" |
 | 4.36.2 | 24 Nov | Fix: Social media tab number leaves out hidden copies |
 | 4.37 | 24 Nov | Stats page, Checker test and Save stats for Claude |
+| 4.37.1 | 24 Nov | Fix: Bing reads its Visual matches with their pictures |
