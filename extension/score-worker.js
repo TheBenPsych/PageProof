@@ -17,8 +17,14 @@ self.onmessage = async e => {
     if (!A) throw new Error('no original');
     const best = await PP_ALIGN.align(A, m.bmp, undefined, { fast: true });
     out = best ? { lines: best.sc.lines, inliers: best.inliers || 0, matched: best.sc.matched, strength: best.sc.strength, midTex: best.sc.midTex, midMatched: best.sc.midMatched, inside: best.sc.inside } : { none: true };
-    // Could count as a copy: check it isn't only a repeating press wall that lines up.
-    if (best && best.sc.lines >= 0.3) { const R = PP_ALIGN.repeats(A, m.bmp, best); out.uniq = R.unique; out.rep = R.repeated; out.backdrop = R.backdropOnly; }
+    // Could count as a copy: check it isn't only a repeating press wall, a logo, or another shot
+    // of the same building that lines up.
+    if (best && best.sc.lines >= 0.3) {
+      const R = PP_ALIGN.repeats(A, m.bmp, best), Sh = PP_ALIGN.shot(A, m.bmp, best);
+      out.uniq = R.unique; out.rep = R.repeated; out.backdrop = R.backdropOnly && Sh.graphic >= 0.6;
+      // Another photo of the same place: only logos / lettering line up, or parts shift (parallax).
+      out.logos = Sh.logos; out.place = Sh.place; out.photo = Sh.photo;
+    }
   } catch (x) { err = String(x && x.message || x); }
   try { m.bmp.close && m.bmp.close(); } catch (x) { /* already freed */ }
   self.postMessage({ id: m.id, out, err, fast: PP_ALIGN.fast(), gpu: PP_ALIGN.gpu(), gpuWhy: PP_ALIGN.gpuWhy() });
