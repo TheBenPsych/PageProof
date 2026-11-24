@@ -510,31 +510,33 @@ V.hidden = async () => {
   // Approved for one client: kept with each client (site | client).
   const perClient = [];
   for (const c of await FC.DB.all('clients')) for (const s of c.licensed || []) perClient.push(s + ' | ' + c.name);
-  const list = tab === 'rejected' ? RS_REJECT.items.map(r => r.url) : tab === 'client' ? perClient.sort().reverse() : RS_LISTS[tab];
-  const rows = [...list].reverse().filter(s => s.toLowerCase().includes(q) && (tab === 'rejected' || tab === 'client' || state.hidKind === 'All' || kindOf(s) === state.hidKind));
-  const T = [['hidden', 'Hidden sites', RS_LISTS.hidden.length], ['allowed', 'Approved for every client', RS_LISTS.allowed.length], ['client', 'Approved for one client', perClient.length], ['rejected', 'Rejected links', RS_REJECT.items.length], ['social', 'Social sites', Object.keys(PP_SOCIAL.mine()).length]];
-  const flat = tab === 'rejected' || tab === 'client';
+  await RS_STOLEN.load();
+  const list = tab === 'rejected' ? RS_REJECT.items.map(r => r.url) : tab === 'client' ? perClient.sort().reverse() : tab === 'stolen' ? RS_STOLEN.items : RS_LISTS[tab];
+  const rows = [...list].reverse().filter(s => s.toLowerCase().includes(q) && (tab === 'rejected' || tab === 'client' || tab === 'stolen' || state.hidKind === 'All' || kindOf(s) === state.hidKind));
+  const T = [['hidden', 'Hidden sites', RS_LISTS.hidden.length], ['allowed', 'Approved for every client', RS_LISTS.allowed.length], ['client', 'Approved for one client', perClient.length], ['rejected', 'Rejected links', RS_REJECT.items.length], ['stolen', 'Stolen before links', RS_STOLEN.items.length], ['social', 'Social sites', Object.keys(PP_SOCIAL.mine()).length]];
+  const flat = tab === 'rejected' || tab === 'client' || tab === 'stolen';
   const page = rows.slice(0, state.hidMore || 100);
   return `${head('Settings', 'Hidden and approved sites', 'Hidden sites never show up in any search. Approved sites may use the photos: copies found there are marked Licensed by themselves.', `<button class="btn" data-act="hidsave">${ic('down', 18)} Download list</button><button class="btn" data-act="hidload">Add from a file</button>`)}
   <section class="card" style="overflow:hidden">
     <div class="toolbar"><div class="tabs" role="tablist">${T.map(([k, l, n]) => `<button role="tab" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}" data-act="hidtab" data-v="${k}">${l} <span>${n.toLocaleString()}</span></button>`).join('')}</div></div>
     <div class="row" style="gap:10px;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--bg)">
-      <input id="hidq" class="chip" style="min-height:38px;padding:0 12px;font-size:14px;flex:1 1 260px" placeholder="${tab === 'rejected' ? 'Find a rejected link' : tab === 'client' ? 'Find a site or a client' : 'Find or add a site, like patch.com or x.com/examplenews'}" value="${esc(state.hidQ)}" aria-label="Find a site">
-      ${tab === 'client' ? '<span class="faint" style="font-size:13px">Add one from a copy: open it in Copies found and press Approve site.</span>' : ''}${!flat ? `<button class="btn primary" data-act="hidadd">＋ ${tab === 'hidden' ? 'Hide' : 'Approve'} it</button>
+      <input id="hidq" class="chip" style="min-height:38px;padding:0 12px;font-size:14px;flex:1 1 260px" placeholder="${tab === 'stolen' ? 'Find a link' : tab === 'rejected' ? 'Find a rejected link' : tab === 'client' ? 'Find a site or a client' : 'Find or add a site, like patch.com or x.com/examplenews'}" value="${esc(state.hidQ)}" aria-label="Find a site">
+      ${tab === 'client' ? '<span class="faint" style="font-size:13px">Add one from a copy: open it in Copies found and press Approve site.</span>' : ''}${tab === 'stolen' ? '<span class="faint" style="font-size:13px;flex:1 1 300px">Pages you already dealt with. A copy found on one of them gets a red Stolen before tag in Copies found, and its site counts as a repeat offender. Add them with Add from a file.</span>' : ''}${!flat ? `<button class="btn primary" data-act="hidadd">＋ ${tab === 'hidden' ? 'Hide' : 'Approve'} it</button>
       <div class="seg">${['All', 'Whole site', 'Sub-site', 'Account or part', 'Ending'].map(k => `<button class="${state.hidKind === k ? 'on' : ''}" data-act="hidkind" data-v="${k}">${k}</button>`).join('')}</div>` : ''}</div>
-    <div class="scroll"><table><thead><tr><th>${tab === 'rejected' ? 'Link' : tab === 'client' ? 'Site' : 'Site or account'}</th>${tab === 'rejected' ? '<th>Photo</th>' : tab === 'client' ? '<th>Approved for</th>' : '<th>What it covers</th>'}<th></th></tr></thead><tbody>
-      ${page.map(h => { const r = tab === 'rejected' ? RS_REJECT.items.find(x => x.url === h) : null; if (tab === 'client') { const [site, who] = h.split(' | '); return `<tr><td><b class="mono" style="font-size:13px;overflow-wrap:anywhere">${esc(site)}</b></td><td>${esc(who)}</td><td style="text-align:right"><button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ Remove</button></td></tr>`; }
+    <div class="scroll"><table><thead><tr><th>${tab === 'rejected' || tab === 'stolen' ? 'Link' : tab === 'client' ? 'Site' : 'Site or account'}</th>${tab === 'stolen' ? '<th></th>' : tab === 'rejected' ? '<th>Photo</th>' : tab === 'client' ? '<th>Approved for</th>' : '<th>What it covers</th>'}<th></th></tr></thead><tbody>
+      ${page.map(h => { if (tab === 'stolen') return `<tr><td><a class="mono" style="font-size:13px;overflow-wrap:anywhere" href="${esc(h)}" target="_blank" rel="noreferrer">${esc(h)}</a></td><td></td><td style="text-align:right"><button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ Take off the list</button></td></tr>`;
+        const r = tab === 'rejected' ? RS_REJECT.items.find(x => x.url === h) : null; if (tab === 'client') { const [site, who] = h.split(' | '); return `<tr><td><b class="mono" style="font-size:13px;overflow-wrap:anywhere">${esc(site)}</b></td><td>${esc(who)}</td><td style="text-align:right"><button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ Remove</button></td></tr>`; }
         return `<tr><td><b class="mono" style="font-size:13px;overflow-wrap:anywhere">${esc(h)}</b></td><td>${r ? esc(r.pic || 'every photo') : `<span class="tag grey">${kindOf(h)}</span>${typeof ppTeamTag === 'function' ? ppTeamTag(h, tab) : ''}`}</td><td style="text-align:right">${!r && typeof ppTeamBtn === 'function' ? ppTeamBtn(h, tab) : ''}<button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ ${tab === 'hidden' ? 'Show again' : tab === 'allowed' ? 'Remove' : 'Bring back'}</button></td></tr>`; }).join('') || `<tr><td colspan="3" class="muted" style="padding:28px;text-align:center">${q ? (flat ? 'Nothing matches.' : 'Nothing matches. Press the button to add it.') : 'This list is empty.'}</td></tr>`}
     </tbody></table></div>
     <div class="row faint" style="padding:10px 18px;border-top:1px solid var(--line);font-size:12.5px;gap:12px"><span>Showing ${page.length.toLocaleString()} of ${rows.length.toLocaleString()}.</span>${rows.length > page.length ? '<button class="btn" style="min-height:30px;font-size:13px;margin-left:auto" data-act="hidmore">Show more</button>' : ''}</div>
   </section>
-  ${flat ? '' : impCard((await RS_IMPORTS.all()).filter(e => e.kind === tab), tab)}
-  <p class="faint" style="margin:0;font-size:12.5px">${RS_LISTS.fileState === 'granted' ? 'Saved in Documents › PageProof as hidden-sites.txt, allowed-sites.txt and rejected-links.txt.' : 'Saved in this browser. <a href="#settings">Set up the PageProof folder</a> to also keep them as text files that survive a reinstall.'}</p>`;
+  ${flat && tab !== 'stolen' ? '' : impCard((await RS_IMPORTS.all()).filter(e => e.kind === tab), tab)}
+  <p class="faint" style="margin:0;font-size:12.5px">${RS_LISTS.fileState === 'granted' ? 'Saved in Documents › PageProof as hidden-sites.txt, allowed-sites.txt, rejected-links.txt and stolen-links.txt.' : 'Saved in this browser. <a href="#settings">Set up the PageProof folder</a> to also keep them as text files that survive a reinstall.'}</p>`;
 };
 // 4.22: files added to this list, each with Undo this import.
 const impCard = (list, tab) => `<section class="card" style="overflow:hidden">
   <div class="row" style="padding:14px 18px;border-bottom:1px solid var(--line);gap:10px"><b style="flex:1">Files you added</b><button class="btn" style="min-height:32px;font-size:13px" data-act="hidunload">Take out the sites in a file…</button></div>
-  ${list.map(e => { const live = (e.op === 'add') === !e.undone; return `<div class="row" style="padding:12px 18px;border-bottom:1px solid var(--line);gap:12px;flex-wrap:nowrap"><span style="flex:1;min-width:0"><b style="overflow-wrap:anywhere">${esc(e.name)}</b><br><span class="muted" style="font-size:13px">${e.op === 'add' ? 'Added' : 'Took out'} ${e.sites.length.toLocaleString()} sites · ${fmtDate(e.at)}${e.undone ? ' · <b>undone ' + fmtDate(e.undone) + '</b>' : ''}</span></span><button class="btn${live && e.op === 'add' ? ' primary' : ''}" style="min-height:32px;font-size:13px;white-space:nowrap" data-act="impundo" data-v="${esc(e.id)}">${e.op === 'add' ? (live ? '↶ Undo this import' : 'Add them again') : (live ? '↶ Put them back' : 'Take them out again')}</button></div>`; }).join('')}
+  ${list.map(e => { const live = (e.op === 'add') === !e.undone; return `<div class="row" style="padding:12px 18px;border-bottom:1px solid var(--line);gap:12px;flex-wrap:nowrap"><span style="flex:1;min-width:0"><b style="overflow-wrap:anywhere">${esc(e.name)}</b><br><span class="muted" style="font-size:13px">${e.op === 'add' ? 'Added' : 'Took out'} ${e.sites.length.toLocaleString()} ${tab === 'stolen' ? 'links' : 'sites'} · ${fmtDate(e.at)}${e.undone ? ' · <b>undone ' + fmtDate(e.undone) + '</b>' : ''}</span></span><button class="btn${live && e.op === 'add' ? ' primary' : ''}" style="min-height:32px;font-size:13px;white-space:nowrap" data-act="impundo" data-v="${esc(e.id)}">${e.op === 'add' ? (live ? '↶ Undo this import' : 'Add them again') : (live ? '↶ Put them back' : 'Take them out again')}</button></div>`; }).join('')}
   <p class="faint" style="margin:0;padding:10px 18px;font-size:12.5px">${list.length ? 'Undo takes out only the sites that file added. Sites that were on the list before stay.' : 'No files added yet.'} Added a file before PageProof kept this list? Press "Take out the sites in a file" and pick the same file: only the sites it added come out.</p>
 </section>`;
 V.hidden.after = () => {
@@ -616,6 +618,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Stolen before links', 'Bring in your list of links stolen before: Settings › Hidden and approved sites › Stolen before links › Add from a file. A copy found on one of those exact pages gets a red Stolen before tag in Copies found, and other pages on the same site (or by the same social account) count as a repeat offender and come first. The Stolen before quick filter shows only them, and More filters can hide them. Nothing is answered by itself.'],
   ['Quick again with a long hidden list', 'A hidden sites list with tens of thousands of pages made every PageProof page slow: each copy was checked against every page on the list. Now it is looked up in one step, about 100 times faster, so a big list no longer slows down clicks, scrolling or Copies found.'],
   ['Undo a file you added', 'Hidden and approved sites now lists every file you added with "Add from a file", each with Undo this import. Undo takes out only the sites that file added, so sites that were on the list before stay. For a file added before this version, press "Take out the sites in a file" and pick the same file. A line with several links separated by commas now counts as several links.'],
   ['Searching matched to your computer', 'The computer check now sets every part of a search on this computer: photo checks at a time (up to 6 on a very strong computer), search tabs open, and found pictures downloaded and opened at once. A new speed level in Settings › Your computer counts from the next search. How often the search sites are asked does not change, so a stronger computer never means more robot checks.'],
@@ -887,6 +890,9 @@ async function act(a, v, el) {
       const [site, who] = v.split(' | ');
       await FC.licenseSite(who, site, false);
       toast(site + ' is no longer approved for ' + who, async () => { await FC.licenseSite(who, site, true); render(true); });
+    } else if (state.hidTab === 'stolen') {
+      await RS_STOLEN.load(); RS_STOLEN.items = RS_STOLEN.items.filter(x => x !== v); await RS_STOLEN.save();
+      toast('Taken off the stolen before list', async () => { await RS_STOLEN.load(); RS_STOLEN.items.push(v); await RS_STOLEN.save(); render(true); });
     } else if (state.hidTab === 'rejected') {
       const r = RS_REJECT.items.find(x => x.url === v);
       RS_REJECT.items = RS_REJECT.items.filter(x => x !== r); await RS_REJECT.save();
@@ -900,10 +906,11 @@ async function act(a, v, el) {
   }
   else if (a === 'hidsave') {
     await RS_LISTS.load();
-    const kind = state.hidTab === 'allowed' ? 'allowed' : 'hidden';
+    const kind = state.hidTab === 'allowed' ? 'allowed' : state.hidTab === 'stolen' ? 'stolen' : 'hidden';
+    if (kind === 'stolen') await RS_STOLEN.load();
     const a2 = document.createElement('a');
-    a2.href = URL.createObjectURL(new Blob([RS_LISTS.text(kind)], { type: 'text/plain' }));
-    a2.download = RS_LISTS.FILES[kind]; a2.click();
+    a2.href = URL.createObjectURL(new Blob([kind === 'stolen' ? RS_STOLEN.text() : RS_LISTS.text(kind)], { type: 'text/plain' }));
+    a2.download = kind === 'stolen' ? RS_STOLEN.FILE : RS_LISTS.FILES[kind]; a2.click();
   }
   else if (a === 'hidload') document.getElementById('hidLoad').click();
   else if (a === 'hidunload') document.getElementById('hidUnload').click();
