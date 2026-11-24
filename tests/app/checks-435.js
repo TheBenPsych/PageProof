@@ -93,6 +93,10 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(b5 === 'removed/linkcard', 'The LinkedIn link preview match went to Removed by itself (' + b5 + ')');
   const chips = await page.evaluate(() => [...document.querySelectorAll('.acctfilters label.chip')].map(l => l.textContent.replace(/\s+/g, ' ').trim()).join(' | '));
   ok(/Show government \(1 hidden\)/.test(chips) && /Show personal accounts \(2 hidden\)/.test(chips), 'The Show government and Show personal accounts ticks say how many are hidden (' + chips + ')');
+  // Ben: "Socials shows 9 matches but I see none" - the tab number and the Quick filter numbers
+  // count only copies you can see (hidden government, personal and repost copies don't count).
+  const nums = await page.evaluate(() => { const t = s => (document.querySelector(s) || {}).textContent || ''; const qf = [...document.querySelectorAll('.qfrow .qf')].map(b => +(b.querySelector('.num') || {}).textContent || 0); return { tab: +t('.bigtabs [data-v="social"] .n'), fresh: +t('.tabs [data-v="New"] span'), qmax: Math.max(0, ...qf) }; });
+  ok(nums.tab === nums.fresh && nums.qmax <= nums.fresh, 'Social media tab number and Quick filters count only the copies that show (tab ' + nums.tab + ', New ' + nums.fresh + ', biggest Quick filter ' + nums.qmax + ')');
   await shot('435-social');
   await page.click('[data-act="fperson"]'); await page.waitForTimeout(500);
   ok((await shown()) === 'b1,b3,b4,b6', 'Show personal accounts brings them back (' + (await shown()) + ' ' + JSON.stringify(await page.evaluate(() => [state.fView, state.fFilter, state.fPerson, state.fTab, state.open])) + ')');

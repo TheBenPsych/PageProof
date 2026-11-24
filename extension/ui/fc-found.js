@@ -717,7 +717,7 @@ V.found = async () => {
   if (routeArg('photo')) { state.fPhoto = routeArg('photo'); state.fFilter = 'All'; state.fView = 'list'; history.replaceState(null, '', '#found'); }
   const everyTab = FCD.copies;
   // 4.9: two tabs, Websites and Social media. Each keeps its own filters.
-  const tabN = t => everyTab.filter(c => (t === 'social') === isSoc(c) && c.status === 'new' && visible(c)).length;
+  const tabN = t => everyTab.filter(c => (t === 'social') === isSoc(c) && c.status === 'new' && visible(c) && !ruleHidden(c)).length;
   const nWeb = tabN('web'), nSoc = tabN('social');
   if (state.fTab === 'social' && !everyTab.some(isSoc)) switchTab('web');
   const everything = everyTab.filter(inTab);
@@ -831,7 +831,7 @@ V.found = async () => {
   // 4.7: one tidy line. Each switch is a small dropdown.
   // 4.11: a dropdown set away from its normal choice (def) turns blue, with an ✕ that puts it back.
   const dd = (id, label, opts, cur, right, def) => { const chosen = def != null && cur !== def; return `<details class="ddw${right ? ' right' : ''}" data-dd="${id}"><summary class="ddb${chosen ? ' chosen' : ''}">${label}${cur != null ? ` <b>${esc((opts.find(o => o[0] === cur) || opts[0])[1])}</b>` : ''} ${chosen ? `<span class="ddx" role="button" tabindex="0" data-act="fset" data-v="${id}|${def}" title="Back to ${esc((opts.find(o => o[0] === def) || opts[0])[1])}" aria-label="Clear ${label}">✕</span>` : '<span class="caret" aria-hidden="true">▾</span>'}</summary><div class="ddm" role="menu">${opts.map(([k, l, s]) => `<button role="menuitemradio" aria-checked="${cur === k}" class="${cur === k ? 'on' : ''}" data-act="fset" data-v="${id}|${k}">${esc(l)}${s ? `<span class="sub">${esc(s)}</span>` : ''}</button>`).join('')}</div></details>`; };
-  const newL = live.filter(c => c.status === 'new');
+  const newL = live.filter(c => c.status === 'new' && !ruleHidden(c));
   // 4.24: new spam blog copies (counted whether they are hidden or showing).
   const spamCs = everything.filter(c => c.spam && c.status === 'new' && !siteHidden(c) && !FCD.countries.includes(c.country)), spamN = spamCs.length;
   // 4.11: the old big number cards are now small Quick filter buttons. Solid blue with a tick = on.
@@ -859,7 +859,7 @@ V.found = async () => {
       ${social ? qf('Known stolen accounts', newL.filter(c => c.repeat > 0).length, state.fRepeat, 'qtoggle', 'repeat', 'bad') : qf('Suspicious sites', newL.filter(c => c.risk.level === 'sus').length, state.fRisk === 'sus', 'qtoggle', 'sus', 'bad')}
       ${qf('Published in the last 3 months', newL.filter(fresh).length, state.fFresh, 'qtoggle', 'fresh', 'ok')}
       ${!social && spamN ? qf('Spam blogs', spamN, state.fSpam === 'only', 'qtoggle', 'spam', 'faint') : ''}
-      ${RS_STOLEN.items.length ? qf('Stolen before', all.filter(c => c.known && c.status !== 'removed').length, state.fKnown === 'only', 'qtoggle', 'known', 'bad') : ''}
+      ${RS_STOLEN.items.length ? qf('Stolen before', all.filter(c => c.known && c.status !== 'removed' && !ruleHidden(c)).length, state.fKnown === 'only', 'qtoggle', 'known', 'bad') : ''}
     </div>
     ${!social ? spamLine(spamCs) : ''}
     ${social ? platChips(all.filter(c => passMore(c) && passStatus(c) && passMainNoPlat(c))) : ''}
