@@ -7,7 +7,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > and as one line in the timeline. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.17.0** (24 Nov 2026).
+Last updated: version **4.23.1** (24 Nov 2026).
 
 ---
 
@@ -25,6 +25,7 @@ Last updated: version **4.17.0** (24 Nov 2026).
 - **Cookie and newsletter pop-ups closed** before the capture, and written down in the pack. (4.14)
 - **Capture holds still:** if you switch tabs or minimise the window it pauses and waits, and blocks accidental scrolling while it works. (4.15)
 - **"Ready to save?" check:** asks once before saving if something looks wrong, finds your client's photo on the page, and warns when the page shows a login wall or "blocked" message. (4.15)
+- **Tricky layouts captured properly:** side panels, slide-ins, sticky headings, pictures that load late, bottom bars and locked pages. Checked on 60 test pages. (4.19)
 - **Capture page proof checklist:** page, pictures, printout and timestamp each get a tick, with numbered steps (case details, then save). (4.3)
 - **Who hosts this site:** hosting company and domain registrar looked up for every capture (IPv6 too). (2.2, 2.6)
 - **Collected by** name remembered; case number and notes start empty each time so they never carry over by mistake. (2.9)
@@ -73,6 +74,8 @@ Last updated: version **4.17.0** (24 Nov 2026).
 - **Mirror check** flips your photo once instead of every time. (4.16)
 - **Links on hidden sites are not downloaded or checked;** approved sites are checked last. (4.16)
 - **Photo checker uses the graphics card** (WebGPU) for finding details, pairing and lining up, but only when that PC's own timing shows it is faster. (4.17)
+- **Owner check tabs** open pinned in the background with the PageProof logo. (4.20)
+- **Computer check sets every part of a search** to suit the PC, and big searches ease off when the computer is busy. (4.21)
 
 ## 5. Review the copies found
 
@@ -88,6 +91,9 @@ Last updated: version **4.17.0** (24 Nov 2026).
 - **Breaking News saver:** saves a photo named the firm's way and checks if it's new or recycled. (4.4)
 - **Site owners** page groups sites run by one company (footer name, shared analytics IDs). **Who's behind this site** helps with OpenCorporates, USPTO and Google lookups. (4.0)
 - **Stolen copies are protected:** never hidden by a bulk Remove or a site hide. (4.15)
+- **Stolen before links:** add a file of links already claimed. A copy on one of those pages gets a red "Stolen before" tag, other pages on the same site or account count as repeat offenders, with a quick filter. (4.23)
+- **Undo a file added** to hidden or approved sites, or take out all of a file's sites. (4.22, 4.23.1)
+- **Team lists:** hidden and approved sites shared through one PageProof Team folder, showing who added each one, with a flag when the team disagrees. (4.18)
 - **No double answers** from a held-down key, and a "too fast?" check. (4.15)
 
 ## 6. Social media accounts
@@ -118,6 +124,7 @@ Last updated: version **4.17.0** (24 Nov 2026).
 ## 9. Safety nets
 
 - **Settings backup** in `Documents\PageProof` and a "Bring them back" offer after reinstalling. (4.0)
+- **Daily backup to your own Google Drive** on work days (last 14 kept), Back up now, and restore by date with a preview and a safety copy first. Moving to a new computer page. (4.18)
 - **One PageProof folder** and a fixed extension ID, so data survives moving the folder. (4.6)
 - **Reconnect your folders first** after every update. (4.3.7)
 - **Pages never hang on Google Drive** (every Drive question has a time limit); a red bar says what Drive answered. (4.3.3 to 4.3.6)
@@ -125,6 +132,7 @@ Last updated: version **4.17.0** (24 Nov 2026).
 - **Where the time goes** is shown on Is everything working. (4.16)
 - **Graphics card row** on Is everything working. (4.17)
 - **Keep searching guards:** reopens if closed by mistake, tab title says leave open, starts fresh after updates. (4.4.3, 4.9.4, 4.15)
+- **A long hidden sites list no longer slows PageProof down** (9,000 copies against 25,000 hidden sites: from 7 seconds to under a tenth of a second). (4.22.1)
 - **Folder name warnings** when a photo folder looks wrong. (4.15)
 - **Automatic tests** run before every release. (4.1)
 - **Nothing writes into its own program folder** (after Windows Defender flagged a self-updater, it was removed). (4.2.1)
@@ -178,3 +186,9 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.15 | 24 Nov | Mistake-proofing; Still online check removed |
 | 4.16 | 24 Nov | Faster photo checker (WebAssembly) |
 | 4.17 | 24 Nov | Graphics-card photo checker |
+| 4.18 | 24 Nov | Daily backup to your own Google Drive, safe restore, team lists |
+| 4.19 | 24 Nov | Full-page capture fixes for tricky layouts |
+| 4.20 | 24 Nov | Owner check tabs open pinned in the background |
+| 4.21 | 24 Nov | Computer check sets every part of a search |
+| 4.22 | 24 Nov | Undo a file added to hidden or approved sites; long lists fast |
+| 4.23 | 24 Nov | Stolen before links in Copies found |
