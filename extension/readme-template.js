@@ -91,7 +91,9 @@ function ppReadmeChecks(stamps) {
   const tsa = stamps.length > 0;
   const certs = { DigiCert: '"DigiCert Trusted Root G4" from https://www.digicert.com/kb/digicert-root-certificates.htm',
     Sectigo: '"USERTrust RSA Certification Authority" root, from sectigo.com',
-    FreeTSA: 'https://freetsa.org/files/cacert.pem' };
+    FreeTSA: 'https://freetsa.org/files/cacert.pem',
+    GlobalSign: '"GlobalSign Root CA - R6" from https://support.globalsign.com/ca-certificates/root-certificates/globalsign-root-certificates',
+    Entrust: '"Entrust Root Certification Authority - G2" from https://www.entrust.com/resources/certificate-solutions/tools/root-certificate-downloads' };
   return [
     'HOW TO CHECK BY HAND (INDEPENDENT OF PAGEPROOF)',
     '-----------------------------------------------',

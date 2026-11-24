@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.40.0** (24 Nov 2026).
+Last updated: version **4.41.0** (24 Nov 2026).
 
 ---
 
@@ -48,6 +48,7 @@ Last updated: version **4.40.0** (24 Nov 2026).
 - **Evidence report PDF per copy found:** your photo and their copy side by side, links, sizes, hidden data, match check, fingerprints of both, and a Match ID. (3.12)
 - **Clock check:** warns if this computer's clock is off compared with the timestamp services. (4.15)
 - Guides: VERIFYING.md (how anyone checks a pack), TUTORIAL.md, and a Word install guide for the team.
+- **Never short on timestamps.** A timestamp service that doesn't answer is asked again twice, then GlobalSign or Entrust stand in, so every pack gets three trusted timestamps. (4.41)
 
 ## 3. Look closer at pictures
 
@@ -83,6 +84,7 @@ Last updated: version **4.40.0** (24 Nov 2026).
 - **Computer check sets every part of a search** to suit the PC, and big searches ease off when the computer is busy. (4.21)
 - **Reddit and forums never show.** Your team never pursues forums, so every Reddit link (reddit.com, old.reddit.com, redd.it, i.redd.it, preview.redd.it, redditmedia.com) is dropped from searches. Clear forum addresses go too: forum.*, forums.* or boards.* sites, pages under /forum/, /forums/ or /threads/, phpBB / vBulletin / Simple Machines pages (viewtopic.php, showthread.php...) and Discourse topics (/t/title/123). Copies found before are off Copies found; ones already marked Stolen stay. (4.34)
 - **The photo must be on their page itself.** A match made on Google's small preview is checked against the page during the search: the article's own pictures count, comments, sidebars and "related" boxes don't. If the photo isn't there, the match is left out; if the page can't be read, it's only a Maybe. (4.35)
+- **Moved or renamed photos keep their history.** When a folder is renamed or a shoot is moved in Google Drive, PageProof recognises the photos and keeps their copies, answers, flags and search dates. A ticked folder that can't be found any more gets a red line on Home. (4.41)
 
 ## 5. Review the copies found
 
@@ -166,6 +168,10 @@ Last updated: version **4.40.0** (24 Nov 2026).
 - **How PageProof is doing.** Day-by-day stats for this computer (found, speed, links thrown out and why, each search site, Keep searching on-time, Drive, photos covered, computer strain), "Something looks off" alerts, a Checker test with made-up pictures, and Save stats for Claude (one file, numbers and website names only) plus a weekly file on Fridays. (4.37)
 - **Bing finds copies again.** Bing's "Pages with this image" and top 60 "Visual matches" are read, each with its picture, and checked like Google's. (4.37.1)
 - **Signed-in check.** Settings › Is everything working? shows whether this browser is signed in to Facebook, Instagram, X, TikTok, LinkedIn, Google and Bing (only whether the sign-in is there, nothing else is read), with why it matters and a Sign in button. (4.38)
+- **Room to grow.** PageProof asks for unlimited browser storage and keeps its data safe from the browser's clean-up. If a save ever fails, Home and Is everything working say so in red. (4.41)
+- **Backups keep the search history.** Restoring, or moving to a new computer, carries on where you were instead of searching every photo again. (4.41)
+- **Error diary.** Problems PageProof handles quietly are counted by where they happened (with names, links and folders taken out) and listed under What went wrong in Save stats for Claude. (4.41)
+- **Check-up after every update.** About a minute after a new version opens, PageProof checks the photo checker, opening a Drive photo, saving, the timestamp services and the search sites, and Home says "everything checked" or what broke. (4.41)
 
 ---
 
@@ -243,3 +249,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.38 | 24 Nov | Far fewer "Picture blocked" links (lazy pictures, Facebook/X links, page fallback) |
 | 4.39 | 24 Nov | Seals, crests, small slices and patterns (fences, floors) no longer count as copies |
 | 4.40 | 24 Nov | New look part 1: menu, top bar and Home |
+| 4.41 | 24 Nov | Safety nets: storage, search history in backups, moved photos, timestamp spares, error diary, update check-up |
