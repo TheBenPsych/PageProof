@@ -1,4 +1,4 @@
-// Checks for 4.30: a social post only counts when the post's OWN picture is your client's photo.
+// Checks for 4.30 and 4.33: a social post only counts when one of the post's OWN pictures is your client's photo.
 // Google Lens can show your client's photo next to a Facebook link when the post itself shows
 // something else (a video, another photo): the match came from elsewhere on that page.
 // Pretend copies only; the post pages are stubbed (the network is never used).
@@ -22,7 +22,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     const photo = await FC.DB.get('photos', p);
     const day = d => new Date(Date.now() - d * 864e5).toISOString();
     const mk = (id, u) => ({ id, photo: p, client: photo.client || '', url: u, key: RS_UTIL.key(u), site: RS_SITE.of(u), title: '', thumb: '', img: '', engines: ['google'], pct: 100, tiles: 40, match: 'same', w: 800, h: 600, firstSeen: day(0), lastSeen: day(0), times: 1, by: "today's 50", status: 'new', online: 'up' });
-    const xs = [mk('pin', 'https://www.facebook.com/SomePage/posts/real-post/111/'), mk('pout', 'https://www.facebook.com/OtherPage/posts/video-post/222/'), mk('pnone', 'https://www.facebook.com/ThirdPage/posts/locked/333/')];
+    const xs = [mk('pin', 'https://www.facebook.com/SomePage/posts/real-post/111/'), mk('pout', 'https://www.facebook.com/OtherPage/posts/video-post/222/'), mk('pnone', 'https://www.facebook.com/ThirdPage/posts/locked/333/'), mk('pcar', 'https://www.facebook.com/FourthPage/posts/album/444/'), mk('pnob', 'https://www.facebook.com/FifthPage/posts/signedout/555/')];
     for (const c of xs) { c.country = FC.countryOf(c.site); c.use = FC.useOf(c); }
     await FC.DB.putMany('copies', xs);
     // Their pictures: the client's own photo (a pretend picture of shapes), and a picture of random dots.
@@ -31,23 +31,28 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     const ours = await draw(7);
     window.ourBlob = async () => ours;          // the client's photo from "Drive"
     window.__pics = { same: await toData(ours), other: await toData(await draw(99)) };
+    // The signed-in browser step, stubbed: the album shows the photo as its 3rd picture; the
+    // video post has nothing else; the signed-out one can't be read.
+    window.postInBrowser = async (c, ours) => /444/.test(c.url) ? { state: 'seen', pct: 100, pic: 'https://scontent.example/3.jpg', n: 3 } : /222/.test(c.url) ? { state: 'notSeen', n: 1 } : null;
     PP_CHECKS.readPage = async c => /111/.test(c.url) ? { ok: true, at: new Date().toISOString(), url: c.url, sells: {}, ads: [], soc: {}, type: 'article', pic: __pics.same }
-      : /222/.test(c.url) ? { ok: true, at: new Date().toISOString(), url: c.url, sells: {}, ads: [], soc: {}, type: 'video.other', pic: __pics.other }
+      : /222|444|555/.test(c.url) ? { ok: true, at: new Date().toISOString(), url: c.url, sells: {}, ads: [], soc: {}, type: 'video.other', pic: __pics.other }
       : { ok: false, at: new Date().toISOString(), why: 'The page answered 403' };
   });
   const res = await page.evaluate(async () => {
     const out = {};
-    for (const id of ['pin', 'pout', 'pnone']) { const c = await FC.DB.get('copies', id); const r = await postCheck(c); const cc = await FC.DB.get('copies', id); out[id] = { state: r && r.state, pct: r && r.pct, video: r && r.video, err: r && r.err, status: cc.status, by: cc.removedBy || '' }; }
+    for (const id of ['pin', 'pout', 'pnone', 'pcar', 'pnob']) { const c = await FC.DB.get('copies', id); const r = await postCheck(c); const cc = await FC.DB.get('copies', id); out[id] = { state: r && r.state, pct: r && r.pct, video: r && r.video, err: r && r.err, status: cc.status, by: cc.removedBy || '' }; }
     return out;
   });
   ok(res.pin.state === 'seen' && res.pin.status === 'new', 'Post whose own picture is the photo: matches and stays new (' + JSON.stringify(res.pin) + ')');
   ok(res.pout.state === 'notSeen' && res.pout.video && res.pout.status === 'removed' && res.pout.by === 'postcheck', 'Post whose own picture is different: goes to Removed by itself (' + JSON.stringify(res.pout) + ')');
+  ok(res.pcar.state === 'seen' && res.pcar.status === 'new', 'Album whose 3rd picture is the photo: found in the signed-in browser, stays new (' + JSON.stringify(res.pcar) + ')');
+  ok(res.pnob.state === 'notSeen' && res.pnob.status === 'new', 'Main picture different but the post can\'t be opened signed in: flagged, NOT removed (' + JSON.stringify(res.pnob) + ')');
   ok(res.pnone.state === 'unknown' && res.pnone.status === 'new', 'Post that can\'t be read: left alone (' + JSON.stringify(res.pnone) + ')');
 
   // The panel explains it.
   await go('found');
   const d = await page.evaluate(async () => { FCD = null; await loadFC(); state.open = 'pout'; await render(true); await new Promise(r => setTimeout(r, 600)); const el = document.getElementById('drawer'); return el ? el.textContent.replace(/\s+/g, ' ') : ''; });
-  ok(/Not seen in the post/.test(d) && /video cover is a different photo/.test(d) && /moved it to Removed/.test(d), 'The panel says why (' + (d.match(/Not seen in the post[^.]*\./) || [''])[0] + ')');
+  ok(/Not seen in the post/.test(d) && /None of the post's pictures is your client's photo/.test(d) && /moved it to Removed/.test(d), 'The panel says why (' + (d.match(/Not seen in the post[^.]*\./) || [''])[0] + ')');
   ok(/Their picture/.test(d) && /small preview/.test(d), 'The panel says where "Theirs" came from');
   const d2 = await page.evaluate(async () => { state.open = 'pin'; await render(true); await new Promise(r => setTimeout(r, 600)); return document.getElementById('drawer').textContent.replace(/\s+/g, ' '); });
   ok(/post's own picture matches/.test(d2) && !/Not seen in the post/.test(d2), 'A real match says the post\'s own picture matches');
