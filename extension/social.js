@@ -8,7 +8,8 @@
 const PP_SOCIAL = (() => {
   const api = typeof browser !== 'undefined' ? browser : chrome;
   // site -> [name, short label, colour]. A site covers its sub-sites (m.facebook.com).
-  // 4.25.0: Ben's fixed list. ONLY these 17 platforms count as social media. Every other site
+  // 4.25.0: Ben's fixed list. ONLY these platforms count as social media (16 since
+  // 4.31.0: Reddit is a forum and Ben never pursues forums, so its links are dropped entirely). Every other site
   // (Naver Blog, note, Twitch, Quora, Medium, Flickr, chat apps...) is a normal website.
   const SITES = {
     'youtube.com': ['YouTube', 'YT', '#C22222'], 'youtu.be': ['YouTube', 'YT', '#C22222'], 'youtube-nocookie.com': ['YouTube', 'YT', '#C22222'],
@@ -19,7 +20,6 @@ const PP_SOCIAL = (() => {
     'linkedin.com': ['LinkedIn', 'IN', '#0A66C2'], 'lnkd.in': ['LinkedIn', 'IN', '#0A66C2'],
     'pinterest.com': ['Pinterest', 'PI', '#B8243A'], 'pin.it': ['Pinterest', 'PI', '#B8243A'],
     'threads.net': ['Threads', 'TH', '#3B3F4A'], 'threads.com': ['Threads', 'TH', '#3B3F4A'],
-    'reddit.com': ['Reddit', 'RD', '#C9471F'], 'redd.it': ['Reddit', 'RD', '#C9471F'],
     'snapchat.com': ['Snapchat', 'SC', '#8A7A00'],
     'tumblr.com': ['Tumblr', 'TU', '#34465D'],
     'bsky.app': ['Bluesky', 'BS', '#1866C9'], 'bsky.social': ['Bluesky', 'BS', '#1866C9'],
@@ -111,9 +111,6 @@ const PP_SOCIAL = (() => {
       case 'pinterest.com':
         if (seg[0] === 'pin' || !okName(seg[0]) || !/^[\w]{3,30}$/.test(seg[0])) return null;
         return mk('pinterest.com', '@' + seg[0], 'https://www.pinterest.com/' + seg[0] + '/', '', seg[0]);
-      case 'reddit.com':
-        if ((seg[0] === 'user' || seg[0] === 'u') && seg[1]) return mk('reddit.com', 'u/' + seg[1], 'https://www.reddit.com/user/' + seg[1] + '/', '', 'user/' + seg[1]);
-        if (seg[0] === 'r' && seg[1]) return mk('reddit.com', 'r/' + seg[1], 'https://www.reddit.com/r/' + seg[1] + '/', 'community');
         return null;
       case 'tumblr.com': {
         const sub = h.endsWith('.tumblr.com') ? h.slice(0, -'.tumblr.com'.length) : '';
@@ -203,7 +200,6 @@ const PP_SOCIAL = (() => {
     'youtu.be': u => 'https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent(u),
     'x.com': u => 'https://publish.twitter.com/oembed?omit_script=1&url=' + encodeURIComponent(u.replace('//x.com/', '//twitter.com/')),
     'twitter.com': u => 'https://publish.twitter.com/oembed?omit_script=1&url=' + encodeURIComponent(u),
-    'reddit.com': u => 'https://www.reddit.com/oembed?url=' + encodeURIComponent(u),
     'pinterest.com': u => 'https://www.pinterest.com/oembed.json?url=' + encodeURIComponent(u),
     'tumblr.com': u => 'https://www.tumblr.com/oembed/1.0?url=' + encodeURIComponent(u),
     'flickr.com': u => 'https://www.flickr.com/services/oembed/?format=json&url=' + encodeURIComponent(u),

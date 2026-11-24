@@ -7,7 +7,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > and as one line in the timeline. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.30.0** (24 Nov 2026).
+Last updated: version **4.31.0** (24 Nov 2026).
 
 ---
 
@@ -109,7 +109,8 @@ Last updated: version **4.30.0** (24 Nov 2026).
 - **Government accounts hidden.** Anyone in or running for public office (Congresswoman, Councilman, "for Council", campaign or .gov sites, grey check) is type Government and hidden unless you tick Show government. (4.27)
 - **Real names on accounts.** "Matt Thibodeau" instead of the number from the link, with the handle small beside it (Facebook numbers, YouTube channel IDs and more). Country filled from Facebook Page transparency or the place on the profile. (4.27)
 - **Only the post's own picture counts.** Google Lens can show your client's photo next to a Facebook or Instagram link when the post itself shows something else (a video, another photo). PageProof now lines up the post's own picture (or video cover) with your client's photo; a clearly different picture sends the match to Removed by itself ("Not seen in the post", Put back still works). The panel also says where "Theirs" came from: the search site's small preview or a picture from their page. (4.30)
-- **Social media means the 17 main platforms only** (YouTube, Facebook, Instagram, TikTok, X, LinkedIn, Pinterest, Threads, Reddit, Snapchat, Tumblr, Bluesky, Substack, Nextdoor, Truth Social, Vimeo, Behance). Every other site is a normal website again, so country filters and whole-site hiding work on it. No more "is this social?" questions. (4.25)
+- **Social media means the 16 main platforms only** (YouTube, Facebook, Instagram, TikTok, X, LinkedIn, Pinterest, Threads, Snapchat, Tumblr, Bluesky, Substack, Nextdoor, Truth Social, Vimeo, Behance). Every other site is a normal website again, so country filters and whole-site hiding work on it. No more "is this social?" questions. (4.25)
+- **Reddit and forums never show.** Your team never pursues forums, so Reddit is off the social list and every Reddit link (reddit.com, old.reddit.com, redd.it, i.redd.it, preview.redd.it, redditmedia.com) is dropped from searches. Clear forum addresses go too: forum.*, forums.* or boards.* sites, pages under /forum/, /forums/ or /threads/, phpBB / vBulletin / Simple Machines pages (viewtopic.php, showthread.php...) and Discourse topics (/t/title/123). Copies found before are off Copies found; ones already marked Stolen stay. (4.31)
 
 ## 7. Everyday tools
 
@@ -205,3 +206,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.25 | 24 Nov | Social media means the 17 main platforms only |
 | 4.27 | 24 Nov | X details fixed, check kinds, Government hidden, countries to show, real account names |
 | 4.30 | 24 Nov | Social matches only count when the post's own picture is the photo; "Theirs" source shown |
+| 4.31 | 24 Nov | Reddit and forums dropped from searches; social list is 16 platforms |

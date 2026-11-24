@@ -490,7 +490,7 @@ V.hidden = async () => {
   // 4.9: which sites are social media (their copies go on the Social media tab of Copies found).
   if (tab === 'social') {
     await PP_SOCIAL.ready;
-    // 4.25.0: a fixed list of 17 platforms. Every other site goes on the Websites tab.
+    // 4.25.0: a fixed list of platforms (16 since 4.31.0 took Reddit out). Every other site goes on the Websites tab.
     const plats = new Map();
     for (const [d, [name]] of Object.entries(PP_SOCIAL.SITES)) { if (!plats.has(name)) plats.set(name, []); plats.get(name).push(d); }
     const rows = [...plats].filter(([n, ds]) => !q || n.toLowerCase().includes(q) || ds.some(d => d.includes(q)));
@@ -619,6 +619,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Reddit and forums taken out', 'Your team never goes after forums, so Reddit is gone: it is no longer a social media platform (16 now), and links from reddit.com, old.reddit.com, redd.it, i.redd.it and preview.redd.it are dropped from searches. The same goes for clear forum addresses: forum.*, forums.* or boards.* sites, and pages under /forum/, /forums/ or /threads/ or made by phpBB, vBulletin or Discourse. Reddit and forum copies found before are off Copies found too. Copies you already marked Stolen stay.'],
   ['X account details fixed', 'Followers, the check mark and the account type on X now come from the account itself. Before, PageProof could pick up your own account\'s numbers (so it said 0 followers), a check it didn\'t have, and "2026 X Corp." from the bottom of X\'s page as a company, which also made people show as Business. Every account is read again once by itself, X ones first.'],
   ['Check marks drawn like the site draws them', 'X: blue check = Paid (anyone can buy it), gold check = Verified organisation, grey check = Government. Instagram and Facebook: Meta check (Meta uses the same check for paid Meta Verified and earned verification). TikTok, YouTube and others: Verified. The Verified filter has "Really verified (not bought)".'],
   ['Government accounts hidden', 'Anyone in or running for public office (Congresswoman, Councilman, "for Council", campaign or .gov websites, a grey check or a government label) is now the account type Government. Their copies are hidden from Copies found and the new-copies number. Tick "Show government" on the Social media tab to see them.'],

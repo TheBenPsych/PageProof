@@ -222,6 +222,32 @@ const RS_DOCS = {
   },
 };
 
+// ---------- 4.31.0: forums are never pursued (Ben) ----------
+// Reddit is a forum, and Ben's team never goes after forums, so links from them are dropped
+// before they reach Copies found. The rule is kept small and sure on purpose:
+//  - Reddit and its picture hosts (reddit.com and every sub-site like old.reddit.com, redd.it,
+//    i.redd.it, preview.redd.it, redditmedia.com).
+//  - Addresses that only forum software makes: a forum.* / forums.* / boards.* site, or a page
+//    under /forum/, /forums/ or /threads/ (XenForo and most others), or phpBB / vBulletin /
+//    Simple Machines pages (viewtopic.php, viewforum.php, showthread.php, forumdisplay.php,
+//    index.php?topic=), or a Discourse topic (/t/some-title/123).
+// Copies you already marked Stolen always stay.
+const RS_FORUM = {
+  HOST: /(^|\.)(reddit\.com|redd\.it|redditmedia\.com|reddituploads\.com)$/,
+  SUB: /^(forum|forums|boards)\./,
+  PATH: /\/(forum|forums|threads)\/|\/(viewtopic|viewforum|showthread|forumdisplay|showpost)\.php|\/index\.php\?topic=|\/t\/[^/?#]+\/\d+(\/|$|\?|#)/i,
+  is(site, url) {
+    let h = String(site || '').toLowerCase(), path = '';
+    try { const u = new URL(url); h = h || u.hostname.toLowerCase(); path = u.pathname + u.search; } catch (e) { /* no address */ }
+    h = h.replace(/^www\d?\./, '');
+    if (!h) return false;
+    if (RS_FORUM.HOST.test(h) || RS_FORUM.SUB.test(h)) return true;
+    // Threads (the Meta app) is social media, not a forum.
+    if (/(^|\.)threads\.(net|com)$/.test(h)) return false;
+    return !!path && RS_FORUM.PATH.test(path);
+  },
+};
+
 // ---------- hidden and allowed sites ----------
 const RS_LISTS = {
   hidden: [], allowed: [], fileState: 'none', _seen: {},
@@ -306,7 +332,8 @@ const RS_LISTS = {
     RS_LISTS[kind] = RS_LISTS[kind].filter(d => d !== site);
     await RS_LISTS.save();
   },
-  isHidden: (site, url) => !!RS_SITE.entryFor(site, url, RS_LISTS.hidden),
+  // 4.31.0: forums (Reddit...) count as hidden too, always.
+  isHidden: (site, url) => RS_FORUM.is(site, url) || !!RS_SITE.entryFor(site, url, RS_LISTS.hidden),
   isAllowed: (site, url) => !!RS_SITE.entryFor(site, url, RS_LISTS.allowed),
 };
 
