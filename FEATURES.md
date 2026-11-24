@@ -7,7 +7,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > and as one line in the timeline. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.23.1** (24 Nov 2026).
+Last updated: version **4.24.0** (24 Nov 2026).
 
 ---
 
@@ -92,6 +92,7 @@ Last updated: version **4.23.1** (24 Nov 2026).
 - **Site owners** page groups sites run by one company (footer name, shared analytics IDs). **Who's behind this site** helps with OpenCorporates, USPTO and Google lookups. (4.0)
 - **Stolen copies are protected:** never hidden by a bulk Remove or a site hide. (4.15)
 - **Stolen before links:** add a file of links already claimed. A copy on one of those pages gets a red "Stolen before" tag, other pages on the same site or account count as repeat offenders, with a quick filter. (4.23)
+- **Spam blogs hidden:** copies on random-looking addresses of throwaway sites get a grey Spam blog tag and stay out of the list until you choose Show them. Hide all of those sites in one click (undoable). Nothing is answered for you. (4.24)
 - **Undo a file added** to hidden or approved sites, or take out all of a file's sites. (4.22, 4.23.1)
 - **Team lists:** hidden and approved sites shared through one PageProof Team folder, showing who added each one, with a flag when the team disagrees. (4.18)
 - **No double answers** from a held-down key, and a "too fast?" check. (4.15)
@@ -192,3 +193,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.21 | 24 Nov | Computer check sets every part of a search |
 | 4.22 | 24 Nov | Undo a file added to hidden or approved sites; long lists fast |
 | 4.23 | 24 Nov | Stolen before links in Copies found |
+| 4.24 | 24 Nov | Spam blog copies hidden until you show them |
