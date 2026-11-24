@@ -4,6 +4,8 @@
 
 A browser extension for **Chrome and Firefox** that captures a whole web page, top to bottom, in one picture, and shows the hidden data inside pictures (camera, date, place, author, copyright).
 
+**Every feature and improvement, in one list:** see [FEATURES.md](FEATURES.md).
+
 - **Whole page:** scrolls the page for you and stitches it into one tall image. Images, embeds and videos are captured exactly as they look on screen (videos as a still frame).
 - **Proof of where it came from:** a banner across the top shows the website's domain, the full web address, and the date and time of the capture.
 - **Hidden content too:** anything that doesn't fit on screen is marked "Section 1", "Section 2" and so on in the capture and shown in full underneath:

@@ -147,13 +147,13 @@ const PP_EVIDENCE = (() => {
     y = table(y, 'Where and when', [
       ['Page', { t: copy.url, mono: true, max: 3 }],
       copy.title ? ['Page title', copy.title] : null,
-      copy.acct && copy.acct.handle ? ['Posted by', { t: copy.acct.handle + (copy.acct.url ? '  ' + copy.acct.url : ''), mono: true, max: 2 }] : null,
+      copy.acct && copy.acct.handle ? ['Posted by', { t: (copy.acctInfo && copy.acctInfo.ok && copy.acctInfo.name && copy.acctInfo.name !== copy.acct.handle ? copy.acctInfo.name + ' (' + copy.acct.handle + ')' : copy.acct.handle) + (copy.acct.url ? '  ' + copy.acct.url : ''), mono: true, max: 2 }] : null,
       copy.acctInfo && copy.acctInfo.ok ? ['The account', { t: [
         copy.acctInfo.followers != null ? copy.acctInfo.followers.toLocaleString('en-US') + ' ' + copy.acctInfo.fw + ' on ' + dayText(copy.acctInfo.at) : '',
-        { blue: 'Verified', gold: 'Verified organisation', grey: 'Verified government account', no: 'Not verified' }[copy.acctInfo.verified] || '',
+        { blue: 'Verified', paid: 'Paid check (bought, not verification)', gold: 'Verified organisation (gold check)', grey: 'Government account (grey check)', meta: 'Instagram/Facebook check (paid or earned)', yes: 'Verified by the site', no: 'No check' }[copy.acctInfo.verified] || '',
         copy.acctInfo.type ? copy.acctInfo.type + (copy.acctInfo.typeSure === 'guess' ? ' (going by the profile)' : '') + (copy.acctInfo.category ? ': ' + copy.acctInfo.category : '') : '',
         copy.acctInfo.company ? 'Company: ' + copy.acctInfo.company + (copy.acctInfo.address ? ', ' + copy.acctInfo.address : '') : '',
-        copy.acctInfo.country ? 'Based in ' + copy.acctInfo.country : ''].filter(Boolean).join('. '), max: 3 }] : null,
+        copy.acctInfo.country ? 'Based in ' + (copy.acctInfo.place || copy.acctInfo.country) : ''].filter(Boolean).join('. '), max: 3 }] : null,
       reg ? ['Registration', [reg.va ? reg.va + ' (registered)' : '', reg.app ? 'application ' + reg.app : ''].filter(Boolean).join(' · ')] : ['Registration', { t: 'No registration number found in the client\'s folders', color: MUTED }],
       ours.path ? ['Client\'s file', { t: ours.path, mono: true, max: 3 }] : null,
       copy.use ? ['How it\'s used', copy.use] : null,

@@ -1053,6 +1053,7 @@ const FC = (() => {
   const BAD_END = /\.(xyz|top|shop|online|site|buzz|click|icu|cyou|rest|monster|lol|cfd|sbs|bond|live|fun|space|store|vip|win|loan|work|info|biz|pw|tk|ml|ga|cf|gq)$/;
   // Country-code endings (.fr, .lt, .com.tr ...). Endings that many sites use outside their country
   // (.io, .co, .tv, .me, .ai, .fm, .ly ...) are left out on purpose: they don't say where a site is.
+  const SHOWN_START = ['United States', 'Puerto Rico'];   // 4.24: countries shown in Copies found to start
   const COUNTRY = { ru: 'Russia', su: 'Russia', cn: 'China', vn: 'Vietnam', in: 'India', id: 'Indonesia', tr: 'Turkey', br: 'Brazil', uk: 'United Kingdom', gb: 'United Kingdom', ca: 'Canada', au: 'Australia', de: 'Germany', fr: 'France', it: 'Italy', es: 'Spain', nl: 'Netherlands',
     pl: 'Poland', ua: 'Ukraine', jp: 'Japan', kr: 'South Korea', mx: 'Mexico', ar: 'Argentina', ph: 'Philippines', pk: 'Pakistan', bd: 'Bangladesh', ng: 'Nigeria', za: 'South Africa', ir: 'Iran', th: 'Thailand', my: 'Malaysia', sg: 'Singapore',
     hk: 'Hong Kong', tw: 'Taiwan', ie: 'Ireland', nz: 'New Zealand', se: 'Sweden', no: 'Norway', dk: 'Denmark', fi: 'Finland', be: 'Belgium', ch: 'Switzerland', at: 'Austria', pt: 'Portugal', gr: 'Greece', cz: 'Czechia', ro: 'Romania',
@@ -1148,16 +1149,24 @@ const FC = (() => {
   // 4.23.1: the hidden list is read once and kept until it changes (a long list made every page slow).
   let HID = null;
   try { api.storage.onChanged.addListener(ch => { if (ch.rsHidden) HID = null; }); } catch (e) { /* no storage events here */ }
+  // 4.24: also leaves out website copies from countries not shown, and government accounts
+  // (unless Show government is on), the same as Copies found.
   async function countNew() {
-    const st = await api.storage.local.get(HID ? ['fcHiddenCountries'] : ['rsHidden', 'fcHiddenCountries']);
+    const st = await api.storage.local.get(HID ? ['fcShownCountries', 'ppShowGov'] : ['rsHidden', 'fcShownCountries', 'ppShowGov']);
     if (!HID) HID = st.rsHidden || [];
-    const hidden = HID, countries = st.fcHiddenCountries || [];
+    const hidden = HID, shown = Array.isArray(st.fcShownCountries) ? st.fcShownCountries : SHOWN_START;
     const every = await allCopies(), fresh = every.filter(c => c.status === 'new');
     // 4.24: spam blog copies are hidden on Copies found until you show them, so they don't count here.
     const spam = spamMarks(every);
-    const keep = fresh.filter(c => !spam.has(c.id));
-    if (!hidden.length && !countries.length) return keep.length;
-    return keep.filter(c => !hiddenCopy(c, hidden) && !countries.includes(c.country || countryOf(c.site))).length;
+    let info = {};
+    if (!st.ppShowGov && fresh.some(c => c.acct)) info = (await meta.get('acctInfo').catch(() => null)) || {};
+    return fresh.filter(c => {
+      if (spam.has(c.id) || hiddenCopy(c, hidden)) return false;
+      const ct = c.country || countryOf(c.site);
+      if (c.use !== 'social' && ct && !shown.includes(ct)) return false;
+      const i = c.acct && info[c.acct.key];
+      return !(i && i.v && i.type === 'Government');
+    }).length;
   }
   // Is this copy on a hidden site, or posted by a hidden account? (4.9: an Instagram /p/ link has
   // no account in it, so "Hide this account" is matched against the account PageProof found.)
@@ -1413,7 +1422,7 @@ const FC = (() => {
       return bad.length;
     });
   }
-  // 4.26: the photo check found an unanswered copy is another photo of the same place (only
+  // 4.28: the photo check found an unanswered copy is another photo of the same place (only
   // logos / lettering line up, or a building from a few steps away). It goes to Removed, where
   // Put back still works. Only copies still waiting for an answer, never ones added by hand.
   async function checkerRemove(id, pct) {
@@ -1568,11 +1577,15 @@ const FC = (() => {
   }
   const week = key => meta.get('week:' + (key || weekKey()));
 
-  // ---------------------------------------------------------------- hidden countries
-  async function hiddenCountries() { return (await api.storage.local.get('fcHiddenCountries')).fcHiddenCountries || []; }
-  async function setHiddenCountries(list) {
-    await api.storage.local.set({ fcHiddenCountries: list });
-    try { await RS_DOCS.writeText('hidden-countries.txt', '# PageProof hidden countries, one per line. Copies on sites from these countries are not shown.\n' + list.join('\n') + '\n'); } catch (e) { /* folder not set up */ }
+  // ---------------------------------------------------------------- countries shown (4.24)
+  // Ben: website copies show only from the countries picked here, United States and Puerto Rico
+  // to start. Copies whose country isn't known always show. (Before 4.24 it was a list of
+  // countries to hide, fcHiddenCountries, which is no longer used.)
+  async function shownCountries() { const v = (await api.storage.local.get('fcShownCountries')).fcShownCountries; return Array.isArray(v) ? v : SHOWN_START.slice(); }
+  async function setShownCountries(list) {
+    list = [...new Set(list)];
+    await api.storage.local.set({ fcShownCountries: list });
+    try { await RS_DOCS.writeText('shown-countries.txt', '# PageProof countries shown in Copies found > Websites, one per line. Copies on sites from other countries are not shown. Sites whose country is not known always show.\n' + list.join('\n') + '\n'); } catch (e) { /* folder not set up */ }
     backupSoon();
   }
 
@@ -1826,12 +1839,12 @@ const FC = (() => {
     return list;
   }
   async function settingsSnapshot() {
-    const st = await api.storage.local.get(['lastCase', 'ppTheme', 'rsSettings', 'fcKeep', 'fcDrive', 'fcHiddenCountries', 'ppHw', 'ppSocialSites']);
+    const st = await api.storage.local.get(['lastCase', 'ppTheme', 'rsSettings', 'fcKeep', 'fcDrive', 'fcShownCountries', 'ppShowGov', 'ppHw', 'ppSocialSites']);
     const clients = await DB.all('clients');
     const flags = await flagList();
     const regs = Object.fromEntries(Object.entries((await meta.get('regs')) || {}).filter(([, v]) => v.manual));
     return { app: 'PageProof', version: api.runtime.getManifest().version, saved: new Date().toISOString(), name: (st.lastCase || {}).collector || '', theme: st.ppTheme || 'light',
-      search: st.rsSettings || null, keep: st.fcKeep || null, drive: st.fcDrive || null, hiddenCountries: st.fcHiddenCountries || [], hardware: st.ppHw || null,
+      search: st.rsSettings || null, keep: st.fcKeep || null, drive: st.fcDrive || null, shownCountries: Array.isArray(st.fcShownCountries) ? st.fcShownCountries : SHOWN_START, showGov: !!st.ppShowGov, hardware: st.ppHw || null,
       clients: clients.map(c => ({ name: c.name, searching: c.searching, priority: !!c.priority, licensed: c.licensed || [], licensedAcc: c.licensedAcc || [] })), flags, regs, picked: await picked(),
       socialSites: st.ppSocialSites || {}, accounts: (await meta.get('acctKept')) || {}, acctLinks: (await meta.get('acctLinks')) || [] };
   }
@@ -1857,7 +1870,8 @@ const FC = (() => {
         firstShare: [2, 3, 4].includes(k.firstShare) ? k.firstShare : 3, fiftyWhich: k.fiftyWhich === 'first' ? 'first' : 'next' };
     }
     if (j.drive && typeof j.drive === 'object') set.fcDrive = { label: str(j.drive.label) || 'G:\\Shared drives\\Photos', done: false };
-    if (Array.isArray(j.hiddenCountries)) set.fcHiddenCountries = j.hiddenCountries.map(str).filter(Boolean);
+    if (Array.isArray(j.shownCountries)) set.fcShownCountries = j.shownCountries.map(str).filter(Boolean);
+    if (typeof j.showGov === 'boolean') set.ppShowGov = j.showGov;
     if (j.socialSites && typeof j.socialSites === 'object') set.ppSocialSites = Object.fromEntries(Object.entries(j.socialSites).filter(([k, v]) => typeof k === 'string' && (v === 'social' || v === 'web')).map(([k, v]) => [k.slice(0, 200), v]));
     if (j.hardware && typeof j.hardware === 'object') set.ppHw = { choice: ['auto', 'Light', 'Normal', 'Strong'].includes(j.hardware.choice) ? j.hardware.choice : 'auto' };
     await api.storage.local.set(set);
@@ -1882,6 +1896,6 @@ const FC = (() => {
   return { DB, meta, open, touch, pics, dropDotMatches, checkerRemove, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, setPicked, pickInside, SCAN, applyPendingFlags, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setClients, logWeek, week, weekKey, firstNotes, searchedOnce,
-    isPool, hiddenCountries, setHiddenCountries, ownerFor, pathOf, logReport, USE, useOf, riskOf, spamMarks, randomLabel, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
+    isPool, shownCountries, setShownCountries, SHOWN_START, ownerFor, pathOf, logReport, USE, useOf, riskOf, spamMarks, randomLabel, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
     backupSoon, backupCopiesSoon, writeSettings, writeCopies, readBackup, restore, restoreCopies, settingsSnapshot, monthsOld, newness, yearOf, quarterOf, dayOf };
 })();

@@ -337,7 +337,7 @@ const PP_SOCIAL = (() => {
     if (!acct || !acct.url) return [];
     const out = [{ url: acct.url, kind: 'profile', click: acct.plat === 'instagram.com' ? 'ig-about' : '' }];
     if (acct.plat === 'facebook.com' && !/\/groups\//.test(acct.url)) {
-      const id = /\/id\.(\d+)$/.exec(acct.key || '');
+      const id = /(?:^|\/)(?:id\.)?(\d{6,})$/.exec(acct.key || '');
       out.push({ url: id ? 'https://www.facebook.com/profile.php?id=' + id[1] + '&sk=about_profile_transparency' : acct.url.replace(/\/+$/, '') + '/about_profile_transparency', kind: 'transparency' });
     }
     if (acct.plat === 'x.com' || acct.plat === 'twitter.com') out.push({ url: 'https://x.com/' + bareName(acct) + '/about', kind: 'transparency' });
@@ -365,7 +365,35 @@ const PP_SOCIAL = (() => {
     const badge = [...document.querySelectorAll('[aria-label*="erified" i], [title*="erified" i], [data-testid="icon-verified"]')].filter(near).map(e => e.getAttribute('aria-label') || e.getAttribute('title') || 'verified').slice(0, 4);
     const links = [...new Set([...top.querySelectorAll('a[href]')].map(a => a.href))].slice(0, 120);
     const buttons = [...new Set([...top.querySelectorAll('a, button, [role="button"]')].map(e => (e.innerText || e.getAttribute('aria-label') || '').trim()).filter(t => t && t.length <= 30))].slice(0, 120);
-    return { url: location.href, title: document.title, desc: meta('og:description') || meta('description'), ogTitle: meta('og:title'), text: (document.body ? document.body.innerText : '').slice(0, 30000), about, data, badge, links, buttons };
+    // 4.24 (Ben): X puts the profile's own facts in fixed places. Its page data also holds the
+    // signed-in viewer and suggested accounts, so on X only these places are read.
+    let x = null;
+    if (/(^|\.)(x|twitter)\.com$/.test(location.hostname)) {
+      const q = (s, r = document) => r.querySelector(s);
+      const head = q('[data-testid="UserName"]');
+      const tx = s => { const e = q(s); return e ? (e.innerText || '').trim() : ''; };
+      x = { name: '', check: '', affiliate: '', followers: '', category: tx('[data-testid="UserProfessionalCategory"]'), bio: tx('[data-testid="UserDescription"]'), url: (q('[data-testid="UserUrl"]') || {}).href || '', items: tx('[data-testid="UserProfileHeader_Items"]'), labels: '' };
+      if (head) {
+        x.name = (head.innerText || '').split('\n')[0].trim();
+        const svg = head.querySelector('svg[data-testid="icon-verified"]');
+        if (svg) {
+          const paths = [...svg.querySelectorAll('path')];
+          const grad = !!svg.querySelector('linearGradient') || paths.some(p => /^url\(/.test(p.getAttribute('fill') || '') || /^url\(/.test(getComputedStyle(p).fill || ''));
+          const col = (getComputedStyle(svg).color || getComputedStyle(paths[0] || svg).fill || '').match(/\d+/g) || [];
+          const [r, g, b] = col.map(Number);
+          x.check = grad ? 'gold' : col.length >= 3 && b > r + 80 && b > g + 40 ? 'blue' : col.length >= 3 && Math.abs(r - g) < 50 && Math.abs(g - b) < 50 ? 'grey' : col.length >= 3 && r > 180 && g > 120 && b < 90 ? 'gold' : 'blue';
+          x.checkLabel = svg.getAttribute('aria-label') || '';
+        }
+        const aff = [...head.querySelectorAll('a[href]')].find(a => a.querySelector('img'));
+        if (aff) { const im = aff.querySelector('img'); x.affiliate = [aff.getAttribute('aria-label'), im && im.getAttribute('alt'), aff.getAttribute('href')].filter(Boolean).join(' · '); }
+      }
+      const fl = [...document.querySelectorAll('a[href$="/verified_followers"], a[href$="/followers"]')].find(a => /follower/i.test(a.innerText || ''));
+      if (fl) x.followers = (fl.innerText || '').trim();
+      x.labels = [...document.querySelectorAll('[data-testid="primaryColumn"] [aria-label*="government" i], [data-testid="primaryColumn"] [aria-label*="official" i], [data-testid="primaryColumn"] [aria-label*="label" i]')].map(e => e.getAttribute('aria-label')).slice(0, 6).join(' · ');
+    }
+    // 4.24: the profile's own name as the page shows it (Facebook, YouTube...): the big heading.
+    const h1 = [...document.querySelectorAll('[role="main"] h1, #page-header h1, ytd-channel-name #text, h1')].map(e => (e.innerText || e.textContent || '').split('\n')[0].trim()).find(t => t && t.length <= 80 && !/^(notifications|facebook|youtube|home|chats|menu)$/i.test(t)) || '';
+    return { h1, url: location.href, title: document.title, desc: meta('og:description') || meta('description'), ogTitle: meta('og:title'), text: (document.body ? document.body.innerText : '').slice(0, 30000), about, data, badge, links, buttons, x };
   }
 
   // ---------- quiet lookup tabs (4.20, Ben) ----------
@@ -432,27 +460,53 @@ const PP_SOCIAL = (() => {
   const CAT_CREATOR = /creator|artist|photograph|blogger|influencer|public figure|musician|band|author|writer|athlete|comedian|personal blog|gamer|model|actor|dj\b|video creator|digital creator/i;
   const CAT_NEWS = /news|media|magazine|newspaper|broadcast|journalist|publisher|tv (network|channel|show)|radio station|media\/news/i;
   const CAT_FAN = /fan page|fan club|meme|community$/i;
+  // 4.24 (Ben): anyone holding or running for any public office is a Government account. Ben never
+  // wants these, so they are hidden from Copies found unless "Show government" is on.
+  const GOV_WORDS = /\b(congress(?:wo)?man|congressperson|member of congress|(?:u\.?s\.?|state) (?:senator|representative|rep\.?)|senator|assembly(?:wo)?man|assembly ?member|council(?:wo)?man|council ?member|councilmember|councillor|councilor|city council|county (?:commissioner|executive|legislator|clerk)|board of supervisors|alder(?:man|woman|person)|(?:deputy )?mayor|(?:lt\.? |lieutenant )?governor|attorney general|district attorney|comptroller|state treasurer|secretary of state|sheriff|legislator|state rep(?:resentative)?|selectman|freeholder|borough president|public advocate|school board member|candidate|running for|campaign (?:for|account|page)|for (?:congress|senate|state senate|state house|council|city council|mayor|governor|assembly|sheriff|district attorney|da|judge|school board|president|comptroller|public advocate|borough president|treasurer|state rep)|paid for by|elected official|government (?:official|organi[sz]ation|agency|account)|politician|political candidate|official (?:account|page) of the (?:city|county|state|town|office)|white house|house of representatives|state legislature)\b/i;
+  const GOV_NAME = /^(?:rep|sen|gov|mayor|senator|congress(?:wo)?man|council(?:wo)?man|councilmember|assembly(?:wo)?man|cm|commissioner|judge|sheriff)\.?\s/i;
+  const GOV_SITE = /(?:for|4)(?:congress|senate|council|citycouncil|mayor|governor|assembly|sheriff|judge|delegate|schoolboard|statehouse|staterep|comptroller|president)(?:[0-9-]*)\.[a-z]+$|(?:^|\.)[a-z0-9-]+\.gov(?:\.[a-z]{2})?$|\.(?:house|senate)\.gov$|^(?:www\.)?(?:house|senate|whitehouse)\.gov$/i;
+  const CAT_GOV = /politician|political candidate|government official|government organi[sz]ation|government (?:agency|building|service)|public (?:&|and) government|elected official|political organi[sz]ation|political party|campaign/i;
+  // The site's own copyright line ("© 2026 X Corp.", "© 2026 Meta") is never the account's company.
+  const SITE_CO = /^(?:\d{4}\s+)?(?:x corp|twitter|meta(?: platforms)?|facebook|instagram|tiktok|bytedance|google|youtube|alphabet|pinterest|reddit|snap|linkedin|microsoft|tumblr|automattic|threads)\b/i;
+  const noCopyright = t => String(t || '').split('\n').filter(l => !/©|\(c\)\s*\d{4}|all rights reserved/i.test(l)).join('\n');
   const CAT_ORG = /non-?profit|government|charity|organi[sz]ation|school|university|college|church|religious|political|public (&|and) government/i;
   const WEB_SKIP = /(^|\.)(facebook|fb|instagram|threads|x|twitter|tiktok|youtube|youtu|pinterest|linkedin|snapchat|reddit|tumblr|google|apple|whatsapp|wa|meta|messenger|bit|t|lnkd|about|help|play|apps|microsoft|cdninstagram|fbcdn|twimg|ytimg|gstatic|w3|schema|tiktokcdn)\.[a-z.]+$/i;
+  // "Boston, MA, United States" -> United States; "Austin, Texas" -> United States; else ''.
+  const US_STATES = /^(A[LKZR]|C[AOT]|D[EC]|FL|GA|HI|I[DLNA]|K[SY]|LA|M[EDAINSOT]|N[EVHJMYCD]|O[HKR]|PA|PR|RI|S[CD]|T[NX]|UT|V[TA]|W[AVIY]|Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming|District of Columbia)$/;
+  function placeCountry(line) {
+    const parts = String(line || '').split(',').map(x => x.trim()).filter(Boolean);
+    if (parts.length < 2 || parts.length > 4 || line.length > 70) return '';
+    const last = parts[parts.length - 1];
+    if (/^(United States|USA|U\.S\.A?\.?|US)$/i.test(last)) return 'United States';
+    if (/^Puerto Rico$/i.test(last) || last === 'PR') return 'Puerto Rico';
+    if (US_STATES.test(last)) return 'United States';
+    const names = typeof FC !== 'undefined' && FC.COUNTRY ? Object.values(FC.COUNTRY) : [];
+    return names.includes(last) ? last : '';
+  }
   // Turns what the reader saw into plain facts. Unknown stays empty, never guessed as "no".
   function profileFacts(acct, pages) {
     const f = { ok: false, followers: null, fw: 'followers', verified: '', type: '', typeSure: '', category: '', company: '', address: '', country: '', created: '', oldNames: [], website: '', email: '', phone: '', signs: [], name: '' };
     if (!acct || !Array.isArray(pages) || !pages.length) return f;
     const plat = acct.plat || '';
     const prof = pages.find(p => p.kind === 'profile') || pages[0];
-    const tr = pages.filter(p => p.kind === 'transparency').map(p => p.text || '').join('\n') + '\n' + pages.map(p => p.about || '').join('\n');
-    const D = {}; for (const p of pages) for (const [k, v] of (p.data || [])) { const key = k.toLowerCase(); if (!(key in D)) D[key] = v; }
+    const tr = noCopyright(pages.filter(p => p.kind === 'transparency').map(p => p.text || '').join('\n') + '\n' + pages.map(p => p.about || '').join('\n'));
+    const isX = plat === 'x.com' || plat === 'twitter.com';
+    // On X the page's data is the viewer's and suggested accounts', not this profile's (4.24).
+    const D = {}; if (!isX) for (const p of pages) for (const [k, v] of (p.data || [])) { const key = k.toLowerCase(); if (!(key in D)) D[key] = v; }
+    const X = isX ? (pages.find(p => p.x && p.x.name) || pages.find(p => p.x) || {}).x || null : null;
     const dv = k => k in D ? unq(D[k]) : undefined;
-    const text = String(prof.text || ''), desc = String(prof.desc || ''), top = text.slice(0, 4000);
+    const text = noCopyright(prof.text), desc = String(prof.desc || ''), top = text.slice(0, 4000);
     // Followers (or subscribers, or members for groups).
     const jf = ['follower_count', 'followers_count', 'followercount', 'followers'].map(dv).find(v => typeof v === 'number');
     const ebf = D.edge_followed_by && /"count"\s*:\s*(\d+)/.exec(D.edge_followed_by);
-    if (typeof jf === 'number') f.followers = jf; else if (ebf) f.followers = +ebf[1];
+    if (X && X.followers) { const m = /([\d][\d.,]*\s?[KMBkmb]?)/.exec(X.followers); if (m) f.followers = big(m[1]); }
+    else if (isX) { /* not shown: stays unknown rather than a guess from the page's data */ }
+    else if (typeof jf === 'number') f.followers = jf; else if (ebf) f.followers = +ebf[1];
     if (f.followers == null) {
       const sub = dv('subscribercounttext'); const sm = sub && /([\d.,]+\s?[KMB]?)\s*subscribers/i.exec(typeof sub === 'string' ? sub : JSON.stringify(sub));
       if (sm) { f.followers = big(sm[1]); f.fw = 'subscribers'; }
     }
-    if (f.followers == null) {
+    if (f.followers == null && !(isX && X && X.name)) {
       for (const [rx, w] of [[/([\d][\d.,]*\s?[KMBkmb]?)\s+(?:Followers|followers)\b/, 'followers'], [/([\d][\d.,]*\s?[KMBkmb]?)\s+subscribers\b/i, 'subscribers'], [/([\d][\d.,]*\s?[KMBkmb]?)\s+(?:total\s+)?members\b/i, 'members']]) {
         const m = rx.exec(desc) || rx.exec(top);
         if (m) { f.followers = big(m[1]); f.fw = w; break; }
@@ -460,32 +514,52 @@ const PP_SOCIAL = (() => {
     }
     if (/\/groups\//.test(acct.url || '')) f.fw = 'members';
     // Verified: the site's own data first, then a check badge next to the name.
-    const vt = String(dv('verified_type') || ''), anyTrue = ['is_verified', 'verified', 'is_blue_verified'].some(k => dv(k) === true), anyFalse = ['is_verified', 'verified', 'is_blue_verified'].some(k => dv(k) === false);
-    if (/business/i.test(vt)) f.verified = 'gold';
-    else if (/government/i.test(vt)) f.verified = 'grey';
-    else if (anyTrue || (prof.badge || []).length) f.verified = 'blue';
-    else if (anyFalse) f.verified = 'no';
+    // 4.24 (Ben): the kind of check matters. X: blue = paid (X Premium), gold = an organisation
+    // X verified, grey = government. Instagram/Facebook/Threads: Meta shows one check for both
+    // paid Meta Verified and earned verification ('meta'), 'paid' when the data says Meta Verified.
+    // TikTok, YouTube and the rest give their check out themselves ('yes').
+    const META = /^(instagram\.com|facebook\.com|threads\.net|threads\.com)$/.test(plat);
+    if (isX) {
+      if (X && X.name) f.verified = X.check === 'gold' ? 'gold' : X.check === 'grey' ? 'grey' : X.check ? 'paid' : 'no';
+    } else {
+      const vt = String(dv('verified_type') || ''), anyTrue = ['is_verified', 'verified', 'is_blue_verified'].some(k => dv(k) === true), anyFalse = ['is_verified', 'verified'].some(k => dv(k) === false);
+      const mv = ['is_verified_by_mv4b', 'is_meta_verified', 'meta_verified'].some(k => dv(k) === true);
+      if (/business/i.test(vt)) f.verified = 'gold';
+      else if (/government/i.test(vt)) f.verified = 'grey';
+      else if (mv) f.verified = 'paid';
+      else if (anyTrue || (prof.badge || []).length) f.verified = META ? 'meta' : 'yes';
+      else if (anyFalse) f.verified = 'no';
+    }
     // Name, bio, category.
-    f.name = String(dv('full_name') || prof.ogTitle || '').replace(/\s*[(•|].*$/, '').trim().slice(0, 80);
-    const bio = String(dv('biography') || dv('signature') || desc || '').slice(0, 600);
-    f.category = String(dv('business_category_name') || dv('category_name') || '').trim();
+    f.name = String((X && X.name) || dv('full_name') || prof.h1 || prof.ogTitle || '').replace(/\s*[(•|].*$/, '').replace(/\s+-\s+(YouTube|Facebook|TikTok)$/i, '').trim().slice(0, 80);
+    if (/^(log ?in|sign ?in|facebook|instagram|youtube|tiktok|x|error|page not found)$/i.test(f.name)) f.name = '';
+    const bio = String((X && X.bio) || dv('biography') || dv('signature') || desc || '').slice(0, 600);
+    f.category = String((X && X.category) || dv('business_category_name') || dv('category_name') || '').trim();
     if (!f.category && plat === 'facebook.com') { const m = /(?:^|\n)\s*(?:Page|Profile)\s*·\s*([^\n·]{2,40})/.exec(text); if (m) f.category = m[1].trim(); }
     if (!f.category && plat === 'instagram.com') { const c = dv('category'); if (typeof c === 'string' && c.length < 40) f.category = c; }
     // Transparency: owner company, address, country, date created, old names.
     const after = (rx, max = 1) => { const m = rx.exec(tr); if (!m) return []; return m[1].split('\n').map(s => s.trim()).filter(Boolean).slice(0, max); };
     const owner = after(/(?:Confirmed Page owner|Organi[sz]ations? that manages? this Page|Page owner|Owned by)\s*:?\s*\n((?:.*\n){1,4})/i, 3);
-    const co = (owner.join('\n').match(COMPANY) || tr.match(COMPANY) || bio.match(COMPANY) || [])[1] || '';
-    f.company = co ? co.trim() : owner[0] && !/^(see|learn|more)\b/i.test(owner[0]) && /confirmed page owner/i.test(tr) ? owner[0] : '';
+    let co = (owner.join('\n').match(COMPANY) || tr.match(COMPANY) || bio.match(COMPANY) || [])[1] || '';
+    co = co.replace(/^\d{4}\s+/, '').trim();
+    if (SITE_CO.test(co)) co = '';
+    f.company = co ? co : owner[0] && !/^(see|learn|more)\b/i.test(owner[0]) && /confirmed page owner/i.test(tr) ? owner[0] : '';
     f.address = owner.slice(1).find(l => /\d/.test(l) && /,/.test(l)) || '';
-    f.country = (after(/(?:Account based in|Based in|Primary country\/region location for people who manage this Page|Country\/region location for people who manage this Page|Country\/region)\s*:?\s*\n?\s*([^\n]{2,60})/i)[0] || '').replace(/\s*\(\d+\)$/, '').trim();
-    if (f.country && !/^[A-Z][A-Za-z .,'()&-]{1,59}$/.test(f.country)) f.country = '';
+    f.country = (after(/(?:Account based in|Based in|Primary country\/region location for people who manage this Page|Country\/region location for people who manage this Page|Country\/region)\s*(?:includes)?\s*:?\s*\n?\s*(?:includes:?\s*\n?\s*)?([^\n]{2,60})/i)[0] || '').replace(/\s*\(\d+\)$/, '').trim();
+    if (f.country && (!/^[A-Z][A-Za-z .,'()&-]{1,59}$/.test(f.country) || /^includes/i.test(f.country))) f.country = '';
+    // 4.24 (Ben): else the place on the profile ("Boston, MA, United States", "Lives in Austin, Texas").
+    if (!f.country) {
+      const det = /(?:^|\n)\s*(?:Details|Intro)\s*\n((?:.*\n?){1,6})/.exec(text);
+      const lines = det ? det[1].split('\n').map(l => l.replace(/^(Lives in|From|Based in)\s+/i, '').trim()) : [];
+      for (const l of lines) { const c = placeCountry(l); if (c) { f.country = c; f.place = l; break; } }
+    }
     const cm = /(?:Page created|Creation date|Date joined|Joined)\s*[-–:]?\s*\n?\s*([A-Z][a-z]+ \d{1,2}, \d{4}|[A-Z][a-z]+ \d{4})/.exec(tr) || /\bJoined ([A-Z][a-z]+ \d{4})\b/.exec(top);
     if (cm) f.created = cm[1];
     const old = /Former usernames?\s*\n((?:.*\n){1,4})/i.exec(tr);
     if (old) f.oldNames = old[1].split('\n').map(s => s.trim()).filter(s => /^@?[\w.]{2,40}$/.test(s)).slice(0, 5);
     for (const m of tr.matchAll(/Changed name to ([^\n]{2,60})/g)) if (f.oldNames.length < 5) f.oldNames.push(m[1].trim());
     // Website, email, phone.
-    const ext = dv('external_url');
+    const ext = (X && X.url) || dv('external_url');
     const fix = u => { try { const x = new URL(u); const r = x.searchParams.get('u') || x.searchParams.get('url') || x.searchParams.get('q'); return r && /^https?:/.test(r) && /^(l\.|lm\.)?(facebook|instagram|youtube|threads)\.|t\.co$|linktr|lnk\.bio/.test(x.hostname) ? r : u; } catch (e) { return ''; } };
     const webs = [ext, ...(prof.links || [])].filter(u => typeof u === 'string' && /^https?:/.test(u)).map(fix).filter(u => { try { const h = new URL(u).hostname.replace(/^www\./, ''); return h && !WEB_SKIP.test(h) && !listed(h); } catch (e) { return false; } });
     f.website = webs[0] || '';
@@ -494,6 +568,7 @@ const PP_SOCIAL = (() => {
     f.ok = f.followers != null || !!f.name || !!f.category || !!f.country;
     // What kind of account: the site says it, or the signs add up.
     const btn = (prof.buttons || []).join(' | ');
+    f.v = 2;   // 4.24: read with the X fixes and government check
     const name = f.name + ' ' + bareName(acct);
     if (/shop now|shop$|view shop|book now|book$|order (now|online)|call now|get directions|directions|send email|email$|contact$|contact us|visit website|buy tickets|start order/i.test(btn)) f.signs.push('a "' + ((btn.match(/shop now|view shop|book now|order now|order online|call now|get directions|send email|contact us|visit website|buy tickets|start order|shop|book|contact|email|directions/i) || ['Contact'])[0]) + '" button');
     if (BIZ_WORDS.test(name) || BIZ_WORDS.test(bio)) f.signs.push('a business word in the name or bio ("' + ((name.match(BIZ_WORDS) || bio.match(BIZ_WORDS))[0]) + '")');
@@ -505,6 +580,20 @@ const PP_SOCIAL = (() => {
     const cat = f.category;
     const set = (t, s) => { if (!f.type) { f.type = t; f.typeSure = s; } };
     if (/\/groups\//.test(acct.url || '')) set('Group', 'sure');
+    // Government: a grey check, a government label or affiliation, a politics category, office
+    // words in the name or bio ("Congresswoman", "NYC Councilman", "for Council"), or a campaign
+    // or .gov website. The reason is kept so the panel can say why.
+    let webHost = ''; try { webHost = f.website ? new URL(f.website).hostname.replace(/^www\./, '') : ''; } catch (e) { /* none */ }
+    const govWhy = f.verified === 'grey' ? 'a grey (government) check'
+      : X && /government|state-affiliated|official/i.test(X.labels || '') ? 'a government label on the profile'
+      : X && X.affiliate && /government|congress|senate|house|council|\bgop\b|dems?\b|democrat|republican|campaign|\.gov/i.test(X.affiliate) ? 'a government or party badge (' + X.affiliate.split(' · ')[0] + ')'
+      : CAT_GOV.test(cat) ? 'the category "' + cat + '"'
+      : GOV_NAME.test(f.name) ? 'the name "' + f.name + '"'
+      : GOV_WORDS.test(bio) ? 'the bio ("' + bio.match(GOV_WORDS)[0] + '")'
+      : GOV_WORDS.test(f.name) ? 'the name ("' + f.name.match(GOV_WORDS)[0] + '")'
+      : webHost && GOV_SITE.test(webHost) ? 'a campaign or government website (' + webHost + ')'
+      : '';
+    if (govWhy) { f.gov = govWhy; set('Government', 'sure'); }
     if (f.verified === 'gold' || f.verified === 'grey') set('Organisation', 'sure');
     if (f.company) set('Business', 'sure');
     if (cat) {

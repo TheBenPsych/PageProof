@@ -22,7 +22,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     await FC.DB.put('copies', mk('h2', 'hiddenexample.com'));
     await FC.DB.put('copies', mk('r1', 'example.ru'));
     const ru = await FC.countryOf('example.ru');
-    await chrome.storage.local.set({ rsHidden: ['hiddenexample.com'], fcHiddenCountries: [ru] });
+    await chrome.storage.local.set({ rsHidden: ['hiddenexample.com'], fcShownCountries: ['United States', 'Puerto Rico'] });
     await FC.touch('test');
     await new Promise(r => setTimeout(r, 300));
     return { ru, n: await FC.countNew() };

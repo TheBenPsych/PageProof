@@ -866,7 +866,7 @@ if (api.alarms) {
 api.storage.onChanged.addListener(ch => {
   if (ch.fcKeep) { fiftySchedule(); driveNudge(false); }
   if (ch.fcNeedsAllow) newBadge();
-  if (ch.fcChanged || ch.rsHidden || ch.fcHiddenCountries) { clearTimeout(badgeT); badgeT = setTimeout(newBadge, 2000); }
+  if (ch.fcChanged || ch.rsHidden || ch.fcShownCountries || ch.ppShowGov) { clearTimeout(badgeT); badgeT = setTimeout(newBadge, 2000); }
 });
 let badgeT = null;
 api.runtime.onStartup.addListener(() => { forgetSearchTabs(); fiftySchedule(); keepAlive(false); newBadge(); driveNudge(true); });
