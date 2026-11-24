@@ -661,21 +661,36 @@
 
   // The progress card in the corner while a capture runs. It sits outside <body> in its own
   // closed shadow, so the page's styles can't change it, and it is hidden before every screenshot.
-  let ov = null, ovText = null;
+  let ov = null, ovText = null, ovSteps = null, ovCount = null, ovBox = null;
+  // UI overhaul batch 8: four steps filling in, "Screen 6 of 14", a calmer outlined Stop, and the
+  // light or dark look you picked in PageProof.
+  const OV_STEPS = ['Screens', 'Scroll boxes', 'Pictures', 'PDF and timestamps'];
   function ovShow(title, step) {
     if (!ov) {
       ov = document.createElement('pageproof-progress');
       ov.style.cssText = 'all:initial;position:fixed;z-index:2147483647;right:16px;bottom:16px;display:block';
       const sh = ov.attachShadow({ mode: 'closed' });
-      sh.innerHTML = '<style>div{font:14px/1.4 system-ui,Segoe UI,Arial,sans-serif;background:#191C24;color:#fff;border-radius:14px;padding:14px 16px;box-shadow:0 10px 40px rgba(0,0,0,.4);display:flex;gap:12px;align-items:center;max-width:320px}' +
-        'i{width:16px;height:16px;border-radius:50%;border:2px solid #444;border-top-color:#0090E7;animation:s .8s linear infinite;flex-shrink:0}@keyframes s{to{transform:rotate(360deg)}}' +
-        'b{display:block}span{color:#AEB3CA;font-size:13px}button{font:inherit;font-weight:600;margin-left:auto;background:#FC424A;color:#fff;border:0;border-radius:8px;padding:6px 12px;cursor:pointer}</style>' +
-        '<div role="status"><i></i><p style="margin:0"><b>PageProof is capturing</b><span></span></p><button type="button">Stop</button></div>';
-      ovText = sh.querySelector('span');
+      sh.innerHTML = '<style>' +
+        '.c{--bg:#FFFFFF;--ink:#22252E;--mut:#5E6582;--line:#D9DCE5;--acc:#0077C2;--ok:#11795A;--bad:#BF2A3F;font:14px/1.4 system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:16px;padding:14px 16px;box-shadow:0 12px 40px rgba(0,0,0,.25);display:flex;flex-direction:column;gap:10px;width:330px;box-sizing:border-box}' +
+        '.c.dark{--bg:#191C24;--ink:#FFFFFF;--mut:#AEB3CA;--line:#2C2E33;--acc:#0090E7;--ok:#00D25B;--bad:#FC424A}' +
+        '.t{display:flex;align-items:center;gap:10px}i.sp{width:16px;height:16px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--acc);animation:s .8s linear infinite;flex-shrink:0}@keyframes s{to{transform:rotate(360deg)}}' +
+        'b{display:block;font-size:14.5px;white-space:nowrap}.n{color:var(--acc);font-weight:700;font-variant-numeric:tabular-nums;margin-left:auto;white-space:nowrap;font-size:13px}' +
+        'ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:6px}' +
+        'li{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--mut)}li::before{content:"";height:4px;border-radius:4px;background:var(--line)}' +
+        'li.on{color:var(--ink);font-weight:600}li.on::before{background:var(--acc)}li.done::before{background:var(--ok)}' +
+        '.m{color:var(--mut);font-size:12.5px;margin:0}' +
+        'button{font:inherit;font-weight:600;font-size:13px;align-self:flex-start;background:transparent;color:var(--bad);border:1.5px solid var(--bad);border-radius:9px;padding:5px 14px;cursor:pointer}button:hover{background:color-mix(in srgb,var(--bad) 10%,transparent)}</style>' +
+        '<div class="c" role="status"><div class="t"><i class="sp"></i><b>PageProof is capturing</b><span class="n"></span></div><ol>' + OV_STEPS.map(t => '<li>' + t + '</li>').join('') + '</ol><p class="m"></p><button type="button">Stop</button></div>';
+      ovBox = sh.querySelector('.c'); ovText = sh.querySelector('.m'); ovSteps = [...sh.querySelectorAll('li')]; ovCount = sh.querySelector('.n');
+      try { chrome.storage.local.get('ppTheme').then(r => { if (ovBox) ovBox.classList.toggle('dark', r.ppTheme === 'dark'); }).catch(() => {}); } catch (e) { /* light */ }
       sh.querySelector('button').onclick = () => { try { chrome.runtime.sendMessage({ type: 'stop' }); } catch (e) { /* reloaded */ } ovText.textContent = 'Stopping, keeping what was captured…'; };
       document.documentElement.appendChild(ov);
     }
-    ovText.textContent = (step ? step + ' · ' : '') + (title || '') + ' Keep this tab open.';
+    // step: the step number (1 = Screens, 2 = Scroll boxes); title: "Screen 6 of 14"
+    const n = typeof step === 'number' ? step : /Step 2/.test(String(step || '')) ? 2 : 1;
+    ovSteps.forEach((li, i) => { li.className = i + 1 < n ? 'done' : i + 1 === n ? 'on' : ''; });
+    ovCount.textContent = title || '';
+    ovText.textContent = 'Keep this tab open. This card is never in the screenshots.';
     ov.style.display = 'block';
   }
   // Hidden, and the browser has drawn the page without it.

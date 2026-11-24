@@ -15,6 +15,23 @@ async function send(msg) { const r = await api.runtime.sendMessage(msg); if (r &
 const done = () => { if (!SIDE) window.close(); };
 const open = h => { api.tabs.create({ url: appUrl(h) }); done(); };
 
+// The biggest photos on the page (up to 4 to show) and how many there are.
+async function pagePics(tab) {
+  try {
+    const [r] = await api.scripting.executeScript({ target: { tabId: tab.id }, func: () => {
+      const seen = new Set(), out = [];
+      for (const el of document.images) {
+        const src = el.currentSrc || el.src;
+        if (!/^https?:/.test(src || '') || seen.has(src) || (el.naturalWidth || 0) < 120 || (el.naturalHeight || 0) < 120) continue;
+        seen.add(src); out.push({ src, best: '', w: el.naturalWidth, h: el.naturalHeight, alt: (el.alt || '').slice(0, 300), kind: 'image' });
+      }
+      out.sort((a, b) => b.w * b.h - a.w * a.h);
+      return { n: out.length, items: out.slice(0, 4) };
+    } });
+    return r && r.result ? r.result : null;
+  } catch (e) { return null; }
+}
+
 async function draw() {
   const tab = await activeTab();
   let busy = false;
@@ -32,21 +49,49 @@ async function draw() {
   const site = canUse(tab) && /^https?:/.test(tab.url) ? RS_SITE.of(tab.url) : '';
   const extra = await api.storage.local.get(['fcNeedsAllow']);
   const needAllow = drive.done && (extra.fcNeedsAllow || (alive && st.state === 'allow'));
+  // UI overhaul batch 8: the capture card names the page; three number tiles; a Keep searching
+  // switch with a live line; the photos on this page as small pictures; today's progress bar.
+  let nStolen = 0;
+  try { nStolen = (await FC.allCopies()).filter(c => c.status === 'stolen' && !c.packAt).length; } catch (e) { /* none */ }
+  const pics = canUse(tab) && /^https?:/.test(tab.url) ? await pagePics(tab) : null;
+  const title = tab && tab.title && canUse(tab) ? tab.title : '';
+  const day0 = new Date(); day0.setHours(0, 0, 0, 0);
+  const goal = k.on ? Math.max(1, Math.floor(FC.workMinutes(k, day0, new Date(+day0 + 864e5)) / (FC.PACE[k.pace] || 6))) : 0;
+  const next = k.on && alive && st.nextAt > Date.now() ? Math.max(1, Math.round((st.nextAt - Date.now()) / 60000)) : 0;
+  const live = !k.on ? 'Off. Switch it on to search your photos all day.' : store.fcPause ? 'Paused by you.' : alive && st.text ? st.text : label;
   $('mini').innerHTML = `
     ${needAllow ? `<div class="msec mfind" role="alert" style="border-color:var(--warn)"><b>One click needed</b><span style="font-size:13.5px">Your browser asks once after it restarts. Press Allow and PageProof can read your photos and start searching.</span><div class="mrow"><button class="btn primary" id="allow">Allow</button></div></div>` : ''}
     ${here ? `<div class="msec mfind" role="alert"><b>This site is in your finds</b><span style="font-size:13.5px">${here.n} ${here.n === 1 ? 'copy' : 'copies'} of your clients' photos on ${esc(site)}${here.stolen ? ', marked stolen' : ''}.</span><div class="mrow"><button class="btn sm" data-go="found?open=${encodeURIComponent(here.first)}">See ${here.n === 1 ? 'it' : 'them'}</button></div></div>` : ''}
     ${busy ? `<button class="mcap stop" id="stop"><span style="font-size:24px">⏹</span><span><b>Stop the capture</b><small>Keeps what's captured so far</small></span></button>`
-      : `<button class="mcap" id="cap"${canUse(tab) ? '' : ' disabled data-why="This tab is a browser page (like a new tab or settings), not a website. Open the website you want to capture, then press Capture."'}><span style="font-size:24px">${ic('capture', 26)}</span><span><b>Capture this page</b><small>${site ? esc(site) + ': PDF, web copy, fingerprints, timestamps' : 'Open a website first'}</small></span></button>`}
-    <div class="msec"><h3>Photos on this page</h3><div class="mrow"><button class="btn" id="pick">${ic('find', 16)} Inspect one</button><button class="btn" id="all">${ic('photo', 16)} Show them all</button></div><span class="faint" style="font-size:12.5px">Or right-click any photo › PageProof › Find copies of it.</span></div>
-    <div class="msec"><h3>Copies found</h3>
-      ${drive.done ? `<div class="mline"><span class="dot ${dot}"></span><b>Keep searching</b><span class="muted" style="margin-left:auto">${label}</span></div>
-      ${k.on && alive && st.text ? `<span class="muted" style="font-size:12.5px">${esc(st.text)}</span>` : ''}
-      <span class="faint" style="font-size:12.5px">Today: ${today.searched} photos searched, ${today.found} new copies</span>
-      <div class="mrow">${nNew ? `<button class="btn primary" data-go="review">Review ${nNew} new</button>` : '<span class="muted" style="font-size:13px">No new copies waiting.</span>'}${k.on ? `<button class="btn" id="pause">${store.fcPause ? 'Resume' : 'Pause'}</button>` : '<button class="btn" data-go="keep">Turn on</button>'}</div>`
-      : `<span class="muted" style="font-size:13px">Search all your clients' photos, all day, from the shared Google Drive.</span><div class="mrow"><button class="btn" data-go="connect">Connect your photos</button></div>`}
+      : `<button class="mcap" id="cap"${canUse(tab) ? '' : ' disabled data-why="This tab is a browser page (like a new tab or settings), not a website. Open the website you want to capture, then press Capture."'}>${site ? `<span class="msl" aria-hidden="true">${esc(site.replace(/^www\./, '')[0] || '?')}</span>` : `<span style="font-size:24px">${ic('capture', 26)}</span>`}<span class="mct"><b>Capture this page</b><small>${site ? esc(site) + (title ? ' · ' + esc(title) : '') : 'Open a website first'}</small></span>${site ? ic('capture', 22) : ''}</button>`}
+    ${drive.done ? `<div class="mtiles">
+      <button class="mtile${nNew ? ' blue' : ''}" data-go="review"><b>${nNew.toLocaleString()}</b><span>new ${nNew === 1 ? 'copy' : 'copies'}</span></button>
+      <button class="mtile${nStolen ? ' amber' : ''}" data-go="tocapture"><b>${nStolen.toLocaleString()}</b><span>to capture</span></button>
+      <button class="mtile" data-go="keep"><b>${today.searched.toLocaleString()}</b><span>searched today</span></button></div>` : ''}
+    <div class="msec"><h3>Photos on this page</h3>
+      ${pics && pics.items.length ? `<div class="mthumbs">${pics.items.map((p, i) => `<button class="mth" data-pic="${i}" title="Inspect this photo"><img src="${esc(p.src)}" alt="" loading="lazy" referrerpolicy="no-referrer"></button>`).join('')}${pics.n > pics.items.length ? `<button class="mth more" id="all" title="Show them all">+${pics.n - pics.items.length}</button>` : ''}</div>
+        <span class="faint" style="font-size:12.5px">Click one to inspect it. Or right-click any photo › PageProof › Find copies of it.</span>`
+      : `<div class="mrow"><button class="btn" id="pick">${ic('find', 16)} Inspect one</button><button class="btn" id="all">${ic('photo', 16)} Show them all</button></div><span class="faint" style="font-size:12.5px">${pics ? 'No big photos found on this page yet. ' : ''}Or right-click any photo › PageProof › Find copies of it.</span>`}</div>
+    <div class="msec">
+      ${drive.done ? `<div class="mline"><label class="switch"><input type="checkbox" id="keepon" ${k.on ? 'checked' : ''} aria-label="Keep searching"><span></span></label><b>Keep searching</b><span class="tag ${dot === 'on' ? 'ok' : dot || 'grey'}" style="margin-left:auto">${esc(k.on ? label : 'Off')}</span></div>
+      ${live !== label ? `<span class="muted mlive">${esc(live)}${today.found ? ' · ' + today.found + ' new today' : ''}</span>` : today.found ? `<span class="muted mlive">${today.found} new today</span>` : ''}
+      ${SIDE && k.on ? `<div class="mprog" role="progressbar" aria-valuemin="0" aria-valuemax="${goal}" aria-valuenow="${Math.min(goal, today.searched)}"><i style="width:${Math.min(100, Math.round(today.searched / goal * 100))}%"></i></div><span class="faint" style="font-size:12.5px">${today.searched} of about ${goal} today${next ? ' · next photo in ' + next + ' min' : ''}</span>` : ''}
+      ${k.on ? `<div class="mrow"><button class="btn sm" id="pause">${store.fcPause ? 'Resume' : 'Pause'}</button></div>` : ''}`
+      : `<h3>Copies found</h3><span class="muted" style="font-size:13px">Search all your clients' photos, all day, from the shared Google Drive.</span><div class="mrow"><button class="btn" data-go="connect">Connect your photos</button></div>`}
     </div>
     <div class="mrow"><button class="btn primary" data-go="home">Open full PageProof</button>${SIDE ? '' : `<button class="btn" id="panel">${ic('panel', 16)} Keep it open beside this page</button>`}</div>
     ${!SIDE ? '<p class="faint" id="tip" style="margin:0;font-size:12px;text-align:center"></p>' : ''}`;
+  for (const b of document.querySelectorAll('[data-pic]')) b.onclick = async () => {
+    const p = pics.items[+b.dataset.pic];
+    try { await send({ type: 'inspect', mode: 'one', page: tab.url, title: tab.title || '', items: [p] }); done(); } catch (e) { err('Could not open the Inspector: ' + e.message); }
+  };
+  const ko = $('keepon');
+  if (ko) ko.onchange = async () => {
+    await FC.setKeep({ on: ko.checked });
+    if (ko.checked) { await api.storage.local.remove('fcPause'); api.runtime.sendMessage({ type: 'fcKeepWake' }).catch(() => {}); }
+    else api.runtime.sendMessage({ type: 'fcKeepStop' }).catch(() => {});
+    draw();
+  };
   const on = (id, f) => { const el = $(id); if (el) el.onclick = f; };
   on('cap', async () => { try { await api.runtime.sendMessage({ type: 'captureTab', tabId: tab.id }); } catch (e) { /* it still starts */ } done(); if (SIDE) setTimeout(draw, 800); });
   on('stop', async () => { await api.runtime.sendMessage({ type: 'stop' }).catch(() => {}); done(); if (SIDE) setTimeout(draw, 800); });

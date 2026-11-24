@@ -7,27 +7,33 @@
 <link rel="stylesheet" href="viewer.css">
 <link rel="stylesheet" href="inspect.css">
 <link rel="stylesheet" href="ui/tools-look.css">
+<link rel="stylesheet" href="ui/page-look.css">
+<link rel="stylesheet" href="ui/tool-page.css">
 <script src="theme.js"></script>
 <script src="pp-guard.js"></script>
 <script src="ui/tool-icons.js" defer></script>
 </head>
-<body class="with-side">
+<body class="with-side tp" data-head="backAll,pickLbl,compare,pack">
+  <div class="pg-head tp-head" id="tpHead">
+    <div><h1>Inspect a photo</h1><p>The camera, date, place and copyright details hidden inside a picture file.</p></div>
+    <div class="tp-act" id="tpAct"></div>
+  </div>
   <aside id="side">
     <div class="brand"><img src="icons/icon48.png" alt="" width="22" height="22"> PageProof Image Inspector</div>
     <div class="site">
-      <div id="domain">Image Inspector</div>
-      <div id="url" class="url">Add a picture to see the hidden data inside it</div>
+      <div id="domain"></div>
+      <div id="url" class="url"></div>
       <div id="sub"></div>
       <div id="notice" hidden></div>
     </div>
 
-    <button id="pack" class="main save" disabled title="Save the original file, a PDF report, the hidden data, fingerprints and trusted timestamps in one zip">⬇ Save evidence pack</button>
+    <button id="pack" class="main save" disabled data-why="Add a picture first." title="Save the original file, a PDF report, the hidden data, fingerprints and trusted timestamps in one zip">⬇ Save evidence pack</button>
     <div class="grid">
-      <button id="pdf" class="tile" disabled title="Download a PDF with the picture and its hidden data"><span>📄</span>PDF</button>
-      <button id="markup" class="tile" disabled title="Highlight, draw and type on a copy of this picture"><span>✏️</span>Markup</button>
-      <button id="copy" class="tile" disabled title="Copy the picture, to paste into an email, chat or document"><span>📋</span>Copy</button>
-      <button id="orig" class="tile" disabled title="Download the untouched original file"><span>🖼️</span>Original</button>
-      <button id="compare" class="tile wide" disabled title="Lay this picture over your client's original to show they are the same photo, like superimposing in Photoshop"><span>🔀</span>Compare with the original</button>
+      <button id="pdf" class="tile" disabled data-why="Add a picture first." title="Download a PDF with the picture and its hidden data"><span>📄</span>PDF</button>
+      <button id="markup" class="tile" disabled data-why="Add a picture first." title="Highlight, draw and type on a copy of this picture"><span>✏️</span>Markup</button>
+      <button id="copy" class="tile" disabled data-why="Add a picture first." title="Copy the picture, to paste into an email, chat or document"><span>📋</span>Copy</button>
+      <button id="orig" class="tile" disabled data-why="Add a picture first." title="Download the untouched original file"><span>🖼️</span>Original</button>
+      <button id="compare" class="tile wide" disabled data-why="Add a picture first." title="Lay this picture over your client's original to show they are the same photo, like superimposing in Photoshop"><span>🔀</span>Compare with the original</button>
     </div>
 
     <div id="warn" class="warnbox" hidden></div>
@@ -50,22 +56,18 @@
 
     <nav class="links">
       <a href="#" id="backAll" hidden>⬅ All pictures on the page</a>
-      <label class="filebtn" title="Choose a picture from your computer">🔍 Inspect another picture<input type="file" id="pick" accept="image/*,.heic,.heif,.avif,.tif,.tiff,.jxl" hidden></label>
-      <a href="compare.html" target="_blank">🔀 Compare two pictures</a>
-      <a href="verify.html" target="_blank">✅ Verify a pack</a>
-      <a href="log.html" target="_blank">📒 Capture log</a>
-    </nav>
+      <label class="filebtn" id="pickLbl" title="Choose a picture from your computer">🔍 Inspect another picture<input type="file" id="pick" accept="image/*,.heic,.heif,.avif,.tif,.tiff,.jxl" hidden></label>
+          </nav>
   </aside>
 
   <div id="content">
     <div id="status"></div>
     <main id="area">
-      <div id="empty" class="drop">
+      <div id="empty" class="drop tp-drop">
         <div class="ph">🖼️</div>
-        <h2>Inspect a picture</h2>
-        <p>See the camera, date, place and copyright details hidden inside a picture file.</p>
+        <h2>Drop a picture here</h2>
+        <p class="alt">or paste it with <kbd>Ctrl</kbd>+<kbd>V</kbd></p>
         <button id="addImage" class="main big">➕ Add a picture</button>
-        <p class="alt">or drag one onto this page, or paste it with <kbd>Ctrl</kbd>+<kbd>V</kbd></p>
         <p class="alt">On a website? Click the PageProof icon and choose <b>Inspect a picture</b>, or right-click a picture and choose <b>Inspect with PageProof</b>.</p>
       </div>
 
@@ -79,6 +81,7 @@
         <div class="frame"><img id="shownImg" alt=""><div id="noPreview" hidden>This browser can't show this type of picture, but its hidden data was still read.</div></div>
         <figcaption id="shownCap"></figcaption>
       </figure>
+      <section id="facts" class="tp-facts" hidden></section>
     </main>
   </div>
 
@@ -91,5 +94,7 @@
   <script src="meta.js"></script>
   <script src="report.js"></script>
   <script src="inspect.js"></script>
+  <script src="ui/tool-page.js"></script>
+  <script src="ui/why.js"></script>
 </body>
 </html>

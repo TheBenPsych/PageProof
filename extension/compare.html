@@ -8,43 +8,27 @@
 <link rel="stylesheet" href="inspect.css">
 <link rel="stylesheet" href="compare.css">
 <link rel="stylesheet" href="ui/tools-look.css">
+<link rel="stylesheet" href="ui/page-look.css">
+<link rel="stylesheet" href="ui/tool-page.css">
 <script src="theme.js"></script>
 <script src="pp-guard.js"></script>
 <script src="ui/tool-icons.js" defer></script>
 </head>
-<body class="with-side">
+<body class="with-side tp tp-compare">
+  <div class="pg-head tp-head" id="tpHead">
+    <div><h1>Compare two photos</h1><p>Lay the copy over the original and line them up, like in Photoshop.</p></div>
+    <div class="tp-act" id="tpAct"><button id="sPng" class="tile small" disabled data-why="Add both pictures first: your original and the copy." title="A picture of what you see now">🖼️ Save picture</button><button id="sPdf" class="tile small" disabled data-why="Add both pictures first: your original and the copy." title="A PDF with both pictures, the overlay at 0%, 50% and 100%, and the difference view">📄 Save as PDF</button><button id="sVid" class="main" disabled data-why="Add both pictures first: your original and the copy." title="A short video of the copy fading in and sliding into place">🎬 Make a video</button></div>
+  </div>
   <aside id="side">
     <div class="brand"><img src="icons/icon48.png" alt="" width="22" height="22"> PageProof Compare</div>
-    <div class="site">
-      <div id="domain">Same picture?</div>
-      <div id="sub">Lay the copy over the original and line them up, like in Photoshop.</div>
-    </div>
 
-    <div class="slot" id="slotA" data-k="A">
-      <div class="th"><span>1</span></div>
-      <div class="info"><b>Original</b><small class="nm">Your client's picture</small>
-        <label class="pickbtn">Choose…<input type="file" accept="image/*,.tif,.tiff,.avif" hidden></label></div>
-    </div>
-    <div class="slot" id="slotB" data-k="B">
-      <div class="th"><span>2</span></div>
-      <div class="info"><b>Copy</b><small class="nm">The one found online</small>
-        <label class="pickbtn">Choose…<input type="file" accept="image/*,.tif,.tiff,.avif" hidden></label></div>
-    </div>
-
-    <div class="nearRow"><label class="pickbtn" id="nearBtn" title="Your client took several shots of the same scene? Add them all and PageProof finds the one the copy came from">＋ Check nearby shots…<input type="file" accept="image/*,.tif,.tiff,.avif" multiple hidden></label></div>
     <section class="card" id="nearby" hidden></section>
 
     <button id="auto" class="main save" disabled data-why="Add both pictures first: your original and the copy." title="Resize and move the copy so it sits exactly on the original">✨ Line them up automatically</button>
     <div id="score" class="card" hidden></div>
 
     <section class="card ctl" id="controls">
-      <h3>Copy on top</h3>
-      <div class="opRow"><span>Original</span><input type="range" id="opacity" min="0" max="100" value="50" disabled data-why="Add both pictures first: your original and the copy."><span>Copy</span></div>
-      <div class="opVal" id="opVal">50% see-through</div>
-      <div class="seg" id="modes">
-        <button data-mode="overlay" class="on">Overlay</button><button data-mode="diff" title="Black where the two pictures are the same">Difference</button><button data-mode="tint" title="Original in blue, copy in orange: grey where they line up">Colour check</button><button data-mode="side">Side by side</button>
-      </div>
-      <label class="chgRow" title="Green line = the part that is the same photo. Red = added, painted over or redrawn in the copy"><input type="checkbox" id="showChg" checked disabled data-why="Add both pictures first: your original and the copy."> Show changes <span class="chgKey"><i class="g"></i>same <i class="r"></i>changed</span></label>
+      <h3>Move the copy</h3>
       <div class="grid">
         <button id="aside" class="tile small" disabled data-why="Add both pictures first: your original and the copy." title="Slide the copy off to the side, then back into place">↔ Slide aside and back</button>
         <button id="fade" class="tile small" disabled data-why="Add both pictures first: your original and the copy." title="Fade between the original and the copy, over and over">▶ Play fade</button>
@@ -74,35 +58,43 @@
       <div id="spotList"></div>
     </section>
 
-    <section class="card">
-      <h3>Save the comparison</h3>
-      <div class="grid three">
-        <button id="sPdf" class="tile small" disabled data-why="Add both pictures first: your original and the copy." title="A PDF with both pictures, the overlay at 0%, 50% and 100%, and the difference view">📄 PDF</button>
-        <button id="sPng" class="tile small" disabled data-why="Add both pictures first: your original and the copy." title="A picture of what you see now">🖼️ Picture</button>
-        <button id="sVid" class="tile small" disabled data-why="Add both pictures first: your original and the copy." title="A short video of the copy fading in and sliding into place">🎬 Video</button>
-      </div>
-    </section>
 
-    <nav class="links">
-      <a href="inspect.html" target="_blank">🔍 Image Inspector</a>
-      <a href="verify.html" target="_blank">✅ Verify a pack</a>
-      <a href="log.html" target="_blank">📒 Capture log</a>
-    </nav>
   </aside>
 
   <div id="content">
     <div id="status"></div>
+    <div class="tp-slots">
+      <div class="slot" id="slotA" data-k="A">
+      <div class="th"><span>1</span></div>
+      <div class="info"><b>Original</b><small class="nm">Your client's picture</small>
+        <label class="pickbtn">Choose…<input type="file" accept="image/*,.tif,.tiff,.avif" hidden></label></div>
+    </div>
+    <div class="slot" id="slotB" data-k="B">
+      <div class="th"><span>2</span></div>
+      <div class="info"><b>Copy</b><small class="nm">The one found online</small>
+        <label class="pickbtn">Choose…<input type="file" accept="image/*,.tif,.tiff,.avif" hidden></label></div>
+    </div>
+
+    <div class="nearRow"><label class="pickbtn" id="nearBtn" title="Your client took several shots of the same scene? Add them all and PageProof finds the one the copy came from">＋ Check nearby shots…<input type="file" accept="image/*,.tif,.tiff,.avif" multiple hidden></label></div>
+    </div>
     <main id="stage">
-      <div id="empty">
+      <div id="empty" class="tp-drop">
         <div class="ph">🔀</div>
-        <h2>Is it the same picture?</h2>
-        <p>Add your client's <b>original</b> and the <b>copy</b> you found, using the two boxes on the left.<br>
-          You can also drag pictures onto them, or paste with <kbd>Ctrl</kbd>+<kbd>V</kbd>.</p>
+        <h2>Drop the original and the copy here</h2>
+        <p class="alt">or use the two boxes above, or paste with <kbd>Ctrl</kbd>+<kbd>V</kbd>.</p>
         <p class="alt">Then click <b>Line them up automatically</b>, or drag the copy into place yourself.</p>
       </div>
       <canvas id="view" hidden tabindex="0"></canvas>
       <p id="hint" hidden>Drag the copy to move it. Arrow keys nudge it 1 pixel (hold Shift for 10). The solid blue line is the original's edge, the dashed orange line the copy's.</p>
     </main>
+    <div class="tp-float" id="tpFloat">
+      <div class="opRow"><span>Original</span><input type="range" id="opacity" min="0" max="100" value="50" disabled data-why="Add both pictures first: your original and the copy."><span>Copy</span></div>
+      <div class="opVal" id="opVal">50% see-through</div>
+      <div class="seg" id="modes">
+        <button data-mode="overlay" class="on">Overlay</button><button data-mode="diff" title="Black where the two pictures are the same">Difference</button><button data-mode="tint" title="Original in blue, copy in orange: grey where they line up">Colour check</button><button data-mode="side">Side by side</button>
+      </div>
+      <label class="chgRow" title="Green line = the part that is the same photo. Red = added, painted over or redrawn in the copy"><input type="checkbox" id="showChg" checked disabled data-why="Add both pictures first: your original and the copy."> Show changes <span class="chgKey"><i class="g"></i>same <i class="r"></i>changed</span></label>
+    </div>
   </div>
 
   <script src="db.js"></script>

@@ -1312,3 +1312,91 @@ tr.rowlink td.chev{color:var(--faint);font-size:18px;text-align:center} tr.rowli
 .wtrack i.s,.wleg i.s{background:var(--bad)} .wtrack i.f,.wleg i.f{background:var(--accent)}
 .wbar .wv{color:var(--muted);font-size:12.5px;white-space:nowrap}
 @media (max-width:900px){.wtiles{grid-template-columns:repeat(3,minmax(0,1fr))}.wbar{grid-template-columns:1fr}}
+
+/* ---- UI overhaul batch 6: Tools page colours and "Used lately" */
+:root{--tc-blue:#1D5FD1;--tc-blue-s:#E2ECFB;--tc-purple:#6D3FD0;--tc-purple-s:#EEE7FB;--tc-green:#0F7A4E;--tc-green-s:#E0F3EA}
+:root[data-theme="dark"]{--tc-blue:#6FA8FF;--tc-blue-s:#13243F;--tc-purple:#B79BFF;--tc-purple-s:#2A1D45;--tc-green:#3FD68C;--tc-green-s:#0F3324}
+@media (prefers-color-scheme:dark){:root:not([data-theme]){--tc-blue:#6FA8FF;--tc-blue-s:#13243F;--tc-purple:#B79BFF;--tc-purple-s:#2A1D45;--tc-green:#3FD68C;--tc-green-s:#0F3324}}
+.toolsec h2{display:flex;align-items:center;gap:8px}
+.toolsec.blue h2::before,.toolsec.purple h2::before,.toolsec.green h2::before{content:"";width:10px;height:10px;border-radius:3px;background:var(--tc-blue)}
+.toolsec.purple h2::before{background:var(--tc-purple)} .toolsec.green h2::before{background:var(--tc-green)}
+.tool.blue .ic,.tused.blue .ic{background:var(--tc-blue-s);color:var(--tc-blue)}
+.tool.purple .ic,.tused.purple .ic{background:var(--tc-purple-s);color:var(--tc-purple)}
+.tool.green .ic,.tused.green .ic{background:var(--tc-green-s);color:var(--tc-green)}
+.toolrecent{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.card.tused{display:flex;align-items:center;gap:12px;padding:12px 14px;text-decoration:none;color:var(--ink)}
+.card.tused .ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex-shrink:0}
+.card.tused b{flex:1;font-size:15px}
+.card.tused>svg{color:var(--faint)}
+.card.tused:hover{border-color:var(--accent)}
+@media (max-width:900px){.toolrecent{grid-template-columns:1fr}}
+
+/* ---- UI overhaul batch 7: Settings in sections, one setting per line */
+.sgrid{display:grid;grid-template-columns:190px minmax(0,1fr);gap:20px;align-items:start}
+.sindex{position:sticky;top:84px;display:flex;flex-direction:column;gap:2px;padding:8px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.sindex button{border:0;background:transparent;color:var(--muted);font:inherit;font-size:14px;font-weight:600;text-align:left;padding:8px 12px;border-radius:9px;cursor:pointer}
+.sindex button:hover{background:var(--sunk);color:var(--ink)}
+.sindex button.on{background:var(--accent-soft);color:var(--accent)}
+.ssecs{display:flex;flex-direction:column;gap:16px;min-width:0}
+.ssec{padding:6px 20px 4px;scroll-margin-top:84px}
+.ssec h2{font-size:16px;margin:12px 0 4px}
+.sline{display:flex;align-items:center;gap:16px;padding:14px 0;border-top:1px solid var(--line)}
+.ssec h2+.sline{border-top:0}
+.sl-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.sl-t b{font-size:14.5px}
+.sl-t span{color:var(--muted);font-size:13.5px}
+.sl-c{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0;max-width:60%}
+.sl-c .btn{min-height:34px;font-size:13.5px}
+.sinput{min-height:36px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px;width:240px;max-width:100%}
+@media (max-width:900px){.sgrid{grid-template-columns:1fr}.sindex{position:static;flex-direction:row;flex-wrap:wrap}.sline{flex-wrap:wrap}.sl-c{max-width:none;justify-content:flex-start}}
+/* Is everything working: summary first, then tiles in groups */
+.hsum{display:flex;align-items:center;gap:16px;padding:18px 20px;border-radius:16px;border:1px solid transparent}
+.hsum.ok{background:var(--ok-soft,#E3F5EE);border-color:color-mix(in srgb,var(--ok) 35%,transparent)}
+.hsum.warn{background:var(--warn-soft,#FDF1DE);border-color:color-mix(in srgb,var(--warn) 35%,transparent)}
+.hsum.bad{background:var(--bad-soft,#FCE8EB);border-color:color-mix(in srgb,var(--bad) 35%,transparent)}
+.hsum .hsi{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;flex-shrink:0;color:#fff;background:var(--ok)}
+.hsum.warn .hsi{background:var(--warn)} .hsum.bad .hsi{background:var(--bad)}
+.hsum>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.hsum b{font-size:19px;font-family:var(--f-display)}
+.hsum span{color:var(--muted);font-size:14px}
+.hgroup{display:flex;flex-direction:column;gap:10px}
+.hgroup h2{font-size:16px;margin:0}
+.htiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.htile{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--faint);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.htile.ok{border-left-color:var(--ok)} .htile.warn{border-left-color:var(--warn)} .htile.bad{border-left-color:var(--bad)}
+.htile .ht{display:flex;align-items:center;gap:8px}
+.htile .hdot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.htile .hb{margin-top:6px}
+/* How PageProof is doing: the funnel */
+.fun{display:flex;flex-direction:column;gap:4px;font-size:13.5px}
+.fun-r{display:grid;grid-template-columns:110px 1fr 60px 40px;gap:10px;align-items:center}
+.fun-t{display:flex;justify-content:center;height:22px;background:var(--sunk);border-radius:6px;overflow:hidden}
+.fun-t i{display:block;height:100%;border-radius:6px}
+.fun-r b{text-align:right}
+.fun-r small{font-size:12px;text-align:right}
+.fun-r+.fun-r .fun-l::before{content:"↳ ";color:var(--faint)}
+/* Help: even tiles in one row */
+.helptiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}
+.helptiles .start{text-align:left;font:inherit;cursor:pointer;color:var(--ink)}
+.helptiles .kq{font-size:20px;line-height:1}
+.ht-blue .ic{background:var(--tc-blue-s);color:var(--tc-blue)}
+.ht-green .ic{background:var(--tc-green-s);color:var(--tc-green)}
+.ht-purple .ic{background:var(--tc-purple-s);color:var(--tc-purple)}
+.ht-amber .ic{background:var(--warn-soft);color:var(--warn)}
+.ht-pink .ic{background:color-mix(in srgb,#D6406E 14%,transparent);color:#C2335F}
+:root[data-theme="dark"] .ht-pink .ic{color:#FF8DB0}
+@media (max-width:1200px){.helptiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:700px){.helptiles{grid-template-columns:1fr}}
+/* Hidden and approved sites: normal letters, site letter badges, coloured kinds, one switch bar */
+.hidname{display:flex;align-items:center;gap:10px;font-weight:600;font-size:14px;overflow-wrap:anywhere}
+.hidname .sl{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;flex-shrink:0;font-size:12.5px;font-weight:700;background:var(--sunk);color:var(--muted);text-transform:uppercase}
+.kind{display:inline-flex;font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px}
+.kind.k-whole{background:var(--tc-blue-s);color:var(--tc-blue)}
+.kind.k-sub{background:var(--tc-purple-s);color:var(--tc-purple)}
+.kind.k-acct{background:var(--tc-green-s);color:var(--tc-green)}
+.kind.k-end{background:var(--sunk);color:var(--muted)}
+.hidtabs{padding:12px 18px}
+.hidtabs .tabs{display:flex;gap:2px;padding:3px;background:var(--sunk);border:1px solid var(--line);border-radius:11px;overflow-x:auto;border-bottom:1px solid var(--line)}
+.hidtabs .tabs button{border:0;border-radius:8px;padding:7px 12px;white-space:nowrap;margin:0}
+.hidtabs .tabs button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12),inset 0 0 0 1px var(--line)}
+.hidtabs .tabs button.on::after{display:none}

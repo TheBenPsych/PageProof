@@ -7,17 +7,19 @@
 <link rel="stylesheet" href="viewer.css">
 <link rel="stylesheet" href="convert.css">
 <link rel="stylesheet" href="ui/tools-look.css">
+<link rel="stylesheet" href="ui/page-look.css">
+<link rel="stylesheet" href="ui/tool-page.css">
 <script src="theme.js"></script>
 <script src="pp-guard.js"></script>
 <script src="ui/tool-icons.js" defer></script>
 </head>
-<body class="with-side">
+<body class="with-side tp tp-convert" data-head="addMore,startOver,switchMode">
+  <div class="pg-head tp-head" id="tpHead">
+    <div><h1 id="domain">Convert files</h1><p id="sub" class="sub"></p></div>
+    <div class="tp-act" id="tpAct"></div>
+  </div>
   <aside id="side">
     <div class="brand"><img src="icons/icon48.png" alt="" width="22" height="22"> <span id="brandName">PageProof Convert</span></div>
-    <div class="site">
-      <div id="domain">Convert files</div>
-      <div id="sub" class="sub"></div>
-    </div>
     <div id="safe" class="safe">🔒 Everything happens on this computer. Your files are never uploaded to a website.</div>
 
     <section id="taskBox" class="card" hidden>
@@ -39,10 +41,7 @@
       <a href="#" id="addMore" hidden>➕ Add more files</a>
       <a href="#" id="startOver" hidden>🗑️ Start over</a>
       <a href="#" id="switchMode"></a>
-      <a href="compare.html" target="_blank">🔀 Compare two pictures</a>
-      <a href="verify.html" target="_blank">✅ Verify a pack</a>
-      <a href="log.html" target="_blank">📒 Capture log</a>
-    </nav>
+          </nav>
     <input type="file" id="pick" multiple hidden>
   </aside>
 
@@ -59,5 +58,6 @@
   <script src="cv-doc.js"></script>
   <script src="cv-open.js"></script>
   <script src="convert.js"></script>
+  <script src="ui/tool-page.js"></script>
 </body>
 </html>

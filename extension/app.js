@@ -481,44 +481,61 @@ ACTS.textsize = async v => {
   catch (e) { toast('Could not change the size here. Hold Ctrl and press + instead.'); }
   render(true);
 };
+// UI overhaul batch 7: Settings in sections with a small index on the left, one setting per line
+// (what it is on the left, the switch or button on the right), and switches for every on/off.
+const sLine = (title, note, ctl, id) => `<div class="sline"${id ? ` id="${id}"` : ''}><div class="sl-t"><b>${title}</b>${note ? `<span>${note}</span>` : ''}</div><div class="sl-c">${ctl}</div></div>`;
+const sSwitch = (attrs, on, label) => `<label class="switch"><input type="checkbox" ${attrs} ${on ? 'checked' : ''} aria-label="${esc(label)}"><span></span></label>`;
+const S_SECTIONS = [['you', 'You'], ['look', 'Look'], ['capture', 'Capturing'], ['search', 'Searching'], ['backup', 'Backups and team'], ['lists', 'Lists'], ['help', 'Help']];
 V.settings = async () => {
   const [name, hw, docs] = [await getName(), await ppHardware(), await RS_DOCS.state()];
   await RS_LISTS.load();
   const zoomKey = await ppZoomKey();
-  const pops = (await api.storage.local.get('ppPopups')).ppPopups !== false;
+  const st = await api.storage.local.get(['ppPopups', 'ppAcctRead', 'fcPageAuto']);
+  const pops = st.ppPopups !== false, acct = st.ppAcctRead !== false, pageAuto = st.fcPageAuto !== false;
+  const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+  const sec = (id, title, lines) => `<section class="card ssec" id="ss-${id}"><h2>${title}</h2>${lines}</section>`;
+  const docsCtl = docs === 'granted' ? `<span class="tag ok">${ic('check', 13, 3)} Connected</span><button class="btn" data-act="docschoose">Change folder</button>`
+    : docs === 'prompt' ? `<span class="tag warn">Needs one click</span><button class="btn primary" data-act="docsallow">Allow</button>`
+    : `<span class="tag warn">Not set up</span><button class="btn primary" data-act="docschoose">Set it up</button>`;
   return `${head('Settings', 'Settings', 'These apply to everything in PageProof and are saved on this computer.')}
-  <div class="grid g2">
-    <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>You</h2>
-      <label class="field" for="sName">Your name on every pack and report<input id="sName" value="${esc(name)}" placeholder="For example, Ben"></label>
-      <div class="dsh" style="margin-top:6px">Version</div>
-      <p class="muted" style="margin:0;font-size:14px">PageProof ${VERSION}</p>
-      <div class="row" style="gap:8px"><a class="btn" href="#whatsnew">What's new</a><button class="btn" data-act="tour">Take the tour again</button></div></section>
-    <section class="card pad" id="textsize" style="display:flex;flex-direction:column;gap:12px"><h2>Text size</h2>
-      <p class="muted" style="margin:0;font-size:14px">Makes everything in PageProof bigger: words, buttons and pictures. Saved on this computer only.</p>
-      <div class="seg" role="group" aria-label="Text size">${TEXT_SIZES.map(([k, l, z]) => `<button class="${zoomKey === k ? 'on' : ''}" aria-pressed="${zoomKey === k}" data-act="textsize" data-v="${k}"><span style="font-size:${Math.round(14 * z)}px">${l}</span></button>`).join('')}</div>
-      <span class="faint" style="font-size:12.5px">Ctrl and + or − also works on any PageProof page, and PageProof remembers it.</span></section>
-    <section class="card pad" id="popSet" style="display:flex;flex-direction:column;gap:12px"><h2>Capturing a page</h2>
-      <label class="row" style="gap:10px;flex-wrap:nowrap;cursor:pointer"><input type="checkbox" id="sPopups" ${pops ? 'checked' : ''} style="width:20px;height:20px;accent-color:var(--accent)"><span><b>Close pop-ups before the first screen</b><span class="muted" style="display:block;font-size:13.5px">Cookie notices, newsletter boxes, "allow notifications" and "open in the app" boxes. PageProof presses the site's own close or accept button, and the capture log says what it closed. Log-in walls are left alone.</span></span></label></section>
-    <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>Is everything working?</h2>
-      <p class="muted" style="margin:0;font-size:14px">Green and red lights for Google Drive, Keep searching, each search site and your backup. One button copies the details to send for support.</p>
-      <a class="btn" style="align-self:flex-start" href="#health">Check now</a></section>
-    <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>How PageProof is doing</h2>
-      <p class="muted" style="margin:0;font-size:14px">Day-by-day stats for this computer: what was found, how fast, what went wrong, and a checker test. Save them as a file to send to Claude for help.</p>
-      <a class="btn" style="align-self:flex-start" href="#stats">See the stats</a></section>
-    <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>PageProof folder</h2>
-      <p class="muted" style="margin:0;font-size:14px">Documents › PageProof. Holds your hidden and approved sites and rejected links as text files, so they survive updates and reinstalls.</p>
-      ${docs === 'granted' ? `<span class="tag ok" style="align-self:flex-start">${ic('check', 13, 3)} Connected</span><button class="btn" style="align-self:flex-start" data-act="docschoose">Change folder</button>`
-        : docs === 'prompt' ? `<span class="tag warn" style="align-self:flex-start">Needs one click</span><button class="btn primary" style="align-self:flex-start" data-act="docsallow">Allow PageProof to use it</button>`
-        : `<span class="tag warn" style="align-self:flex-start">Not set up</span><button class="btn primary" style="align-self:flex-start" data-act="docschoose">Set up the PageProof folder</button><span class="faint" style="font-size:12.5px">Pick Documents in the window that opens. PageProof makes a PageProof folder inside it.</span>`}</section>
-    <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>Hidden and approved sites</h2>
-      <p class="muted" style="margin:0;font-size:14px">${RS_LISTS.hidden.length.toLocaleString()} hidden · ${RS_LISTS.allowed.length.toLocaleString()} approved · ${RS_REJECT.items.length.toLocaleString()} rejected links.</p>
-      <a class="btn" style="align-self:flex-start" href="#hidden">See and edit the lists</a></section>
-    <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><div class="row"><h2>Your computer</h2><span class="tag ${hw.level === 'Light' ? 'warn' : 'ok'}" style="margin-left:auto">${hw.level}</span></div>
-      <p class="muted" style="margin:0;font-size:14px">${hw.cores} cores, ${hw.memGB} GB memory. Up to ${hw.limits.checks} photo ${hw.limits.checks > 1 ? 'checks' : 'check'} and ${hw.limits.tabs} search ${hw.limits.tabs > 1 ? 'tabs' : 'tab'} at once.</p>
-      <a class="btn" style="align-self:flex-start" href="#computer">See limits</a></section>
+  <div class="sgrid">
+    <nav class="sindex" aria-label="Settings sections">${S_SECTIONS.map(([id, t], i) => `<button class="${i ? '' : 'on'}" data-act="sjump" data-v="${id}">${t}</button>`).join('')}</nav>
+    <div class="ssecs">
+    ${sec('you', 'You',
+      sLine('Your name', 'Printed as "Collected by" on every pack and report.', `<input id="sName" class="sinput" value="${esc(name)}" placeholder="For example, Ben" aria-label="Your name">`) +
+      sLine('Version', 'PageProof ' + VERSION, '<a class="btn" href="#whatsnew">What\'s new</a><button class="btn" data-act="tour">Take the tour again</button>'))}
+    ${sec('look', 'Look',
+      sLine('Text size', 'Makes words, buttons and pictures bigger. Ctrl and + or − also works.', `<div class="seg" role="group" aria-label="Text size">${TEXT_SIZES.map(([k, l, z]) => `<button class="${zoomKey === k ? 'on' : ''}" aria-pressed="${zoomKey === k}" data-act="textsize" data-v="${k}"><span style="font-size:${Math.round(14 * z)}px">${l}</span></button>`).join('')}</div>`, 'textsize') +
+      sLine('Colours', 'Light or dark. The moon button at the top does the same.', `<div class="seg" role="group" aria-label="Colours">${[['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button class="${theme === k ? 'on' : ''}" aria-pressed="${theme === k}" data-act="themeset" data-v="${k}">${l}</button>`).join('')}</div>`, 'themeSet'))}
+    ${sec('capture', 'Capturing',
+      sLine('Close pop-ups before the first screen', 'Cookie notices, newsletter and "open in the app" boxes. PageProof presses the site\'s own close button and the capture log says what it closed. Log-in walls are left alone.', sSwitch('id="sPopups"', pops, 'Close pop-ups'), 'popSet'))}
+    ${sec('search', 'Searching',
+      sLine('Keep searching', 'Pace, hours, a goal date and Today\'s 50.', '<a class="btn" href="#keep">Open Keep searching</a>') +
+      sLine('Read account details by itself', 'Followers, verified and owner company of social accounts, one account a minute, only while Keep searching is on.', sSwitch('data-act="acctread"', acct, 'Read account details by itself')) +
+      sLine('Show their pages by themselves', 'In a copy\'s panel, load the site\'s page in a small window and keep a small picture of it.', sSwitch('data-act="pageauto"', pageAuto, 'Show their pages by themselves')) +
+      sLine('Your computer', `${hw.cores} cores, ${hw.memGB} GB memory. Up to ${hw.limits.checks} photo ${hw.limits.checks > 1 ? 'checks' : 'check'} and ${hw.limits.tabs} search ${hw.limits.tabs > 1 ? 'tabs' : 'tab'} at once.`, `<span class="tag ${hw.level === 'Light' ? 'warn' : 'ok'}">${hw.level}</span><a class="btn" href="#computer">See limits</a>`))}
+    ${sec('backup', 'Backups and team',
+      '<!--sync-->' +
+      sLine('PageProof folder', 'Documents › PageProof. Keeps your lists as text files, so they survive updates and reinstalls.', docsCtl))}
+    ${sec('lists', 'Lists',
+      sLine('Hidden and approved sites', `${RS_LISTS.hidden.length.toLocaleString()} hidden · ${RS_LISTS.allowed.length.toLocaleString()} approved · ${RS_REJECT.items.length.toLocaleString()} rejected links.`, '<a class="btn" href="#hidden">See and edit</a>'))}
+    ${sec('help', 'Help',
+      sLine('Is everything working?', 'Lights for Google Drive, Keep searching, each search site and your backup.', '<a class="btn" href="#health">Check now</a>') +
+      sLine('How PageProof is doing', 'Day-by-day stats and a file to send for help.', '<a class="btn" href="#stats">See the stats</a>') +
+      sLine('Help and tutorial', 'Step-by-step guides for everything PageProof does.', '<a class="btn" href="#help">Open help</a>'))}
+    </div>
   </div>`;
 };
 V.settings.after = () => {
+  // The index lights up the section on screen.
+  if (!window.ppSpyOn) {
+    window.ppSpyOn = true;
+    addEventListener('scroll', () => {
+      const secs = [...document.querySelectorAll('.ssec')]; if (!secs.length) return;
+      let cur = secs[0]; for (const x of secs) if (x.getBoundingClientRect().top < 160) cur = x;
+      document.querySelectorAll('.sindex button').forEach(b => b.classList.toggle('on', 'ss-' + b.dataset.v === cur.id));
+    }, { passive: true, capture: true });
+  }
   const n = document.getElementById('sName');
   n.onchange = async () => { await setName(n.value.trim()); toast('Saved. New packs say "Collected by ' + (n.value.trim() || '…') + '".'); };
   const pp = document.getElementById('sPopups');
@@ -528,6 +545,8 @@ V.settings.after = () => {
 // =====================================================================================
 // Hidden and approved sites
 // =====================================================================================
+const KIND_CLS = { 'Whole site': 'k-whole', 'Sub-site': 'k-sub', 'Account or part': 'k-acct', 'Ending': 'k-end' };
+const hidName = h => { const b = String(h).replace(/^\.|^www\./, ''); return `<span class="hidname"><span class="sl" aria-hidden="true">${esc((b[0] || '?'))}</span>${esc(h)}</span>`; };
 const kindOf = s => s.startsWith('.') ? 'Ending' : s.includes('/') ? 'Account or part' : s.split('.').length > 2 && !/\.(co|com|org|net|gov|ac)\.[a-z]{2}$/.test(s) ? 'Sub-site' : 'Whole site';
 V.hidden = async () => {
   await RS_LISTS.load();
@@ -542,7 +561,7 @@ V.hidden = async () => {
     const readOn = (await api.storage.local.get('ppAcctRead')).ppAcctRead !== false;
     return `${head('Settings', 'Hidden and approved sites', 'Hidden sites never show up in any search. Approved sites may use the photos: copies found there are marked Licensed by themselves.')}
     <section class="card" style="overflow:hidden">
-      <div class="toolbar"><div class="tabs" role="tablist">${[['hidden', 'Hidden sites'], ['allowed', 'Approved for every client'], ['client', 'Approved for one client'], ['rejected', 'Rejected links'], ['stolen', 'Stolen before links'], ['social', 'Social sites']].map(([k, l]) => `<button role="tab" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}" data-act="hidtab" data-v="${k}">${l}</button>`).join('')}</div></div>
+      <div class="toolbar hidtabs"><div class="tabs" role="tablist">${[['hidden', 'Hidden sites'], ['allowed', 'Approved for every client'], ['client', 'Approved for one client'], ['rejected', 'Rejected links'], ['stolen', 'Stolen before links'], ['social', 'Social sites']].map(([k, l]) => `<button role="tab" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}" data-act="hidtab" data-v="${k}">${l}</button>`).join('')}</div></div>
       <div class="row" style="gap:10px;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--bg)">
         <input id="hidq" class="chip" style="min-height:38px;padding:0 12px;font-size:14px;flex:1 1 260px" placeholder="Find a platform, like vimeo" value="${esc(state.hidQ)}" aria-label="Find a platform"></div>
       <p class="muted" style="margin:0;padding:12px 18px;font-size:13.5px;border-bottom:1px solid var(--line)">Only these ${plats.size} platforms count as social media. Every other site (blogs, video sites, forums, chat apps...) shows on the Websites tab like any website, and can be hidden as a whole site.</p>
@@ -550,7 +569,7 @@ V.hidden = async () => {
         ${rows.map(([n, ds]) => `<tr><td><b>${esc(n)}</b></td><td class="mono" style="font-size:12.5px">${esc(ds.join(', '))}${n === 'Pinterest' || n === 'Nextdoor' ? ' <span class="faint">+ country sites</span>' : ''}<br><span class="faint">and their mobile and sub-sites (m., mobile., www.)</span></td></tr>`).join('') || '<tr><td colspan="2" class="faint">No platform matches. That site counts as a website.</td></tr>'}
       </tbody></table></div>
     </section>
-    <section class="card pad"><label class="row" style="gap:10px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="acctread" data-act="acctread" ${readOn ? 'checked' : ''} style="margin-top:4px"><span><b>Read account details by itself</b><br><span class="muted" style="font-size:13px">Followers, verified, account type, country and owner company. PageProof opens each account's profile in a background tab of your browser for a few seconds, one account a minute (X: one every 2 minutes, 30 a day), every 90 days, only for copies still to review, only while Keep searching is on and inside its hours (Pause stops it too). Off: only when you press "Read again now" on an account.</span></span></label></section>
+    <section class="card pad"><div class="row" style="gap:12px;align-items:flex-start;flex-wrap:nowrap"><label class="switch" style="margin-top:2px"><input type="checkbox" id="acctread" data-act="acctread" ${readOn ? 'checked' : ''} aria-label="Read account details by itself"><span></span></label><span><b>Read account details by itself</b><br><span class="muted" style="font-size:13px">Followers, verified, account type, country and owner company. PageProof opens each account's profile in a background tab of your browser for a few seconds, one account a minute (X: one every 2 minutes, 30 a day), every 90 days, only for copies still to review, only while Keep searching is on and inside its hours (Pause stops it too). Off: only when you press "Read again now" on an account.</span></span></div></section>
     <p class="faint" style="margin:0;font-size:12.5px">Copies on social sites go on the Social media tab of Copies found, where Stolen, Hide and Approve work per account. Saved with your settings backup.</p>`;
   }
   // Approved for one client: kept with each client (site | client).
@@ -564,15 +583,15 @@ V.hidden = async () => {
   const page = rows.slice(0, state.hidMore || 100);
   return `${head('Settings', 'Hidden and approved sites', 'Hidden sites never show up in any search. Approved sites may use the photos: copies found there are marked Licensed by themselves.', `<button class="btn" data-act="hidsave">${ic('down', 18)} Download list</button><button class="btn" data-act="hidload">Add from a file</button>`)}
   <section class="card" style="overflow:hidden">
-    <div class="toolbar"><div class="tabs" role="tablist">${T.map(([k, l, n]) => `<button role="tab" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}" data-act="hidtab" data-v="${k}">${l} <span>${n.toLocaleString()}</span></button>`).join('')}</div></div>
+    <div class="toolbar hidtabs"><div class="tabs" role="tablist">${T.map(([k, l, n]) => `<button role="tab" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}" data-act="hidtab" data-v="${k}">${l} <span>${n.toLocaleString()}</span></button>`).join('')}</div></div>
     <div class="row" style="gap:10px;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--bg)">
       <input id="hidq" class="chip" style="min-height:38px;padding:0 12px;font-size:14px;flex:1 1 260px" placeholder="${tab === 'stolen' ? 'Find a link' : tab === 'rejected' ? 'Find a rejected link' : tab === 'client' ? 'Find a site or a client' : 'Find or add a site, like patch.com or x.com/examplenews'}" value="${esc(state.hidQ)}" aria-label="Find a site">
       ${tab === 'client' ? '<span class="faint" style="font-size:13px">Add one from a copy: open it in Copies found and press Approve site.</span>' : ''}${tab === 'stolen' ? '<span class="faint" style="font-size:13px;flex:1 1 300px">Pages you already dealt with. A copy found on one of them gets a red Stolen before tag in Copies found, and its site counts as a repeat offender. Add them with Add from a file.</span>' : ''}${!flat ? `<button class="btn primary" data-act="hidadd">＋ ${tab === 'hidden' ? 'Hide' : 'Approve'} it</button>
       <div class="seg">${['All', 'Whole site', 'Sub-site', 'Account or part', 'Ending'].map(k => `<button class="${state.hidKind === k ? 'on' : ''}" data-act="hidkind" data-v="${k}">${k}</button>`).join('')}</div>` : ''}</div>
     <div class="scroll"><table><thead><tr><th>${tab === 'rejected' || tab === 'stolen' ? 'Link' : tab === 'client' ? 'Site' : 'Site or account'}</th>${tab === 'stolen' ? '<th></th>' : tab === 'rejected' ? '<th>Photo</th>' : tab === 'client' ? '<th>Approved for</th>' : '<th>What it covers</th>'}<th></th></tr></thead><tbody>
       ${page.map(h => { if (tab === 'stolen') return `<tr><td><a class="mono" style="font-size:13px;overflow-wrap:anywhere" href="${esc(h)}" target="_blank" rel="noreferrer">${esc(h)}</a></td><td></td><td style="text-align:right"><button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ Take off the list</button></td></tr>`;
-        const r = tab === 'rejected' ? RS_REJECT.items.find(x => x.url === h) : null; if (tab === 'client') { const [site, who] = h.split(' | '); return `<tr><td><b class="mono" style="font-size:13px;overflow-wrap:anywhere">${esc(site)}</b></td><td>${esc(who)}</td><td style="text-align:right"><button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ Remove</button></td></tr>`; }
-        return `<tr><td><b class="mono" style="font-size:13px;overflow-wrap:anywhere">${esc(h)}</b></td><td>${r ? esc(r.pic || 'every photo') : `<span class="tag grey">${kindOf(h)}</span>${typeof ppTeamTag === 'function' ? ppTeamTag(h, tab) : ''}`}</td><td style="text-align:right">${!r && typeof ppTeamBtn === 'function' ? ppTeamBtn(h, tab) : ''}<button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ ${tab === 'hidden' ? 'Show again' : tab === 'allowed' ? 'Remove' : 'Bring back'}</button></td></tr>`; }).join('') || `<tr><td colspan="3" class="muted" style="padding:28px;text-align:center">${q ? (flat ? 'Nothing matches.' : 'Nothing matches. Press the button to add it.') : 'This list is empty.'}</td></tr>`}
+        const r = tab === 'rejected' ? RS_REJECT.items.find(x => x.url === h) : null; if (tab === 'client') { const [site, who] = h.split(' | '); return `<tr><td>${hidName(site)}</td><td>${esc(who)}</td><td style="text-align:right"><button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ Remove</button></td></tr>`; }
+        return `<tr><td>${hidName(h)}</td><td>${r ? esc(r.pic || 'every photo') : `<span class="kind ${KIND_CLS[kindOf(h)]}">${kindOf(h)}</span>${typeof ppTeamTag === 'function' ? ppTeamTag(h, tab) : ''}`}</td><td style="text-align:right">${!r && typeof ppTeamBtn === 'function' ? ppTeamBtn(h, tab) : ''}<button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ ${tab === 'hidden' ? 'Show again' : tab === 'allowed' ? 'Remove' : 'Bring back'}</button></td></tr>`; }).join('') || `<tr><td colspan="3" class="muted" style="padding:28px;text-align:center">${q ? (flat ? 'Nothing matches.' : 'Nothing matches. Press the button to add it.') : 'This list is empty.'}</td></tr>`}
     </tbody></table></div>
     <div class="row faint" style="padding:10px 18px;border-top:1px solid var(--line);font-size:12.5px;gap:12px"><span>Showing ${page.length.toLocaleString()} of ${rows.length.toLocaleString()}.</span>${rows.length > page.length ? '<button class="btn" style="min-height:30px;font-size:13px;margin-left:auto" data-act="hidmore">Show more</button>' : ''}</div>
   </section>
@@ -591,6 +610,9 @@ V.hidden.after = () => {
   i.onkeydown = e => { if (e.key === 'Enter' && state.hidTab === 'social') return; else if (e.key === 'Enter' && !['rejected', 'client'].includes(state.hidTab)) act('hidadd'); };
 };
 Object.assign(ACTS, {
+  keyhelp: () => { if (window.ppKeyHelp) window.ppKeyHelp(true); },
+  sjump: v => { const el = document.getElementById('ss-' + v); if (el) el.scrollIntoView({ block: 'start' }); document.querySelectorAll('.sindex button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); },
+  themeset: async v => { await ppTheme(v); render(true); },
   socadd: async v => {
     const site = RS_SITE.tidy(state.hidQ || '').split('/')[0];
     if (!site || site.startsWith('.')) return toast('Type a site, like photoverse.social');
@@ -855,12 +877,14 @@ V.reconnect.after = async () => {
 V.whatsnew = async () => `${head('Settings', 'What\'s new in PageProof ' + VERSION, 'Shown once after each update. Your captures, settings and lists carry over.')}
   <section class="card" style="overflow:hidden">${NEWS.map(([t, d]) => `<div class="row" style="padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:nowrap;gap:14px"><span class="newbadge" style="margin:0">New</span><span><b>${t}</b><br><span class="muted" style="font-size:14px">${d}</span></span></div>`).join('')}</section>
   <button class="btn primary" style="align-self:flex-start" data-act="newsseen">Got it</button>`;
+// UI overhaul batch 7: Help as even tiles in one row, each with its own icon colour.
 V.help = async () => `${head('Help', 'Help and tutorial', 'Step-by-step guides for everything PageProof does.')}
-  <div class="grid g2">
-    <a class="start" href="https://github.com/TheBenPsych/PageProof/blob/main/TUTORIAL.md" target="_blank"><span class="ic">${ic('help', 22)}</span><b>Tutorial</b><span>Capture, find copies, inspect, compare, mark up and more, one step at a time.</span></a>
-    <a class="start" href="https://github.com/TheBenPsych/PageProof/blob/main/VERIFYING.md" target="_blank"><span class="ic">${ic('verify', 22)}</span><b>Checking a pack</b><span>How anyone can check that an evidence pack was not changed.</span></a>
-    <button class="start" data-act="tour" style="text-align:left;cursor:pointer;font:inherit"><span class="ic">${ic('home', 22)}</span><b>Take the tour</b><span>Five quick stops around this page.</span></button>
-    <a class="start" href="#setup"><span class="ic">${ic('settings', 22)}</span><b>Run first-time setup again</b><span>Your name, the PageProof folder, a computer check, and keeping PageProof handy.</span></a>
+  <div class="helptiles">
+    <a class="start ht-blue" href="https://github.com/TheBenPsych/PageProof/blob/main/TUTORIAL.md" target="_blank"><span class="ic">${ic('help', 22)}</span><b>Tutorial</b><span>Capture, find copies, inspect, compare, mark up and more, one step at a time.</span></a>
+    <a class="start ht-green" href="https://github.com/TheBenPsych/PageProof/blob/main/VERIFYING.md" target="_blank"><span class="ic">${ic('verify', 22)}</span><b>Checking a pack</b><span>How anyone can check that an evidence pack was not changed.</span></a>
+    <button class="start ht-purple" data-act="tour"><span class="ic">${ic('home', 22)}</span><b>Take the tour</b><span>Five quick stops around this page.</span></button>
+    <a class="start ht-amber" href="#setup"><span class="ic">${ic('settings', 22)}</span><b>Run setup again</b><span>Your name, the PageProof folder, a computer check, and keeping PageProof handy.</span></a>
+    <button class="start ht-pink" data-act="keyhelp"><span class="ic"><b class="kq">?</b></span><b>Keyboard keys</b><span>Y Stolen, L Licensed, N Remove, U Undo, / to search. Press ? anywhere.</span></button>
   </div>`;
 
 // =====================================================================================

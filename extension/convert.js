@@ -286,12 +286,12 @@ function renderMain() {
 
 function emptyView() {
   const open = S.mode === 'open';
-  const e = h(`<div class="empty">
+  const e = h(`<div class="empty tp-drop">
     <div class="ph">${open ? '🗂️' : '🔄'}</div>
-    <h2>${open ? 'Open odd files' : 'Convert files'}</h2>
-    <p>${open ? 'Add a file your computer can\'t open. PageProof shows what is inside and lets you save it as PDF or pull files out.' : 'Add one file or many. PageProof works out what they are and shows you what it can do with them.'}</p>
+    <h2>Drop files here</h2>
+    <p class="alt">or paste with <kbd>Ctrl</kbd>+<kbd>V</kbd>. ${open ? 'PageProof shows what is inside and lets you save it as PDF or pull files out.' : 'Add one file or many: PageProof works out what they are and what it can do with them.'}</p>
     <button class="addbtn">➕ Add files</button>
-    <p class="alt">or drag them onto this page, or paste with <kbd>Ctrl</kbd>+<kbd>V</kbd></p>
+    <b class="canh">What it can do</b>
     <div class="can">${(open ? ['🍎 Mac Pages, Numbers, Keynote', '🍎 iPhone HEIC photos', '✉️ Outlook .msg and .eml emails', '📦 ZIP, RAR, 7-Zip, TAR', '🖼️ TIFF, AVIF, WebP pictures', '📝 Word, Excel, RTF, OpenOffice']
       : ['🖼️ JPG, PNG, WebP, GIF, BMP, AVIF', '🍎 iPhone HEIC photos', '📑 Join, split and reorder PDFs', '📄 Word and other documents to PDF', '🗜️ Make a PDF or picture smaller', '✂️ Rotate, crop, resize', '🍎 Mac Pages, Numbers, Keynote', '📦 ZIP and RAR', '✉️ Outlook .msg and .eml emails']).map(t => `<span>${t}</span>`).join('')}</div>
     <p class="alt" style="margin-top:22px">🔒 Everything happens on this computer. Your files are never uploaded.</p>

@@ -188,12 +188,13 @@ async function capture(tab, auto) {
 
   try {
     // 1) The main page, one screen at a time, starting from the very top.
-    let y = 0, prevNext = -1;
+    let y = 0, prevNext = -1, ovOf = 0;
     for (let i = 0; i < MAX_PAGE_SHOTS; i++) {
       progress(String(i + 1));
-      ovStep = ['Screen ' + (i + 1) + '.', 'Step 1 of 3'];
+      ovStep = ['Screen ' + (i + 1) + (ovOf ? ' of ' + Math.max(i + 1, ovOf) : ''), 1];
       lastScroll = ['scrollPage', y];
       const at = await inPage(tabId, 'scrollPage', y);
+      if (at && at.total && at.crop && at.crop.h) { ovOf = Math.min(MAX_PAGE_SHOTS, Math.ceil(at.total / at.crop.h)); ovStep = ['Screen ' + (i + 1) + ' of ' + Math.max(i + 1, ovOf), 1]; }
       await sleep(i === 0 ? SETTLE_MS * 2 : SETTLE_MS);
       // Some sites (like Google) only make their top bar "stick" after you scroll, so check again before every later screen.
       if (i > 0) await inPage(tabId, 'hideFixed');
@@ -218,7 +219,7 @@ async function capture(tab, auto) {
     for (const s of info.sections) {
       if (stopRequested) break;
       progress('S' + s.n);
-      ovStep = ['Scroll box ' + s.n + ' of ' + info.sections.length + '.', 'Step 2 of 3'];
+      ovStep = ['Box ' + s.n + ' of ' + info.sections.length, 2];
       const sec = { n: s.n, kind: s.kind, label: s.label, axes: s.axes, width: 0, height: 0, tiles: [] };
       const add = (shot, at, x, y) => {
         sec.tiles.push({ src: shot, crop: at.crop, destX: x, destY: y });

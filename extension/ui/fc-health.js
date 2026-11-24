@@ -69,6 +69,10 @@ async function healthLights() {
   return L;
 }
 const LIGHT = { ok: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--bad)', grey: 'var(--faint)' };
+// UI overhaul batch 7: the lights as tiles in three groups.
+const H_SITES = t => /^(Google Lens|Yandex|Bing|Signed in)/.test(t);
+const H_SEARCH = t => /^(Keep searching|Last photo searched|Skipped photos|Stats)$/.test(t);
+const HGROUPS = [['Your computer', t => !H_SITES(t) && !H_SEARCH(t)], ['Searching', H_SEARCH], ['Search sites', H_SITES]];
 
 // ---------------------------------------------------------------- Copy details for support
 // Numbers and settings only. Never a photo's name, a client's name, a site or a folder path.
@@ -260,12 +264,11 @@ V.health = async () => {
   const lights = await healthLights();
   const bad = lights.filter(l => l[0] === 'bad').length, warn = lights.filter(l => l[0] === 'warn').length;
   return `${head('Settings', 'Is everything working?', 'A quick look at every part of PageProof. Green is fine, yellow needs a look, red is stopped.', `<button class="btn" data-act="healthagain">${ic('refresh', 18)} Check again</button><button class="btn primary" data-act="supportcopy">${ic('doc', 18)} Copy details for support</button>`)}
-  <div class="banner ${bad ? 'bad' : warn ? 'warn' : 'info'}" style="font-size:15px"><b>${bad ? plural(bad, 'thing has', 'things have') + ' stopped' : warn ? plural(warn, 'thing needs', 'things need') + ' a look' : 'Everything is working'}</b>${bad && warn ? `<span class="muted">and ${warn} more ${warn === 1 ? 'needs' : 'need'} a look</span>` : ''}</div>
-  <section class="card" style="overflow:hidden">
-    ${lights.map(([c, title, text, btn]) => `<div class="row" style="gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);flex-wrap:nowrap;align-items:center">
-      <span style="width:14px;height:14px;border-radius:50%;flex-shrink:0;background:${LIGHT[c]}" role="img" aria-label="${{ ok: 'Working', warn: 'Needs a look', bad: 'Stopped', grey: 'Not in use' }[c]}"></span>
-      <div style="flex:1;min-width:0"><b>${esc(title)}</b><div class="muted" style="font-size:13.5px">${esc(text)}</div></div>${btn || ''}</div>`).join('')}
-  </section>
+  ${(() => { const first = lights.find(l => l[0] === 'bad' && l[3]) || lights.find(l => l[0] === 'warn' && l[3]);
+    return `<div class="hsum ${bad ? 'bad' : warn ? 'warn' : 'ok'}" role="status"><span class="hsi">${ic(bad || warn ? 'warn' : 'check', 26, 2.4)}</span><div><b>${bad ? plural(bad, 'thing has', 'things have') + ' stopped' : warn ? plural(warn, 'thing needs', 'things need') + ' a look' : 'Everything is working'}</b><span>${bad && warn ? `and ${warn} more ${warn === 1 ? 'needs' : 'need'} a look. ` : ''}${first ? esc(first[1]) + ': ' + esc(first[2]) : 'Every light below is green or not in use yet.'}</span></div>${first ? first[3] : ''}</div>`; })()}
+  ${HGROUPS.map(([g, test]) => { const ls = lights.filter(l => test(l[1])); return ls.length ? `<section class="hgroup"><h2>${g}</h2><div class="htiles">${ls.map(([c, title, text, btn]) => `<div class="htile ${c}">
+      <div class="ht"><span class="hdot" style="background:${LIGHT[c]}" role="img" aria-label="${{ ok: 'Working', warn: 'Needs a look', bad: 'Stopped', grey: 'Not in use' }[c]}"></span><b>${esc(title)}</b></div>
+      <div class="muted" style="font-size:13.5px">${esc(text)}</div>${btn ? `<div class="hb">${btn}</div>` : ''}</div>`).join('')}</div></section>` : ''; }).join('')}
   ${await timeCard()}
   ${storageCard()}
   ${state.support ? `<section class="card pad" style="display:flex;flex-direction:column;gap:10px"><div class="row"><h2>Details for support</h2><span class="tag ok" style="margin-left:auto">Copied</span></div>

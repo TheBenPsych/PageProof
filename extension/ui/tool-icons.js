@@ -62,7 +62,7 @@
     '👁': 'eye', '📎': 'clip', '📊': 'chart', '🎯': 'target',
   };
   const RX = new RegExp('(' + Object.keys(MAP).map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')\\uFE0F?', 'u');
-  const LABELS = 'button,a,summary,h1,h2,h3,label,nav,.brand,.safe,.gonote,.howto,.can,.ways,.lead,.note,.empty,#empty,.card,.pill,.tag,.st,.kv,.fold,#notice,#banner,#status';
+  const LABELS = 'button,a,summary,h1,h2,h3,label,nav,.brand,.safe,.gonote,.howto,.can,.ways,.lead,.note,.empty,#empty,.card,.pill,.tag,.st,.kv,.fold,#notice,#banner,#status,.tp-facts';
   const NEVER = 'pre,textarea,input,select,[contenteditable],#preview,#board,#details,iframe,svg,.nm,.name,.fname,.t,.url,script,style';
   const svg = name => { const s = document.createElement('span'); s.className = 'tic'; s.setAttribute('aria-hidden', 'true');
     s.innerHTML = `<svg viewBox="0 0 24 24" width="1.15em" height="1.15em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[name].replace(/\.(\d)00\b/g, '.$1')}</svg>`; return s; };
