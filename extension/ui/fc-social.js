@@ -8,6 +8,11 @@ api.storage.local.get('ppShowGov').then(st => { if (st && st.ppShowGov) state.fG
 
 const isSoc = c => c.use === 'social';
 const isXAcct = a => !!a && /^(x|twitter)\.com$/.test(a.plat || '');
+// 4.30.1: details read before the viewer's own data was left out are not shown (they could be
+// YOUR name and followers): X before 4.24, Instagram, Facebook, Threads and TikTok before 4.30.1.
+// Those accounts are read again by themselves.
+const isMetaAcct = a => !!a && /^(instagram\.com|facebook\.com|threads\.net|threads\.com|tiktok\.com)$/.test(a.plat || '');
+const staleInfo = (i, a) => !!i && i.ok && ((isXAcct(a) && !i.v) || (isMetaAcct(a) && (i.v || 0) < 4));
 const inTab = c => (state.fTab === 'social') === isSoc(c);
 const platOf = c => PP_SOCIAL.platform(c.site);
 const platBadge = (c, size = 20) => { const p = platOf(c); return `<span class="plat" style="--pc:${p.color};width:${size}px;height:${size}px;font-size:${Math.round(size * 0.45)}px" title="${esc(p.name)}" aria-label="${esc(p.name)}">${esc(p.short)}</span>`; };
@@ -21,7 +26,7 @@ const sureTag = a => a.from === 'you' ? '<span class="tag grey">set by you</span
 function acctName(a) {
   if (!a) return '';
   const i = FCD && FCD.acctInfo && FCD.acctInfo[a.key];
-  const n = String((i && i.ok && i.name && !(isXAcct(a) && !i.v) && i.name) || a.name || '').trim();
+  const n = String((i && i.ok && i.name && !staleInfo(i, a) && i.name) || a.name || '').trim();
   const plain = s => String(s || '').toLowerCase().replace(/^@/, '').replace(/[\s._-]/g, '');
   return n && plain(n) !== plain(PP_SOCIAL.bareName(a)) && plain(n) !== plain(a.handle) ? n : '';
 }
@@ -86,13 +91,16 @@ async function socIndex(copies) {
 // 3 days. One account at a time while PageProof is open. Nothing to type in.
 // 4.24: details read before the X fixes are not shown for X (they could be the viewer's own
 // followers and the site's footer); every account is read again once, the X ones first.
-const infoOf = c => { const i = (c && c.acct && FCD && FCD.acctInfo && FCD.acctInfo[c.acct.key]) || null; return i && !i.v && isXAcct(c.acct) ? null : i; };
+const infoOf = c => { const i = (c && c.acct && FCD && FCD.acctInfo && FCD.acctInfo[c.acct.key]) || null; return staleInfo(i, c.acct) ? null : i; };
 const INFO_BUSY = new Set();
 async function readAcctInfo(acct) {
   if (!acct || INFO_BUSY.has(acct.key)) return null;
   INFO_BUSY.add(acct.key);
   try {
+    PP_SOCIAL.halt.on = false;
     const pages = await PP_SOCIAL.readProfile(acct);
+    // Paused or switched off half way: nothing is saved, so this account is read again after Resume.
+    if (PP_SOCIAL.halt.on) return null;
     const f = PP_SOCIAL.profileFacts(acct, pages);
     if (f.website && !f.shop) {
       const pf = await PP_CHECKS.readPage({ url: f.website, site: RS_SITE.of(f.website) }).catch(() => null);
@@ -109,27 +117,105 @@ async function readAcctInfo(acct) {
     return all[acct.key];
   } finally { INFO_BUSY.delete(acct.key); }
 }
-const infoDue = i => !i || (i.ok && !i.v) || (i.ok ? Date.now() - Date.parse(i.at) > 30 * 864e5 && (!i.failAt || Date.now() - Date.parse(i.failAt) > 3 * 864e5) : Date.now() - Date.parse(i.failAt || i.at || 0) > 3 * 864e5);
+const infoDue = (i, a) => !i || (i.ok && !i.v) || staleInfo(i, a) || (i.ok ? Date.now() - Date.parse(i.at) > 90 * 864e5 && (!i.failAt || Date.now() - Date.parse(i.failAt) > 3 * 864e5) : Date.now() - Date.parse(i.failAt || i.at || 0) > 3 * 864e5);
 let infoQueueOn = false;
+// 4.30.2 (Ben): the reader only works while Keep searching is on, not paused, and inside its hours,
+// one account a minute. Pause or Off closes its tab at once; Resume carries on with the next account.
+// Keep searching's status shows how far it is ("Reading account details 12 of 80").
+const INFO_GAP = () => globalThis.PP_INFO_GAP ?? 60000;   // the checks make it shorter
+// Hard limits per site (4.30.2, Ben: X stopped loading after many profiles in a row). X at most one
+// profile every 2 minutes and 30 a day; other sites one a minute and 150 a day. Two empty pages in a
+// row from a site (a block, a login wall, a page stuck on its logo) = that site is left alone for 6 hours.
+const SITE_LIMIT = { x: { gap: 2 * 60000, day: 30 }, other: { gap: 60000, day: 150 } };
+const acctSite = a => isXAcct(a) ? 'x' : String(a.plat || (a.key || '').split('/')[0] || 'other').replace(/^www\./, '');
+const limitOf = site => SITE_LIMIT[site] || SITE_LIMIT.other;
+async function siteLimits() {
+  const L = (await api.storage.local.get('fcAcctLimits')).fcAcctLimits || {};
+  const today = new Date().toDateString();
+  for (const v of Object.values(L)) if (v.day !== today) { v.day = today; v.n = 0; }
+  return L;
+}
+// When may this site be read next? 0 = now.
+function siteWait(L, site) {
+  const v = L[site]; if (!v) return 0;
+  const lim = limitOf(site), now = Date.now();
+  if (v.restUntil && v.restUntil > now) return v.restUntil;
+  if (v.n >= lim.day) { const t = new Date(); t.setHours(24, 0, 0, 0); return +t; }
+  const gap = globalThis.PP_SITE_GAP ?? lim.gap;
+  return v.last && now - v.last < gap ? v.last + gap : 0;
+}
+async function siteNote(site, ok) {
+  const L = await siteLimits();
+  const v = L[site] || (L[site] = { day: new Date().toDateString(), n: 0 });
+  v.n++; v.last = Date.now();
+  v.empty = ok ? 0 : (v.empty || 0) + 1;
+  if (v.empty >= 2) { v.restUntil = Date.now() + 6 * 3600000; v.empty = 0; }
+  await api.storage.local.set({ fcAcctLimits: L });
+}
+// Opening a copy whose account has no details yet reads them then (inside the site's limits).
+async function acctOnOpen(c) {
+  if (!c || !c.acct || INFO_BUSY.has(c.acct.key)) return null;
+  const i = FCD && FCD.acctInfo && FCD.acctInfo[c.acct.key];
+  if (i && !infoDue(i, c.acct)) return null;
+  if ((await api.storage.local.get('ppAcctRead')).ppAcctRead === false) return null;
+  const site = acctSite(c.acct);
+  if (siteWait(await siteLimits(), site)) return null;
+  const r = await readAcctInfo(c.acct).catch(() => null);
+  if (r) await siteNote(site, !!r.ok);
+  return r;
+}
+const infoSay = v => api.storage.local.set({ fcAcctRead: { ...v, beat: Date.now() } }).catch(() => {});
 async function infoQueue() {
   if (infoQueueOn || !FCD) return;
-  const st = await api.storage.local.get('ppAcctRead').catch(() => ({}));
-  if (st.ppAcctRead === false) return;
   infoQueueOn = true;
+  let done = 0;
   try {
     for (;;) {
+      const st = await api.storage.local.get('ppAcctRead').catch(() => ({}));
+      if (st.ppAcctRead === false) { await infoSay({ state: 'off' }); break; }
       if (!FCD) await loadFC();
       const info = FCD.acctInfo || {};
       // Accounts with new copies first, then the rest; each account once.
-      const todo = [...FCD.accts.values()].filter(e => e.copies.length && !INFO_BUSY.has(e.key) && infoDue(info[e.key]))
-        .sort((a, b) => (isXAcct(b.acct) && info[b.key] && !info[b.key].v ? 1 : 0) - (isXAcct(a.acct) && info[a.key] && !info[a.key].v ? 1 : 0) || b.copies.filter(x => x.status === 'new').length - a.copies.filter(x => x.status === 'new').length)[0];
-      if (!todo) break;
-      await readAcctInfo(todo.acct).catch(() => null);
+      // Only accounts with a copy still waiting for your answer (answered and removed ones are skipped;
+      // opening a copy reads its account then, see acctOnOpen).
+      const due = [...FCD.accts.values()].filter(e => e.copies.some(x => x.status === 'new') && !INFO_BUSY.has(e.key) && infoDue(info[e.key], e.acct));
+      if (!due.length) { await infoSay({ state: 'done', done }); break; }
+      const ok = await FC.quietOK();
+      if (!ok.ok) { infoHeld = true; await infoSay({ state: 'held', why: ok.why, done, total: done + due.length }); await infoWait(); continue; }
+      // Sites that are resting or have had enough for today wait (their accounts stay due).
+      const L = await siteLimits();
+      const ready = due.filter(e => !siteWait(L, acctSite(e.acct)));
+      if (!ready.length) {
+        const until = Math.min(...due.map(e => siteWait(L, acctSite(e.acct))));
+        const resting = [...new Set(due.map(e => acctSite(e.acct)).filter(x => L[x] && L[x].restUntil > Date.now()))];
+        infoHeld = true;
+        await infoSay({ state: 'held', why: resting.length ? 'site' : 'limit', sites: resting, until: resting.length ? Math.min(...resting.map(x => L[x].restUntil)) : until, done, total: done + due.length });
+        await infoWait(Math.max(5000, Math.min(until - Date.now(), 30 * 60000)));
+        continue;
+      }
+      const todo = ready.sort((a, b) => (staleInfo(info[b.key], b.acct) ? 1 : 0) - (staleInfo(info[a.key], a.acct) ? 1 : 0) || b.copies.filter(x => x.status === 'new').length - a.copies.filter(x => x.status === 'new').length)[0];
+      infoHeld = false;
+      await infoSay({ state: 'reading', done, total: done + due.length, who: todo.acct.handle || '' });
+      const r = await readAcctInfo(todo.acct).catch(() => null);
+      if (r) { done++; await siteNote(acctSite(todo.acct), !!r.ok); }
       socRedrawSoon();
-      await new Promise(r => setTimeout(r, 4000));
+      await infoSay({ state: 'resting', done, total: done + due.length - (r ? 1 : 0), next: Date.now() + INFO_GAP() });
+      await infoWait(INFO_GAP());
     }
   } finally { infoQueueOn = false; }
 }
+// Waits (at most ms), and wakes early when Pause, Off or the hours change.
+let infoWake = null, infoHeld = false;
+const infoWait = (ms = 5 * 60000) => new Promise(r => { const t = setTimeout(go, ms); function go() { clearTimeout(t); infoWake = null; r(); } infoWake = go; });
+api.storage.onChanged.addListener(ch => {
+  if (!ch.fcPause && !ch.fcKeep && !ch.ppAcctRead) return;
+  FC.quietOK().then(async ok => {
+    const off = (await api.storage.local.get('ppAcctRead')).ppAcctRead === false;
+    if (!ok.ok || off) PP_SOCIAL.stopQuiet();
+    if (infoWake && infoHeld) infoWake();
+    if (ok.ok && FCD) { infoQueue(); socQueue(); }
+  }).catch(() => {});
+});
 // The filters on the Social media tab: Verified, Followers, Account type, Country.
 const TYPES = ['Business', 'Creator', 'Organisation', 'Government', 'News or media', 'Fan page', 'Group', 'Person'];
 // Kinds of check (4.24, Ben): paid = X blue / Meta Verified; gold = organisation X verified;
@@ -154,6 +240,7 @@ const folOf = c => { const i = infoOf(c); return i && i.ok ? i.followers : null;
 function passAcct(c) {
   if (state.fVer !== 'Any') { const v = verOf(c); if (state.fVer === 'real' ? !REAL_V.includes(v) : v !== state.fVer) return false; }
   if (!state.fGov && state.fType !== 'Government' && typeOf(c) === 'Government') return false;
+  if (!state.fRepost && c.rp && c.rp.state === 'repost') return false;
   if (state.fFol !== 'Any' && PP_SOCIAL.folBand(folOf(c)) !== state.fFol) return false;
   if (state.fType !== 'Any' && typeOf(c) !== state.fType) return false;
   if (state.fCountry !== 'Any' && countryOfAcct(c) !== state.fCountry) return false;
@@ -161,7 +248,9 @@ function passAcct(c) {
 }
 // passAcct, leaving one filter out (for the numbers in its own menu).
 function passAcctBut(c, k) { const was = state[k]; state[k] = 'Any'; try { return passAcct(c); } finally { state[k] = was; } }
-function acctFilterLine(dd, xs) {
+function acctFilterLine(dd, xsAll) {
+  // 4.32: xsAll includes hidden reposts (for their count); the other filters count only what shows.
+  const xs = state.fRepost ? xsAll : xsAll.filter(c => !(c.rp && c.rp.state === 'repost'));
   const n = (k, test) => xs.filter(c => passAcctBut(c, k) && test(c)).length;
   const countries = [...new Set(xs.map(countryOfAcct).filter(x => x !== 'nk'))].sort();
   const busy = FCD && FCD.accts ? [...FCD.accts.values()].filter(e => e.copies.length && !(FCD.acctInfo || {})[e.key]).length : 0;
@@ -171,6 +260,7 @@ function acctFilterLine(dd, xs) {
     ${dd('fType', 'Account type', [['Any', 'Any'], ...TYPES.map(t => [t, t, n('fType', c => typeOf(c) === t) + '']), ['nk', 'Not known', n('fType', c => typeOf(c) === 'nk') + '']], state.fType, false, 'Any')}
     ${dd('fCountry', 'Country', [['Any', 'Any'], ...countries.map(t => [t, t, n('fCountry', c => countryOfAcct(c) === t) + '']), ['nk', 'Not known', n('fCountry', c => countryOfAcct(c) === 'nk') + '']], state.fCountry, false, 'Any')}
     ${(() => { const g = xs.filter(c => typeOf(c) === 'Government').length; return state.fType === 'Government' ? '' : `<label class="chip" style="cursor:pointer;gap:6px" title="People and offices in government, and anyone running for office. Hidden unless you tick this."><input type="checkbox" data-act="fgov" ${state.fGov ? 'checked' : ''}> Show government${g ? ` <span class="faint">(${g} ${state.fGov ? 'shown' : 'hidden'})</span>` : ''}</label>`; })()}
+    ${(() => { const r = xsAll.filter(c => c.rp && c.rp.state === 'repost').length; return `<label class="chip" style="cursor:pointer;gap:6px" title="Posts that only share, repost or quote someone else's post. The original poster is the lead. Hidden unless you tick this."><input type="checkbox" data-act="frepost" ${state.fRepost ? 'checked' : ''}> Show reposts and shares${r ? ` <span class="faint">(${r} ${state.fRepost ? 'shown' : 'hidden'})</span>` : ''}</label>`; })()}
     ${busy ? `<span class="faint" style="font-size:12.5px">${plural(busy, 'account')} still being read</span>` : ''}</div>`;
 }
 // The little badges on a row: check mark, followers, type, company.
@@ -255,12 +345,14 @@ async function socQueue() {
   try {
     for (;;) {
       if (route() !== 'found' && route() !== 'review') break;
+      // Pause stops these page checks too (4.30.2); Resume starts them again.
+      if ((await api.storage.local.get('fcPause')).fcPause) break;
       if (!FCD) await loadFC();
       const todo = FCD.copies.filter(c => isSoc(c) && !c.acct && c.status !== 'removed' && !FIND_BUSY.has(c.id) && (!c.acctTry || Date.now() - c.acctTry > 3 * 864e5)).slice(0, 2);
       if (!todo.length) {
         // 4.30: then each new social copy's own picture is checked against your client's photo
         // (one at a time), so "Not seen in the post" shows in the list without opening it.
-        const chk = FCD.copies.find(c => c.status === 'new' && needsPostCheck(c) && !POST_BUSY.has(c.id) && !(c.postTry && Date.now() - c.postTry < 864e5));
+        const chk = FCD.copies.find(c => (c.status === 'new' || c.removedBy === 'postcheck') && needsPostCheck(c) && !POST_BUSY.has(c.id) && !(c.postTry && Date.now() - c.postTry < 864e5));
         if (!chk) break;
         chk.postTry = Date.now();
         await postCheck(chk).catch(() => null);
@@ -313,7 +405,7 @@ function readPostInTab() {
 // The row's first line on the Social media tab: the account leads.
 function socLine(c) {
   const a = c.acct;
-  return `<div class="l1 soc">${platBadge(c)}${a ? acctHtml(a) : '<b class="nofind">Account not found yet</b>'}<span class="pkind">${esc(postWord(c))}</span>${c.status !== 'new' ? tagFor(c) : ''}
+  return `<div class="l1 soc">${platBadge(c)}${a ? acctHtml(a) : '<b class="nofind">Account not found yet</b>'}<span class="pkind">${esc(postWord(c))}</span>${c.status !== 'new' ? tagFor(c) : ''}${rpTags(c)}
     ${a && c.repeat && c.status === 'new' ? `<span class="tag bad" title="You marked this account stolen before">Marked stolen ${c.repeat === 1 ? 'once' : c.repeat + ' times'} before</span>` : ''}
     ${a ? acctBadges(c) : ''}
     ${!a ? `<button class="btn sm ghost setacct" data-act="openacct" data-v="${esc(c.id)}">Set account</button>` : a.sure === 'likely' ? '<span class="tag warn" title="Read from the page\'s text. Check it once.">Account: likely</span>' : ''}${sigIcons(c)}</div>`;
@@ -329,7 +421,7 @@ function postCard(c) {
   return `<section class="dsec postcard" id="postcard"><div class="row" style="justify-content:space-between;gap:8px"><div class="dsh" style="margin:0">The post</div><span class="faint" style="font-size:12px">No live preview: ${esc(platOf(c).name)} blocks it</span></div>
     ${p.caption ? `<p class="cap">“${esc(p.caption)}”</p>` : `<p class="faint" style="margin:0;font-size:13px">${busy ? 'Reading the post…' : 'The caption isn\'t public. Open the post to see it.'}</p>`}
     ${bits.length ? `<span class="muted" style="font-size:12.5px">${esc(bits.join(' · '))}</span>` : ''}
-    <div class="row" style="gap:6px"><a class="btn sm" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer">${ic('ext', 14)} Open post</a><button class="btn sm" data-act="capturecopy">${ic('capture', 14)} Capture the post</button><button class="btn ghost sm" data-act="trypage">Try the live preview anyway</button></div></section>`;
+    <div class="row" style="gap:6px"><a class="btn sm" href="${safeUrl(linkOf(c))}" target="_blank" rel="noreferrer">${ic('ext', 14)} Open post</a><button class="btn sm" data-act="capturecopy">${ic('capture', 14)} Capture the post</button><button class="btn ghost sm" data-act="trypage">Try the live preview anyway</button></div></section>${rpBox(c)}`;
 }
 // The panel's Account tab.
 function acctPane(c) {
@@ -428,6 +520,7 @@ Object.assign(ACTS, {
     if (!c || !c.acct) return;
     const p = readAcctInfo(c.acct); render(true);
     const i = await p;
+    if (i) await siteNote(acctSite(c.acct), !!i.ok);
     toast(i && i.ok ? 'Read ' + c.acct.handle + '\'s profile.' : platOf(c).name + ' didn\'t show the profile. PageProof tries again in 3 days.');
     render(true);
   },
@@ -515,4 +608,102 @@ function platChips(xs) {
   return `<div class="platchips" role="group" aria-label="Platforms"><button class="pchip${state.fPlat === 'Any' ? ' on' : ''}" data-act="fplat" data-v="Any" aria-pressed="${state.fPlat === 'Any'}">All platforms <i class="num">${xs.length}</i></button>
     ${list.map(e => `<button class="pchip${state.fPlat === e.p.key ? ' on' : ''}" data-act="fplat" data-v="${esc(e.p.key)}" aria-pressed="${state.fPlat === e.p.key}">${platBadge({ site: e.site }, 18)}${esc(e.p.name)} <i class="num">${e.n}</i></button>`).join('')}</div>`;
 }
-function passMainNoAcct(c) { const k = ['fVer', 'fFol', 'fType', 'fCountry'], was = k.map(x => state[x]); k.forEach(x => { state[x] = 'Any'; }); try { return passMain(c); } finally { k.forEach((x, i) => { state[x] = was[i]; }); } }
+function passMainNoAcct(c) { const k = ['fVer', 'fFol', 'fType', 'fCountry', 'fRepost'], was = k.map(x => state[x]); k.forEach(x => { state[x] = x === 'fRepost' ? true : 'Any'; }); try { return passMain(c); } finally { k.forEach((x, i) => { state[x] = was[i]; }); } }
+
+// ---------------------------------------------------------------- reposts and shares (4.32, Ben)
+// A copy found on an account page is checked in your browser: PageProof finds the exact post, and
+// tells you when it is only a share or repost of someone else's post (repost.js). Reposts are hidden
+// unless "Show reposts and shares" is ticked, and point to the original post. Never answered for you.
+state.fRepost = false;
+api.storage.local.get('ppShowReposts').then(st => { if (st && st.ppShowReposts) state.fRepost = true; }).catch(() => {});
+const isRepost = c => !!(c.rp && c.rp.state === 'repost');
+const exactPost = c => (c.rp && c.rp.post) || '';
+const linkOf = c => exactPost(c) || c.url;
+const RP_BUSY = new Set();
+const rpWord = c => ({ share: 'Share', repost: 'Repost', quote: 'Quote', reblog: 'Reblog' }[(c.rp && c.rp.kind) || ''] || PP_REPOST.WORD[PP_REPOST.plat(c.site)] || 'Repost');
+const origName = c => c.rp && c.rp.orig ? acctText(c.rp.orig) : 'another account';
+async function rpCheck(c) {
+  if (RP_BUSY.has(c.id)) return null;
+  RP_BUSY.add(c.id);
+  try {
+    PP_SOCIAL.halt.on = false;
+    const rp = await PP_REPOST.check(c).catch(() => ({ at: new Date().toISOString(), state: 'failed' }));
+    // Paused or switched off half way: nothing is saved, so it is checked again after Resume.
+    if (!rp || PP_SOCIAL.halt.on) return null;
+    // Read the copy again right before saving and change only rp, so an answer given meanwhile stays.
+    const cc = await FC.DB.get('copies', c.id);
+    if (!cc) return null;
+    cc.rp = rp; await FC.DB.put('copies', cc);
+    c.rp = rp; FCD_STALE = true;
+    return rp;
+  } finally { RP_BUSY.delete(c.id); }
+}
+// New social copies that need it are checked quietly, one at a time, while Copies found is open.
+// Same rules as the account reader (4.30.2): only while Keep searching is on, not paused and inside
+// its hours, "Read account details" on, the per-site limits (X 1 per 2 minutes / 30 a day, others
+// 1 a minute / 150 a day, 2 empty pages = the site rests 6 hours), one page a minute.
+let rpQueueOn = false;
+const rpSite = c => c.acct ? acctSite(c.acct) : (isXAcct({ plat: PP_SOCIAL.listed(c.site) }) ? 'x' : PP_SOCIAL.listed(c.site) || c.site);
+async function rpQueue() {
+  if (rpQueueOn || !FCD) return;
+  rpQueueOn = true;
+  try {
+    for (;;) {
+      if (route() !== 'found' && route() !== 'review') break;
+      if ((await api.storage.local.get('ppAcctRead').catch(() => ({}))).ppAcctRead === false) break;
+      if (!(await FC.quietOK()).ok) break;        // Resume / hours starting again restarts it (below)
+      // One background tab at a time: wait while the account reader has one open.
+      if (INFO_BUSY.size) { await new Promise(r => setTimeout(r, 5000)); continue; }
+      if (!FCD) await loadFC();
+      const L = await siteLimits();
+      const c = FCD.copies.filter(c => isSoc(c) && PP_REPOST.due(c) && !RP_BUSY.has(c.id) && !siteWait(L, rpSite(c)))
+        .sort((a, b) => (PP_REPOST.profileOnly(b) ? 1 : 0) - (PP_REPOST.profileOnly(a) ? 1 : 0) || String(b.firstSeen || '').localeCompare(String(a.firstSeen || '')))[0];
+      if (!c) break;
+      const rp = await rpCheck(c);
+      if (rp) await siteNote(rpSite(c), rp.state !== 'blocked' && rp.state !== 'failed');
+      socRedrawSoon();
+      await new Promise(r => setTimeout(r, INFO_GAP()));
+    }
+  } finally { rpQueueOn = false; }
+}
+api.storage.onChanged.addListener(ch => {
+  if (!ch.fcPause && !ch.fcKeep && !ch.ppAcctRead) return;
+  FC.quietOK().then(ok => { if (ok.ok && FCD) rpQueue(); }).catch(() => {});
+});
+// Tags on the row.
+function rpTags(c) {
+  if (isRepost(c)) return `<span class="tag warn" title="${esc(rpWord(c))} of ${esc(origName(c))}'s post. The original post is the lead.${c.rp.sure === 'likely' ? ' Read from the page: check it once.' : ''}">${esc(rpWord(c))} of ${esc(c.rp.orig ? c.rp.orig.handle : 'another account')}</span>`;
+  if (exactPost(c)) return '<span class="tag blue" title="The link went to the account page. PageProof found the post that holds the photo.">Exact post found</span>';
+  if (PP_REPOST.profileOnly(c)) return `<span class="tag grey" title="The search engine linked the account page, not one post.">${RP_BUSY.has(c.id) ? 'Finding the post…' : 'Link goes to the account page'}</span>`;
+  return '';
+}
+// The box in the copy's panel ("The post" section).
+function rpBox(c) {
+  const p = PP_REPOST.plat(c.site);
+  if (!p) return '';
+  const busy = RP_BUSY.has(c.id), rp = c.rp, prof = PP_REPOST.profileOnly(c);
+  const again = `<button class="btn ghost sm" data-act="rpcheck" data-v="${esc(c.id)}"${busy ? ' disabled' : ''}>${busy ? 'Looking…' : 'Look again'}</button>`;
+  if (busy && !rp) return `<section class="dsec rpbox"><div class="dsh">${prof ? 'Finding the post' : 'Checking for a share or repost'}</div><p class="muted" style="margin:0;font-size:13px">${prof ? 'Scrolling the account page in a background tab to find the post that holds the photo…' : 'Opening the post in a background tab…'}</p></section>`;
+  if (rp && rp.state === 'repost') {
+    return `<section class="dsec rpbox"><div class="dsh">${esc(rpWord(c))} of someone else's post</div>
+      <p style="margin:0;font-size:13.5px">${esc(c.acct ? acctText(c.acct) : 'This account')} ${rp.kind === 'quote' ? 'quoted' : rp.kind === 'share' ? 'shared' : rp.kind === 'reblog' ? 'reblogged' : 'reposted'} a post by <b>${esc(origName(c))}</b>. The original poster is the lead.${rp.sure === 'likely' ? ' <span class="tag warn">likely</span>' : ''}</p>
+      <div class="row" style="gap:6px;flex-wrap:wrap">${rp.origPost ? `<a class="btn sm" href="${safeUrl(rp.origPost)}" target="_blank" rel="noreferrer">${ic('ext', 14)} Open the original post</a>` : ''}${rp.orig && rp.orig.url ? `<a class="btn sm" href="${safeUrl(rp.orig.url)}" target="_blank" rel="noreferrer">${ic('ext', 14)} Open ${esc(rp.orig.handle)}</a>` : ''}${rp.post ? `<a class="btn ghost sm" href="${safeUrl(rp.post)}" target="_blank" rel="noreferrer">${ic('ext', 14)} Open their ${esc(rpWord(c).toLowerCase())}</a>` : ''}${again}</div>
+      <span class="faint" style="font-size:12.5px">Reposts and shares are hidden from the list unless "Show reposts and shares" is ticked. Nothing was answered for you.</span></section>`;
+  }
+  if (!prof) return rp && rp.state === 'own' ? '' : '';
+  if (rp && rp.post) return `<section class="dsec rpbox"><div class="dsh">Exact post found</div><p class="muted" style="margin:0;font-size:13px">The search linked the account page. This is the post that holds the photo${rp.pct ? ` (${rp.pct}% lines up)` : ''}.</p><div class="row" style="gap:6px"><a class="btn sm" href="${safeUrl(rp.post)}" target="_blank" rel="noreferrer">${ic('ext', 14)} Open the post</a>${again}</div></section>`;
+  const why = !rp ? 'PageProof will look for the post shortly.' : rp.state === 'own' ? 'The photo is on the account page, but the post\'s own link wasn\'t shown.' : rp.state === 'blocked' ? platOf(c).name + ' asked to log in. Log in to ' + platOf(c).name + ' in this browser, then press Look again.' : 'The photo wasn\'t found in the newest posts. It may be older, or deleted.';
+  return `<section class="dsec rpbox"><div class="dsh">Link goes to the account page, not the post</div><p class="muted" style="margin:0;font-size:13px">${esc(why)}</p><div class="row" style="gap:6px"><button class="btn sm" data-act="rpcheck" data-v="${esc(c.id)}"${busy ? ' disabled' : ''}>${busy ? 'Looking…' : rp ? 'Look again' : 'Find the post now'}</button></div></section>`;
+}
+Object.assign(ACTS, {
+  frepost: async (v, el) => { state.fRepost = !!(el && el.checked); await api.storage.local.set({ ppShowReposts: state.fRepost }).catch(() => {}); render(true); },
+  rpcheck: async v => {
+    await loadFC();
+    const c = FCD.copies.find(x => x.id === v); if (!c) return;
+    toast(PP_REPOST.profileOnly(c) ? 'Looking for the post on ' + (c.acct ? c.acct.handle : 'the account') + '\'s page in a background tab…' : 'Opening the post in a background tab…');
+    const p = rpCheck(c); render(true);
+    const rp = await p;
+    toast(!rp ? 'This site isn\'t checked for reposts.' : rp.state === 'repost' ? rpWord(c) + ' of ' + origName(c) + '.' : rp.post ? 'Found the post.' : rp.state === 'own' ? 'Their own post, not a repost.' : rp.state === 'blocked' ? platOf(c).name + ' asked to log in.' : 'The photo wasn\'t found on the page.');
+    render(true);
+  },
+});

@@ -30,7 +30,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     return {
       nums: ['12.5K', '1,204', '1.2M', '3 B', '48 200'].map(S.big).join(','),
       pages: S.profilePages(fb).map(p => p.url).concat(S.profilePages(xo).map(p => p.url)).join(' '),
-      ig: S.profileFacts(ig, [{ kind: 'profile', desc: '9,812 Followers, 300 Following, 120 Posts - See Instagram photos and videos from Pinecrest Bakery (@pinecrest.bakery)', text: '', data: [['is_business_account', 'true'], ['category_name', '"Bakery"'], ['is_verified', 'false']], about: 'About this account\nDate joined\nMarch 2019\nAccount based in\nUnited States\nFormer usernames\n@pinecrest_old\n' }]),
+      ig: S.profileFacts(ig, [{ kind: 'profile', own: [0], desc: '9,812 Followers, 300 Following, 120 Posts - See Instagram photos and videos from Pinecrest Bakery (@pinecrest.bakery)', text: '', data: [['is_business_account', 'true', 10], ['category_name', '"Bakery"', 20], ['is_verified', 'false', 30]], about: 'About this account\nDate joined\nMarch 2019\nAccount based in\nUnited States\nFormer usernames\n@pinecrest_old\n' }]),
       fb: S.profileFacts(fb, [{ kind: 'profile', text: 'Harbor Light Outfitters\n48K likes • 52K followers\nPage · Clothing store\n', data: [], badge: ['Verified account'], links: ['https://l.facebook.com/l.php?u=https%3A%2F%2Fharborlight.example%2F'], buttons: ['Shop now'] },
         { kind: 'transparency', text: 'Page transparency\nConfirmed Page owner\nHarbor Light Outfitters LLC\n12 Pier St, Portland, ME 04101\nPage created - March 4, 2015\nPrimary country/region location for people who manage this Page\nUnited States (3)\n' }]),
       fan: S.profileFacts(fan, [{ kind: 'profile', text: 'Coastal Sunsets Fans\n3.1K followers\nPage · Fan Page\n', data: [] }]),
@@ -45,12 +45,15 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
       xp: S.profileFacts(S.fromUrl('https://x.com/plainperson'), [{ kind: 'profile', text: '', data: [], x: { name: 'Plain Person', check: 'blue', followers: '830 Followers', bio: 'Photos of the coast' } }]),
       grp: S.profileFacts(grp, [{ kind: 'profile', text: 'Shore Photo Swap\nPublic group · 12.4K members', data: [] }]),
       // No category shown: the automatic business check adds up the signs.
-      guess: S.addShopSign(S.profileFacts(guess, [{ kind: 'profile', desc: '2,100 Followers - Seaside Goods (@seaside.goods)', text: '', data: [['biography', '"Handmade home decor. hello@seaside.example"'], ['is_business_account', 'null']], links: ['https://seasidegoods.example/'], buttons: [] }]), { ok: true, sells: { cart: true } }),
+      guess: S.addShopSign(S.profileFacts(guess, [{ kind: 'profile', own: [0], desc: '2,100 Followers - Seaside Goods (@seaside.goods)', text: '', data: [['biography', '"Handmade home decor. hello@seaside.example"', 10], ['is_business_account', 'null', 20]], links: ['https://seasidegoods.example/'], buttons: [] }]), { ok: true, sells: { cart: true } }),
+      // 4.30.1 (Ben): the page's data also holds the signed-in viewer. Only the viewed account's own block counts.
+      viewer: S.profileFacts(S.fromUrl('https://www.instagram.com/examplewins/'), [{ kind: 'profile', own: [9000], ogTitle: 'Example Wins (@examplewins) • Instagram photos and videos', desc: '160K Followers, 500 Following', text: '', data: [['full_name', '"Viewer Person"', 100], ['is_business_account', 'false', 120], ['is_professional_account', 'false', 140], ['full_name', '"Example Wins"', 9050], ['category_name', '"Radio Station"', 9100]] }]),
+      viewerOld: S.profileFacts(S.fromUrl('https://www.instagram.com/examplewins/'), [{ kind: 'profile', ogTitle: '', desc: '', text: '', data: [['full_name', '"Viewer Person"'], ['is_business_account', 'false'], ['is_professional_account', 'false']] }]),
       nothing: S.profileFacts(nothing, [{ kind: 'profile', text: 'Log in to TikTok', desc: '', data: [] }]),
     };
   });
   ok(unit.nums === '12500,1204,1200000,3000000000,48200', 'Follower numbers like 12.5K, 1.2M and 48 200 are read right (' + unit.nums + ')');
-  ok(/facebook\.com\/harborlightoutfitters\/about_profile_transparency/.test(unit.pages) && /x\.com\/DailyExNews\/about/.test(unit.pages), 'Facebook Page transparency and X "About this account" are read too');
+  ok(/facebook\.com\/harborlightoutfitters\/about_profile_transparency/.test(unit.pages) && !/x\.com\/DailyExNews\/about/.test(unit.pages), 'Facebook Page transparency is read too; X "About this account" is not opened (4.30.2, Ben: the bio has it all)');
   ok(unit.ig.followers === 9812 && unit.ig.verified === 'no' && unit.ig.type === 'Business' && unit.ig.typeSure === 'sure' && unit.ig.country === 'United States' && unit.ig.created === 'March 2019' && unit.ig.oldNames[0] === '@pinecrest_old',
     'Instagram: followers, not verified, Business (Bakery), based in, date joined, old names');
   ok(unit.fb.followers === 52000 && unit.fb.verified === 'meta' && unit.fb.company === 'Harbor Light Outfitters LLC' && /ME 04101/.test(unit.fb.address) && unit.fb.country === 'United States' && unit.fb.type === 'Business' && unit.fb.website === 'https://harborlight.example/',
@@ -64,6 +67,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(/profile\.php\?id=61500000000001&sk=about_profile_transparency/.test(unit.pages2), 'A Facebook number link reads Page transparency too (' + unit.pages2 + ')');
   ok(unit.xp.verified === 'paid' && unit.xp.type !== 'Government' && unit.xp.followers === 830, 'X: an ordinary paid-check account is not Government');
   ok(unit.guess.type === 'Business' && unit.guess.typeSure === 'guess' && unit.guess.signs.length >= 3 && unit.guess.signs.includes('its website sells things'), 'No category: the business check adds up the signs (' + unit.guess.signs.join('; ') + ')');
+  ok(unit.viewer.name === 'Example Wins' && unit.viewer.followers === 160000 && unit.viewer.type === 'News or media' && unit.viewerOld.name === '' && unit.viewerOld.type === '', 'Instagram: never the signed-in viewer\'s own name or type (' + [unit.viewer.name, unit.viewer.type, unit.viewerOld.name, unit.viewerOld.type].join(' / ') + ')');
   ok(!unit.nothing.ok && unit.nothing.type === '' && unit.nothing.verified === '' && unit.nothing.followers == null, 'A login wall gives "Not known", never a guess');
 
   // ---- pretend social copies, with the profile reader stubbed
@@ -86,7 +90,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     const P = {
       'facebook.com/harborlightoutfitters': [{ kind: 'profile', text: 'Harbor Light Outfitters\n52K followers\nPage · Clothing store\n', data: [], badge: ['Verified'], buttons: ['Shop now'] }, { kind: 'transparency', text: 'Confirmed Page owner\nHarbor Light Outfitters LLC\n12 Pier St, Portland, ME 04101\nPrimary country/region location for people who manage this Page\nUnited States (3)\n' }],
       'facebook.com/coastalsunsetsfans': [{ kind: 'profile', text: 'Coastal Sunsets Fans\n3.1K followers\nPage · Fan Page\n', data: [] }],
-      'instagram.com/pinecrest.bakery': [{ kind: 'profile', desc: '9,812 Followers, 300 Following', text: '', data: [['is_business_account', 'true'], ['category_name', '"Bakery"'], ['is_verified', 'false']] }],
+      'instagram.com/pinecrest.bakery': [{ kind: 'profile', own: [0], desc: '9,812 Followers, 300 Following', text: '', data: [['is_business_account', 'true', 10], ['category_name', '"Bakery"', 20], ['is_verified', 'false', 30]] }],
       'x.com/dailyexnews': [{ kind: 'profile', text: '', data: [['verified_type', '"Business"'], ['followers_count', '1450000']], x: { name: 'Daily Example News', check: 'gold', followers: '1.4M Followers' } }, { kind: 'transparency', text: 'Account based in\nCanada\n' }],
       'tiktok.com/@quickclips': [{ kind: 'profile', text: 'Log in', data: [] }],
     };
@@ -104,8 +108,10 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.evaluate(() => { FCD = null; state.fFilter = 'All'; return render(true); }); await page.waitForTimeout(600);
   await page.click('.bigtabs [data-v="social"]'); await page.waitForTimeout(500);
   await page.evaluate(() => { state.fView = 'list'; state.fFilter = 'All'; return render(true); });
+  // 4.30.2: it only reads while Keep searching is on, not paused, inside its hours.
+  await page.evaluate(() => { globalThis.PP_INFO_GAP = 1500; globalThis.PP_SITE_GAP = 0; return api.storage.local.set({ fcKeep: { on: true, hours: 'all' } }); });
   await page.evaluate(() => infoQueue());
-  // The reader goes one account at a time by itself (4 s apart).
+  // The reader goes one account at a time by itself.
   for (let i = 0; i < 40; i++) { await page.waitForTimeout(1000); const n = await page.evaluate(async () => Object.keys((await FC.meta.get('acctInfo')) || {}).length); if (n >= 5) break; }
   await page.waitForTimeout(3500);
   const info = await page.evaluate(async () => ({ reads: window.READS.slice(), all: (await FC.meta.get('acctInfo')) || {} }));

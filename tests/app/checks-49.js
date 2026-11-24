@@ -174,7 +174,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     plats: new Set(Object.values(PP_SOCIAL.SITES).map(x => x[0])).size,
     whole: [RS_LISTS.wholeSocial('instagram.com'), RS_LISTS.wholeSocial('twitch.tv'), RS_LISTS.wholeSocial('blog.naver.com')].join(),
   }));
-  ok(!fixed.yes.length && !fixed.no.length && fixed.plats === 16, 'Only the 16 platforms (Reddit taken out in 4.31) count as social (wrong: ' + fixed.yes.concat(fixed.no).join(', ') + '; ' + fixed.plats + ' platforms)');
+  ok(!fixed.yes.length && !fixed.no.length && fixed.plats === 16, 'Only the 16 platforms count as social (wrong: ' + fixed.yes.concat(fixed.no).join(', ') + '; ' + fixed.plats + ' platforms)');
   ok(fixed.whole === 'true,false,false', 'Instagram can only be hidden per account; Twitch and Naver Blog can be hidden as a whole site (' + fixed.whole + ')');
 
   // ---- Settings › Social sites

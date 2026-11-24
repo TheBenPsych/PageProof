@@ -222,7 +222,7 @@ const RS_DOCS = {
   },
 };
 
-// ---------- 4.31.0: forums are never pursued (Ben) ----------
+// ---------- Forums are never pursued (Ben) ----------
 // Reddit is a forum, and Ben's team never goes after forums, so links from them are dropped
 // before they reach Copies found. The rule is kept small and sure on purpose:
 //  - Reddit and its picture hosts (reddit.com and every sub-site like old.reddit.com, redd.it,
@@ -332,7 +332,7 @@ const RS_LISTS = {
     RS_LISTS[kind] = RS_LISTS[kind].filter(d => d !== site);
     await RS_LISTS.save();
   },
-  // 4.31.0: forums (Reddit...) count as hidden too, always.
+  // Forums (Reddit...) count as hidden too, always.
   isHidden: (site, url) => RS_FORUM.is(site, url) || !!RS_SITE.entryFor(site, url, RS_LISTS.hidden),
   isAllowed: (site, url) => !!RS_SITE.entryFor(site, url, RS_LISTS.allowed),
 };

@@ -270,6 +270,23 @@ const FC = (() => {
   const KEEP_DEFAULT = { on: false, pace: 'Steady', hours: 'work', from: 8, to: 18, weekdays: true, fiftyTime: '09:00', fiftyAuto: false, perDay: 50, firstShare: 3, fiftyWhich: 'next' };
   const PACE = { Gentle: 10, Steady: 5, Faster: 2 };      // minutes between photos
   async function keep() { return { ...KEEP_DEFAULT, ...((await api.storage.local.get('fcKeep')).fcKeep || {}) }; }
+  // Inside the hours picked on Keep searching (8 AM to 6 PM on weekdays unless changed).
+  function inHours(k, d = new Date()) {
+    if (k.hours === 'all') return true;
+    const day = d.getDay(), hr = d.getHours() + d.getMinutes() / 60;
+    if (k.weekdays !== false && (day === 0 || day === 6)) return false;
+    return hr >= (k.from ?? 8) && hr < (k.to ?? 18);
+  }
+  // 4.30.2 (Ben): may PageProof do quiet work by itself (read account details, open pinned tabs)?
+  // Only while Keep searching is on, not paused, and inside its hours.
+  async function quietOK() {
+    const k = await keep();
+    const st = await api.storage.local.get('fcPause');
+    if (!k.on) return { ok: false, why: 'off' };
+    if (st.fcPause) return { ok: false, why: 'paused' };
+    if (!inHours(k)) return { ok: false, why: 'hours' };
+    return { ok: true };
+  }
   async function setKeep(ch) { const k = { ...(await keep()), ...ch }; await api.storage.local.set({ fcKeep: k }); backupSoon(); return k; }
   async function drive() { return { label: 'G:\\Shared drives\\Photos', done: false, ...((await api.storage.local.get('fcDrive')).fcDrive || {}) }; }
   async function setDrive(ch) { const d = { ...(await drive()), ...ch }; await api.storage.local.set({ fcDrive: d }); backupSoon(); return d; }
@@ -1152,7 +1169,7 @@ const FC = (() => {
   // 4.24: also leaves out website copies from countries not shown, and government accounts
   // (unless Show government is on), the same as Copies found.
   async function countNew() {
-    const st = await api.storage.local.get(HID ? ['fcShownCountries', 'ppShowGov'] : ['rsHidden', 'fcShownCountries', 'ppShowGov']);
+    const st = await api.storage.local.get(HID ? ['fcShownCountries', 'ppShowGov', 'ppShowReposts'] : ['rsHidden', 'fcShownCountries', 'ppShowGov', 'ppShowReposts']);
     if (!HID) HID = st.rsHidden || [];
     const hidden = HID, shown = Array.isArray(st.fcShownCountries) ? st.fcShownCountries : SHOWN_START;
     const every = await allCopies(), fresh = every.filter(c => c.status === 'new');
@@ -1162,10 +1179,12 @@ const FC = (() => {
     if (!st.ppShowGov && fresh.some(c => c.acct)) info = (await meta.get('acctInfo').catch(() => null)) || {};
     return fresh.filter(c => {
       if (spam.has(c.id) || hiddenCopy(c, hidden)) return false;
+      // 4.32: reposts and shares of someone else's post are hidden until you show them.
+      if (!st.ppShowReposts && c.rp && c.rp.state === 'repost') return false;
       const ct = c.country || countryOf(c.site);
       if (c.use !== 'social' && ct && !shown.includes(ct)) return false;
       const i = c.acct && info[c.acct.key];
-      return !(i && i.v && i.type === 'Government');
+      return !(i && i.v && i.type === 'Government' && !(/^(instagram\.com|facebook\.com|threads\.net|threads\.com|tiktok\.com)$/.test(c.acct.plat || '') && i.v < 4));
     }).length;
   }
   // Is this copy on a hidden site, or posted by a hidden account? (4.9: an Instagram /p/ link has
@@ -1175,7 +1194,7 @@ const FC = (() => {
     // 4.15 (Ben's idea 11): copies you marked Stolen are never hidden by a hidden site or account.
     if (c && c.status === 'stolen') return false;
     list = list || (typeof RS_LISTS !== 'undefined' ? RS_LISTS.hidden : []);
-    // 4.31.0: forums (Reddit...) are never pursued, so their copies never show.
+    // Forums (Reddit...) are never pursued, so their copies never show.
     if (typeof RS_FORUM !== 'undefined' && RS_FORUM.is(c.site, c.url)) return true;
     if (RS_SITE.entryFor(c.site, c.url, list)) return true;
     const k = c.acct && c.acct.key;
@@ -1267,7 +1286,7 @@ const FC = (() => {
     let fresh = 0;
     const oldList = [...old.values()];
     for (const l of links) {
-      // 4.31.0: a link from a forum (Reddit...) is dropped: Ben's team never pursues forums.
+      // A link from a forum (Reddit...) is dropped: Ben's team never pursues forums.
       if (typeof RS_FORUM !== 'undefined' && RS_FORUM.is(l.site, l.url)) continue;
       const id = p.id + '|' + l.key;
       // The same page under another address (phone version, tracking bits) is that copy (4.14).
@@ -1425,6 +1444,17 @@ const FC = (() => {
       await meta.set('dotFix', now);
       return bad.length;
     });
+  }
+  // 4.31: the photo check found an unanswered copy is another photo of the same place (only
+  // logos / lettering line up, or a building from a few steps away). It goes to Removed, where
+  // Put back still works. Only copies still waiting for an answer, never ones added by hand.
+  async function checkerRemove(id, pct) {
+    const c = await DB.get('copies', id);
+    if (!c || c.status !== 'new' || /by hand/.test(c.by || '')) return false;
+    c.status = 'removed'; c.answered = new Date().toISOString(); c.removedBy = 'checker'; c.otherShot = 1;
+    if (typeof pct === 'number') c.pct = pct;
+    await DB.put('copies', c); await recount(new Set([c.photo])); backupCopiesSoon(); touch('copies');
+    return true;
   }
   // 4.14: an evidence pack was saved from a capture of this copy (Evidence › Needs a capture).
   // how: 'pack' (saved through PageProof) or 'hand' (you say it was captured another way).
@@ -1886,7 +1916,7 @@ const FC = (() => {
     if (left.length !== list.length) backupSoon(true);
   }
 
-  return { DB, meta, open, touch, pics, dropDotMatches, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
+  return { DB, meta, open, touch, pics, dropDotMatches, checkerRemove, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, inHours, quietOK, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, setPicked, pickInside, SCAN, applyPendingFlags, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setClients, logWeek, week, weekKey, firstNotes, searchedOnce,
     isPool, shownCountries, setShownCountries, SHOWN_START, ownerFor, pathOf, logReport, USE, useOf, riskOf, spamMarks, randomLabel, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,

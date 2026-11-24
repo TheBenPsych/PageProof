@@ -1,0 +1,149 @@
+# The automatic checks. They run on every pull request (and once more after it lands on main,
+# as a safety net). They start a real browser with PageProof loaded and a pretend library.
+#
+# To be quick:
+#  - only what the change can affect runs: a docs-only change runs no browser checks, and the
+#    60 full-page capture pages only run when the capture code changed,
+#  - the checks are split into parts that run side by side (6 + 3), about 3 to 4 minutes in all,
+#  - the test browser is kept in a cache between runs.
+# The last job is called "checks". It is green when every part passed (or wasn't needed).
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same pull request stops the older, now useless, run.
+concurrency:
+  group: checks-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  what-changed:
+    runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.c.outputs.app }}
+      capture: ${{ steps.c.outputs.capture }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: c
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ] || [ -z "$BASE" ] || ! git cat-file -e "$BASE" 2>/dev/null || [ "$BASE" = 0000000000000000000000000000000000000000 ]; then
+            echo "Running everything."; echo "app=true" >> $GITHUB_OUTPUT; echo "capture=true" >> $GITHUB_OUTPUT; exit 0
+          fi
+          FILES=$(git diff --name-only "$BASE"...HEAD 2>/dev/null || git diff --name-only "$BASE" HEAD)
+          echo "Changed files:"; echo "$FILES"
+          # Browser checks: anything except docs, change notes, pictures, the capture test pages and the Windows update file
+          APP=$(echo "$FILES" | grep -vE '(^|/)[^/]*\.md$|^changes/|^assets/|^tests/capture/|^tools/windows/' | grep -c . || true)
+          # Full-page capture checks: only the capture code, the manifest, the capture tests or this file
+          CAP=$(echo "$FILES" | grep -E '^extension/(content|background|viewer)\.js$|^extension/manifest\.json$|^tests/capture/|^\.github/workflows/checks\.yml$' | grep -c . || true)
+          echo "app=$([ "$APP" -gt 0 ] && echo true || echo false)" >> $GITHUB_OUTPUT
+          echo "capture=$([ "$CAP" -gt 0 ] && echo true || echo false)" >> $GITHUB_OUTPUT
+
+  # House rules: change notes written right, and no version bump in pull requests (that is
+  # what made every open pull request clash). See CONTRIBUTING.md.
+  rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: python3 tools/release.py --check
+      - if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          old=$(git show "$BASE:extension/manifest.json" | python3 -c "import json,sys;print(json.load(sys.stdin)['version'])")
+          new=$(python3 -c "import json;print(json.load(open('extension/manifest.json'))['version'])")
+          if [ "$old" != "$new" ]; then
+            echo "::error file=extension/manifest.json::Please don't change the version in a pull request ($old -> $new). Put it back to $old and add a note in changes/ instead: the release build sets the version. See CONTRIBUTING.md."
+            exit 1
+          fi
+          if git diff --name-only "$BASE"...HEAD | grep -qx 'FEATURES.md'; then
+            echo "::warning file=FEATURES.md::FEATURES.md changed by hand. New features and the timeline should go in a changes/ note instead (fewer clashes). See CONTRIBUTING.md."
+          fi
+
+  app:
+    needs: what-changed
+    if: needs.what-changed.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2, 3, 4, 5, 6]
+    name: app checks (part ${{ matrix.part }} of 6)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Get the test browser
+        run: |
+          cd tests/app && npm install --no-save playwright@1
+          echo "PW=$(node -p "require('playwright/package.json').version")" >> $GITHUB_ENV
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ env.PW }}
+      - run: cd tests/app && npx playwright install --with-deps chromium
+      - name: Run this part of the checks
+        run: SHARD=${{ matrix.part }}/6 xvfb-run -a node tests/app/run.js
+
+  # 60 test pages that copy tricky layouts (side panels, slide-ins, sticky bars, late pictures,
+  # endless feeds, pop-up windows...). Each is captured the way PageProof does it and checked
+  # for blank, missing or doubled parts.
+  capture:
+    needs: what-changed
+    if: needs.what-changed.outputs.capture == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2, 3]
+    name: capture checks (part ${{ matrix.part }} of 3)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Get the test browser
+        run: |
+          cd tests/app && npm install --no-save playwright@1
+          echo "PW=$(node -p "require('playwright/package.json').version")" >> $GITHUB_ENV
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ env.PW }}
+      - run: cd tests/app && npx playwright install --with-deps chromium
+      - name: Run this part of the capture checks
+        run: SHARD=${{ matrix.part }}/3 NODE_PATH=tests/app/node_modules node tests/capture/run.js
+
+  checks:
+    needs: [what-changed, rules, app, capture]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Results: $RESULTS"
+          case " $RESULTS " in *" failure "*|*" cancelled "*) echo "Some checks failed."; exit 1;; esac
+          echo "Every check that was needed passed."

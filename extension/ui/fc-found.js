@@ -256,7 +256,10 @@ async function readTheirPage(c, again) {
 // lined up with your client's photo. A clearly different picture is flagged "Not seen in the post".
 const POSTCHK_V = 1;
 const POST_BUSY = new Set();
-const needsPostCheck = c => isSoc(c) && c.status !== 'removed' && (!c.postChk || c.postChk.v !== POSTCHK_V);
+// 4.32: a link to an account page has no "post's own picture" (its picture is the profile photo),
+// so it is never checked or removed this way. The repost check finds the exact post instead.
+const acctPageLink = c => typeof PP_REPOST !== 'undefined' && PP_REPOST.profileOnly(c);
+const needsPostCheck = c => isSoc(c) && (c.status !== 'removed' || (c.removedBy === 'postcheck' && slidesDue(c))) && !acctPageLink(c) && (!c.postChk || c.postChk.v !== POSTCHK_V || slidesDue(c));
 async function bitmapOf(blob, max = 640) {
   const bm = await createImageBitmap(blob);
   const f = Math.min(1, max / Math.max(bm.width, bm.height));
@@ -292,6 +295,7 @@ async function postCheck(c) {
         }
       } catch (e) { res.err = String(e && e.message || e).slice(0, 120); }
     }
+    await slidesInto(c, res);         // TikTok slideshows: every slide, and which one it is
     const cc = await FC.DB.get('copies', c.id);
     if (cc) { cc.postChk = res; await FC.DB.put('copies', cc); }
     c.postChk = res; FCD_STALE = true;
@@ -307,7 +311,7 @@ async function postCheck(c) {
     POST_BUSY.delete(c.id);
   }
 }
-const notInPost = c => isSoc(c) && c.postChk && c.postChk.state === 'notSeen' && !/^https?:/i.test(c.img || '');
+const notInPost = c => isSoc(c) && !acctPageLink(c) && c.postChk && c.postChk.state === 'notSeen' && !/^https?:/i.test(c.img || '');
 const NOT_IN_POST = c => `The post's own ${c.postChk.video ? 'video cover' : 'picture'} is a different photo. Google matched a picture somewhere else on that page (a comment, a link preview, a suggested post), and only the post's own picture counts.${c.removedBy === 'postcheck' ? ' So PageProof moved it to Removed. Put it back if your client\'s photo is in the post after all (for example a later picture in a multi-picture post).' : ' Open the post and look before marking Stolen.'}`;
 const ruleRow = h => `<div class="rrow ${h.lvl}"><span class="tag ${PP_CHECKS.LVL[h.lvl][1]}">${PP_CHECKS.LVL[h.lvl][0]}</span><span>${esc(h.text)}</span></div>`;
 function kindSelect(c, kind, id) {
@@ -438,6 +442,7 @@ async function drawer(list) {
   const pub = PP_CHECKS.pubDate(p);
   const hits = PP_CHECKS.rules(c, kind, c.pf);
   const capturedAt = [c.url, ...(c.alts || [])].map(u => PP_CHECKS.captureOf(logR.log, u)).find(Boolean) || c.packAt || null;
+  if (typeof acctOnOpen === 'function' && isSoc(c) && c.acct) acctOnOpen(c).then(r => { if (r && state.open === c.id) { FCD_STALE = true; render(true); } }).catch(() => {});
   if (needsPostCheck(c) && !POST_BUSY.has(c.id)) postCheck(c).then(() => { if (state.open === c.id) render(true); }).catch(() => {});
   else if (!c.pf && !PF_BUSY.has(c.id)) readTheirPage(c).then(() => { if (state.open === c.id) render(true); }).catch(() => {});
   const ck = checksParts(c, reg, kind, hits, pub, capturedAt);
@@ -453,6 +458,8 @@ async function drawer(list) {
   else if (!soc) fine.push('Site looks normal');
   if (c.credit === 'removed') look.push(['copy', 'nocredit', 'Credit removed', 'Your client\'s photo carries a copyright line in its hidden data. Their copy has none.']);
   else if (c.credit === 'kept') fine.push('Credit kept');
+  if (soc && c.rp && c.rp.state === 'repost') look.push(['warn', 'repeat', `${rpWord(c)} of ${origName(c)}'s post`, 'This account only passed someone else\'s post along. The original poster is the lead. See The post tab.', 'dtab', 'The post', 'page']);
+  else if (soc && PP_REPOST.profileOnly(c) && !(c.rp && c.rp.post)) look.push(['warn', 'warn', 'Link goes to the account page, not the post', RP_BUSY.has(c.id) ? 'Finding the post now…' : 'PageProof looks for the exact post in your browser. See The post tab.', 'dtab', 'The post', 'page']);
   if (soc && !c.acct) look.push(['warn', 'who', 'Account not found yet', 'The link doesn\'t show who posted it. Set it in the Account tab.', 'dtab', 'Account', 'acct']);
   if (c.spam) look.push(['warn', 'warn', 'Looks like a spam blog', c.spam.join(' · ') + '. Nothing was answered for you.', 'spamhide', 'Hide all of ' + esc(FC.baseOf(c.site)), esc(FC.baseOf(c.site))]);
   if (c.known) look.push(['bad', 'repeat', 'On your stolen-before list', 'This exact page is on your list of links stolen before.']);
@@ -492,6 +499,7 @@ async function drawer(list) {
     <dl class="facts">
       <dt>Client</dt><dd>${c.clientName ? esc(c.clientName) : `<span style="color:var(--warn);font-weight:600">Client unknown</span> <select data-act="setclient" aria-label="Set the client" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:13px;padding:2px 4px"><option value="">Set…</option>${clients.map(n => `<option>${esc(n)}</option>`).join('')}</select>`}</dd>
       <dt>Photo</dt><dd>${esc(c.photoName)}${p && p.w ? `<br><span class="muted" style="font-size:13px">${p.w} × ${p.h}</span>` : ''}</dd>
+      ${picLinkRow(c)}
       <dt>How it's used</dt><dd>${esc(FC.USE[c.use][0])}<br><span class="muted" style="font-size:13px">${esc(FC.USE[c.use][1])}</span></dd>
       <dt>Seen</dt><dd>${shortDate(c.firstSeen)}${c.lastSeen && c.lastSeen !== c.firstSeen ? ' → ' + shortDate(c.lastSeen) : ''}, ${c.times > 1 ? c.times + ' times' : 'once'}${c.by ? `<br><span class="muted" style="font-size:13px">First found by ${esc(c.by)}${c.engines && c.engines.length ? ' on ' + c.engines.map(e => ({ google: 'Google Lens', yandex: 'Yandex', bing: 'Bing' }[e] || esc(e))).join(', ') : ''}</span>` : ''}</dd>
       <dt>Their picture</dt><dd>${/^https?:/i.test(c.img || '') ? `From their page: <a class="mono" style="font-size:12px;overflow-wrap:anywhere" href="${safeUrl(c.img)}" target="_blank" rel="noreferrer">${esc(c.img.replace(/^https?:\/\/(www\.)?/, '').slice(0, 90))}</a>` : `The search site's small preview <span class="muted" style="font-size:13px">(PageProof did not get the picture from their page itself)</span>`}${isSoc(c) ? `<br><span class="muted" style="font-size:13px">${POST_BUSY.has(c.id) || !c.postChk ? 'Checking the post\'s own picture…' : c.postChk.state === 'seen' ? `The post's own picture matches (${c.postChk.pct}% lines up).` : c.postChk.state === 'notSeen' ? `<b style="color:var(--bad)">The post's own ${c.postChk.video ? 'video cover' : 'picture'} is a different photo.</b>` : 'The post\'s own picture could not be read (Facebook and Instagram often need a sign-in).'}${c.postChk && c.postChk.pic ? ` <a href="${safeUrl(c.postChk.pic)}" target="_blank" rel="noreferrer">See it</a>` : ''}${c.postChk ? ` · <a href="#" data-act="postagain">Check again</a>` : ''}</span>` : ''}</dd>
@@ -805,7 +813,7 @@ function siteStrip(base, xs) {
     <div class="sbtns"><a class="btn sm" href="${safeUrl('https://' + base)}" target="_blank" rel="noreferrer" data-act="openlink">Home page</a><button class="btn sm" data-act="stripok" data-v="${esc(c.id)}">Approve site</button>${RS_LISTS.wholeSocial(base) ? '' : `<button class="btn sm" data-act="hidesite" data-v="${esc(base)}">Hide site</button>`}<button class="btn sm" data-act="gowho" data-v="${esc(c.id)}">Who's behind it</button></div></div>`;
 }
 V.found.guard = async () => ((await FC.drive()).done ? null : 'connect');
-V.found.after = () => { if (typeof FC_PREV !== 'undefined') FC_PREV.start(); loadOurs(); bindHover(); ppPagePic(); ppKeptLine(); socQueue(); infoQueue(); };
+V.found.after = () => { if (typeof FC_PREV !== 'undefined') FC_PREV.start(); loadOurs(); bindHover(); ppPagePic(); ppKeptLine(); socQueue(); infoQueue(); if (typeof rpQueue === 'function') rpQueue(); };
 
 // Hovering a copy's thumbnail shows it next to your client's photo.
 // Only one card ever exists. It goes away when the mouse leaves the pictures, and also when the
@@ -1228,7 +1236,7 @@ Object.assign(ACTS, {
   },
   putback: async () => { const c = FCD.copies.find(x => x.id === state.open); await answerCopies([state.open], 'new', (c ? c.site : 'Copy') + ' put back'); toastUndo('Put back as new.'); render(true); },
   changeans: async () => { const c = FCD.copies.find(x => x.id === state.open); await answerCopies([state.open], 'new', (c ? c.site : 'Copy') + ' answer cleared'); toastUndo('Answer cleared. Choose a new one.'); render(true); },
-  copytext: async v => { try { await navigator.clipboard.writeText(v); toast('Copied ' + (v.length > 40 ? 'the full path' : v)); } catch (e) { toast('Could not copy. Select the text and press Ctrl+C.'); } },
+  copytext: async v => { try { await navigator.clipboard.writeText(v); toast('Copied ' + (v.length > 40 ? (/^https?:/i.test(v) ? 'the link' : 'the full path') : v)); } catch (e) { toast('Could not copy. Select the text and press Ctrl+C.'); } },
   addreg: async v => {
     const i = document.getElementById('regIn');
     if (!i || !(await FC.setReg(v, i.value))) return toast('Type a number like VA 1-234-567 or 1-12345678901.');
@@ -1334,7 +1342,7 @@ async function matchReport(c, caseNo) {
     const p = FCD.photos.get(c.photo);
     const blob = await ourBlob(p);
     const r = await PP_EVIDENCE.make({ blob, name: c.photoName, w: p && p.w, h: p && p.h, hash: (p && p.hash) || await RS_UTIL.sha256(blob), client: c.clientName, path: await FC.pathOf(p), reg: p ? await FC.regFor(p) : null },
-      { ...c, use: FC.USE[c.use][0], acctInfo: infoOf(c) }, { caseNo, collector: await getName(), owner: await ownerSummary(c.site), checks: await reportChecks(c, p) });
+      { ...c, use: FC.USE[c.use][0], acctInfo: infoOf(c), pic: picLink(c) }, { caseNo, collector: await getName(), owner: await ownerSummary(c.site), checks: await reportChecks(c, p) });
     const a = document.createElement('a'); a.href = URL.createObjectURL(r.blob); a.download = r.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
     await FC.logReport({ id: r.id, file: r.name, url: c.url, site: c.site, photo: c.photoName, client: c.clientName, caseNo });
     if (r.credit) { const cc = await FC.DB.get('copies', c.id); if (cc) { cc.credit = r.credit; await FC.DB.put('copies', cc); } }
@@ -1360,8 +1368,10 @@ async function captureCopy(c) {
     }
     if (!pic && p) pic = await FC.thumbOf(p);
   } catch (e) { /* the check is skipped */ }
-  await api.storage.local.set({ fcCapFor: { url: c.url, id: c.id, at: Date.now(), pic } });
-  await api.runtime.sendMessage({ type: 'captureUrl', url: c.url }).catch(() => {});
+  // 4.32: when the link was an account page and the exact post was found, capture the post.
+  const capUrl = (c.rp && c.rp.post) || c.url;
+  await api.storage.local.set({ fcCapFor: { url: capUrl, id: c.id, at: Date.now(), pic } });
+  await api.runtime.sendMessage({ type: 'captureUrl', url: capUrl }).catch(() => {});
   toast('Opening ' + c.site + ' to capture it. When you save the evidence pack, the match report PDF is saved too.');
 }
 // The capture page asks for the match report after saving a pack (fcReportReq). Only one open

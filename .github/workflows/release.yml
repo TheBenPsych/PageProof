@@ -1,69 +1,81 @@
-# Every time the code on "main" changes, this packs the extension into
-# PageProof.zip and puts it on the "Latest build" release page for easy download.
+# Every time a change lands on "main", this sets the version, writes the change notes into
+# FEATURES.md and the What's new list, packs PageProof.zip and puts it on the "Latest build"
+# release page. It takes about a minute.
+#
+# It does not run the long browser checks first: every pull request has already passed them
+# before it was merged (see checks.yml, which also runs once more on main as a safety net).
+#
+# Ben's download link never changes:
+#   https://github.com/TheBenPsych/PageProof/releases/download/latest/PageProof.zip
 name: Build download
 
 on:
   push:
     branches: [main]
-  pull_request:
   workflow_dispatch:
 
-# Safety: by default every job may only READ the code. Only the "zip" job below, which runs
-# after a change lands on main (never for someone else's pull request), may publish a release.
+# One release at a time. If two changes land close together, the second waits, then picks up
+# everything that is on main by then.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
 jobs:
-  # The automatic checks (tests/app). They start a real browser with PageProof loaded and a
-  # pretend library. If any check fails, the "zip" job below does not run: nothing is released.
-  checks:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Get the test browser
-        run: |
-          cd tests/app
-          npm install --no-save playwright@1
-          npx playwright install --with-deps chromium
-      - name: Run every check
-        run: xvfb-run -a node tests/app/run.js
-      # 60 test pages that copy tricky layouts (side panels, slide-ins, sticky bars, late pictures,
-      # endless feeds, pop-up windows...). Each is captured the way PageProof does it and checked
-      # for blank, missing or doubled parts.
-      - name: Run the full-page capture checks
-        run: NODE_PATH=tests/app/node_modules node tests/capture/run.js
-
   zip:
-    needs: checks
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.repository == 'TheBenPsych/PageProof'
+    if: github.repository == 'TheBenPsych/PageProof'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          ref: main
+          fetch-depth: 0
+      - name: Set the version and write in the change notes
+        id: v
+        env:
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          LAST=$(git tag -l 'v*' --sort=-v:refname | head -1)
+          NOTES=$(ls changes/*.md 2>/dev/null | grep -vi '/readme.md$' | wc -l)
+          if [ -n "$LAST" ] && [ "$MANUAL" != true ] && [ "$NOTES" = 0 ] && git diff --quiet "$LAST" HEAD -- extension tools/windows; then
+            echo "Nothing in PageProof changed since $LAST (docs or tests only), so no new download."
+            echo "skip=true" >> $GITHUB_OUTPUT; exit 0
+          fi
+          VERSION=$(python3 tools/release.py ${LAST:+--last ${LAST#v}} | tail -1)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          git add -A extension/manifest.json extension/app.js FEATURES.md changes
+          git commit -q -m "Release $VERSION" || true
+          git tag "v$VERSION"
+          for i in 1 2 3; do
+            git push origin HEAD:main "v$VERSION" && exit 0
+            echo "main moved on while this ran; catching up and trying again"
+            git tag -d "v$VERSION"; git pull --rebase -q origin main || { echo "::error::Could not catch up with main"; exit 1; }
+            git tag "v$VERSION"; sleep 3
+          done
+          exit 1
       - name: Pack the extension
-        run: cd extension && zip -r ../PageProof.zip . -x '.*'
+        if: steps.v.outputs.skip != 'true'
+        run: cd extension && zip -qr ../PageProof.zip . -x '.*'
       # Firefox can't use Chrome's "service_worker" background yet, and Chrome shows an error
       # if the manifest also lists Firefox's "scripts". So Firefox gets its own copy of the
       # manifest with "scripts" added.
       - name: Pack the Firefox version
+        if: steps.v.outputs.skip != 'true'
         run: |
           rm -rf ff && cp -r extension ff
-          python3 -c "import json;p='ff/manifest.json';m=json.load(open(p));m.pop('key',None);m['background']={'scripts':['db.js','rs-store.js','social.js','fc-store.js','background.js']};m['permissions']=[x for x in m['permissions'] if x not in ('sidePanel','system.cpu','system.memory')];sp=m.pop('side_panel',None);m['sidebar_action']={'default_panel':'sidepanel.html','default_title':'PageProof'};json.dump(m,open(p,'w'),indent=2)"
-          cd ff && zip -r ../PageProof-Firefox.zip . -x '.*'
+          python3 -c "import json;p='ff/manifest.json';m=json.load(open(p));m.pop('key',None);m['background']={'scripts':['db.js','rs-store.js','social.js','fc-store.js','tiktok.js','background.js']};m['permissions']=[x for x in m['permissions'] if x not in ('sidePanel','system.cpu','system.memory')];sp=m.pop('side_panel',None);m['sidebar_action']={'default_panel':'sidepanel.html','default_title':'PageProof'};json.dump(m,open(p,'w'),indent=2)"
+          cd ff && zip -qr ../PageProof-Firefox.zip . -x '.*'
       - name: Publish the "latest" release
+        if: steps.v.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
         run: |
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest PageProof.zip PageProof-Firefox.zip --title "Latest build" --notes "Chrome and Edge: download PageProof.zip below. Firefox: download PageProof-Firefox.zip. Then unzip it, and follow the install steps in the README."
+          gh release create latest PageProof.zip PageProof-Firefox.zip tools/windows/Update-PageProof.cmd --target main --title "Latest build: $VERSION" --notes "Version $VERSION. Chrome and Edge: download PageProof.zip below. Firefox: download PageProof-Firefox.zip. Then unzip it into Documents › PageProof › Install and press Reload on PageProof's card in chrome://extensions (see the README). Windows, quicker: download Update-PageProof.cmd once, keep it in Documents › PageProof, and double-click it to install or update."

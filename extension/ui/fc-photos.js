@@ -564,6 +564,7 @@ V.keep = async () => {
       <div class="stat"><b>${today.found}</b><span>new copies found today</span></div>
       <div class="stat"><b>~${Math.round(perHour * hrs)}</b><span>photos a day at this pace</span></div>
     </div>
+    ${await acctReadRow()}
   </section>
   <div class="grid g2">
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
@@ -661,4 +662,23 @@ Object.assign(ACTS, {
 // Shown when Keep searching is on but you closed its pinned tab (Ben, 4.4.3).
 function keepClosedBanner() {
   return `<div class="banner warn" role="alert">${ic('help', 22)}<div style="flex:1 1 260px;min-width:0"><b>Keep searching is stopped</b><div style="font-size:13.5px">Its pinned PageProof tab was closed, so no new photos are being searched.</div></div><button class="btn primary" data-act="keepshow">Start it again</button></div>`;
+}
+
+// 4.30.2 (Ben): the account details reader's own switch, and what it is doing now.
+async function acctReadRow() {
+  const st = await api.storage.local.get(['ppAcctRead', 'fcAcctRead', 'fcAcctLimits']);
+  const on = st.ppAcctRead !== false, a = st.fcAcctRead || {}, L = st.fcAcctLimits || {};
+  const t = ms => new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const name = x => x === 'x' ? 'X' : x.replace(/\.com$/, '').replace(/^./, c => c.toUpperCase());
+  const resting = Object.entries(L).filter(([, v]) => v.restUntil > Date.now()).map(([k, v]) => name(k) + ' until ' + t(v.restUntil));
+  const fresh = a.beat && Date.now() - a.beat < 10 * 60000;
+  const now = !on ? 'Off: account details are only read when you press "Read again now" on an account.'
+    : fresh && (a.state === 'reading' || a.state === 'resting') && a.total ? 'Reading account details ' + Math.min(a.done + 1, a.total) + ' of ' + a.total + '.'
+    : fresh && a.state === 'held' && a.why === 'paused' ? 'Paused with Keep searching.'
+    : fresh && a.state === 'held' && a.why === 'hours' ? 'Waiting for your hours.'
+    : fresh && a.state === 'held' && a.why === 'limit' ? 'Had enough for now: carries on at ' + t(a.until) + '.'
+    : 'Reads each social account once a month, one a minute, inside your hours.';
+  return `<div class="row" style="gap:10px;align-items:flex-start;border-top:1px solid var(--line);padding-top:12px"><label class="switch"><input type="checkbox" id="acctread" data-act="acctread" ${on ? 'checked' : ''}><span></span></label>
+    <div style="flex:1;min-width:0"><b>Read account details</b> <span class="muted" style="font-size:13.5px">${esc(now)}</span>
+    <div class="faint" style="font-size:12.5px">Followers, check mark, type and country, from each account's profile in a small pinned tab. X: at most one profile every 2 minutes and 30 a day. A site that shows empty pages twice is left alone for 6 hours.${resting.length ? ' Resting now: ' + esc(resting.join(', ')) + '.' : ''}</div></div></div>`;
 }

@@ -3,11 +3,12 @@
 This is the running list of everything PageProof can do and every improvement made to it.
 It is grouped by **what the tool does**, then there is a **version timeline** at the bottom.
 
-> **Keeping it up to date:** every new version adds its changes here, in the right group
-> and as one line in the timeline. Plain words only. No client names, real photos or real
+> **Keeping it up to date:** don't edit this file by hand for a new change. Add a note in
+> `changes/` (see CONTRIBUTING.md): the release build adds it here, in the right group and as
+> one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.31.0** (24 Nov 2026).
+Last updated: version **4.33.0** (24 Nov 2026).
 
 ---
 
@@ -30,6 +31,7 @@ Last updated: version **4.31.0** (24 Nov 2026).
 - **Who hosts this site:** hosting company and domain registrar looked up for every capture (IPv6 too). (2.2, 2.6)
 - **Collected by** name remembered; case number and notes start empty each time so they never carry over by mistake. (2.9)
 - **Needs a capture list:** copies marked Stolen that don't have an evidence pack yet. (4.14)
+- **TikTok slideshows in a capture.** A capture of a TikTok photo post lists every picture's link in post-pictures.txt (the files are in images/). (4.33)
 
 ## 2. Prove it (the evidence pack)
 
@@ -54,8 +56,10 @@ Last updated: version **4.31.0** (24 Nov 2026).
 - **Automatic line-up** handles resized, cropped, zoomed, stretched, tilted and mirrored copies, and copies with headlines or logos on top. Checked by a built-in test set of 200+ distorted copies. (3.3.1, 3.4)
 - **Shows what an AI edit changed:** green for untouched, red for redrawn, "Same photo, heavily edited" verdict, Pick a spot for a close-up score, and Check nearby shots to see which of several similar frames the copy came from. (4.8)
 - **No false matches** from tiny shrunk guesses or press walls (sponsor backdrops with repeating logos). (4.2.2, 4.8.3)
+- **Logos and buildings are not copies.** When only printed logos, signs or lettering line up (a sponsor wall, a red carpet backdrop, a shop sign, a logo file), it says "Different photo, only the logos match". When a scene lines up but things at different distances shift against each other (a building shot from a few steps away), it says "Different photo of the same place". Both are thrown out of searches and show a low %. Unanswered copies already found are checked again once. (4.31)
 - **Logos and buildings no longer count as copies:** PageProof checks whether only logos match (sponsor walls, red carpets, signs) or whether it is another shot of the same place, and unanswered copies are re-checked once. (4.26, waiting to be merged)
 - **Mark up a copy:** highlight, box, circle, arrow, text, pick an area; copy to clipboard or save as PNG/PDF. Labelled "Marked-up copy" and never added to the pack. (3.0)
+- **Copy picture link.** Right-click a picture: its own web address is copied (on TikTok slideshows, with the slide number). (4.33)
 
 ## 4. Find copies of client photos
 
@@ -98,6 +102,7 @@ Last updated: version **4.31.0** (24 Nov 2026).
 - **Undo a file added** to hidden or approved sites, or take out all of a file's sites. (4.22, 4.23.1)
 - **Team lists:** hidden and approved sites shared through one PageProof Team folder, showing who added each one, with a flag when the team disagrees. (4.18)
 - **No double answers** from a held-down key, and a "too fast?" check. (4.15)
+- **Picture link and TikTok slides.** The copy panel shows the address of their picture itself (Copy link, Open), and the Evidence report lists it. TikTok slideshows are checked slide by slide ("Slide 3 of 4"). (4.33)
 
 ## 6. Social media accounts
 
@@ -107,10 +112,12 @@ Last updated: version **4.31.0** (24 Nov 2026).
 - **X details read right.** Followers, check mark and type come from the account itself, not your own account or X's page footer ("X Corp."). (4.27)
 - **Kinds of check mark, drawn like the site.** X blue = Paid (bought), X gold = Verified organisation, grey = Government, Instagram/Facebook = Meta check (paid or earned look the same), others = Verified. Filter "Really verified (not bought)". (4.27)
 - **Government accounts hidden.** Anyone in or running for public office (Congresswoman, Councilman, "for Council", campaign or .gov sites, grey check) is type Government and hidden unless you tick Show government. (4.27)
-- **Real names on accounts.** "Matt Thibodeau" instead of the number from the link, with the handle small beside it (Facebook numbers, YouTube channel IDs and more). Country filled from Facebook Page transparency or the place on the profile. (4.27)
+- **Real names on accounts.** "Jamie Rivera" (made-up example) instead of the number from the link, with the handle small beside it (Facebook numbers, YouTube channel IDs and more). Country filled from Facebook Page transparency or the place on the profile. (4.27)
+- **Never your own name on someone else's account.** Instagram, Threads and TikTok pages also carry the signed-in person's own details (name, followers). PageProof now reads only the viewed account's own part of the page, and Facebook's hidden page data is not used at all. Accounts read before this fix are read again by themselves. (4.30.1)
 - **Only the post's own picture counts.** Google Lens can show your client's photo next to a Facebook or Instagram link when the post itself shows something else (a video, another photo). PageProof now lines up the post's own picture (or video cover) with your client's photo; a clearly different picture sends the match to Removed by itself ("Not seen in the post", Put back still works). The panel also says where "Theirs" came from: the search site's small preview or a picture from their page. (4.30)
 - **Social media means the 16 main platforms only** (YouTube, Facebook, Instagram, TikTok, X, LinkedIn, Pinterest, Threads, Snapchat, Tumblr, Bluesky, Substack, Nextdoor, Truth Social, Vimeo, Behance). Every other site is a normal website again, so country filters and whole-site hiding work on it. No more "is this social?" questions. (4.25)
-- **Reddit and forums never show.** Your team never pursues forums, so Reddit is off the social list and every Reddit link (reddit.com, old.reddit.com, redd.it, i.redd.it, preview.redd.it, redditmedia.com) is dropped from searches. Clear forum addresses go too: forum.*, forums.* or boards.* sites, pages under /forum/, /forums/ or /threads/, phpBB / vBulletin / Simple Machines pages (viewtopic.php, showthread.php...) and Discourse topics (/t/title/123). Copies found before are off Copies found; ones already marked Stolen stay. (4.31)
+- **Reposts and shares spotted and hidden.** Facebook shares, X reposts and quotes, Instagram, Threads, TikTok and Bluesky reposts and Tumblr reblogs are tagged "Share of …" / "Repost of …", hidden until you tick Show reposts and shares, and point to the original post and account as the lead. Never answered for you. (4.32)
+- **Exact post found when the link is only an account page.** PageProof scrolls the account page in a quiet background tab (following Pause, hours and per-site limits), lines each post's pictures up with your client's photo and links the post that holds it. Capture captures that post. (4.32)
 
 ## 7. Everyday tools
 
@@ -130,6 +137,7 @@ Last updated: version **4.31.0** (24 Nov 2026).
 - **Evidence library** with picture cards. (4.14)
 - **Hover help** on terms, and buttons that say why they're greyed out. (4.0, 4.15)
 - Fills wide screens and works in narrow windows. (4.2.3, 4.5)
+- **One-click install and update on Windows:** Update-PageProof.cmd on the download page puts the newest version into Documents › PageProof › Install for whoever runs it. (4.32.1)
 
 ## 9. Safety nets
 
@@ -141,11 +149,13 @@ Last updated: version **4.31.0** (24 Nov 2026).
 - **Is everything working?** health page, Copy details for support, storage meter with safe clean-up (never touches Stolen). (4.1, 4.3)
 - **Where the time goes** is shown on Is everything working. (4.16)
 - **Graphics card row** on Is everything working. (4.17)
+- **Pause really stops everything.** Pause or Off stops the photo being searched, any big search (today's 50, New search) and the account details reader at once, and closes their tabs. Resume picks up where it stopped, including the rest of a big search. The account reader only works in your Keep searching hours, only for accounts with copies still to review (or when you open a copy), keeps what it read for 90 days, and has hard limits per site (X: one profile every 2 minutes, 30 a day; a site showing empty pages is left alone for 6 hours). Only the profile is opened for X, Instagram and Threads (their "About this account" is skipped; Facebook still reads Page transparency). "Read account details" switch on Keep searching, which shows "Reading account details 12 of 80". No more "beforeunload" errors on edge://extensions. (4.30.2)
 - **Keep searching guards:** reopens if closed by mistake, tab title says leave open, starts fresh after updates. (4.4.3, 4.9.4, 4.15)
 - **A long hidden sites list no longer slows PageProof down** (9,000 copies against 25,000 hidden sites: from 7 seconds to under a tenth of a second). (4.22.1)
 - **Folder name warnings** when a photo folder looks wrong. (4.15)
 - **Automatic tests** run before every release. (4.1)
 - **Nothing writes into its own program folder** (after Windows Defender flagged a self-updater, it was removed). (4.2.1)
+- **New versions in about a minute:** the download link is updated a minute after each change, and the automatic checks run side by side before it. (4.31.1)
 
 ---
 
@@ -206,4 +216,10 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.25 | 24 Nov | Social media means the 17 main platforms only |
 | 4.27 | 24 Nov | X details fixed, check kinds, Government hidden, countries to show, real account names |
 | 4.30 | 24 Nov | Social matches only count when the post's own picture is the photo; "Theirs" source shown |
-| 4.31 | 24 Nov | Reddit and forums dropped from searches; social list is 16 platforms |
+| 4.30.1 | 24 Nov | Fix: Instagram accounts showed your own name; viewer's details left out, accounts read again |
+| 4.30.2 | 24 Nov | Pause and Off stop everything at once (big searches, account reader, their tabs); Resume picks up where it stopped |
+| 4.31 | 24 Nov | Logos and buildings no longer count as copies (only-logos and same-place checks) |
+| 4.31.1 | 24 Nov | Fix: New versions reach the download page in about a minute |
+| 4.32 | 24 Nov | Reposts and shares spotted and hidden, original poster as lead, exact post found on account-page links |
+| 4.32.1 | 24 Nov | Fix: Update-PageProof.cmd on the download page for the team |
+| 4.33 | 24 Nov | Picture links on every copy; TikTok slideshows checked slide by slide |
