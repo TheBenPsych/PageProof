@@ -142,6 +142,10 @@ async function chores() {
     if (workTime && now - (m.watch || 0) > 6.5 * 86400000) {
       await FC.watchFolders(); ch.watch = now;
     }
+    // 4.43: weak Maybes nobody answered in 30 days put themselves away (once a day).
+    if (typeof FC_RULES !== 'undefined' && now - (m.weak || 0) > 20 * 3600000) { await FC_RULES.tidyWeak(); ch.weak = now; }
+    // 4.43: a sweep of a Stolen site, one small step at a time (about 20 seconds at most).
+    if (typeof FC_RULES !== 'undefined') await FC_RULES.sweepStep().catch(e => console.warn('PageProof sweep:', e));
     // Who's behind new sites: one site at a time, only sites with copies you still care about.
     if (now - (m.owner || 0) > 120000) {
       ch.owner = now;
