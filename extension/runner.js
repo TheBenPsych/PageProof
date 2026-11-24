@@ -37,7 +37,10 @@ function acctLine() {
   if (a.state === 'held' && a.why === 'site' && a.sites && a.sites.length) return ' Account details: ' + a.sites.map(x => x === 'x' ? 'X' : x).join(', ') + ' showed empty pages, so ' + (a.sites.length > 1 ? 'they are' : 'it is') + ' left alone until ' + time(a.until) + '.';
   return '';
 }
+// How PageProof is doing: what stopped Keep searching (counted each time it starts waiting).
+const PAUSES = ['paused', 'fifty', 'offline', 'allow', 'busy', 'resting', 'setup'];
 async function status(state, text, extra = {}) {
+  if (state !== S.statState) { if (PAUSES.includes(state)) PP_STATS.add('keep.pause.' + state); S.statState = state; }
   S.lastText = text; S.lastExtra = extra;
   if (state !== 'paused' && state !== 'off') text += acctLine();
   const st = { state, text, beat: Date.now(), win: S.win, tabId: S.me, jobTab: S.tab, ver: MY_VER, ...extra };
@@ -374,4 +377,9 @@ $('open').onclick = e => { e.preventDefault(); api.tabs.create({ url: api.runtim
   // folder can take many minutes). Without it the background thought this window had closed and
   // kept opening a new one, which closed itself again straight away, about once a minute.
   setInterval(() => { if (S.lastSt) api.storage.local.set({ fcStatus: { ...S.lastSt, beat: Date.now() } }).catch(() => {}); }, 30000);
+  // One minute at a time, what Keep searching was doing (How PageProof is doing › Keep searching).
+  setInterval(() => { if (S.lastSt && !reloading) PP_STATS.minute(S.lastSt.state); }, 60000);
+  // The weekly stats file (Friday at 5:30 PM, or the next time this tab runs after that).
+  setInterval(() => { if (typeof PP_REPORT !== 'undefined') PP_REPORT.weeklyMaybe().catch(() => {}); }, 15 * 60000);
+  setTimeout(() => { if (typeof PP_REPORT !== 'undefined') PP_REPORT.weeklyMaybe().catch(() => {}); }, 90000);
 })();

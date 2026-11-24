@@ -353,7 +353,13 @@ async function postInBrowser(c, ours) {
     return n ? { state: unsure ? 'unsure' : 'notSeen', n } : null;
   } catch (e) { return null; } finally { if (tab) PP_SOCIAL.closeQuiet(tab); }
 }
+// How PageProof is doing: how many post checks ran, how long, and how many could not read the post.
 async function postCheck(c, opts = {}) {
+  const t0 = Date.now(), r = await postCheckNow(c, opts);
+  if (r && typeof PP_STATS !== 'undefined') { PP_STATS.add('job.post.n'); PP_STATS.add('job.post.' + (r.state === 'unknown' ? 'fail' : 'ok')); PP_STATS.time('job.post', Date.now() - t0); }
+  return r;
+}
+async function postCheckNow(c, opts = {}) {
   if (POST_BUSY.has(c.id) || typeof PP_ALIGN === 'undefined') return null;
   POST_BUSY.add(c.id);
   let ours = null;

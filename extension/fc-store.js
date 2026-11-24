@@ -958,6 +958,7 @@ const FC = (() => {
     try { file = await fileFor(p); }
     catch (e) {
       if (e && e.name === 'NotFoundError' && (await driveState(true)) === 'granted') { await noteSkip(p, 'gone'); return { error: SKIP_WHY.gone }; }
+      if (typeof PP_STATS !== 'undefined') PP_STATS.add('drive.openFailed');
       return { error: 'Google Drive could not be reached for this photo.', soft: true };
     }
     if (!file.size) { await noteSkip(p, 'empty'); return { error: SKIP_WHY.empty }; }
@@ -994,6 +995,7 @@ const FC = (() => {
       const why = h.zeros >= (ENGINE_LIMIT[e] || 30) ? 'zeros' : h.fails >= FAIL_LIMIT ? 'fails' : '';
       if (why && !(h.until > now)) {
         h.until = now + ENGINE_REST; h.brokenAt = now; h.why = why;
+        if (typeof PP_STATS !== 'undefined') { PP_STATS.add('eng.' + e + '.broke'); PP_STATS.add('eng.' + e + '.restMin', Math.round(ENGINE_REST / 60000)); }
         broke.push([e, h.ids.slice(), why === 'zeros' ? h.zeros : h.fails, why]);
         h.ids = [];
       }
@@ -1028,6 +1030,7 @@ const FC = (() => {
   // "Copy details for support". Numbers only: never a file name or a client's name.
   let perfBuf = null, perfT = null;
   function perf(name, ms, n) {
+    if (typeof PP_STATS !== 'undefined') PP_STATS.time('drive.' + name, ms);
     perfBuf = perfBuf || {};
     perfBuf[name] = { ms: Math.round(ms), n: n == null ? undefined : n };
     clearTimeout(perfT);
@@ -1360,6 +1363,7 @@ const FC = (() => {
   // Add ONE link to the copies of a photo by hand (a link the checker threw out that you say is
   // a copy). Unlike ingest(), it doesn't count as a search.
   async function rescue(pic, l, by) {
+    if (typeof PP_STATS !== 'undefined') PP_STATS.add('ans.rescued');
     const p = await photoForPic(pic);
     const id = p.id + '|' + l.key, now = new Date().toISOString();
     if (await DB.get('copies', id)) return;
@@ -1493,6 +1497,12 @@ const FC = (() => {
     let rejects = 0;
     for (const c of got) {
       before.push(JSON.parse(JSON.stringify(c)));
+      // How PageProof is doing: your answers, answers changed later and copies put back.
+      if (typeof PP_STATS !== 'undefined' && status !== 'skip' && c.status !== status) {
+        PP_STATS.add('ans.' + status);
+        if (c.status === 'removed' && status === 'new') PP_STATS.add('ans.putBack' + (c.removedBy ? '.' + c.removedBy : ''));
+        else if (c.status !== 'new') PP_STATS.add('ans.changed');
+      }
       if (status === 'skip') { c.skipped = now; }
       else { c.status = status; c.answered = now; delete c.skipped; }
       Object.assign(c, extra);
@@ -1649,6 +1659,10 @@ const FC = (() => {
   // Read the site: home page, the copy's page, and its About / Contact / Privacy pages.
   // Everything is read as text with DOMParser (nothing from the site is run).
   async function lookup(site, pageUrl) {
+    const t0 = Date.now();
+    try { return await lookupNow(site, pageUrl); } finally { if (typeof PP_STATS !== 'undefined') { PP_STATS.add('job.owner.n'); PP_STATS.time('job.owner', Date.now() - t0); } }
+  }
+  async function lookupNow(site, pageUrl) {
     const f = { site, at: new Date().toISOString(), names: [], emails: [], phones: [], social: [], ids: [], pages: [], clues: [] };
     const seen = new Set();
     const read = async (url, label) => {

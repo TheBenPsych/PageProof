@@ -95,6 +95,11 @@ async function socIndex(copies) {
 const infoOf = c => { const i = (c && c.acct && FCD && FCD.acctInfo && FCD.acctInfo[c.acct.key]) || null; return staleInfo(i, c.acct) ? null : i; };
 const INFO_BUSY = new Set();
 async function readAcctInfo(acct) {
+  const t0 = Date.now(), r = await readAcctInfoNow(acct);
+  if (r && typeof PP_STATS !== 'undefined') { PP_STATS.add('job.acct.n'); PP_STATS.add('job.acct.' + (r.ok && !r.failAt ? 'ok' : 'fail')); PP_STATS.time('job.acct', Date.now() - t0); }
+  return r;
+}
+async function readAcctInfoNow(acct) {
   if (!acct || INFO_BUSY.has(acct.key)) return null;
   INFO_BUSY.add(acct.key);
   try {
@@ -151,7 +156,7 @@ async function siteNote(site, ok) {
   const v = L[site] || (L[site] = { day: new Date().toDateString(), n: 0 });
   v.n++; v.last = Date.now();
   v.empty = ok ? 0 : (v.empty || 0) + 1;
-  if (v.empty >= 2) { v.restUntil = Date.now() + 6 * 3600000; v.empty = 0; }
+  if (v.empty >= 2) { v.restUntil = Date.now() + 6 * 3600000; v.empty = 0; if (typeof PP_STATS !== 'undefined') PP_STATS.add('limit.rest.' + (PP_STATS.siteName(site) || site.replace(/[^a-z]/g, '') || 'other')); }
   await api.storage.local.set({ fcAcctLimits: L });
 }
 // Opening a copy whose account has no details yet reads them then (inside the site's limits).
@@ -191,6 +196,7 @@ async function infoQueue() {
         const until = Math.min(...due.map(e => siteWait(L, acctSite(e.acct))));
         const resting = [...new Set(due.map(e => acctSite(e.acct)).filter(x => L[x] && L[x].restUntil > Date.now()))];
         infoHeld = true;
+        if (typeof PP_STATS !== 'undefined') PP_STATS.add('limit.held.' + (resting.length ? 'resting' : 'limit'));
         await infoSay({ state: 'held', why: resting.length ? 'site' : 'limit', sites: resting, until: resting.length ? Math.min(...resting.map(x => L[x].restUntil)) : until, done, total: done + due.length });
         await infoWait(Math.max(5000, Math.min(until - Date.now(), 30 * 60000)));
         continue;
@@ -661,6 +667,11 @@ const RP_BUSY = new Set();
 const rpWord = c => ({ share: 'Share', repost: 'Repost', quote: 'Quote', reblog: 'Reblog' }[(c.rp && c.rp.kind) || ''] || PP_REPOST.WORD[PP_REPOST.plat(c.site)] || 'Repost');
 const origName = c => c.rp && c.rp.orig ? acctText(c.rp.orig) : 'another account';
 async function rpCheck(c) {
+  const t0 = Date.now(), r = await rpCheckNow(c);
+  if (r && typeof PP_STATS !== 'undefined') { PP_STATS.add('job.repost.n'); PP_STATS.add('job.repost.' + (r.state === 'blocked' || r.state === 'failed' ? 'fail' : 'ok')); PP_STATS.time('job.repost', Date.now() - t0); }
+  return r;
+}
+async function rpCheckNow(c) {
   if (RP_BUSY.has(c.id)) return null;
   RP_BUSY.add(c.id);
   try {

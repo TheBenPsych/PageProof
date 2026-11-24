@@ -1010,3 +1010,44 @@ a.banner{text-decoration:none}
 
 .ahandle{font-size:12px;font-weight:400;color:var(--faint);overflow-wrap:anywhere}
 h2 .ahandle{font-size:13px}
+
+/* Settings › How PageProof is doing (ui/fc-stats.js) */
+.st-range{margin-right:4px}
+.st-card{display:flex;flex-direction:column;gap:12px;min-width:0}
+.st-card h2{font-size:17px}
+.st-h3{margin:0 0 6px;font-size:14px}
+.st-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.st-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.st-tile{padding:14px 16px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.st-tile b{font-size:24px;letter-spacing:-.02em}
+.st-grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.st-grid3>div{background:var(--sunk);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.st-grid3 b{font-size:19px}
+.st-grid3 small{font-size:12.5px}
+.st-bars{display:flex;flex-direction:column;gap:7px;font-size:13.5px}
+.st-bar{display:grid;grid-template-columns:minmax(120px,38%) 1fr 64px;gap:10px;align-items:center}
+.st-bar>span:first-child{min-width:0;overflow-wrap:anywhere}
+.st-track{height:11px;background:var(--sunk);border-radius:6px;overflow:hidden}
+.st-track i{display:block;height:100%;border-radius:6px}
+.st-bar b{text-align:right}
+.st-stack{display:flex;height:16px;border-radius:6px;overflow:hidden;gap:2px;background:var(--sunk)}
+.st-stack i{display:block}
+.st-legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--muted);margin-top:6px}
+.st-legend>span{display:inline-flex;align-items:center;gap:6px}
+.st-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.st-scroll{overflow-x:auto}
+.st-t{width:100%;border-collapse:collapse;font-size:13.5px}
+.st-t th{text-align:left;font-weight:600;color:var(--faint);padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.st-t td{padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.st-t .r{text-align:right}
+.st-spark{width:100%;height:46px;display:block}
+.st-hours{display:grid;grid-template-columns:repeat(10,1fr);gap:3px;height:22px}
+.st-hours i{border-radius:4px;display:block}
+.st-alerts{display:flex;flex-direction:column;overflow:hidden}
+.st-alert{display:flex;gap:12px;align-items:flex-start;padding:12px 18px;border-bottom:1px solid var(--line);font-size:14px}
+.st-alert:last-child{border-bottom:0}
+.st-alert>b{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:13px;color:#fff;background:var(--warn)}
+.st-alert.bad>b{background:var(--bad)}
+.st-alert.warn{background:var(--warn-soft)} .st-alert.bad{background:var(--bad-soft)}
+@media (max-width:1000px){.st-two{grid-template-columns:1fr}.st-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.st-grid3{grid-template-columns:1fr}.st-bar{grid-template-columns:1fr 1fr 54px}}

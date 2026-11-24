@@ -56,6 +56,11 @@ async function healthLights() {
   if (d.done) L.push([skipped.length ? 'warn' : 'ok', 'Skipped photos', skipped.length ? skipped.length.toLocaleString() + (skipped.length >= 5000 ? '+' : '') + ' photos could not be searched.' : 'Every photo tried so far could be opened.', skipped.length ? '<a class="btn sm" href="#skipped">See them</a>' : '']);
   // Preview pictures
   L.push([moved ? 'ok' : 'warn', 'Preview pictures', moved ? 'Kept in their own small store.' : 'Still being tidied after the update. This finishes by itself.']);
+  // How PageProof is doing (the stats page's "Something looks off")
+  try {
+    const al = typeof PP_REPORT !== 'undefined' ? (await PP_REPORT.model('7', { light: true })).alerts : [];
+    L.push([al.some(a => a[0] === 'bad') ? 'bad' : al.length ? 'warn' : 'ok', 'Stats', al.length ? al.map(a => a[1]).join('. ') + '.' : 'Nothing looks off compared with this computer\'s usual numbers.', '<a class="btn sm" href="#stats">See the stats</a>']);
+  } catch (e) { /* stats are only a help */ }
   // Version
   L.push(['ok', 'PageProof version', 'You have ' + VERSION + '. New versions come from your team lead.']);
   return L;

@@ -378,6 +378,8 @@ async function groupTabNow(p, tabId) {
 async function runOne(p, engine) {
   const run = p.runs[engine];
   run.state = 'go'; delete run.why; renderSoon();
+  if (!p.t0) p.t0 = Date.now();                     // for "Whole photo, start to done"
+  if (!R.statPhoto) R.statPhoto = Date.now();
   let tab;
   const opts = { windowId: R.winId, url: ENGINES[engine].start, active: false };
   try { try { tab = await api.tabs.create({ ...opts, pinned: true }); } catch (e) { tab = await api.tabs.create(opts); } }
@@ -408,6 +410,7 @@ function finishTask(t, state, why) {
   const run = t.p.runs[t.engine];
   run.state = state;
   if (state === 'done' && t.start) timeAdd('search', Date.now() - t.start);
+  statEngine(t, state, why);
   if (why) run.why = why; else delete run.why;
   if (t.captcha) { t.captcha = false; updatePause(t.engine); }
   if (picDone(t.p)) maybeIngest(t.p);
@@ -424,6 +427,18 @@ function finishTask(t, state, why) {
   t.done();
 }
 
+// Each search site, for How PageProof is doing: searches, how long, links, empty, no answer.
+function statEngine(t, state, why) {
+  const k = 'eng.' + t.engine + '.';
+  if (state === 'done') {
+    const n = t.p.runs[t.engine].count || 0;
+    PP_STATS.add(k + 'n'); PP_STATS.add(k + 'links', n); if (!n) PP_STATS.add(k + 'empty');
+    if (t.start) PP_STATS.time(k + 'ms', Date.now() - t.start);
+  } else if (state === 'fail') {
+    PP_STATS.add(k + 'n'); PP_STATS.add(k + (/No answer/.test(why || '') ? 'noAnswer' : 'fail'));
+  } else if (state === 'skip' && /robot/.test(why || '')) PP_STATS.add(k + 'robotSkip');
+}
+
 function updatePause(engine) {
   R.paused[engine] = [...R.tasks.values()].some(x => x.engine === engine && x.captcha);
   if (![...R.tasks.values()].some(x => x.captcha)) banner(null);
@@ -431,10 +446,12 @@ function updatePause(engine) {
 
 async function onCaptcha(t) {
   if (t.captcha) return;
+  PP_STATS.add('eng.' + t.engine + '.robot');
   if (job.auto) {
     // Nobody is watching: that site rests for an hour and the others carry on.
     const rest = (await api.storage.local.get('fcRest')).fcRest || {};
     rest[t.engine] = Date.now() + 3600000;
+    PP_STATS.add('eng.' + t.engine + '.restMin', 60);
     await api.storage.local.set({ fcRest: rest });
     t.captcha = true;
     giveUp(t.engine);
@@ -572,12 +589,19 @@ async function fetchPicture(url) {
   try {
     const t0 = Date.now();
     const r = await fetch(url, { signal: ctl.signal, credentials: 'omit' });
-    if (!r.ok) return null;
+    // "Problems by website" (How PageProof is doing): the website's plain name only, never the address.
+    if (!r.ok) { const blocked = [401, 403, 429, 451].includes(r.status); PP_STATS.add(blocked ? 'dl.blocked' : 'dl.failed'); PP_STATS.site(url, blocked ? 'b' : 'f'); return null; }
     const b = await r.blob();
-    timeAdd('dl', Date.now() - t0);
-    if (b.size > 25e6) return null;
-    return await decodeTurn(() => shrinkPicture(b));
-  } catch (e) { return null; } finally { clearTimeout(timer); }
+    timeAdd('dl', Date.now() - t0); PP_STATS.time('dl', Date.now() - t0);
+    if (b.size > 25e6) { PP_STATS.add('dl.tooBig'); return null; }
+    const out = await decodeTurn(() => shrinkPicture(b));
+    if (!out) PP_STATS.add('dl.unreadable');
+    return out;
+  } catch (e) {
+    const slow = ctl.signal.aborted;
+    PP_STATS.add(slow ? 'dl.slow' : 'dl.failed'); PP_STATS.site(url, slow ? 's' : 'f');
+    return null;
+  } finally { clearTimeout(timer); }
 }
 // Downloads run several more at a time than the photo checks (the internet is the slow part of a
 // download, not the computer), but opening a big picture takes 50-100 MB for a moment, so only a
@@ -629,7 +653,7 @@ async function easeTick() {
 }
 function easeSet(on) {
   EASE.on = on; EASE.calm = 0;
-  if (on) { EASE.since = Date.now(); TIMES.eased++; timesSoon(); }
+  if (on) { EASE.since = Date.now(); TIMES.eased++; timesSoon(); PP_STATS.add('strain.eased'); PP_STATS.add('strain.eased.' + (/memory/i.test(EASE.why) ? 'memory' : /battery/i.test(EASE.why) ? 'battery' : 'busy')); }
   else { EASE.why = ''; freeWorker(); freeSlots(); const n = DECODE.wait.splice(0); n.forEach(f => f()); }
   trimWorkers(); renderSoon();
 }
@@ -674,7 +698,8 @@ async function checkInWorker(p, bmp) {
   let w;
   const tw = Date.now();
   try { w = await idleWorker(); } catch (e) { POOL.failed = true; return null; }
-  timeAdd('wait', Date.now() - tw);
+  const waited = Date.now() - tw;
+  timeAdd('wait', waited); PP_STATS.time('chk.wait', waited);
   w.busy++;                                            // taken before any waiting below
   try {
     if (!w.sent.has(p.i)) {
@@ -695,41 +720,31 @@ async function checkInWorker(p, bmp) {
   timeAdd('check', Date.now() - tc);
   if (res.fast !== undefined) TIMES.fast = res.fast;
   if (res.gpu !== undefined && res.gpu !== null) { TIMES.gpu = res.gpu; TIMES.gpuWhy = res.gpuWhy || ''; }
+  if (res.out) res.out._w = waited;
   return res.out;
 }
 
 async function measure(p, bmp) {
   const f = Math.min(1, 640 / Math.max(bmp.width, bmp.height));
   const small = f < 1 ? await createImageBitmap(bmp, { resizeWidth: Math.round(bmp.width * f), resizeHeight: Math.round(bmp.height * f), resizeQuality: 'high' }) : bmp;
+  const t0 = Date.now();
   try {
     const w = await checkInWorker(p, small);
-    if (w && w.stuck) return { pct: -1, sv: SCORE_VERSION };        // took too long: shown as "Can't check"
-    let best = w ? (w.none ? null : { inliers: w.inliers, sc: w, backdrop: w.backdrop, logos: w.logos, place: w.place, photo: w.photo })
+    if (w && w.stuck) { PP_STATS.add('chk.stuck'); return { pct: -1, sv: SCORE_VERSION }; }       // took too long: shown as "Can't check"
+    let best = w ? PP_VERDICT.fromWorker(w)
       : await PP_ALIGN.align(await origBitmap(p), small, undefined, { fast: true });
     if (best && !w && best.sc.lines >= 0.3) {
       const A = await origBitmap(p), Sh = PP_ALIGN.shot(A, small, best);
       best.backdrop = PP_ALIGN.repeats(A, small, best).backdropOnly && Sh.graphic >= 0.6;
       Object.assign(best, { logos: Sh.logos, place: Sh.place, photo: Sh.photo });
     }
-    // Only logos line up, or another shot of the same place: the % shown is what lines up of the
-    // photo itself (without the logos / the parts that shift), so these show low, not 50-77%.
-    const other = !!(best && (best.logos || best.place) && best.photo !== null && best.photo !== undefined);
-    return {
-      pct: best ? Math.max(0, Math.min(100, Math.round((other ? best.photo : best.sc.lines) * 100))) : 0,
-      inl: best && best.inliers || 0,                       // matching details found in both pictures
-      tiles: best ? best.sc.matched : 0,                    // small squares that line up
-      str: best ? +best.sc.strength.toFixed(2) : 0,         // how closely they line up
-      // Share of the middle of your picture (where the subject usually is) that lines up.
-      mid: best && best.sc.midTex >= 8 ? +(best.sc.midMatched / best.sc.midTex).toFixed(2) : null,
-      n: best ? best.sc.inside || 0 : 0,                   // small squares compared at all (the shared area)
-      // Only a repeating press wall (the same logos printed over and over) lines up.
-      wall: best && best.backdrop ? 1 : 0,
-      logos: best && best.logos ? 1 : 0,                    // only printed logos / lettering line up
-      place: best && best.place ? 1 : 0,                    // another shot of the same place (parallax)
-      sv: SCORE_VERSION,
-    };
-  } catch (e) { return { pct: 0, inl: 0, tiles: 0, str: 0, mid: null, sv: SCORE_VERSION }; }
+    const out = PP_VERDICT.fields(best, SCORE_VERSION);
+    statCheck(out, Date.now() - t0 - (w && w._w || 0));
+    return out;
+  } catch (e) { PP_STATS.add('chk.error'); return { pct: 0, inl: 0, tiles: 0, str: 0, mid: null, sv: SCORE_VERSION }; }
 }
+// How long one photo check took, by its answer (Settings › How PageProof is doing).
+function statCheck(m, ms) { const v = PP_VERDICT.score(m); PP_STATS.time('chk.' + v, ms); PP_STATS.time('chk.all', ms); }
 // Quick first look with the search site's small preview (fast to download). A clear
 // "different photo" stops there; anything else is checked again with the full picture.
 async function scoreLink(l) {
@@ -771,19 +786,7 @@ function baseVerdict(l) {
   if (l.rescued) return 'maybe';          // you said it is a copy
   if (userNo(l)) return 'no';
   if (l.sv !== SCORE_VERSION) return l.pct === null ? 'cant' : 'pending';
-  if (l.pct === null || l.pct < 0) return 'cant';
-  if (l.n != null && l.n < 40) return 'no';   // shared area too small to say anything
-  if (!(l.tiles >= 12)) return 'no';           // too few matching squares, whatever the %
-  if (l.wall) return 'no';                     // only the repeating logos behind the people line up
-  if (l.logos || l.place) return 'no';         // only logos / lettering, or another shot of the same place
-  if (l.mid !== null && l.mid !== undefined && l.mid < 0.35) return 'no';
-  const midOk = l.mid === null || l.mid === undefined || l.mid >= 0.42;
-  // Most of the shared area must line up. Copies with a big headline over them (about 55%)
-  // land in Maybe, as do different shots in front of the same logo wall (about 50%).
-  if (midOk && l.str >= 0.8 && ((l.pct >= 75 && l.inl >= 15 && l.tiles >= 20) || (l.pct >= 85 && l.inl >= 10))) return 'same';
-  // A high % on its own means nothing: two different photos can "line up" over a tiny shared patch.
-  if (l.inl >= 11 && l.tiles >= 12 && l.pct >= 40) return 'maybe';
-  return 'no';
+  return PP_VERDICT.score(l);
 }
 // 4.35 (Ben): a match only counts when the photo is on their page itself, never only in a
 // comment, a link preview, a "related posts" box or a suggested post. A match made on the search
@@ -835,6 +838,7 @@ async function pageCheck(l) {
   let social = false;
   try { social = !!(globalThis.PP_SOCIAL && PP_SOCIAL.isSocial(new URL(l.url).hostname)); } catch (e) { /* bad address */ }
   let state = 'unknown';
+  const t0 = Date.now();
   try {
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 12000);
     const r = await fetch(l.url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal });
@@ -862,8 +866,9 @@ async function pageCheck(l) {
       if (state !== 'seen' && state !== 'card' && tried) state = social ? 'postOnly' : 'notSeen';
       TIMES.pages = (TIMES.pages || 0) + 1;
     }
-  } catch (e) { /* their page did not answer: unknown */ }
+  } catch (e) { /* their page did not answer: unknown */ PP_STATS.site(l.url, 'f'); }
   l.onPage = state; l.pv = PV;
+  PP_STATS.add('job.page.n'); PP_STATS.add('job.page.' + (state === 'unknown' ? 'fail' : 'ok')); PP_STATS.time('job.page', Date.now() - t0);
 }
 const VERDICT = {
   same: { tag: 'Same photo', cls: 'ex', rank: 4 },
@@ -1020,9 +1025,41 @@ function maybeIngest(p) {
   p.ingested = true;
   const links = p.links.filter(l => ['same', 'maybe'].includes(verdict(l)) && !RS_LISTS.isHidden(l.site, l.url) && !isRejected(p, l))
     .map(l => ({ ...l, verdict: verdict(l) }));
-  FC.ingest(p, links, BY[job.kind] || 'a search').then(r => { if (!p.healthNoted) { p.healthNoted = true; return FC.engineResults(health, r.photo.id, !links.length); } })
+  FC.ingest(p, links, BY[job.kind] || 'a search').then(r => { statPhoto(p, r && r.fresh || 0); if (!p.healthNoted) { p.healthNoted = true; return FC.engineResults(health, r.photo.id, !links.length); } })
     .catch(err => { p.ingested = false; console.warn('PageProof: could not add the copies', err); })
     .finally(() => { saveJob(); autoDone(); });
+}
+// From search to copy, and why each link was thrown out (How PageProof is doing). Counts only.
+function statPhoto(p, fresh) {
+  if (p.statDone) return;
+  p.statDone = true;
+  const S = PP_STATS, why = {};
+  let same = 0, maybe = 0;
+  for (const l of p.links) {
+    let k = '';
+    if (typeof RS_FORUM !== 'undefined' && RS_FORUM.is(l.site, l.url)) k = 'forum';
+    else if (!l.rescued && RS_LISTS.isHidden(l.site, l.url)) k = 'hidden';
+    else {
+      const v = verdict(l);
+      if (v === 'cant') k = 'cant';
+      else if (v === 'no') k = cardOf(l) ? 'card' : l.onPage === 'notSeen' || l.onPage === 'card' ? 'notInPost' : userNo(l) ? 'removedBefore' : (l.wall || l.logos || l.place) ? 'logos' : 'different';
+      else if (v === 'same' || v === 'maybe') {
+        if (isRejected(p, l)) k = 'removedBefore';
+        else { if (RS_LISTS.isAllowed(l.site, l.url)) S.add('drop.approved'); if (v === 'same') same++; else maybe++; }
+      } else k = 'other';
+    }
+    if (k) why[k] = (why[k] || 0) + 1;
+    // Per search site: what its links turned out to be, so one broken site stands out.
+    const v = k || verdict(l);
+    for (const e of l.engines || []) S.add('engv.' + e + '.' + v);
+    if (k === 'cant' && (l.engines || []).length === 1) S.add('engv.' + l.engines[0] + '.cantOnly');
+  }
+  S.add('photos'); S.add('photos.' + (job.kind || 'new'));
+  S.add('links', p.links.length); if (p.links.length) S.add('photos.withLinks');
+  for (const [k, n] of Object.entries(why)) S.add('drop.' + k, n);
+  S.add('kept.same', same); S.add('kept.maybe', maybe);
+  S.add('copies.new', fresh); if (fresh) S.add('photos.withNew');
+  if (p.t0 && Date.now() - p.t0 < 4 * 3600000) S.time('photo.' + (job.kind === 'fifty' || job.kind === 'new' ? 'big' : 'one'), Date.now() - p.t0);
 }
 // Keep searching runs a search in a background window: when it's finished, tell that window and close.
 let autoClosing = false;
@@ -1416,6 +1453,7 @@ async function initResults() {
   renderResults();
   scoreAll();
   for (const p of job.pics) maybeIngest(p);
+  if (unfinished) PP_STATS.add('strain.resumed');        // the page was reloaded or crashed mid-search
   if (mine && (!job.started || unfinished)) runJob();
   // 4.30.2: the browser only shows "Leave site?" after someone clicked in the tab, and logs an error
   // (shown on edge://extensions) when a page asks without that click. So it only asks after one.
