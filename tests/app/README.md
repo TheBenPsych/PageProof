@@ -28,6 +28,7 @@ pretend Google Drive folder, pretend copies found). No real photos, clients or w
 | `checks-422.js` | Hidden and approved sites: Add from a file is remembered under Files you added, Undo this import takes out only what it added, Add them again, and Take out the sites in a file for files added before 4.22 |
 | `checks-423.js` | Stolen before links: Add from a file on that tab (two links on a line count as two), nothing goes into Hidden sites, the red Stolen before tag on a copy on a listed page (www. and tracking bits ignored), its answer unchanged, other pages on the same site count as repeat offenders, the Stolen before quick filter, Undo this import |
 | `checks-424.js` | Spam blogs: random-looking addresses on throwaway sites get a Spam blog tag, their answers are not changed, they stay out of Copies found, One at a time and the new-copies number until you press Show them, the Spam blogs quick filter, Hide all hides the whole sites (new made-up addresses too), Undo |
+| `checks-430.js` | A Facebook or Instagram match only counts when the post's own picture is the client's photo: a post showing a different picture goes to Removed by itself, an unreadable post is left alone, and the panel says where "Theirs" came from |
 | `speed.js` | Every main page draws quickly with 50,000 photos and 5,000 copies |
 
 To run them yourself (needs Node.js):
