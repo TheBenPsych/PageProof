@@ -1,9 +1,21 @@
-# Updates PageProof to the newest version: downloads PageProof.zip from the "Latest build"
-# page on GitHub and puts it into Documents\PageProof\Install. Your saved work (copies found,
-# settings, site lists) lives in the browser and in Documents\PageProof, not in Install, so it
-# is not touched. Run it by double-clicking "Update PageProof.cmd" next to this file.
-# It only uses tools that come with Windows. It changes nothing outside the Install folder
-# (and a temporary folder that it deletes again).
+@echo off
+rem ---------------------------------------------------------------------------------------
+rem  Update PageProof (Windows). Double-click this file to install or update PageProof.
+rem  It downloads PageProof.zip from the "Latest build" page on GitHub and puts it into
+rem  Documents\PageProof\Install (your own Documents folder, whoever you are signed in as).
+rem  Your saved work is not in Install, so it is not touched. Then press Reload on
+rem  PageProof's card in chrome://extensions or edge://extensions.
+rem  It only uses tools that come with Windows (PowerShell, robocopy). The PowerShell part
+rem  is below the ###POWERSHELL### line, so you can read exactly what it does.
+rem ---------------------------------------------------------------------------------------
+title PageProof update
+set "PP_SELF=%~f0"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$t = [IO.File]::ReadAllText($env:PP_SELF); & ([scriptblock]::Create($t.Substring($t.LastIndexOf('###POWERSHELL###'))))"
+echo.
+pause
+exit /b
+
+###POWERSHELL###
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'   # makes the download much faster in Windows PowerShell
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -53,8 +65,16 @@ try {
     Write-Host ''
     Write-Host ('  Done: PageProof ' + $nv.version + ' is in ' + $install) -ForegroundColor Green
     Write-Host ''
-    Write-Host '  Last step: in Chrome or Edge, open the extensions page (chrome://extensions or'
-    Write-Host '  edge://extensions) and press the round arrow (Reload) on PageProof''s card.'
+    if ($old) {
+      Write-Host '  Last step: in Chrome or Edge, open the extensions page (chrome://extensions or'
+      Write-Host '  edge://extensions) and press the round arrow (Reload) on PageProof''s card.'
+    } else {
+      Write-Host '  First time only: in Chrome or Edge, open chrome://extensions (or edge://extensions),'
+      Write-Host '  turn on Developer mode, click Load unpacked and choose this folder:'
+      Write-Host ('  ' + $install)
+      Write-Host '  (If PageProof was loaded from another folder before, this takes its place.)'
+      Write-Host '  After that, updating is just: double-click this file, then press Reload.'
+    }
   }
 } catch {
   Write-Host ''
