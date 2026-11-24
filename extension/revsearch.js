@@ -222,58 +222,65 @@ async function addToDraft(files) {
   renderSetup();
 }
 
-async function setupSide() {
+// UI overhaul (batch 3): New search, All searches and Search results use the main PageProof look
+// (page heading, cards, tiles) with no inner side panel of their own.
+function plain(on) { document.body.classList.toggle('plain', on); document.body.classList.toggle('with-side', !on); }
+function pgHead(title, sub, ...right) { return h('div', { class: 'pg-head' }, h('div', {}, h('h1', { text: title }), sub ? h('p', { text: sub }) : null), ...right); }
+// A small progress ring. Only numbers go into its markup.
+function ring(done, total, size) {
+  const z = size || 40, r = z / 2 - 4, c = 2 * Math.PI * r, f = total ? Math.min(1, done / total) : 0;
+  const el = h('span', { class: 'pg-ring' + (total && done >= total ? ' done' : ''), style: 'width:' + z + 'px;height:' + z + 'px', title: done + ' of ' + total + ' done', role: 'img', 'aria-label': done + ' of ' + total + ' done' });
+  el.innerHTML = `<svg width="${z}" height="${z}" viewBox="0 0 ${z} ${z}" aria-hidden="true"><circle class="tr" cx="${z / 2}" cy="${z / 2}" r="${r}" fill="none" stroke-width="4"/><circle class="fg" cx="${z / 2}" cy="${z / 2}" r="${r}" fill="none" stroke-width="4" stroke-linecap="round" stroke-dasharray="${(c * f).toFixed(1)} ${c.toFixed(1)}"/></svg><b>${f >= 1 ? '✓' : Math.round(f * 100) + '%'}</b>`;
+  return el;
+}
+// Google / Yandex / Bing with a green, amber or red light. lights: [[engine, 'ok'|'warn'|'bad'|'off', note]]
+const engLights = lights => h('div', { class: 'pg-eng', role: 'list', 'aria-label': 'Search sites' }, lights.map(([e, c, note]) =>
+  h('span', { class: 'e', role: 'listitem', title: note || (c === 'ok' ? 'Working' : '') }, h('i', { class: c === 'ok' ? '' : c }), ENGINES[e].short, note ? h('small', { text: note }) : null)));
+
+let setupN = 0;     // only the newest drawing goes on screen
+async function renderSetup(busy) {
+  plain(true);
+  const me = ++setupN;
   const s = await getSettings();
-  const save = () => setSettings(s).then(setupSide);
-  const engines = h('div', { class: 'card' }, h('h3', { text: 'Search on' }),
-    Object.entries(ENGINES).map(([k, e]) => h('label', { class: 'chk' },
-      h('input', { type: 'checkbox', checked: s.engines[k], onchange: ev => { s.engines[k] = ev.target.checked; save(); } }), fav(k), e.name, h('small', { text: e.what }))));
-  const speed = h('div', { class: 'card' }, h('h3', { text: 'Speed' }),
-    h('div', { class: 'seg' }, Object.entries(SPEED).map(([k, v]) => h('button', { class: s.speed === k ? 'on' : '', text: v.label, onclick: () => { s.speed = k; save(); } }))),
-    h('p', { class: 'hint', text: SPEED[s.speed].hint }));
+  if (me !== setupN) return;
+  const save = () => setSettings(s).then(() => renderSetup());
   const n = draft.length, nEng = Object.values(s.engines).filter(Boolean).length;
   const secs = Math.round(n * (SPEED[s.speed].gap[0] + SPEED[s.speed].gap[1]) / 2000 / SPEED[s.speed].per + 15);
-  const go = h('button', { class: 'big', disabled: !n || !nEng, text: '🔎 Search ' + (n ? plural(n, 'picture') : 'pictures'), onclick: async () => {
+  const notes = draftNotes.length ? h('div', { class: 'howbox', style: 'max-width:none' }, draftNotes.map(t => h('div', { text: t }))) : null;
+  const sh = (num, title, done) => h('div', { class: 'sh' }, h('em', { text: done ? '✓' : num }), h('h2', { text: title }));
+  const step1 = h('section', { class: 'pg-card pg-step' + (n ? ' done' : ''), 'aria-label': 'Step 1: pick photos' }, sh('1', busy ? 'Getting your pictures ready…' : n ? plural(n, 'photo') + ' picked' : 'Pick photos', n),
+    n ? h('div', { class: 'pg-thumbs' }, draft.map((p, i) => h('div', { class: 't', title: p.name + ' · ' + p.w + ' × ' + p.h },
+      h('img', { src: p.thumb, alt: '' }), h('span', { text: i + 1 }),
+      h('button', { title: 'Take this picture out', 'aria-label': 'Take ' + p.name + ' out', text: '✕', onclick: () => { draft.splice(i, 1); renderSetup(); } })))) : null,
+    h('div', { class: 'pg-drop' },
+      h('button', { class: 'pg-btn' + (n ? '' : ' primary'), disabled: n >= MAX_PICS, text: n ? '＋ Add more pictures' : '📁 Add pictures', onclick: () => $('filePick').click() }),
+      h('button', { class: 'pg-btn sm', text: '📂 From my clients\' photos', onclick: e => goApp('clients', e) }),
+      h('span', { text: 'Or drag pictures or a whole folder onto this page, or paste pictures or links (Ctrl+V). Up to ' + MAX_PICS + ' at once.' })));
+  const step2 = h('section', { class: 'pg-card pg-step' + (nEng ? ' done' : ''), 'aria-label': 'Step 2: search on' }, sh('2', 'Search on', nEng),
+    Object.entries(ENGINES).map(([k, e]) => h('label', { class: 'pg-tick' + (s.engines[k] ? ' on' : '') },
+      h('input', { type: 'checkbox', checked: s.engines[k], onchange: ev => { s.engines[k] = ev.target.checked; save(); } }), fav(k), h('span', {}, h('b', { text: e.name }), h('small', { text: e.what })))));
+  const why = !n ? 'Add at least one picture first.' : !nEng ? 'Tick at least one search site in step 2.' : '';
+  const go = h('button', { class: 'pg-btn primary big', disabled: !!why, title: why, text: '🔎 Search ' + (n ? plural(n, 'photo') : 'photos'), onclick: async () => {
     go.disabled = true;
     const job = await startJob(draft.slice());
     if (job) { draft.length = 0; draftNotes = ['Search started. You can add more pictures for another search here.']; renderSetup(); }
     else go.disabled = false;
   } });
-  side(h('div', {}, h('div', { id: 'domain', text: 'Reverse image search' }), h('div', { id: 'sub', text: 'Search many pictures at once on Google, Yandex and Bing.' })),
-    engines, speed, go,
-    n ? h('p', { class: 'hint', style: 'margin:-4px 0 0;text-align:center', text: 'About ' + (secs < 90 ? secs + ' seconds' : Math.round(secs / 60) + ' minutes') + ' for ' + plural(n, 'picture') + ' on ' + plural(nEng, 'site') }) : null,
-    h('div', { class: 'links' },
-      appLink('keep', '📂 Today\'s 50 and Keep searching'),
-      appLink('searches', '📒 All searches'),
-      appLink('hidden', '🚫 Hidden and approved sites'),
-      h('a', { href: 'https://github.com/TheBenPsych/PageProof/blob/main/TUTORIAL.md#16-search-many-pictures-at-once-reverse-image-search', target: '_blank', text: '❔ How this works' })));
-}
-
-function renderSetup(busy) {
-  setupSide();
-  const notes = draftNotes.length ? h('div', { class: 'howbox', style: 'max-width:none' }, draftNotes.map(t => h('div', { text: t }))) : null;
-  if (!draft.length) {
-    $('main').replaceChildren(h('div', { class: 'empty' },
-      notes,
-      h('div', { class: 'ic', text: '🖼️' }),
-      h('h1', { text: busy ? 'Getting your pictures ready…' : 'Which pictures do you want to search?' }),
-      h('button', { class: 'addbtn', text: '📁 Add pictures', onclick: () => $('filePick').click() }),
-      h('button', { class: 'btn', style: 'font-size:14px;padding:8px 16px', text: '📂 Or pick from my clients\' photos', onclick: e => goApp('clients', e) }),
-      h('div', { class: 'ways' }, h('span', { text: 'Or drag pictures or a whole folder onto this page' }), h('span', { text: 'Or paste pictures or picture links (Ctrl+V)' }), h('span', { text: 'Up to ' + MAX_PICS + ' at once' })),
-      h('div', { class: 'howbox' }, h('b', { text: 'What happens next:' }), h('ol', {},
-        h('li', { text: 'PageProof shows the results right here in PageProof. The Google, Yandex and Bing search tabs open as small pinned tabs at the left of the tab bar, and close by themselves when done.' }),
-        h('li', { text: 'The pictures are searched a few at a time, with short pauses, in your own browser. That keeps "are you a robot" checks away.' }),
-        h('li', { text: 'Every link found is listed on one results page, with a % match. Hide the sites you never care about.' })))));
-    return;
-  }
+  const step3 = h('section', { class: 'pg-card pg-step', 'aria-label': 'Step 3: speed and start' }, sh('3', 'Speed and start'),
+    h('div', { class: 'pg-seg', role: 'radiogroup', 'aria-label': 'Speed' }, Object.entries(SPEED).map(([k, v]) => h('button', { role: 'radio', 'aria-checked': String(s.speed === k), class: s.speed === k ? 'on' : '', text: v.label, title: v.hint, onclick: () => { s.speed = k; save(); } }))),
+    h('p', { class: 'pg-faint', style: 'margin:0', text: SPEED[s.speed].hint }),
+    h('div', { style: 'flex:1' }),
+    go,
+    why ? h('p', { class: 'pg-why', text: why }) : h('p', { class: 'pg-faint', style: 'margin:0;text-align:center', text: 'About ' + (secs < 90 ? secs + ' seconds' : Math.round(secs / 60) + ' minutes') + ' for ' + plural(n, 'photo') + ' on ' + plural(nEng, 'site') }));
   $('main').replaceChildren(...[
-    h('div', {}, h('h1', { text: plural(draft.length, 'picture') + (busy ? ' (adding more…)' : ' ready') }), h('p', { class: 'lead', text: 'Numbers match the pictures in the results window. Press ✕ to take a picture out.' })),
+    pgHead('New search', 'Search a few photos right now on Google Lens, Yandex and Bing. For your clients\' photos all day, use Keep searching.'),
     notes,
-    h('div', { class: 'pics' }, draft.map((p, i) => h('div', { class: 'pic' },
-      h('img', { src: p.thumb, alt: '' }), h('span', { class: 'num', text: i + 1 }),
-      h('button', { class: 'x', title: 'Take this picture out', text: '✕', onclick: () => { draft.splice(i, 1); renderSetup(); } }),
-      h('div', { class: 'nm', text: p.name, title: p.name }), h('div', { class: 'sz', text: p.w + ' × ' + p.h + ' · ' + (p.size / 1e6).toFixed(1) + ' MB' })))),
-    draft.length < MAX_PICS ? h('button', { class: 'addbtn small', text: '＋ Add more pictures', onclick: () => $('filePick').click() }) : null].filter(Boolean));
+    h('div', { class: 'pg-steps' }, step1, step2, step3),
+    h('details', { class: 'pg-thrown' }, h('summary', { text: 'What happens when you press Search' }), h('div', { class: 'in' }, h('ol', { style: 'margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;font-size:14px' },
+      h('li', { text: 'The results show right here in PageProof. The search tabs open as small pinned tabs at the left of the tab bar and close by themselves when done.' }),
+      h('li', { text: 'The photos are searched a few at a time, with short pauses, in your own browser. That keeps "are you a robot" checks away.' }),
+      h('li', { text: 'Every copy found goes to Copies found with a % match.' })),
+      h('a', { href: 'https://github.com/TheBenPsych/PageProof/blob/main/TUTORIAL.md#16-search-many-pictures-at-once-reverse-image-search', target: '_blank', text: '❔ How this works' })))].filter(Boolean));
 }
 
 function setupDropAndPaste(onFiles) {
@@ -1175,50 +1182,6 @@ function statusLine(p) {
   return bits.join(' · ');
 }
 
-function resultsSide() {
-  const done = job.pics.filter(picDone).length, total = job.pics.length;
-  const busy = R.running || (R.watch && !job.finished);
-  const links = job.pics.reduce((a, p) => a + shownCount(p), 0);
-  const sites = new Set(job.pics.flatMap(p => visibleLinks(p, { raw: true, withHidden: false }).map(l => l.site))).size;
-  const when = new Date(job.created);
-  const left = job.pics.filter(p => job.engines.some(e => ['wait', 'skip', 'fail'].includes(p.runs[e].state))).length;
-  const head = busy
-    ? h('div', {}, h('div', { id: 'domain', text: 'Searching ' + plural(total, 'picture') }),
-      h('div', { id: 'sub', text: done + ' done · ' + job.pics.filter(picBusy).length + ' searching · ' + (total - done - job.pics.filter(picBusy).length) + ' waiting' }),
-      h('div', { class: 'prog' }, h('i', { style: 'width:' + Math.round(done / total * 100) + '%' })),
-      job.bg ? h('p', { class: 'hint' }, job.started ? 'This search runs in the small pinned PageProof tab at the left of your tab bar. You can close this page and keep working. Open All searches any time to see how far it is.'
-        : 'Waiting for the small pinned PageProof tab to start this search (it runs one big search at a time).', job.started ? null : h('button', { class: 'ghost', text: '▶ Start it now', onclick: () => api.runtime.sendMessage({ type: 'fcBgStart' }).catch(() => {}) }))
-        : h('p', { class: 'hint', text: 'You can use other PageProof pages and other tabs meanwhile. Keep the PageProof tab open until it finishes.' }))
-    : h('div', {}, h('div', { id: 'domain', text: plural(total, 'picture') + ' searched' }),
-      h('div', { id: 'sub', text: when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) + ' · ' + plural(job.pics.reduce((a, p) => a + sameCount(p), 0), 'same-photo link') + ' (of ' + links + ' found)' + (job.pics.some(checking) ? ' · still checking matches…' : '') }));
-  const list = h('div', { class: 'card plist' }, job.pics.map(p => {
-    const n = sameCount(p), nNew = p.links.filter(l => l.isNew && isSame(l) && !RS_LISTS.isHidden(l.site, l.url)).length;
-    const state = picDone(p) ? h('span', { class: 'cnt' + (n ? '' : ' z') + (nNew ? ' newc' : ''), title: 'Links that show the same photo', text: (nNew ? n + ' · ' + nNew + ' new' : n) + (checking(p) ? '…' : '') })
-      : runList(p).some(r => r.state === 'captcha') ? h('span', { class: 'st bad', text: 'Check!' })
-      : picBusy(p) ? h('span', { class: 'st go', text: 'Searching' }) : h('span', { class: 'st wait', text: 'Waiting' });
-    return h('button', { class: 'pitem' + (p.i === R.sel ? ' on' : ''), onclick: () => { R.sel = p.i; renderResults(); scoreAll(); window.scrollTo(0, 0); } },
-      h('img', { src: p.thumb, alt: '' }), h('div', { class: 'n' }, h('b', { text: (p.i + 1) + '. ' + p.name }), h('small', { text: statusLine(p) }), checkLine(p)), state);
-  }));
-  const actions = busy
-    ? [h('button', { class: 'big stop', text: '⏹ Stop and keep results so far', onclick: () => {
-        if (R.watch) { api.runtime.sendMessage({ type: 'ppBgStop', job: job.id }).catch(() => {}); banner([h('b', { text: 'Stopping… ' }), 'The searches already running finish their page, then it stops.'], 'info'); return; }
-        R.stop = true; for (const t of [...R.tasks.values()]) finishTask(t, 'skip', 'Stopped');
-      } })]
-    : [h('button', { class: 'big', text: '💾 Save results', onclick: () => { saveCsv(); savePdf(); } }),
-      h('div', { class: 'grid2' }, h('button', { class: 'ghost', text: '📄 PDF report', onclick: savePdf }), h('button', { class: 'ghost', text: '📊 Spreadsheet', onclick: saveCsv })),
-      left ? h('button', { class: 'ghost', text: '🔁 Search the rest (' + left + ')', onclick: () => {
-        for (const p of job.pics) for (const e of job.engines) if (['skip', 'fail'].includes(p.runs[e].state)) p.runs[e].state = 'wait';
-        // A pinned-tab search: back into the pinned tab's line, and this page watches it again.
-        if (job.bg && !BG) { delete job.finished; saveJob(true).then(() => bgQueue(job.id)).then(() => watch()); return; }
-        runJob();
-      } }) : null];
-  side(head, list, ...actions, h('div', { class: 'links' },
-    appLink('found', '🗂 All copies found'),
-    appLink('search', '🔎 New search'),
-    appLink('hidden', '🚫 Hidden and approved sites'),
-    appLink('searches', '📒 All searches')));
-}
-
 // A link the checker threw out (Different photo / Can't check). These are NOT added to All copies
 // found; "It is a copy" rescues one that really is your photo.
 function rowFor(p, l) {
@@ -1248,7 +1211,65 @@ function rowFor(p, l) {
 
 function renderResults() {
   if (!job) return;
-  resultsSide();
+  plain(true);
+  const busy = R.running || (R.watch && !job.finished);
+  const total = job.pics.length, done = job.pics.filter(picDone).length, nBusy = job.pics.filter(picBusy).length;
+  const when = new Date(job.created);
+  const whenTxt = when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const left = job.pics.filter(p => job.engines.some(e => ['wait', 'skip', 'fail'].includes(p.runs[e].state))).length;
+  const keptOf = q => visibleLinks(q, { raw: true, withHidden: false }).filter(l => ['same', 'maybe'].includes(verdict(l))).length;
+  const outOf = q => visibleLinks(q, { raw: true, withHidden: false }).filter(l => ['no', 'cant'].includes(verdict(l))).length;
+  const totalKept = job.pics.reduce((a, q) => a + keptOf(q), 0), totalOut = job.pics.reduce((a, q) => a + outOf(q), 0);
+  const allIn = !R.running && job.pics.every(q => q.ingested || !job.engines.some(e => q.runs[e].state === 'done'));
+  // ---- heading and its buttons
+  const acts = busy
+    ? [h('button', { class: 'pg-btn stop', text: '⏹ Stop and keep results so far', onclick: () => {
+        if (R.watch) { api.runtime.sendMessage({ type: 'ppBgStop', job: job.id }).catch(() => {}); banner([h('b', { text: 'Stopping… ' }), 'The searches already running finish their page, then it stops.'], 'info'); return; }
+        R.stop = true; for (const t of [...R.tasks.values()]) finishTask(t, 'skip', 'Stopped');
+      } })]
+    : [left ? h('button', { class: 'pg-btn', text: '🔁 Search the rest (' + left + ')', onclick: () => {
+        for (const p of job.pics) for (const e of job.engines) if (['skip', 'fail'].includes(p.runs[e].state)) p.runs[e].state = 'wait';
+        // A pinned-tab search: back into the pinned tab's line, and this page watches it again.
+        if (job.bg && !BG) { delete job.finished; saveJob(true).then(() => bgQueue(job.id)).then(() => watch()); return; }
+        runJob();
+      } }) : null,
+      h('button', { class: 'pg-btn', text: '📄 PDF report', onclick: savePdf }), h('button', { class: 'pg-btn', text: '📊 Spreadsheet', onclick: saveCsv })];
+  const head = pgHead(busy ? 'Searching ' + plural(total, 'photo') : plural(total, 'photo') + ' searched', whenTxt + ' · ' + (busy ? done + ' done · ' + nBusy + ' searching · ' + (total - done - nBusy) + ' waiting' : plural(totalKept, 'copy', 'copies') + ' found' + (job.pics.some(checking) ? ' · still checking matches…' : '')),
+    h('div', { class: 'pg-actions' }, acts.filter(Boolean)));
+  const bgNote = busy && job.bg ? h('p', { class: 'pg-faint', style: 'margin:0' }, job.started ? 'This search runs in the small pinned PageProof tab at the left of your tab bar. You can close this page and keep working.'
+    : 'Waiting for the small pinned PageProof tab to start this search (it runs one big search at a time). ', job.started ? null : h('button', { class: 'pg-btn sm', text: '▶ Start it now', onclick: () => api.runtime.sendMessage({ type: 'fcBgStart' }).catch(() => {}) })) : null;
+  // ---- search site lights
+  const lights = job.engines.map(e => {
+    if (R.gaveUp[e]) return [e, 'bad', 'skipped'];
+    if (R.paused[e]) return [e, 'warn', 'robot check'];
+    if (job.pics.some(p => p.runs[e].state === 'captcha')) return [e, 'warn', 'robot check'];
+    if (job.pics.every(p => !['wait', 'go', 'captcha'].includes(p.runs[e].state))) return [e, job.pics.some(p => ['skip', 'fail'].includes(p.runs[e].state)) ? 'warn' : 'ok', job.pics.some(p => ['skip', 'fail'].includes(p.runs[e].state)) ? 'some skipped' : 'done'];
+    return [e, 'ok', job.pics.some(p => p.runs[e].state === 'go') ? 'searching' : 'waiting'];
+  });
+  const tiles = h('div', { class: 'pg-tiles' },
+    h('div', { class: 'pg-tile' + (done >= total ? ' ok' : '') }, h('b', { text: done + ' of ' + total }), h('span', { text: 'photos done' })),
+    h('div', { class: 'pg-tile' + (totalKept ? ' bad' : '') }, h('b', { text: totalKept }), h('span', { text: 'Same photo or Maybe, sent to Copies found' })),
+    h('div', { class: 'pg-tile grey' }, h('b', { text: totalOut }), h('span', { text: 'thrown out by the checker' })));
+  const sum = h('section', { class: 'pg-card', style: 'display:flex;gap:12px;align-items:center;flex-wrap:wrap' },
+    h('div', { style: 'flex:1 1 300px;min-width:0;display:flex;flex-direction:column;gap:6px' }, engLights(lights),
+      h('span', { class: 'pg-faint', text: allIn ? 'The copies are in Copies found, with each photo\'s client. Review them there: Stolen, Licensed or Remove.' : 'Each photo\'s copies go to Copies found as soon as that photo is searched and checked.' }),
+      EASE.on && (R.running || R.scoring) ? h('span', { class: 'pg-faint ease', text: EASE.why + ', so PageProof slowed down to one photo check and one search tab. Full speed again when the computer calms down.' }) : null),
+    h('a', { class: 'pg-btn primary', href: appUrl('review'), onclick: e => goApp('review', e), text: 'Review new copies' }),
+    h('a', { class: 'pg-btn', href: appUrl('found'), onclick: e => goApp('found', e), text: 'Copies found' }));
+  // ---- one row per photo
+  const dot = st => st === 'done' ? 'done' : st === 'go' ? 'go' : st === 'captcha' ? 'warn' : ['skip', 'fail'].includes(st) ? 'bad' : '';
+  const list = h('section', { class: 'pg-card pg-list res-list', 'aria-label': 'Photos in this search' }, job.pics.map(p => {
+    const n = sameCount(p), nNew = p.links.filter(l => l.isNew && isSame(l) && !RS_LISTS.isHidden(l.site, l.url)).length, k = keptOf(p);
+    const chip = picDone(p) ? h('span', { class: 'pg-chip' + (k ? ' bad' : ''), title: 'Links that show the same photo, or maybe', text: k ? (n + ' same' + (k > n ? ' · ' + (k - n) + ' maybe' : '') + (nNew ? ' · ' + nNew + ' new' : '')) + (checking(p) ? '…' : '') : checking(p) ? 'Checking…' : 'None' })
+      : runList(p).some(r => r.state === 'captcha') ? h('span', { class: 'pg-chip warn', text: 'Check!' })
+      : picBusy(p) ? h('span', { class: 'pg-chip ok', text: 'Searching' }) : h('span', { class: 'pg-chip', text: 'Waiting' });
+    return h('button', { class: 'pg-row' + (p.i === R.sel ? ' on' : ''), 'aria-pressed': String(p.i === R.sel), onclick: () => { R.sel = p.i; renderResults(); scoreAll(); const d = $('selcard'); if (d && d.scrollIntoView) d.scrollIntoView({ block: 'nearest' }); } },
+      h('img', { class: 'th', src: p.thumb, alt: '' }),
+      h('div', { class: 't' }, h('b', { text: (p.i + 1) + '. ' + p.name }), h('small', { text: statusLine(p) })),
+      h('span', { class: 'pg-dots', 'aria-label': 'Search sites' }, job.engines.map(e => h('span', { title: ENGINES[e].short + ': ' + (p.runs[e].state || '') }, h('b', { class: dot(p.runs[e].state) }), ENGINES[e].short[0]))),
+      h('span', { class: 'chips' }, chip));
+  }));
+  // ---- the picked photo
   const p = job.pics[R.sel];
   const all = visibleLinks(p, { raw: true, withHidden: false });
   const cnt = k => all.filter(l => verdict(l) === k).length;
@@ -1259,37 +1280,28 @@ function renderResults() {
   const tabBtn = e => {
     const r = p.runs[e];
     if (!r || (!r.tabId && !r.pageUrl)) return null;
-    return h('button', { class: 'btn', onclick: async () => {
+    return h('button', { class: 'pg-btn sm', onclick: async () => {
       try { if (r.tabId) { await api.tabs.update(r.tabId, { active: true }); return; } } catch (err) { /* closed */ }
       if (r.pageUrl) openTab(r.pageUrl);
     } }, fav(e), ' ' + ENGINES[e].short + ' tab');
   };
   const problems = job.engines.map(e => p.runs[e]).filter(r => r.why && r.state !== 'done').map(r => r.why);
-  // The whole search: one button to the review, which lives in All copies found.
-  const totalKept = job.pics.reduce((a, q) => a + visibleLinks(q, { raw: true, withHidden: false }).filter(l => ['same', 'maybe'].includes(verdict(l))).length, 0);
-  const allIn = !R.running && job.pics.every(q => q.ingested || !job.engines.some(e => q.runs[e].state === 'done'));
-  const top = h('div', { class: 'sumcard' },
-    h('div', {}, h('b', { text: R.running ? 'Searching… ' + plural(totalKept, 'copy', 'copies') + ' found so far' : plural(totalKept, 'copy', 'copies') + ' found in this search' }),
-      h('small', { text: allIn ? 'They are in All copies found, with each photo\'s client. Review them there: Stolen, Licensed or Remove.'
-        : 'Each photo\'s copies go to All copies found as soon as that photo is searched and checked. You review them there.' })),
-    EASE.on && (R.running || R.scoring) ? h('small', { class: 'ease', text: EASE.why + ', so PageProof slowed down to one photo check and one search tab. Full speed again when the computer calms down.' }) : null,
-    h('a', { class: 'btn blue', href: appUrl('review'), onclick: e => goApp('review', e), text: 'Review new copies' }),
-    h('a', { class: 'btn', href: appUrl('found'), onclick: e => goApp('found', e), text: 'All copies found' }));
   const state = searching ? 'Searching… ' + statusLine(p)
     : nPend ? 'Checking ' + plural(nPend, 'picture') + ' found against yours…'
-      : kept ? plural(kept, 'copy', 'copies') + ' of this photo ' + (p.ingested ? 'added to' : 'going to') + ' All copies found (' + nSame + ' same photo, ' + nMaybe + ' maybe)'
+      : kept ? plural(kept, 'copy', 'copies') + ' of this photo ' + (p.ingested ? 'added to' : 'going to') + ' Copies found (' + nSame + ' same photo, ' + nMaybe + ' maybe)'
         : 'No copies found for this photo';
   const wasOpen = $('thrown') ? $('thrown').open : false;
-  $('main').replaceChildren(top,
-    h('div', { class: 'rhead' }, h('img', { src: p.thumb, alt: '' }), h('div', { class: 'meta' },
-      h('h1', { text: (p.i + 1) + '. ' + p.name }),
-      h('p', { class: 'lead' }, h('b', { style: kept && !searching && !nPend ? 'color:#15803d' : '', text: state }), ' · your file is ' + p.w + ' × ' + p.h),
-      h('div', { class: 'btns' }, job.engines.map(tabBtn)),
-      problems.length ? h('p', { class: 'note', text: [...new Set(problems)].join(' ') }) : null)),
-    h('details', { class: 'thrown', id: 'thrown', open: wasOpen },
-      h('summary', {}, h('b', { text: 'Thrown out by the checker: ' + out.length }), ' · ' + nNo + ' different photo · ' + (out.length - nNo) + " can't check"),
-      h('p', { class: 'hint', text: 'These were not added to All copies found. If one really is your photo, press "＋ It is a copy" and it goes there.' }),
-      out.length ? h('div', { class: 'list' }, h('div', { class: 'site' }, out.map(l => rowFor(p, l)))) : h('div', { class: 'none', text: searching || nPend ? 'Nothing thrown out yet.' : 'Nothing was thrown out for this photo.' })));
+  const sel = h('section', { class: 'pg-card', id: 'selcard', style: 'display:flex;flex-direction:column;gap:12px' },
+    h('div', { class: 'pg-sel' }, h('img', { src: p.thumb, alt: '' }), h('div', { style: 'min-width:0;display:flex;flex-direction:column;gap:4px' },
+      h('h2', { text: (p.i + 1) + '. ' + p.name, style: 'overflow-wrap:anywhere' }),
+      h('span', { class: 'pg-muted', style: 'font-size:14px' }, h('b', { style: kept && !searching && !nPend ? 'color:var(--p-ok)' : '', text: state }), ' · your file is ' + p.w + ' × ' + p.h),
+      h('div', { class: 'pg-actions' }, job.engines.map(tabBtn)))),
+    problems.length ? h('p', { class: 'note', style: 'margin:0', text: [...new Set(problems)].join(' ') }) : null,
+    h('details', { class: 'pg-thrown thrown', id: 'thrown', open: wasOpen },
+      h('summary', {}, h('span', { text: 'Thrown out' }), h('span', { class: 'pg-chip', text: out.length }), out.length ? h('span', { class: 'pg-faint', text: 'Different photo ' + nNo + ' · Can\'t check ' + (out.length - nNo) }) : null),
+      h('div', { class: 'in' }, h('p', { class: 'pg-faint', style: 'margin:0', text: 'These were not added to Copies found. If one really is your photo, press "＋ It is a copy" and it goes there.' }),
+        out.length ? h('div', { class: 'list' }, h('div', { class: 'site' }, out.map(l => rowFor(p, l)))) : h('div', { class: 'none', text: searching || nPend ? 'Nothing thrown out yet.' : 'Nothing was thrown out for this photo.' }))));
+  $('main').replaceChildren(...[head, bgNote, tiles, sum, h('div', { class: 'res-grid' }, list, sel)].filter(Boolean));
 }
 
 // ---------- the Evidence report (one PDF for one use) ----------
@@ -1505,25 +1517,42 @@ async function initResults() {
 // View 3: all searches
 // =====================================================================================
 async function renderPast() {
+  plain(true);
   const jobs = (await RS_DB.all('jobs')).sort((a, b) => b.created.localeCompare(a.created));
   await RS_LISTS.load();
-  side(h('div', {}, h('div', { id: 'domain', text: 'All searches' }), h('div', { id: 'sub', text: 'The last 40 searches are kept. Every copy they found is also in All copies found.' })),
-    h('div', { class: 'links' }, appLink('search', '🔎 New search'), appLink('found', '🗂 All copies found'), appLink('keep', '📂 Today\'s 50 and Keep searching')));
-  const KIND = { keep: ' · Keep searching', fifty: ' · today\'s 50' };
-  $('main').replaceChildren(h('h1', { text: plural(jobs.length, 'search', 'searches') }),
-    jobs.length ? h('div', { class: 'tbl' }, jobs.map(j => {
-      const links = j.pics.reduce((a, p) => a + p.links.filter(l => !RS_LISTS.isHidden(l.site, l.url) && isSame(l)).length, 0);
-      const nNew = j.pics.reduce((a, p) => a + p.links.filter(l => l.isNew && isSame(l) && !RS_LISTS.isHidden(l.site, l.url)).length, 0);
-      return h('div', { class: 'tr' }, h('img', { src: j.pics[0] && j.pics[0].thumb, alt: '' }),
-        h('b', { text: new Date(j.created).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) + (KIND[j.kind] || (j.folder ? ' · daily 50' : '')) }),
-        h('span', {}, plural(j.pics.length, 'picture'), j.bg && !j.finished ? [h('br'), h('small', { class: 'muted', text: j.started ? 'Running in the pinned tab · ' + j.pics.filter(p => Object.values(p.runs).every(r => !['wait', 'go', 'captcha'].includes(r.state))).length + ' done' : 'Waiting for the pinned tab' })] : null),
-        h('span', {}, plural(links, 'same-photo link'), nNew ? [' ', h('span', { class: 'tag new', text: nNew + ' new' })] : ''),
-        h('span', {}, h('button', { class: 'btn', text: 'Open', onclick: () => goResults(j.id) })),
-        h('button', { class: 'del', title: 'Delete this search from the list (the copies it found stay in All copies found)', text: '🗑', onclick: async () => {
-          await RS_DB.del('jobs', j.id); renderPast();
-          banner([h('b', { text: 'Search deleted. ' }), 'The copies it found are still in All copies found.', h('span', { class: 'sp' }), h('button', { text: '↶ Undo', onclick: async () => { await RS_DB.put('jobs', j.id, j); banner(null); renderPast(); } })], 'info');
-        } }));
-    })) : h('div', { class: 'none', text: 'No searches yet.' }));
+  const KIND = { keep: 'Keep searching', fifty: 'Today\'s 50' };
+  const head = pgHead('All searches', 'The last 40 searches are kept. Every copy they found is also in Copies found.',
+    h('a', { class: 'pg-btn primary', href: appUrl('search'), onclick: e => goApp('search', e), text: '🔎 New search' }));
+  const rowOf = j => {
+    const shown = l => !RS_LISTS.isHidden(l.site, l.url);
+    let same = 0, maybe = 0, nNew = 0;
+    for (const p of j.pics) for (const l of p.links) { if (!shown(l)) continue; const v = verdict(l); if (v === 'same') { same++; if (l.isNew) nNew++; } else if (v === 'maybe') maybe++; }
+    const done = j.pics.filter(p => Object.values(p.runs).every(r => !['wait', 'go', 'captcha'].includes(r.state))).length;
+    const running = j.bg && !j.finished;
+    const when = new Date(j.created).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    const what = KIND[j.kind] || (j.folder ? 'Daily 50' : 'New search');
+    const sites = (j.engines || []).map(e => ENGINES[e] ? ENGINES[e].short : e).join(', ');
+    const open = () => goResults(j.id);
+    return h('div', { class: 'pg-row', role: 'button', tabindex: 0, title: 'Open this search', onclick: open, onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } } },
+      ring(done, j.pics.length, 40),
+      h('div', { class: 't' }, h('b', { text: when + ' · ' + plural(j.pics.length, 'photo') }),
+        h('small', { text: what + (sites ? ' · ' + sites : '') + (running ? (j.started ? ' · running in the pinned tab, ' + done + ' done' : ' · waiting for the pinned tab') : '') })),
+      h('div', { class: 'chips' },
+        same ? h('span', { class: 'pg-chip bad', text: plural(same, 'same photo', 'same photo') }) : null,
+        maybe ? h('span', { class: 'pg-chip warn', text: maybe + ' maybe' }) : null,
+        nNew ? h('span', { class: 'pg-chip ok', text: nNew + ' new' }) : null,
+        !same && !maybe && done >= j.pics.length ? h('span', { class: 'pg-chip', text: 'No copies' }) : null),
+      h('button', { class: 'del', title: 'Delete this search from the list (the copies it found stay in Copies found)', 'aria-label': 'Delete this search', text: '🗑', onclick: async e => {
+        e.stopPropagation();
+        await RS_DB.del('jobs', j.id); renderPast();
+        banner([h('b', { text: 'Search deleted. ' }), 'The copies it found are still in Copies found.', h('span', { class: 'sp' }), h('button', { text: '↶ Undo', onclick: async () => { await RS_DB.put('jobs', j.id, j); banner(null); renderPast(); } })], 'info');
+      } }));
+  };
+  $('main').replaceChildren(head,
+    jobs.length ? h('section', { class: 'pg-card pg-list', 'aria-label': 'Searches' }, jobs.map(rowOf))
+      : h('section', { class: 'pg-card pg-empty' }, h('b', { text: 'No searches yet' }),
+        h('p', { text: 'Search a few photos on Google Lens, Yandex and Bing. Keep searching and Today\'s 50 also show their searches here.' }),
+        h('a', { class: 'pg-btn primary', href: appUrl('search'), onclick: e => goApp('search', e), text: '🔎 Start a new search' })));
   // A search running in the pinned tab: the list shows how far it is, so it is read again now and then.
   clearTimeout(pastTimer);
   if (jobs.some(j => j.bg && !j.finished)) pastTimer = setTimeout(renderPast, 15000);

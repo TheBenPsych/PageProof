@@ -278,7 +278,7 @@ V.skipped = async () => {
   const canRetry = all.some(x => x[3] !== 'type');
   return `${head('Find copies', 'Skipped photos', 'Photos PageProof could not search, and why. They are tried again by themselves every 3 months.', `<a class="btn" href="#clients">Clients and photos</a>${canRetry ? `<button class="btn primary" data-act="skretry" data-v="">Try them all again</button>` : ''}`)}
   ${await driveBanner()}
-  ${!all.length ? `<section class="card pad" style="text-align:center;padding:48px 22px"><h2>No skipped photos</h2><p class="muted" style="margin:8px 0 0">Every photo PageProof has tried so far could be opened and searched.</p></section>` : `
+  ${!all.length ? `<section class="card pad" style="text-align:center;padding:48px 22px"><span class="okcircle" aria-hidden="true">${ic('check', 28, 3)}</span><h2>No skipped photos</h2><p class="muted" style="margin:8px 0 0">Every photo PageProof has tried so far could be opened and searched.</p></section>` : `
   <section class="card" style="overflow:hidden">
     <div class="toolbar"><div class="tabs" role="tablist">${[['All', 'All', all.length], ...Object.keys(FC.SKIP_LABEL).filter(k => kinds[k]).map(k => [k, FC.SKIP_LABEL[k], kinds[k]])].map(([k, l, n]) => `<button role="tab" class="${state.skTab === k ? 'on' : ''}" aria-selected="${state.skTab === k}" data-act="sktab" data-v="${k}">${l} <span>${n.toLocaleString()}</span></button>`).join('')}</div></div>
     ${state.skTab !== 'All' ? `<div style="padding:12px 18px;border-bottom:1px solid var(--line);background:var(--sunk);font-size:14px">${esc(FC.SKIP_WHY[state.skTab])}</div>` : ''}
