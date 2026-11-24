@@ -35,7 +35,8 @@
     "sidePanel",
     "system.cpu",
     "system.memory",
-    "declarativeNetRequestWithHostAccess"
+    "declarativeNetRequestWithHostAccess",
+    "cookies"
   ],
   "commands": {
     "capture-page": {

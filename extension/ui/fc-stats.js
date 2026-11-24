@@ -110,7 +110,7 @@ function stSites(m) {
 }
 function stHelpers(m) {
   const D = m.D, c = k => SR().c(D, k);
-  const rows = [['page', 'Their page check (is it in the article?)'], ['post', 'Post check (is it in the post?)'], ['acct', 'Account reader'], ['repost', 'Repost check'], ['owner', 'Who\'s behind this site']]
+  const rows = [['page', 'Their page check (is it in the article?)'], ['own', 'No picture from the search site: read their page'], ['post', 'Post check (is it in the post?)'], ['acct', 'Account reader'], ['repost', 'Repost check'], ['owner', 'Who\'s behind this site']]
     .filter(([k]) => c('job.' + k + '.n')).map(([k, l]) => [l, stN(c('job.' + k + '.n')), stMs(SR().usual(D, 'job.' + k)), stN(c('job.' + k + '.fail'))]);
   const lim = Object.entries(D.c).filter(([k]) => k.startsWith('limit.'));
   return stCard('Post check, account reader and site limits', 'The helpers that open pages in the background, with a speed limit per site.',

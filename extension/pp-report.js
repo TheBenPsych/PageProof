@@ -184,7 +184,7 @@ const PP_REPORT = (() => {
     L.push('', 'Problems by website (failed / too slow / blocked us)');
     if (!sites.length) L.push('  None.'); else for (const [s, v] of sites) L.push('  ' + s + ': ' + v.f + ' / ' + v.s + ' / ' + v.b);
     L.push('', 'Helpers');
-    for (const [k, l] of [['page', 'Their page check (during searches)'], ['post', 'Post check (Copies found)'], ['acct', 'Account reader'], ['repost', 'Repost check'], ['owner', 'Who\'s behind this site']]) if (c(D, 'job.' + k + '.n')) L.push('  ' + l + ': ' + num(c(D, 'job.' + k + '.n')) + ' done, ' + ms(usual(D, 'job.' + k)) + ' usual, ' + num(c(D, 'job.' + k + '.fail')) + ' failed');
+    for (const [k, l] of [['page', 'Their page check (during searches)'], ['own', 'No picture from the search site: read their page instead'], ['post', 'Post check (Copies found)'], ['acct', 'Account reader'], ['repost', 'Repost check'], ['owner', 'Who\'s behind this site']]) if (c(D, 'job.' + k + '.n')) L.push('  ' + l + ': ' + num(c(D, 'job.' + k + '.n')) + ' done, ' + ms(usual(D, 'job.' + k)) + ' usual, ' + num(c(D, 'job.' + k + '.fail')) + ' failed');
     const lim = Object.entries(D.c).filter(([k]) => k.startsWith('limit.'));
     if (lim.length) L.push('  Site limits: ' + lim.map(([k, n]) => k.replace('limit.rest.', 'rested ').replace('limit.held.', 'held for ') + ' ' + n).join(', '));
     const km = keepMinutes(D);
