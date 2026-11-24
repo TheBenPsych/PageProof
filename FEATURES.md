@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.32.1** (24 Nov 2026).
+Last updated: version **4.33.0** (24 Nov 2026).
 
 ---
 
@@ -31,6 +31,7 @@ Last updated: version **4.32.1** (24 Nov 2026).
 - **Who hosts this site:** hosting company and domain registrar looked up for every capture (IPv6 too). (2.2, 2.6)
 - **Collected by** name remembered; case number and notes start empty each time so they never carry over by mistake. (2.9)
 - **Needs a capture list:** copies marked Stolen that don't have an evidence pack yet. (4.14)
+- **TikTok slideshows in a capture.** A capture of a TikTok photo post lists every picture's link in post-pictures.txt (the files are in images/). (4.33)
 
 ## 2. Prove it (the evidence pack)
 
@@ -58,6 +59,7 @@ Last updated: version **4.32.1** (24 Nov 2026).
 - **Logos and buildings are not copies.** When only printed logos, signs or lettering line up (a sponsor wall, a red carpet backdrop, a shop sign, a logo file), it says "Different photo, only the logos match". When a scene lines up but things at different distances shift against each other (a building shot from a few steps away), it says "Different photo of the same place". Both are thrown out of searches and show a low %. Unanswered copies already found are checked again once. (4.31)
 - **Logos and buildings no longer count as copies:** PageProof checks whether only logos match (sponsor walls, red carpets, signs) or whether it is another shot of the same place, and unanswered copies are re-checked once. (4.26, waiting to be merged)
 - **Mark up a copy:** highlight, box, circle, arrow, text, pick an area; copy to clipboard or save as PNG/PDF. Labelled "Marked-up copy" and never added to the pack. (3.0)
+- **Copy picture link.** Right-click a picture: its own web address is copied (on TikTok slideshows, with the slide number). (4.33)
 
 ## 4. Find copies of client photos
 
@@ -100,6 +102,7 @@ Last updated: version **4.32.1** (24 Nov 2026).
 - **Undo a file added** to hidden or approved sites, or take out all of a file's sites. (4.22, 4.23.1)
 - **Team lists:** hidden and approved sites shared through one PageProof Team folder, showing who added each one, with a flag when the team disagrees. (4.18)
 - **No double answers** from a held-down key, and a "too fast?" check. (4.15)
+- **Picture link and TikTok slides.** The copy panel shows the address of their picture itself (Copy link, Open), and the Evidence report lists it. TikTok slideshows are checked slide by slide ("Slide 3 of 4"). (4.33)
 
 ## 6. Social media accounts
 
@@ -219,3 +222,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.31.1 | 24 Nov | Fix: New versions reach the download page in about a minute |
 | 4.32 | 24 Nov | Reposts and shares spotted and hidden, original poster as lead, exact post found on account-page links |
 | 4.32.1 | 24 Nov | Fix: Update-PageProof.cmd on the download page for the team |
+| 4.33 | 24 Nov | Picture links on every copy; TikTok slideshows checked slide by slide |
