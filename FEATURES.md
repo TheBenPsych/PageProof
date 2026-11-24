@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.34.0** (24 Nov 2026).
+Last updated: version **4.35.0** (24 Nov 2026).
 
 ---
 
@@ -81,6 +81,7 @@ Last updated: version **4.34.0** (24 Nov 2026).
 - **Owner check tabs** open pinned in the background with the PageProof logo. (4.20)
 - **Computer check sets every part of a search** to suit the PC, and big searches ease off when the computer is busy. (4.21)
 - **Reddit and forums never show.** Your team never pursues forums, so every Reddit link (reddit.com, old.reddit.com, redd.it, i.redd.it, preview.redd.it, redditmedia.com) is dropped from searches. Clear forum addresses go too: forum.*, forums.* or boards.* sites, pages under /forum/, /forums/ or /threads/, phpBB / vBulletin / Simple Machines pages (viewtopic.php, showthread.php...) and Discourse topics (/t/title/123). Copies found before are off Copies found; ones already marked Stolen stay. (4.34)
+- **The photo must be on their page itself.** A match made on Google's small preview is checked against the page during the search: the article's own pictures count, comments, sidebars and "related" boxes don't. If the photo isn't there, the match is left out; if the page can't be read, it's only a Maybe. (4.35)
 
 ## 5. Review the copies found
 
@@ -118,6 +119,7 @@ Last updated: version **4.34.0** (24 Nov 2026).
 - **Social media means the 16 main platforms only** (YouTube, Facebook, Instagram, TikTok, X, LinkedIn, Pinterest, Threads, Snapchat, Tumblr, Bluesky, Substack, Nextdoor, Truth Social, Vimeo, Behance). Every other site is a normal website again, so country filters and whole-site hiding work on it. No more "is this social?" questions. (4.25)
 - **Reposts and shares spotted and hidden.** Facebook shares, X reposts and quotes, Instagram, Threads, TikTok and Bluesky reposts and Tumblr reblogs are tagged "Share of …" / "Repost of …", hidden until you tick Show reposts and shares, and point to the original post and account as the lead. Never answered for you. (4.32)
 - **Exact post found when the link is only an account page.** PageProof scrolls the account page in a quiet background tab (following Pause, hours and per-site limits), lines each post's pictures up with your client's photo and links the post that holds it. Capture captures that post. (4.32)
+- **Every picture of a social post checked.** When a post's main picture isn't the photo, the post is opened in your signed-in browser and every picture (albums, video covers) is looked at, leaving out comments, replies, link previews and "More posts" grids. Only then is a match moved to Removed (Put back works). (4.35)
 
 ## 7. Everyday tools
 
@@ -224,3 +226,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.32.1 | 24 Nov | Fix: Update-PageProof.cmd on the download page for the team |
 | 4.33 | 24 Nov | Picture links on every copy; TikTok slideshows checked slide by slide |
 | 4.34 | 24 Nov | Reddit and forums dropped from searches; social list is 16 platforms |
+| 4.35 | 24 Nov | Photo must be on their page itself (checked during the search, every picture of social posts) |
