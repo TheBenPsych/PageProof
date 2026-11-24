@@ -7,7 +7,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > and as one line in the timeline. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.16.0** (24 Nov 2026).
+Last updated: version **4.17.0** (24 Nov 2026).
 
 ---
 
@@ -72,6 +72,7 @@ Last updated: version **4.16.0** (24 Nov 2026).
 - **Faster photo checker:** now uses WebAssembly, gives the same answers, and is about 3x faster on photos that are different. (4.16)
 - **Mirror check** flips your photo once instead of every time. (4.16)
 - **Links on hidden sites are not downloaded or checked;** approved sites are checked last. (4.16)
+- **Photo checker uses the graphics card** (WebGPU) for finding details, pairing and lining up, but only when that PC's own timing shows it is faster. (4.17)
 
 ## 5. Review the copies found
 
@@ -122,6 +123,7 @@ Last updated: version **4.16.0** (24 Nov 2026).
 - **Pages never hang on Google Drive** (every Drive question has a time limit); a red bar says what Drive answered. (4.3.3 to 4.3.6)
 - **Is everything working?** health page, Copy details for support, storage meter with safe clean-up (never touches Stolen). (4.1, 4.3)
 - **Where the time goes** is shown on Is everything working. (4.16)
+- **Graphics card row** on Is everything working. (4.17)
 - **Keep searching guards:** reopens if closed by mistake, tab title says leave open, starts fresh after updates. (4.4.3, 4.9.4, 4.15)
 - **Folder name warnings** when a photo folder looks wrong. (4.15)
 - **Automatic tests** run before every release. (4.1)
@@ -175,3 +177,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.14 | 23 Nov | 5-item menu, Home to-do list, pop-ups closed, one row per page, Needs a capture |
 | 4.15 | 24 Nov | Mistake-proofing; Still online check removed |
 | 4.16 | 24 Nov | Faster photo checker (WebAssembly) |
+| 4.17 | 24 Nov | Graphics-card photo checker |
