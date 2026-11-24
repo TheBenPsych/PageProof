@@ -368,23 +368,60 @@ const PP_SOCIAL = (() => {
     const buttons = [...new Set([...top.querySelectorAll('a, button, [role="button"]')].map(e => (e.innerText || e.getAttribute('aria-label') || '').trim()).filter(t => t && t.length <= 30))].slice(0, 120);
     return { url: location.href, title: document.title, desc: meta('og:description') || meta('description'), ogTitle: meta('og:title'), text: (document.body ? document.body.innerText : '').slice(0, 30000), about, data, badge, links, buttons };
   }
-  // Opens each page in a background tab of your own browser, reads it, and closes it.
+
+  // ---------- quiet lookup tabs (4.20, Ben) ----------
+  // Pages PageProof opens in your browser to see who is behind an account or post open as a small
+  // pinned tab at the left of the tab bar, in the background, showing the PageProof logo and
+  // "checking owner", and close by themselves when the check is done (like the search tabs).
+  const LOGO = 'data:image/png;base64,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';
+  function brandTab(logo, title) {
+    if (window.__ppQuiet) return; window.__ppQuiet = true;
+    const fix = () => {
+      if (!document.head) return;
+      const links = document.querySelectorAll('link[rel~="icon"], link[rel="apple-touch-icon"], link[rel="mask-icon"]');
+      if (links.length !== 1 || links[0].href !== logo) {
+        links.forEach(l => l.remove());
+        const l = document.createElement('link'); l.rel = 'icon'; l.type = 'image/png'; l.href = logo; document.head.appendChild(l);
+      }
+      if (document.title !== title) document.title = title;
+    };
+    fix();
+    if (!document.head) document.addEventListener('DOMContentLoaded', fix, { once: true });
+    setInterval(fix, 1000);   // the sites keep putting their own icon and title back
+  }
+  const QUIET_TITLE = '🔒 PageProof · checking owner · closes itself';
+  const brandQuiet = id => api.scripting.executeScript({ target: { tabId: id }, func: brandTab, args: [LOGO, QUIET_TITLE], injectImmediately: true }).catch(() => {});
+  // Opens url quietly and waits until it has loaded (at most ms). Returns the tab.
+  async function openQuiet(url, ms = 25000) {
+    let win;
+    try { const me = await api.tabs.getCurrent(); if (me) win = me.windowId; } catch (e) { /* not in a tab */ }
+    const opts = { url, active: false, ...(win != null ? { windowId: win } : {}) };
+    let tab;
+    try { tab = await api.tabs.create({ ...opts, pinned: true }); } catch (e) { tab = await api.tabs.create(opts); }
+    await new Promise(res => {
+      const t = setTimeout(done, ms);
+      function done() { clearTimeout(t); api.tabs.onUpdated.removeListener(on); res(); }
+      function on(id, ch) {
+        if (id !== tab.id) return;
+        if (ch.status === 'loading' || ch.title || ch.favIconUrl) brandQuiet(tab.id);
+        if (ch.status === 'complete') { brandQuiet(tab.id); done(); }
+      }
+      api.tabs.onUpdated.addListener(on);
+    });
+    return tab;
+  }
+  const closeQuiet = tab => { if (tab) api.tabs.remove(tab.id).catch(() => {}); };
+  // Opens each page in a quiet pinned tab of your own browser, reads it, and closes it.
   async function readProfile(acct) {
     const out = [];
     for (const p of profilePages(acct)) {
       let tab;
       try {
-        tab = await api.tabs.create({ url: p.url, active: false });
-        await new Promise(res => {
-          const t = setTimeout(done, 25000);
-          function done() { clearTimeout(t); api.tabs.onUpdated.removeListener(on); res(); }
-          function on(id, ch) { if (id === tab.id && ch.status === 'complete') done(); }
-          api.tabs.onUpdated.addListener(on);
-        });
+        tab = await openQuiet(p.url);
         await new Promise(r => setTimeout(r, 3000));       // the sites draw the profile after loading
         const [res] = await api.scripting.executeScript({ target: { tabId: tab.id }, func: readProfileInTab, args: [p.click || ''] });
         if (res && res.result) out.push({ kind: p.kind, ...res.result });
-      } catch (e) { /* this page couldn't be read */ } finally { if (tab) api.tabs.remove(tab.id).catch(() => {}); }
+      } catch (e) { /* this page couldn't be read */ } finally { closeQuiet(tab); }
     }
     return out;
   }
@@ -501,6 +538,6 @@ const PP_SOCIAL = (() => {
   const shortNum = n => n == null ? '' : n >= 1e9 ? (n / 1e9).toFixed(n >= 1e10 ? 0 : 1).replace(/\.0$/, '') + 'B' : n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e4 ? 0 : 1).replace(/\.0$/, '') + 'k' : String(n);
 
   return { SITES, ready, listed, isSocial, platform, postKind, fromUrl, fromTyped, isShort, unshort, publicInfo, hasPublic: url => !!OEMBED[listed(host(url))], fromTags, shapeOf, pageSigns, askFor, setMine, mine: () => mine, mineFor, ELSEWHERE, plainName, bareName, host,
-    big, profilePages, readProfileInTab, readProfile, profileFacts, addShopSign, FOL_BANDS, folBand, shortNum };
+    big, profilePages, readProfileInTab, readProfile, openQuiet, closeQuiet, profileFacts, addShopSign, FOL_BANDS, folBand, shortNum };
 })();
 if (typeof self !== 'undefined') self.PP_SOCIAL = PP_SOCIAL;

@@ -16,12 +16,12 @@ const sureTag = a => a.from === 'you' ? '<span class="tag grey">set by you</span
 const acctGroup = key => (FCD && FCD.acctLinkOf && FCD.acctLinkOf.get(key)) || key;
 
 // The tab state: each tab keeps its own filters.
-const TAB_KEYS = ['fFilter', 'fq', 'fWhen', 'fMatch', 'fYear', 'fQuarter', 'fPhoto', 'fView', 'fSort', 'fClient', 'fUse', 'fRisk', 'fCredit', 'fShop', 'fRepeat', 'fOwner', 'fFresh', 'fPlat', 'fAcct', 'more', 'exp', 'sView', 'fVer', 'fFol', 'fType', 'fCountry'];
+const TAB_KEYS = ['fFilter', 'fq', 'fWhen', 'fMatch', 'fYear', 'fQuarter', 'fPhoto', 'fView', 'fSort', 'fClient', 'fUse', 'fRisk', 'fCredit', 'fShop', 'fRepeat', 'fKnown', 'fOwner', 'fFresh', 'fPlat', 'fAcct', 'more', 'exp', 'sView', 'fVer', 'fFol', 'fType', 'fCountry'];
 const TAB_START = { web: { fView: 'client' }, social: { fView: 'account' } };
 function switchTab(t) {
   if (t === state.fTab) return;
   state.tabSaved[state.fTab] = Object.fromEntries(TAB_KEYS.map(k => [k, Array.isArray(state[k]) ? state[k].slice() : state[k]]));
-  const base = { fFilter: 'New', fq: '', fWhen: 'any', fMatch: 'any', fYear: 'Any', fQuarter: 'Any', fPhoto: '', fSort: 'act', fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fOwner: '', fFresh: false, fPlat: 'Any', fAcct: '', more: 250, exp: [], sView: 'copies', fVer: 'Any', fFol: 'Any', fType: 'Any', fCountry: 'Any' };
+  const base = { fFilter: 'New', fq: '', fWhen: 'any', fMatch: 'any', fYear: 'Any', fQuarter: 'Any', fPhoto: '', fSort: 'act', fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fKnown: '', fOwner: '', fFresh: false, fPlat: 'Any', fAcct: '', more: 250, exp: [], sView: 'copies', fVer: 'Any', fFol: 'Any', fType: 'Any', fCountry: 'Any' };
   Object.assign(state, base, TAB_START[t], state.tabSaved[t] || {});
   state.fTab = t; state.open = ''; state.picked = [];
 }
@@ -236,18 +236,12 @@ function socRedrawSoon() {
     FCD_STALE = true; render(true);
   }, 2500);
 }
-// Step D: open the post in your own browser (signed in, like a Capture sees it), read who
-// posted it, and close the tab again.
+// Step D: open the post in your own browser (signed in, like a Capture sees it) in a quiet pinned
+// PageProof tab, read who posted it, and close the tab again.
 async function findInBrowser(c) {
   let tab;
   try {
-    tab = await api.tabs.create({ url: c.url, active: false });
-    await new Promise(res => {
-      const t = setTimeout(done, 25000);
-      function done() { clearTimeout(t); api.tabs.onUpdated.removeListener(on); res(); }
-      function on(id, ch) { if (id === tab.id && ch.status === 'complete') done(); }
-      api.tabs.onUpdated.addListener(on);
-    });
+    tab = await PP_SOCIAL.openQuiet(c.url);
     await new Promise(r => setTimeout(r, 2500));      // social sites draw the post after loading
     const [res] = await api.scripting.executeScript({ target: { tabId: tab.id }, func: readPostInTab });
     const now = await api.tabs.get(tab.id).catch(() => tab);
@@ -257,7 +251,7 @@ async function findInBrowser(c) {
     await FC.setAcct(c.id, acct || undefined, r && r.post || undefined);
     FCD_STALE = true;
     return acct;
-  } catch (e) { return null; } finally { if (tab) api.tabs.remove(tab.id).catch(() => {}); }
+  } catch (e) { return null; } finally { PP_SOCIAL.closeQuiet(tab); }
 }
 // Runs inside the post's tab: the page's tags and the profile links near the post.
 function readPostInTab() {

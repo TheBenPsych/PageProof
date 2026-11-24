@@ -79,26 +79,43 @@ const RS_SITE = {
   // The list entry that covers this link (whole site, ending, or site.com/part), if any.
   // Lists can hold thousands of entries, so they are indexed once: whole sites by name, endings
   // (.gov) in a short list, and site parts (x.com/name) grouped by site.
-  entryFor(site, url, list) {
+  // 4.22.1: fast even with tens of thousands of entries. "site.com/part" entries are kept per site
+  // as a set of paths, and a link is looked up by its own path and each shorter part of it
+  // (/a/b/c, /a/b, /a), so the time no longer grows with the size of the list.
+  index(list) {
     let ix = RS_SITE._ix.get(list);
     if (!ix || ix.n !== list.length) {
-      ix = { n: list.length, sites: new Set(), ends: [], parts: new Map() };
+      ix = { n: list.length, all: new Set(list), sites: new Set(), ends: [], parts: new Map() };
       for (const d of list) {
-        if (d.includes('/')) { const host = d.slice(0, d.indexOf('/')); if (!ix.parts.has(host)) ix.parts.set(host, []); ix.parts.get(host).push(d); }
+        if (d.includes('/')) { const i = d.indexOf('/'), host = d.slice(0, i); if (!ix.parts.has(host)) ix.parts.set(host, new Set()); ix.parts.get(host).add(d.slice(i)); }
         else if (d.startsWith('.')) ix.ends.push(d);
         else ix.sites.add(d);
       }
       RS_SITE._ix.set(list, ix);
     }
+    return ix;
+  },
+  has: (list, entry) => RS_SITE.index(list).all.has(entry),
+  entryFor(site, url, list) {
+    if (!site || !list || !list.length) return undefined;
+    const ix = RS_SITE.index(list);
     // the site itself, then each shorter ending of it (m.facebook.com -> facebook.com -> com)
     const labels = site.split('.');
     for (let i = 0; i < labels.length - 1; i++) { const d = labels.slice(i).join('.'); if (ix.sites.has(d)) return d; }
     const end = ix.ends.find(e => site.endsWith(e));
     if (end) return end;
-    if (url) for (let i = 0; i < labels.length - 1; i++) {
-      const ps = ix.parts.get(labels.slice(i).join('.'));
-      const hit = ps && ps.find(d => RS_SITE.underPath(url, d));
-      if (hit) return hit;
+    if (url && ix.parts.size) {
+      let p = null;
+      for (let i = 0; i < labels.length - 1; i++) {
+        const host = labels.slice(i).join('.'), ps = ix.parts.get(host);
+        if (!ps) continue;
+        if (p === null) {
+          try { p = new URL(url).pathname; } catch (e) { return undefined; }
+          try { p = decodeURIComponent(p); } catch (e) { /* keep */ }
+          p = p.toLowerCase().replace(/\/+$/, '');
+        }
+        for (let q = p; q; q = q.slice(0, q.lastIndexOf('/'))) if (ps.has(q)) return host + q;
+      }
     }
     return undefined;
   },
@@ -207,7 +224,7 @@ const RS_DOCS = {
 
 // ---------- hidden and allowed sites ----------
 const RS_LISTS = {
-  hidden: [], allowed: [], fileState: 'none',
+  hidden: [], allowed: [], fileState: 'none', _seen: {},
   FILES: { hidden: 'hidden-sites.txt', allowed: 'allowed-sites.txt' },
   HEAD: {
     hidden: '# PageProof hidden sites, one per line.\n# Links from these sites never show in reverse search results.\n# Start a line with a dot to hide a whole ending, for example .gov or .edu\n# Add a part after the site to hide only that part, for example x.com/examplesports or example.com/forum\n# Lines starting with # are notes and are ignored.\n',
@@ -223,14 +240,20 @@ const RS_LISTS = {
     RS_LISTS.allowed = st.rsAllowed || [];
     RS_LISTS.fileState = await RS_DOCS.state();
     if (RS_LISTS.fileState === 'granted') {
-      let wrote = false;
+      let wrote = false, fresh = false;
       for (const kind of ['hidden', 'allowed']) {
         const t = await RS_DOCS.readText(RS_LISTS.FILES[kind]);
         if (t === undefined) continue;                              // folder too slow: keep the browser's copy
-        if (t !== null) RS_LISTS[kind] = RS_LISTS.parse(t);       // the file wins
-        else { await RS_DOCS.writeText(RS_LISTS.FILES[kind], RS_LISTS.text(kind)); wrote = true; }
+        // the file wins (4.22.1: an unchanged file is not read again, so a long list stays quick)
+        if (t !== null) {
+          const c = RS_LISTS._seen[kind], same = c && c.t === t;
+          if (!same || !c.stored || (st[kind === 'hidden' ? 'rsHidden' : 'rsAllowed'] || []).length !== c.a.length) fresh = true;
+          RS_LISTS[kind] = same ? c.a : RS_LISTS.parse(t); RS_LISTS._seen[kind] = { t, a: RS_LISTS[kind], stored: true };
+        }
+        else { await RS_DOCS.writeText(RS_LISTS.FILES[kind], RS_LISTS.text(kind)); wrote = true; fresh = true; }
       }
-      await api.storage.local.set({ rsHidden: RS_LISTS.hidden, rsAllowed: RS_LISTS.allowed });
+      // 4.22.1: only copied into the browser when something changed (a big list made every page slow).
+      if (fresh) await api.storage.local.set({ rsHidden: RS_LISTS.hidden, rsAllowed: RS_LISTS.allowed });
       RS_LISTS.wrote = wrote;
     }
     // 4.9.4: social sites hidden whole before are shown again (only accounts can be hidden now).
@@ -248,7 +271,7 @@ const RS_LISTS = {
     const api = globalThis.browser || globalThis.chrome;
     await api.storage.local.set({ rsHidden: RS_LISTS.hidden, rsAllowed: RS_LISTS.allowed, rsListsSaved: Date.now() });
     if ((await RS_DOCS.state()) === 'granted') {
-      for (const kind of ['hidden', 'allowed']) await RS_DOCS.writeText(RS_LISTS.FILES[kind], RS_LISTS.text(kind));
+      for (const kind of ['hidden', 'allowed']) { const t = RS_LISTS.text(kind); await RS_DOCS.writeText(RS_LISTS.FILES[kind], t); RS_LISTS._seen[kind] = { t, a: RS_LISTS[kind], stored: true }; }
       RS_LISTS.fileState = 'granted';
     }
   },
@@ -278,6 +301,124 @@ const RS_LISTS = {
   },
   isHidden: (site, url) => !!RS_SITE.entryFor(site, url, RS_LISTS.hidden),
   isAllowed: (site, url) => !!RS_SITE.entryFor(site, url, RS_LISTS.allowed),
+};
+
+// ---------- 4.23: links stolen before (a list you bring in from a file) ----------
+// Pages you already found and dealt with somewhere else (a spreadsheet, your legal portal...).
+// A copy found on one of these exact pages gets a red "Stolen before" tag in Copies found, and the
+// site (or the social account) counts as a repeat offender. Nothing is answered by itself.
+const RS_STOLEN = {
+  items: [], FILE: 'stolen-links.txt',
+  HEAD: '# PageProof links stolen before, one per line.\n# Copies found on these exact pages get a "Stolen before" tag, and their sites count as repeat offenders.\n# Lines starting with # are notes.\n',
+  parse(text) {
+    const out = new Set();
+    for (const line of String(text || '').split(/\r?\n/)) for (const part of line.split(/,\s*(?=[a-z]+:\/\/)/i)) {
+      let t = part.trim().replace(/[\s,;]+$/, '');
+      if (!t || t.startsWith('#')) continue;
+      if (!/^[a-z]+:\/\//i.test(t)) t = 'https://' + t;
+      try { const u = new URL(t); if (/^https?:$/.test(u.protocol) && /\./.test(u.hostname)) out.add(t); } catch (e) { /* not a link */ }
+    }
+    return [...out];
+  },
+  text() { return RS_STOLEN.HEAD + RS_STOLEN.items.join('\n') + '\n'; },
+  async load() {
+    const api = globalThis.browser || globalThis.chrome;
+    const old = RS_STOLEN.items;
+    RS_STOLEN.items = (await api.storage.local.get('rsStolen')).rsStolen || [];
+    if ((await RS_DOCS.state()) === 'granted') {
+      const t = await RS_DOCS.readText(RS_STOLEN.FILE);
+      if (t === undefined) { /* folder too slow: keep the browser's copy */ }
+      else if (t !== null && t === RS_STOLEN._t) { RS_STOLEN.items = RS_STOLEN._a; return RS_STOLEN; }   // unchanged: nothing to do
+      else if (t !== null) { RS_STOLEN.items = RS_STOLEN._a = RS_STOLEN.parse(t); RS_STOLEN._t = t; await api.storage.local.set({ rsStolen: RS_STOLEN.items }); }
+      else if (RS_STOLEN.items.length) await RS_DOCS.writeText(RS_STOLEN.FILE, RS_STOLEN.text());
+    }
+    if (old.length !== RS_STOLEN.items.length || old.some((x, i) => x !== RS_STOLEN.items[i])) RS_STOLEN._ix = null;
+    return RS_STOLEN;
+  },
+  async save() {
+    const api = globalThis.browser || globalThis.chrome;
+    await api.storage.local.set({ rsStolen: RS_STOLEN.items });
+    if ((await RS_DOCS.state()) === 'granted') { const t = RS_STOLEN.text(); await RS_DOCS.writeText(RS_STOLEN.FILE, t); RS_STOLEN._t = t; RS_STOLEN._a = RS_STOLEN.items; }
+    RS_STOLEN._ix = null;
+  },
+  // pages: exact pages (same page key Copies found uses). sites: links per website.
+  // accts: links per social account (a whole social site never counts, only its accounts).
+  index() {
+    if (RS_STOLEN._ix) return RS_STOLEN._ix;
+    const FCx = typeof FC !== 'undefined' ? FC : globalThis.FC, S = typeof PP_SOCIAL !== 'undefined' ? PP_SOCIAL : globalThis.PP_SOCIAL;
+    const pages = new Set(), sites = new Map(), accts = new Map();
+    for (const u of RS_STOLEN.items) {
+      pages.add(FCx && FCx.pageKey ? FCx.pageKey(u) : u.toLowerCase());
+      const site = RS_SITE.of(u);
+      const social = !!(S && S.isSocial && S.isSocial(site));
+      const a = social && S.fromUrl ? S.fromUrl(u) : null;
+      if (a && a.key) accts.set(a.key, (accts.get(a.key) || 0) + 1);
+      else if (site && !social) sites.set(site, (sites.get(site) || 0) + 1);
+    }
+    return (RS_STOLEN._ix = { pages, sites, accts });
+  },
+};
+
+// ---------- 4.22: files you added to a list, and undoing them ----------
+// Each "Add from a file" (and each "Take out the sites in a file") is remembered with the exact
+// sites it changed, so it can be undone later without touching sites that were there before.
+const RS_IMPORTS = {
+  KEY: 'rsImports', KEEP: 6,
+  // One link per line. A line holding several links ("https://a.com/x, https://b.com/y") counts as several.
+  parseFile(text) {
+    const out = [];
+    for (const line of String(text || '').split(/\r?\n/)) for (const part of line.split(/,\s*(?=[a-z]+:\/\/)/i)) out.push(part);
+    return RS_LISTS.parse(out.join('\n'));
+  },
+  async all() {
+    const api = globalThis.browser || globalThis.chrome;
+    return (await api.storage.local.get(RS_IMPORTS.KEY))[RS_IMPORTS.KEY] || [];
+  },
+  async record(e) {
+    const api = globalThis.browser || globalThis.chrome;
+    const list = await RS_IMPORTS.all();
+    list.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: Date.now(), undone: 0, ...e });
+    await api.storage.local.set({ [RS_IMPORTS.KEY]: list.slice(0, RS_IMPORTS.KEEP) });
+  },
+  // Undo (or redo) one entry. Returns how many sites changed.
+  async toggle(id) {
+    const api = globalThis.browser || globalThis.chrome;
+    const list = await RS_IMPORTS.all();
+    const e = list.find(x => x.id === id);
+    if (!e) return 0;
+    const L = e.kind === 'stolen' ? RS_STOLEN : RS_LISTS;
+    await L.load();
+    const takeOut = (e.op === 'add') === !e.undone;
+    const n = takeOut ? RS_IMPORTS.takeOut(e.kind, e.sites) : RS_IMPORTS.putIn(e.kind, e.sites);
+    await L.save();
+    e.undone = e.undone ? 0 : Date.now();
+    await api.storage.local.set({ [RS_IMPORTS.KEY]: list });
+    return n;
+  },
+  arr: kind => (kind === 'stolen' ? RS_STOLEN.items : RS_LISTS[kind]),
+  setArr(kind, a) { if (kind === 'stolen') RS_STOLEN.items = a; else RS_LISTS[kind] = a; },
+  takeOut(kind, sites) {
+    const gone = new Set(sites), was = RS_IMPORTS.arr(kind), before = was.length;
+    RS_IMPORTS.setArr(kind, was.filter(d => !gone.has(d)));
+    return before - RS_IMPORTS.arr(kind).length;
+  },
+  putIn(kind, sites) {
+    const a = RS_IMPORTS.arr(kind), have = new Set(a); let n = 0;
+    for (const s of sites) if (!have.has(s) && !(kind === 'hidden' && RS_LISTS.wholeSocial(s))) { have.add(s); a.push(s); n++; }
+    return n;
+  },
+  // For a file added before 4.22 (nothing was remembered then): which sites in the list did that file add?
+  // 4.23.1: every entry that came from the file comes out, except whole sites and endings
+  // (patch.com, .gov) that were on the list before the file's first page: those are the kind you
+  // hide by hand, so they stay. (4.22 guessed from the order of the list, and on a real list that
+  // had been synced and backed up the order was no longer the file's, so most entries stayed.)
+  fromFile(text, list) {
+    const inFile = new Set([...RS_LISTS.parse(text), ...RS_IMPORTS.parseFile(text), ...RS_STOLEN.parse(text)]);
+    const firstPage = list.findIndex(s => inFile.has(s) && s.includes('/'));
+    const added = [], before = [];
+    list.forEach((s, i) => { if (!inFile.has(s)) return; if (!s.includes('/') && (firstPage < 0 || i < firstPage)) before.push(s); else added.push(s); });
+    return { added, before };
+  },
 };
 
 // ---------- rejected links (the trash can) ----------

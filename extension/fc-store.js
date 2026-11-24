@@ -1100,9 +1100,13 @@ const FC = (() => {
   // 4.8.2: the "new copies" number (menu, toolbar dot, side panel) counts only the new copies
   // Copies found shows: copies on hidden sites or from hidden countries stay out of it. Before,
   // it counted every new copy in the store, so hidden ones kept the number up after "All caught up".
+  // 4.23.1: the hidden list is read once and kept until it changes (a long list made every page slow).
+  let HID = null;
+  try { api.storage.onChanged.addListener(ch => { if (ch.rsHidden) HID = null; }); } catch (e) { /* no storage events here */ }
   async function countNew() {
-    const st = await api.storage.local.get(['rsHidden', 'fcHiddenCountries']);
-    const hidden = st.rsHidden || [], countries = st.fcHiddenCountries || [];
+    const st = await api.storage.local.get(HID ? ['fcHiddenCountries'] : ['rsHidden', 'fcHiddenCountries']);
+    if (!HID) HID = st.rsHidden || [];
+    const hidden = HID, countries = st.fcHiddenCountries || [];
     const fresh = (await allCopies()).filter(c => c.status === 'new');
     if (!hidden.length && !countries.length) return fresh.length;
     return fresh.filter(c => !hiddenCopy(c, hidden) && !countries.includes(c.country || countryOf(c.site))).length;
@@ -1116,7 +1120,7 @@ const FC = (() => {
     list = list || (typeof RS_LISTS !== 'undefined' ? RS_LISTS.hidden : []);
     if (RS_SITE.entryFor(c.site, c.url, list)) return true;
     const k = c.acct && c.acct.key;
-    return !!k && (list.includes(k) || list.includes(RS_SITE.tidy(k)));
+    return !!k && (RS_SITE.has(list, k) || RS_SITE.has(list, RS_SITE.tidy(k)));
   }
   // Is this account approved (for every client, or for this copy's client)?
   function acctApproved(acct, client) {

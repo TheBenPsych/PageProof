@@ -83,7 +83,7 @@ async function supportDetails() {
     'PageProof details for support', 'Made ' + new Date().toString(), '',
     'Version: ' + VERSION,
     'Browser: ' + navigator.userAgent,
-    'Computer: ' + hw.cores + ' cores, ' + hw.memGB + ' GB memory, rated ' + hw.level + ' (' + hw.limits.checks + ' photo checks, ' + hw.limits.tabs + ' search tabs at once)',
+    'Computer: ' + hw.cores + ' cores, ' + hw.memGB + ' GB memory, rated ' + hw.level + ' (' + hw.limits.checks + ' photo checks, ' + hw.limits.tabs + ' search tabs, ' + hw.limits.dl + ' downloads, ' + hw.limits.decode + ' pictures opened at once)',
     'Page memory in use: ' + (performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) + ' MB' : 'not known'),
     'Browser storage used by PageProof: ' + (est.usage ? Math.round(est.usage / 1e6) + ' MB' : 'not known'), '',
     'How much it holds',
@@ -120,8 +120,8 @@ async function supportDetails() {
 async function timeSums() {
   const st = (await api.storage.local.get('rsTiming')).rsTiming;
   if (!st || !st.days) return null;
-  const sum = { search: [0, 0], dl: [0, 0], check: [0, 0], wait: [0, 0], skipped: 0 };
-  for (const d of Object.values(st.days)) { for (const k of ['search', 'dl', 'check', 'wait']) { sum[k][0] += d[k][0]; sum[k][1] += d[k][1]; } sum.skipped += d.skipped || 0; }
+  const sum = { search: [0, 0], dl: [0, 0], check: [0, 0], wait: [0, 0], skipped: 0, eased: 0 };
+  for (const d of Object.values(st.days)) { for (const k of ['search', 'dl', 'check', 'wait']) { sum[k][0] += d[k][0]; sum[k][1] += d[k][1]; } sum.skipped += d.skipped || 0; sum.eased += d.eased || 0; }
   const avg = k => sum[k][0] ? Math.round(sum[k][1] / sum[k][0]) : null;
   return { sum, avg, fast: st.fast, gpu: st.gpu, gpuWhy: st.gpuWhy || '', checks: st.checks || 1 };
 }
@@ -143,6 +143,7 @@ async function timeCard() {
     ${row('Checking a found picture against your photo', 'check', 'each')}
     ${row('Waiting for a free checker', 'wait', 'each')}
     <div class="row" style="gap:12px;padding:10px 0;flex-wrap:nowrap"><span style="flex:1">Links on your hidden sites, skipped without downloading</span><b>${t ? t.sum.skipped.toLocaleString() : '–'}</b><span style="width:110px"></span></div>
+    <div class="row" style="gap:12px;padding:10px 0;border-top:1px solid var(--line);flex-wrap:nowrap"><span style="flex:1">Times a search slowed down because the computer was busy</span><b>${t ? t.sum.eased.toLocaleString() : '–'}</b><span style="width:110px"></span></div>
     <div class="row" style="gap:12px;padding:10px 0;border-top:1px solid var(--line);flex-wrap:nowrap"><span style="flex:1">Graphics card (lines up real copies faster)</span><b>${!t || t.gpu == null ? 'Not used yet' : t.gpu ? 'In use' : 'Not available on this computer'}</b><span style="width:110px"></span></div>
     ${t && t.fast === false ? '<p class="muted" style="margin:4px 0 0;font-size:13.5px">The fast checker could not start in this browser, so the slower one is used. Results are the same.</p>' : ''}
   </section>`;

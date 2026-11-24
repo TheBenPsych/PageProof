@@ -510,26 +510,35 @@ V.hidden = async () => {
   // Approved for one client: kept with each client (site | client).
   const perClient = [];
   for (const c of await FC.DB.all('clients')) for (const s of c.licensed || []) perClient.push(s + ' | ' + c.name);
-  const list = tab === 'rejected' ? RS_REJECT.items.map(r => r.url) : tab === 'client' ? perClient.sort().reverse() : RS_LISTS[tab];
-  const rows = [...list].reverse().filter(s => s.toLowerCase().includes(q) && (tab === 'rejected' || tab === 'client' || state.hidKind === 'All' || kindOf(s) === state.hidKind));
-  const T = [['hidden', 'Hidden sites', RS_LISTS.hidden.length], ['allowed', 'Approved for every client', RS_LISTS.allowed.length], ['client', 'Approved for one client', perClient.length], ['rejected', 'Rejected links', RS_REJECT.items.length], ['social', 'Social sites', Object.keys(PP_SOCIAL.mine()).length]];
-  const flat = tab === 'rejected' || tab === 'client';
+  await RS_STOLEN.load();
+  const list = tab === 'rejected' ? RS_REJECT.items.map(r => r.url) : tab === 'client' ? perClient.sort().reverse() : tab === 'stolen' ? RS_STOLEN.items : RS_LISTS[tab];
+  const rows = [...list].reverse().filter(s => s.toLowerCase().includes(q) && (tab === 'rejected' || tab === 'client' || tab === 'stolen' || state.hidKind === 'All' || kindOf(s) === state.hidKind));
+  const T = [['hidden', 'Hidden sites', RS_LISTS.hidden.length], ['allowed', 'Approved for every client', RS_LISTS.allowed.length], ['client', 'Approved for one client', perClient.length], ['rejected', 'Rejected links', RS_REJECT.items.length], ['stolen', 'Stolen before links', RS_STOLEN.items.length], ['social', 'Social sites', Object.keys(PP_SOCIAL.mine()).length]];
+  const flat = tab === 'rejected' || tab === 'client' || tab === 'stolen';
   const page = rows.slice(0, state.hidMore || 100);
   return `${head('Settings', 'Hidden and approved sites', 'Hidden sites never show up in any search. Approved sites may use the photos: copies found there are marked Licensed by themselves.', `<button class="btn" data-act="hidsave">${ic('down', 18)} Download list</button><button class="btn" data-act="hidload">Add from a file</button>`)}
   <section class="card" style="overflow:hidden">
     <div class="toolbar"><div class="tabs" role="tablist">${T.map(([k, l, n]) => `<button role="tab" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}" data-act="hidtab" data-v="${k}">${l} <span>${n.toLocaleString()}</span></button>`).join('')}</div></div>
     <div class="row" style="gap:10px;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--bg)">
-      <input id="hidq" class="chip" style="min-height:38px;padding:0 12px;font-size:14px;flex:1 1 260px" placeholder="${tab === 'rejected' ? 'Find a rejected link' : tab === 'client' ? 'Find a site or a client' : 'Find or add a site, like patch.com or x.com/examplenews'}" value="${esc(state.hidQ)}" aria-label="Find a site">
-      ${tab === 'client' ? '<span class="faint" style="font-size:13px">Add one from a copy: open it in Copies found and press Approve site.</span>' : ''}${!flat ? `<button class="btn primary" data-act="hidadd">＋ ${tab === 'hidden' ? 'Hide' : 'Approve'} it</button>
+      <input id="hidq" class="chip" style="min-height:38px;padding:0 12px;font-size:14px;flex:1 1 260px" placeholder="${tab === 'stolen' ? 'Find a link' : tab === 'rejected' ? 'Find a rejected link' : tab === 'client' ? 'Find a site or a client' : 'Find or add a site, like patch.com or x.com/examplenews'}" value="${esc(state.hidQ)}" aria-label="Find a site">
+      ${tab === 'client' ? '<span class="faint" style="font-size:13px">Add one from a copy: open it in Copies found and press Approve site.</span>' : ''}${tab === 'stolen' ? '<span class="faint" style="font-size:13px;flex:1 1 300px">Pages you already dealt with. A copy found on one of them gets a red Stolen before tag in Copies found, and its site counts as a repeat offender. Add them with Add from a file.</span>' : ''}${!flat ? `<button class="btn primary" data-act="hidadd">＋ ${tab === 'hidden' ? 'Hide' : 'Approve'} it</button>
       <div class="seg">${['All', 'Whole site', 'Sub-site', 'Account or part', 'Ending'].map(k => `<button class="${state.hidKind === k ? 'on' : ''}" data-act="hidkind" data-v="${k}">${k}</button>`).join('')}</div>` : ''}</div>
-    <div class="scroll"><table><thead><tr><th>${tab === 'rejected' ? 'Link' : tab === 'client' ? 'Site' : 'Site or account'}</th>${tab === 'rejected' ? '<th>Photo</th>' : tab === 'client' ? '<th>Approved for</th>' : '<th>What it covers</th>'}<th></th></tr></thead><tbody>
-      ${page.map(h => { const r = tab === 'rejected' ? RS_REJECT.items.find(x => x.url === h) : null; if (tab === 'client') { const [site, who] = h.split(' | '); return `<tr><td><b class="mono" style="font-size:13px;overflow-wrap:anywhere">${esc(site)}</b></td><td>${esc(who)}</td><td style="text-align:right"><button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ Remove</button></td></tr>`; }
-        return `<tr><td><b class="mono" style="font-size:13px;overflow-wrap:anywhere">${esc(h)}</b></td><td>${r ? esc(r.pic || 'every photo') : `<span class="tag grey">${kindOf(h)}</span>`}</td><td style="text-align:right"><button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ ${tab === 'hidden' ? 'Show again' : tab === 'allowed' ? 'Remove' : 'Bring back'}</button></td></tr>`; }).join('') || `<tr><td colspan="3" class="muted" style="padding:28px;text-align:center">${q ? (flat ? 'Nothing matches.' : 'Nothing matches. Press the button to add it.') : 'This list is empty.'}</td></tr>`}
+    <div class="scroll"><table><thead><tr><th>${tab === 'rejected' || tab === 'stolen' ? 'Link' : tab === 'client' ? 'Site' : 'Site or account'}</th>${tab === 'stolen' ? '<th></th>' : tab === 'rejected' ? '<th>Photo</th>' : tab === 'client' ? '<th>Approved for</th>' : '<th>What it covers</th>'}<th></th></tr></thead><tbody>
+      ${page.map(h => { if (tab === 'stolen') return `<tr><td><a class="mono" style="font-size:13px;overflow-wrap:anywhere" href="${esc(h)}" target="_blank" rel="noreferrer">${esc(h)}</a></td><td></td><td style="text-align:right"><button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ Take off the list</button></td></tr>`;
+        const r = tab === 'rejected' ? RS_REJECT.items.find(x => x.url === h) : null; if (tab === 'client') { const [site, who] = h.split(' | '); return `<tr><td><b class="mono" style="font-size:13px;overflow-wrap:anywhere">${esc(site)}</b></td><td>${esc(who)}</td><td style="text-align:right"><button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ Remove</button></td></tr>`; }
+        return `<tr><td><b class="mono" style="font-size:13px;overflow-wrap:anywhere">${esc(h)}</b></td><td>${r ? esc(r.pic || 'every photo') : `<span class="tag grey">${kindOf(h)}</span>${typeof ppTeamTag === 'function' ? ppTeamTag(h, tab) : ''}`}</td><td style="text-align:right">${!r && typeof ppTeamBtn === 'function' ? ppTeamBtn(h, tab) : ''}<button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ ${tab === 'hidden' ? 'Show again' : tab === 'allowed' ? 'Remove' : 'Bring back'}</button></td></tr>`; }).join('') || `<tr><td colspan="3" class="muted" style="padding:28px;text-align:center">${q ? (flat ? 'Nothing matches.' : 'Nothing matches. Press the button to add it.') : 'This list is empty.'}</td></tr>`}
     </tbody></table></div>
     <div class="row faint" style="padding:10px 18px;border-top:1px solid var(--line);font-size:12.5px;gap:12px"><span>Showing ${page.length.toLocaleString()} of ${rows.length.toLocaleString()}.</span>${rows.length > page.length ? '<button class="btn" style="min-height:30px;font-size:13px;margin-left:auto" data-act="hidmore">Show more</button>' : ''}</div>
   </section>
-  <p class="faint" style="margin:0;font-size:12.5px">${RS_LISTS.fileState === 'granted' ? 'Saved in Documents › PageProof as hidden-sites.txt, allowed-sites.txt and rejected-links.txt.' : 'Saved in this browser. <a href="#settings">Set up the PageProof folder</a> to also keep them as text files that survive a reinstall.'}</p>`;
+  ${flat && tab !== 'stolen' ? '' : impCard((await RS_IMPORTS.all()).filter(e => e.kind === tab), tab)}
+  <p class="faint" style="margin:0;font-size:12.5px">${RS_LISTS.fileState === 'granted' ? 'Saved in Documents › PageProof as hidden-sites.txt, allowed-sites.txt, rejected-links.txt and stolen-links.txt.' : 'Saved in this browser. <a href="#settings">Set up the PageProof folder</a> to also keep them as text files that survive a reinstall.'}</p>`;
 };
+// 4.22: files added to this list, each with Undo this import.
+const impCard = (list, tab) => `<section class="card" style="overflow:hidden">
+  <div class="row" style="padding:14px 18px;border-bottom:1px solid var(--line);gap:10px"><b style="flex:1">Files you added</b><button class="btn" style="min-height:32px;font-size:13px" data-act="hidunload">Take out the sites in a file…</button></div>
+  ${list.map(e => { const live = (e.op === 'add') === !e.undone; return `<div class="row" style="padding:12px 18px;border-bottom:1px solid var(--line);gap:12px;flex-wrap:nowrap"><span style="flex:1;min-width:0"><b style="overflow-wrap:anywhere">${esc(e.name)}</b><br><span class="muted" style="font-size:13px">${e.op === 'add' ? 'Added' : 'Took out'} ${e.sites.length.toLocaleString()} ${tab === 'stolen' ? 'links' : 'sites'} · ${fmtDate(e.at)}${e.undone ? ' · <b>undone ' + fmtDate(e.undone) + '</b>' : ''}</span></span><button class="btn${live && e.op === 'add' ? ' primary' : ''}" style="min-height:32px;font-size:13px;white-space:nowrap" data-act="impundo" data-v="${esc(e.id)}">${e.op === 'add' ? (live ? '↶ Undo this import' : 'Add them again') : (live ? '↶ Put them back' : 'Take them out again')}</button></div>`; }).join('')}
+  <p class="faint" style="margin:0;padding:10px 18px;font-size:12.5px">${list.length ? 'Undo takes out only the sites that file added. Sites that were on the list before stay.' : 'No files added yet.'} Added a file before PageProof kept this list? Press "Take out the sites in a file" and pick the same file: only the sites it added come out.</p>
+</section>`;
 V.hidden.after = () => {
   const i = document.getElementById('hidq');
   i.oninput = () => { state.hidQ = i.value; state.hidMore = 0; render(true).then(() => { const j = document.getElementById('hidq'); j.focus(); j.setSelectionRange(j.value.length, j.value.length); }); };
@@ -548,12 +557,30 @@ Object.assign(ACTS, {
 document.getElementById('hidLoad').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (!f) return;
-  await RS_LISTS.load();
-  const kind = state.hidTab === 'allowed' ? 'allowed' : 'hidden';
-  const have = new Set(RS_LISTS[kind]); let n = 0;
-  for (const s of RS_LISTS.parse(await f.text())) if (!have.has(s)) { have.add(s); RS_LISTS[kind].push(s); n++; }
-  await RS_LISTS.save();
-  toast(n + ' ' + (n === 1 ? 'site' : 'sites') + ' added');
+  const kind = state.hidTab === 'allowed' ? 'allowed' : state.hidTab === 'stolen' ? 'stolen' : 'hidden';
+  const L = kind === 'stolen' ? RS_STOLEN : RS_LISTS;
+  await L.load();
+  const arr = RS_IMPORTS.arr(kind), have = new Set(arr), added = [], text = await f.text();
+  for (const s of (kind === 'stolen' ? RS_STOLEN.parse(text) : RS_IMPORTS.parseFile(text))) if (!have.has(s) && !(kind === 'hidden' && RS_LISTS.wholeSocial(s))) { have.add(s); arr.push(s); added.push(s); }
+  await L.save();
+  if (added.length) await RS_IMPORTS.record({ op: 'add', kind, name: f.name, sites: added });
+  const n = added.length;
+  toast(n.toLocaleString() + ' ' + (kind === 'stolen' ? (n === 1 ? 'link' : 'links') : n === 1 ? 'site' : 'sites') + ' added', n ? async () => { const l = await RS_IMPORTS.all(); if (l[0]) await RS_IMPORTS.toggle(l[0].id); render(true); } : null);
+  render(true);
+});
+// 4.22: take out the sites a file added (for files added before PageProof remembered imports).
+document.getElementById('hidUnload').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  const kind = state.hidTab === 'allowed' ? 'allowed' : state.hidTab === 'stolen' ? 'stolen' : 'hidden';
+  const L = kind === 'stolen' ? RS_STOLEN : RS_LISTS;
+  await L.load();
+  const { added, before } = RS_IMPORTS.fromFile(await f.text(), RS_IMPORTS.arr(kind));
+  if (!added.length) return toast('None of the sites in ' + f.name + ' were added to this list by that file.');
+  const n = RS_IMPORTS.takeOut(kind, added);
+  await L.save();
+  await RS_IMPORTS.record({ op: 'remove', kind, name: f.name, sites: added });
+  toast('Took out ' + n.toLocaleString() + ' sites added by ' + f.name + (before.length ? '. ' + before.length.toLocaleString() + ' were there before it, so they stay.' : '.'), async () => { const l = await RS_IMPORTS.all(); if (l[0]) await RS_IMPORTS.toggle(l[0].id); render(true); });
   render(true);
 });
 
@@ -574,11 +601,12 @@ V.computer = async () => {
     <div class="hwlim">
       <div><b>${L.checks}</b><span>photo ${L.checks > 1 ? 'checks' : 'check'} at a time</span></div>
       <div><b>${L.tabs}</b><span>search ${L.tabs > 1 ? 'tabs' : 'tab'} open at once</span></div>
+      <div><b>${L.dl}</b><span>found pictures downloaded at once</span></div>
       <div><b>${L.pace}</b><span>fastest Keep searching pace</span></div>
       <div><b>${L.ram}</b><span>of memory</span></div></div>
     <span class="muted" style="font-size:13.5px">The daily 50 takes ${L.fifty} at this level.</span></div>
     <div class="dsec"><div class="dsh">It also backs off by itself</div>
-      <ul class="hwlist"><li>Pauses when the computer is busy for a minute (processor over 80%), and picks up again when it calms down.</li><li>Pauses on a laptop running on battery below 30%.</li><li>Waits while most of the memory is in use, for example during a video call.</li><li>Never goes over the limits above, even if you pick a faster pace.</li></ul></div>
+      <ul class="hwlist"><li>Keep searching pauses when the computer is busy for a minute (processor over 80%), and picks up again when it calms down.</li><li>Big searches (today's 50, a search you start) slow down to one photo check and one search tab while the computer is busy, so they still finish, and go back to full speed a minute after it calms down.</li><li>The same happens on a laptop running on battery below 30%, and while most of the memory is in use, for example during a video call.</li><li>Never goes over the limits above, even if you pick a faster pace or search speed.</li><li>This only sets how much work your computer does. How often Google, Yandex and Bing are asked stays at the safe search speed, so a stronger computer never causes more robot checks.</li></ul></div>
     <label class="field" style="max-width:420px">Speed level<select id="hwsel">${[['auto', `Let PageProof decide (${h.auto})`], ['Light', 'Light: older or busy computer'], ['Normal', 'Normal'], ['Strong', 'Strong: fast computer']].map(([k, l]) => `<option value="${k}" ${h.choice === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
   </section>`;
 };
@@ -590,6 +618,20 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Take out the sites in a file: takes out all of them', 'Take out the sites in a file now takes out every page that came from the file. Only whole sites (like patch.com) that were hidden before the file stay, since those are the ones you hide by hand. Before, it guessed from the order of the list and left most of a big file in.'],
+  ['Stolen before links', 'Bring in your list of links stolen before: Settings › Hidden and approved sites › Stolen before links › Add from a file. A copy found on one of those exact pages gets a red Stolen before tag in Copies found, and other pages on the same site (or by the same social account) count as a repeat offender and come first. The Stolen before quick filter shows only them, and More filters can hide them. Nothing is answered by itself.'],
+  ['Quick again with a long hidden list', 'A hidden sites list with tens of thousands of pages made every PageProof page slow: each copy was checked against every page on the list. Now it is looked up in one step, about 100 times faster, so a big list no longer slows down clicks, scrolling or Copies found.'],
+  ['Undo a file you added', 'Hidden and approved sites now lists every file you added with "Add from a file", each with Undo this import. Undo takes out only the sites that file added, so sites that were on the list before stay. For a file added before this version, press "Take out the sites in a file" and pick the same file. A line with several links separated by commas now counts as several links.'],
+  ['Searching matched to your computer', 'The computer check now sets every part of a search on this computer: photo checks at a time (up to 6 on a very strong computer), search tabs open, and found pictures downloaded and opened at once. A new speed level in Settings › Your computer counts from the next search. How often the search sites are asked does not change, so a stronger computer never means more robot checks.'],
+  ['Big searches ease off when you are busy', 'While the computer is flat out, memory is nearly full or a laptop is low on battery, today\'s 50 and searches you start slow down to one photo check and one search tab instead of carrying on at full speed. They still finish, and go back to full speed a minute after the computer calms down. Is everything working shows how often it happened.'],
+  ['Owner checks stay out of your way', 'When PageProof opens an account or post in your browser to see who is behind it, it now opens as a small pinned tab at the far left with the PageProof logo and "checking owner". It stays in the background, never jumps in front of your work, and closes by itself when the check is done.'],
+  ['Full-page captures on tricky sites', 'Details panels that slide in from the side (like a business search result) no longer leave a narrow strip with blank space beside it: the page is kept as it looks and the panel is written out in full as a numbered section. Boxes that fade or slide in as you scroll, late pictures, sticky headings and column titles, "Add to cart" and cookie bars at the bottom, pop-up windows and pages that grow as pictures load now come out whole, with nothing blank or doubled.'],
+  ['Daily backup to your own Google Drive', 'Once a day (Monday to Friday, 8 to 6) PageProof saves a copy of your work into My Drive › PageProof Backup: copies found, answers, hidden and approved sites, clients, settings and the capture log. Only you can see it. The last 14 are kept. Settings › Backups has Back up now and the time of the last backup, which turns red after 3 work days without one.'],
+  ['Safe restore', 'Pick any backup by date and see what would change before anything does. Your data right now is saved first as a "Before a restore" backup, so you can always go back.'],
+  ['Team lists', 'Share hidden and approved sites and accounts with your team through one PageProof Team folder on Google Drive. Each person\'s PageProof saves only its own file, so nobody\'s answers get lost. Hidden and approved sites says who on the team added each one, and Show for me shows a site a teammate hid on your computer only.'],
+  ['When the team disagrees', 'If one person hid a site and another approved it, PageProof flags it on Home and in Settings › Team lists so you can pick the answer everyone uses.'],
+  ['Google Drive isn\'t syncing', 'If Google Drive for desktop stops answering, Home says so plainly. Your backup and team changes wait and go out by themselves when Drive is back.'],
+  ['Moving to a new computer', 'Settings › Backups › Moving to a new computer walks you through it: back up on the old one, install, restore on the new one. First-time setup has a new Back up and share step too.'],
   ['Uses your graphics card', 'On computers with a graphics card, PageProof now uses it to find the details in each found picture, pair them up and line up real copies. Each computer tests itself on its first few pictures and only keeps the graphics card where it is quicker. Settings › Is everything working? shows whether it is in use.'],
   ['A faster photo checker', 'The part that checks each found picture against your photo now runs in WebAssembly, a faster language built into Chrome and Edge. Same answers as before, worked out about twice as fast (the pairing-up step about 5 times). Nothing to install.'],
   ['Mirror check with half the work', 'To catch copies flipped left to right, PageProof now flips your photo once and reuses it, instead of flipping every found picture and starting over.'],
@@ -749,14 +791,14 @@ V.help = async () => `${head('Help', 'Help and tutorial', 'Step-by-step guides f
 // First-time setup (opens by itself after installing)
 // =====================================================================================
 const SETUP = [
-  async () => `<div class="eyebrow" style="margin:0">Step 1 of 4</div><h2 style="font-size:24px">Welcome to PageProof</h2>
-    <p class="muted" style="margin:0">Four quick steps. You can change everything later in Settings.</p>
+  async () => `<div class="eyebrow" style="margin:0">Step 1 of 5</div><h2 style="font-size:24px">Welcome to PageProof</h2>
+    <p class="muted" style="margin:0">Five quick steps. You can change everything later in Settings.</p>
     <label class="field" for="suName">Your name<input id="suName" placeholder="For example, Ben" value="${esc(await getName())}"></label>
     <p class="faint" style="margin:0;font-size:13px">It goes on every evidence pack and report as "Collected by".</p>`,
-  async () => { const s = await RS_DOCS.state(); return `<div class="eyebrow" style="margin:0">Step 2 of 4</div><h2 style="font-size:24px">Where should PageProof keep its lists?</h2>
+  async () => { const s = await RS_DOCS.state(); return `<div class="eyebrow" style="margin:0">Step 2 of 5</div><h2 style="font-size:24px">Where should PageProof keep its lists?</h2>
     <p class="muted" style="margin:0">Your hidden sites, copies found and settings are kept as small text files in Documents › PageProof, so they survive updates and reinstalls.</p>
     ${s === 'granted' ? `<span class="tag ok" style="align-self:flex-start">${ic('check', 13, 3)} Folder ready</span>${(state.backup = await FC.readBackup()) ? `<div class="banner info" style="padding:10px 12px"><span style="flex:1;font-size:14px"><b>Found your PageProof settings from ${fmtDate(state.backup.saved)}</b><br><span class="muted">Your name, clients, flags, hidden countries and copies found. Bring them back?</span></span><button class="btn primary" data-act="surestore">Bring them back</button></div>` : ''}` : s === 'prompt' ? `<button class="btn primary" style="align-self:flex-start" data-act="docsallow">Allow PageProof to use it</button>` : `<button class="btn primary" style="align-self:flex-start" data-act="docschoose">Pick Documents</button><span class="faint" style="font-size:13px">In the window that opens, click Documents, then Select Folder. If Chrome says it can't use Documents, make a new folder called PageProof inside it and pick that.</span>`}`; },
-  async () => { const h = await ppHardware(), L = h.limits; return `<div class="eyebrow" style="margin:0">Step 3 of 4</div><h2 style="font-size:24px">Checking your computer</h2><p class="muted" style="margin:0">So PageProof never slows it down. Nothing to do here.</p>
+  async () => { const h = await ppHardware(), L = h.limits; return `<div class="eyebrow" style="margin:0">Step 4 of 5</div><h2 style="font-size:24px">Checking your computer</h2><p class="muted" style="margin:0">So PageProof never slows it down. Nothing to do here.</p>
     <div class="ofacts"><div class="ofact"><span>Processor</span><b>${h.cores} cores</b></div><div class="ofact"><span>Memory</span><b>${h.memGB} GB</b></div><div class="ofact"><span>System</span><b>${esc(h.system)}</b></div></div>
     <div class="banner info" style="padding:10px 12px"><span class="tag ${h.level === 'Light' ? 'warn' : 'ok'}">${h.level}</span><span style="flex:1;font-size:14px">Up to <b>${L.checks}</b> photo ${L.checks > 1 ? 'checks' : 'check'} and <b>${L.tabs}</b> search ${L.tabs > 1 ? 'tabs' : 'tab'} at once. It pauses by itself when the computer is busy.</span></div>`; },
   async () => `<div style="text-align:center;display:flex;flex-direction:column;gap:10px;align-items:center"><span class="tag ok" style="font-size:14px;padding:4px 12px">✓ You're set</span><h2 style="font-size:24px">Two things to keep it handy</h2></div>
@@ -849,6 +891,9 @@ async function act(a, v, el) {
       const [site, who] = v.split(' | ');
       await FC.licenseSite(who, site, false);
       toast(site + ' is no longer approved for ' + who, async () => { await FC.licenseSite(who, site, true); render(true); });
+    } else if (state.hidTab === 'stolen') {
+      await RS_STOLEN.load(); RS_STOLEN.items = RS_STOLEN.items.filter(x => x !== v); await RS_STOLEN.save();
+      toast('Taken off the stolen before list', async () => { await RS_STOLEN.load(); RS_STOLEN.items.push(v); await RS_STOLEN.save(); render(true); });
     } else if (state.hidTab === 'rejected') {
       const r = RS_REJECT.items.find(x => x.url === v);
       RS_REJECT.items = RS_REJECT.items.filter(x => x !== r); await RS_REJECT.save();
@@ -862,12 +907,22 @@ async function act(a, v, el) {
   }
   else if (a === 'hidsave') {
     await RS_LISTS.load();
-    const kind = state.hidTab === 'allowed' ? 'allowed' : 'hidden';
+    const kind = state.hidTab === 'allowed' ? 'allowed' : state.hidTab === 'stolen' ? 'stolen' : 'hidden';
+    if (kind === 'stolen') await RS_STOLEN.load();
     const a2 = document.createElement('a');
-    a2.href = URL.createObjectURL(new Blob([RS_LISTS.text(kind)], { type: 'text/plain' }));
-    a2.download = RS_LISTS.FILES[kind]; a2.click();
+    a2.href = URL.createObjectURL(new Blob([kind === 'stolen' ? RS_STOLEN.text() : RS_LISTS.text(kind)], { type: 'text/plain' }));
+    a2.download = kind === 'stolen' ? RS_STOLEN.FILE : RS_LISTS.FILES[kind]; a2.click();
   }
   else if (a === 'hidload') document.getElementById('hidLoad').click();
+  else if (a === 'hidunload') document.getElementById('hidUnload').click();
+  else if (a === 'impundo') {
+    const l = await RS_IMPORTS.all(), e = l.find(x => x.id === v);
+    if (!e) return;
+    const out = (e.op === 'add') === !e.undone;
+    const n = await RS_IMPORTS.toggle(v);
+    toast((out ? 'Took out ' : 'Put back ') + n.toLocaleString() + ' sites from ' + e.name, async () => { await RS_IMPORTS.toggle(v); render(true); });
+    render(true);
+  }
   else if (a === 'surestore') {
     if (!state.backup) return;
     await FC.restore(state.backup); state.backup = null;
