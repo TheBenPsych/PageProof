@@ -468,6 +468,19 @@ Object.assign(ACTS, {
 // ---------------------------------------------------------------- every photo searched once (4.10)
 // How many first searches a day: Keep searching gives 1 in N of its photos to never-searched
 // photos, Today's 50 (if it starts by itself) too, or all 50 when set to "Never searched first".
+// 4.42 (Ben's pick): a goal instead of a pace. "Every photo searched once by <date>".
+function goalRow(k, F, hw) {
+  const g = FC.goalPlan(k, F.never, hw.limits.pace);
+  const day = iso => new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  const min = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
+  let line = '<span class="faint" style="font-size:13px">Or set a date and PageProof works out the pace for you (never faster than is safe).</span>';
+  if (g && g.done) line = '<span class="tag ok">Goal met</span> <span class="faint" style="font-size:13px">Every photo has had its first search, so the pace above is used again.</span>';
+  else if (g && g.onTrack) line = `<span class="tag ok">On track</span> <span class="faint" style="font-size:13px">${g.never.toLocaleString()} photos to go, about ${g.perDay.toLocaleString()} a work day: 1 photo every ${Math.round(g.gap * 10) / 10} minutes. This replaces the pace above.</span>`;
+  else if (g) line = `<span class="tag warn">Behind</span> <span class="faint" style="font-size:13px">${g.never.toLocaleString()} photos to go is too many for ${esc(day(g.goal))} at the fastest safe pace. At that pace it would be done about ${esc(day(g.eta))}. PageProof goes as fast as is safe meanwhile. Today's 50 helps catch up.</span>`;
+  return `<div style="display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:10px">
+    <div class="row" style="gap:8px"><label class="mini">Goal: every photo searched once by<input type="date" min="${min}" value="${esc(k.goal || '')}" data-act="keepgoal" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);padding:2px 6px"></label>${k.goal ? '<button class="btn sm" data-act="keepgoaloff">No goal</button>' : ''}</div>
+    <div>${line}</div></div>`;
+}
 function firstPerDay(k, hw, week) {
   const ORDER = ['Gentle', 'Steady', 'Faster'];
   const pace = ORDER[Math.min(ORDER.indexOf(k.pace), ORDER.indexOf(hw.limits.pace))] || 'Steady';
@@ -527,7 +540,7 @@ function firstBlock(F, rate) {
 }
 
 // ---------------------------------------------------------------- Keep searching and today's 50
-const STATE_TAG = { running: ['Searching', 'ok'], waiting: ['Resting between photos', 'ok'], off: ['Off', 'grey'], paused: ['Paused', 'grey'], hours: ['Outside your hours', 'grey'], fifty: ['Paused while a big search runs', 'warn'],
+const STATE_TAG = { running: ['Searching', 'ok'], waiting: ['Resting between photos', 'ok'], off: ['Off', 'grey'], paused: ['Paused', 'grey'], hours: ['Outside your hours', 'grey'], fifty: ['Big search running', 'ok'],
   offline: ['Google Drive offline', 'bad'], allow: ['Needs one click', 'warn'], busy: ['Computer busy', 'warn'], resting: ['Search sites resting', 'warn'], setup: ['Not set up', 'warn'], idle: ['Nothing due right now', 'ok'], closed: ['Stopped', 'bad'] };
 V.keep = async () => {
   if (routeArg('start50')) { history.replaceState(null, '', '#keep'); setTimeout(() => ACTS.fifty(), 300); }
@@ -571,13 +584,14 @@ V.keep = async () => {
       <h2>Pace and hours</h2>
       <div class="seg" role="radiogroup" aria-label="Pace">${Object.entries(FC.PACE).map(([p, m]) => `<button role="radio" aria-checked="${k.pace === p}" class="${k.pace === p ? 'on' : ''}" data-act="keepset" data-v="pace|${p}">${p}<span class="faint" style="font-size:12px;display:block">1 photo every ${m} min</span></button>`).join('')}</div>
       <p class="faint" style="margin:0;font-size:13px">Your computer is <b>${esc(hw.level)}</b>${pace !== k.pace ? `, so PageProof goes at the ${pace} pace (1 photo every ${FC.PACE[pace]} minutes)` : ''}. <a href="#computer">Computer check</a></p>
+      ${goalRow(k, F, hw)}
       <div class="seg" role="radiogroup" aria-label="Hours">${[['work', 'Work hours'], ['all', 'All day and night']].map(([h, l]) => `<button role="radio" aria-checked="${k.hours === h}" class="${k.hours === h ? 'on' : ''}" data-act="keepset" data-v="hours|${h}">${l}</button>`).join('')}</div>
       ${k.hours === 'work' ? `<div class="row"><label class="mini">From<select data-act="keepnum" data-v="from">${hourOpts.map(h => `<option value="${h}" ${k.from === h ? 'selected' : ''}>${hlabel(h)}</option>`).join('')}</select></label><label class="mini">To<select data-act="keepnum" data-v="to">${hourOpts.map(h => `<option value="${h}" ${k.to === h ? 'selected' : ''}>${hlabel(h)}</option>`).join('')}</select></label><label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="checkbox" data-act="keepwd" ${k.weekdays ? 'checked' : ''}> Weekdays only</label></div>` : ''}
       <p class="faint" style="margin:0;font-size:13px">If a search site asks "are you a robot?", PageProof never tries to get past it. That site rests for an hour and the others carry on.</p>
     </section>
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
       <div class="row"><h2>Today's 50</h2>${fifty ? '<span class="tag ok" style="margin-left:auto">Running now</span>' : ''}</div>
-      <p class="muted" style="margin:0;font-size:14px">A bigger batch at once. It runs quietly in the small pinned PageProof tab, so you can keep working and close this page (see how far it is in All searches). Keep searching pauses while it runs, then carries on. The 50 are the next photos in line.</p>
+      <p class="muted" style="margin:0;font-size:14px">A bigger batch at once. It runs quietly in the small pinned PageProof tab, so you can keep working and close this page (see how far it is in All searches). Keep searching carries on at half speed while it runs. The 50 are the next photos in line.</p>
       <div class="row"><label class="mini">How many<select data-act="keepnum" data-v="perDay">${[10, 25, 50, 75, 100].map(n => `<option value="${n}" ${k.perDay === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label class="mini">Which photos<select data-act="keepset2" data-v="fiftyWhich"><option value="next" ${k.fiftyWhich !== 'first' ? 'selected' : ''}>Next in line</option><option value="first" ${k.fiftyWhich === 'first' ? 'selected' : ''}>Never searched first</option></select></label><button class="btn primary" data-act="fifty"${fifty ? ' disabled data-why="Today\'s check is already running. It carries on by itself."' : ''}>Check ${k.perDay} now</button></div>
       <label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" data-act="keepauto" ${k.fiftyAuto ? 'checked' : ''}> Start by itself every weekday at <input type="time" value="${esc(k.fiftyTime)}" data-act="keeptime" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);padding:2px 6px"></label>
       <p class="faint" style="margin:0;font-size:13px">On this computer 50 photos take ${esc(hw.limits.fifty)}.</p>
@@ -620,6 +634,8 @@ Object.assign(ACTS, {
   keeppause: async () => { const p = (await api.storage.local.get('fcPause')).fcPause; if (p) await api.storage.local.remove('fcPause'); else await api.storage.local.set({ fcPause: Date.now() }); render(true); },
   keepshow: async () => { await api.runtime.sendMessage({ type: 'fcKeepWake', show: true }).catch(() => {}); setTimeout(() => render(true), 1500); },
   keepset: async v => { const [f, x] = v.split('|'); await FC.setKeep({ [f]: x }); render(true); },
+  keepgoal: async (v, el) => { const d = el.value; if (/^\d{4}-\d{2}-\d{2}$/.test(d)) { await FC.setKeep({ goal: d }); toast('Goal set. PageProof works out the pace from now on.'); render(true); } },
+  keepgoaloff: async () => { await FC.setKeep({ goal: '' }); toast('No goal: the pace you picked is used.'); render(true); },
   keepnum: async (v, el) => { await FC.setKeep({ [v]: +el.value }); render(true); },
   firstshare: async v => { await FC.setKeep({ firstShare: +v }); toast('1 in ' + v + ' searches now go to photos never searched.'); render(true); },
   keepset2: async (v, el) => { await FC.setKeep({ [v]: el.value }); render(true); },

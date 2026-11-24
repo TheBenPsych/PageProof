@@ -1,14 +1,17 @@
 // Keep searching: searches the photos in the shared Google Drive one at a time, all day, in this
 // small pinned PageProof tab. The background opens it when Keep searching is on.
 //  - Rests between photos (the pace), only in the hours you picked.
-//  - Waits while today's 50 run, while Google Drive can't be reached, while the computer is busy
+//  - Keeps going (at half speed) while today's 50 run. Waits while Google Drive can't be reached, while the computer is busy
 //    or on low battery, and gives a search site an hour's rest if it asks "are you a robot".
 //  - Looks for new photos every hour (this and last quarter's folders), every folder once a week
 //    (on a weekday, 8 AM to 6 PM, when the office computers are on).
 //  - Reads who is behind new sites.
 const api = globalThis.browser || globalThis.chrome;
 const $ = id => document.getElementById(id);
-const S = { me: null, job: null, tab: null, started: 0, last: 0, skip: new Set(), win: null, cpu: null, busyTicks: 0, ticking: false, allowAsked: 0 };
+// 4.42: jobs = the one-photo searches running now (at most 2: one with Google, and Yandex and Bing
+// on another photo while Google is still busy). lastG / lastF = when Google / Yandex and Bing last
+// started a photo. bgSkip = the photos a big search is doing (Keep searching leaves them alone).
+const S = { me: null, jobs: [], lastG: 0, lastF: 0, bgSkip: new Set(), skip: new Set(), win: null, cpu: null, busyTicks: 0, ticking: false, allowAsked: 0 };
 const NAMES = { google: 'Google', yandex: 'Yandex', bing: 'Bing' };
 const MY_VER = api.runtime.getManifest().version;
 // Is this tab running old code? After an update (or Reload) this page can keep the old version, or
@@ -43,10 +46,10 @@ async function status(state, text, extra = {}) {
   if (state !== S.statState) { if (PAUSES.includes(state)) PP_STATS.add('keep.pause.' + state); S.statState = state; }
   S.lastText = text; S.lastExtra = extra;
   if (state !== 'paused' && state !== 'off') text += acctLine();
-  const st = { state, text, beat: Date.now(), win: S.win, tabId: S.me, jobTab: S.tab, ver: MY_VER, ...extra };
+  const st = { state, text, beat: Date.now(), win: S.win, tabId: S.me, jobTab: S.jobs[0] ? S.jobs[0].tab : null, jobs: S.jobs.length, ver: MY_VER, ...extra };
   S.lastSt = st;
   await api.storage.local.set({ fcStatus: st });
-  const LABEL = { running: ['Searching', 'ok'], waiting: ['Resting', 'ok'], off: ['Off', 'grey'], paused: ['Paused', 'grey'], hours: ['Outside your hours', 'grey'], fifty: ['Paused for a big search', 'warn'],
+  const LABEL = { running: ['Searching', 'ok'], waiting: ['Resting', 'ok'], off: ['Off', 'grey'], paused: ['Paused', 'grey'], hours: ['Outside your hours', 'grey'], fifty: ['Big search running', 'ok'],
     offline: ['Google Drive offline', 'bad'], allow: ['Needs one click', 'warn'], busy: ['Computer busy', 'warn'], resting: ['Search sites resting', 'warn'], setup: ['Not set up', 'warn'], idle: ['Nothing due', 'ok'] };
   const [l, c] = LABEL[state] || ['Working', 'grey'];
   $('state').textContent = l; $('state').className = 'tag ' + c;
@@ -72,7 +75,7 @@ const inHours = (k, d) => FC.inHours(k, d);
 // rest after Resume.
 async function pauseAll() {
   // The photo that was being searched goes back in line (first after Resume).
-  if (S.job && S.current) S.skip.delete(S.current.id);
+  for (const j of S.jobs) S.skip.delete(j.photoId);
   await stopJob('paused');
   await bgHold();
 }
@@ -95,17 +98,26 @@ async function pausedText(tally) {
   return 'Paused. Nothing is searched or checked, and no tabs open, until you press Resume. Then it picks up where it stopped.' + big + ' ' + tally + '.';
 }
 
-async function stopJob(why) {
-  if (S.tab) { try { await api.tabs.remove(S.tab); } catch (e) { /* closed */ } }
-  // Its search site tabs too (closing the photo's page does not close them).
-  if (S.job) {
+// Stops one running photo search (only), or all of them.
+async function stopJob(why, only) {
+  const list = only ? [only] : S.jobs.slice();
+  S.jobs = S.jobs.filter(j => !list.includes(j));
+  for (const j of list) {
+    if (j.tab) { try { await api.tabs.remove(j.tab); } catch (e) { /* closed */ } }
+    // Its search site tabs too (closing the photo's page does not close them).
     try {
       const all = await api.storage.local.get(null);
-      for (const [k, v] of Object.entries(all)) if (k.startsWith('rsTabL:') && v === S.job) { await api.tabs.remove(+k.slice(7)).catch(() => {}); await api.storage.local.remove(k); }
+      for (const [k, v] of Object.entries(all)) if (k.startsWith('rsTabL:') && v === j.id) { await api.tabs.remove(+k.slice(7)).catch(() => {}); await api.storage.local.remove(k); }
     } catch (e) { /* nothing marked */ }
   }
-  S.job = null; S.tab = null;
-  if (why) console.info('PageProof Keep searching:', why);
+  if (why && list.length) console.info('PageProof Keep searching:', why);
+}
+const firstCurrent = () => (S.jobs[0] && S.jobs[0].current) || null;
+// What is running, in a sentence.
+function runningText(tally) {
+  const big = BG.id ? ' A big search runs alongside' + (BG.text ? ' (' + BG.text + ')' : '') + ', so Keep searching goes at half speed.' : '';
+  if (S.jobs.length > 1) return 'Searching 2 photos: ' + S.jobs.map(j => j.current.name + ' on ' + j.engines.map(e => NAMES[e]).join(' and ')).join(', ') + '. ' + tally + '.' + big;
+  return 'Searching one photo. ' + tally + '.' + big;
 }
 
 // Housekeeping that only needs doing now and then.
@@ -125,6 +137,10 @@ async function chores() {
       await FC.applyPendingFlags();
     } else if (now - (m.quick || 0) > 3600000) {
       const r = await FC.scan({ full: false, background: true }); if (!r.busy && !r.state) ch.quick = now;
+    }
+    // 4.42: new client folders (the top two levels of folder names only), once a week.
+    if (workTime && now - (m.watch || 0) > 6.5 * 86400000) {
+      await FC.watchFolders(); ch.watch = now;
     }
     // Who's behind new sites: one site at a time, only sites with copies you still care about.
     if (now - (m.owner || 0) > 120000) {
@@ -150,15 +166,21 @@ async function step() {
   const tally = today.searched + ' photos searched today' + (today.found ? ', ' + today.found + ' new copies' : '');
   if (st.fcPause) { await pauseAll(); return status('paused', await pausedText(tally)); }
   S.held = null;
-  if (BG.id) return status('fifty', 'A big search is running in this tab' + (BG.text ? ' (' + BG.text + ')' : '') + '. ' + (k.on ? 'Keep searching carries on by itself when it finishes.' : 'You can leave this tab and carry on working.'));
-  if (!k.on) { await stopJob(); return status('off', 'Keep searching is off. Turn it on in Find copies › Keep searching.'); }
-  // A search is running: wait for it (at most 12 minutes).
-  if (S.job) {
-    if (Date.now() - S.started > 12 * 60000) await stopJob('took too long');
-    else return status('running', 'Searching one photo. ' + tally + '.', { current: S.current });
+  if (!k.on) {
+    await stopJob();
+    if (BG.id) return status('fifty', 'A big search is running in this tab' + (BG.text ? ' (' + BG.text + ')' : '') + '. You can leave this tab and carry on working.');
+    return status('off', 'Keep searching is off. Turn it on in Find copies › Keep searching.');
   }
-  if (!inHours(k)) return status('hours', 'Waiting for your hours (' + (k.hours === 'all' ? 'all day' : (k.from ?? 8) + ':00 to ' + (k.to ?? 18) + ':00' + (k.weekdays !== false ? ', weekdays' : '')) + '). ' + tally + '.');
-  if (fiftyRunning(st.fcFifty) || BG.id) return status('fifty', (BG.id ? 'A big search is running in this tab' + (BG.text ? ' (' + BG.text + ')' : '') : 'Today\'s 50 are running') + '. Keep searching carries on by itself when it finishes.');
+  // 4.42 one search line (Ben's pick): a big search (today's 50, New search, photos you picked)
+  // no longer stops Keep searching. Both run; Keep searching goes at half speed meanwhile, and
+  // skips the photos the big search is doing.
+  const big = !!BG.id || fiftyRunning(st.fcFifty);
+  // A search that runs over 12 minutes is stopped (its photo stays due).
+  for (const j of S.jobs.slice()) if (Date.now() - j.started > 12 * 60000) await stopJob('took too long', j);
+  const hw = await ppHardware();
+  const most = big || (hw.limits.tabs || 1) < 2 ? 1 : 2;
+  if (S.jobs.length >= most) return status('running', runningText(tally), { current: firstCurrent() });
+  if (!inHours(k)) return status(S.jobs.length ? 'running' : 'hours', S.jobs.length ? runningText(tally) : 'Waiting for your hours (' + (k.hours === 'all' ? 'all day' : (k.from ?? 8) + ':00 to ' + (k.to ?? 18) + ':00' + (k.weekdays !== false ? ', weekdays' : '')) + '). ' + tally + '.', { current: firstCurrent() });
   const ds = await FC.driveState(true);
   if (ds === 'none') return status('setup', 'Connect your photos first: open Find copies and follow the 4 steps.');
   if (ds === 'prompt') {
@@ -171,46 +193,84 @@ async function step() {
   if (ds === 'offline') { await api.storage.local.set({ fcDriveOffline: Date.now() }); return status('offline', 'Can\'t reach Google Drive, so searching is paused. Nothing is lost: it picks up where it left off.'); }
   const was = (await api.storage.local.get('fcDriveOffline')).fcDriveOffline;
   if (was) await api.storage.local.set({ fcDriveOffline: 0, fcDriveBack: Date.now() });
-  await chores();
+  if (!S.jobs.length) await chores();
   const busy = await computerBusy();
-  if (busy) return status('busy', busy + ', so PageProof is waiting. It carries on when the computer calms down.');
+  if (busy) return status(S.jobs.length ? 'running' : 'busy', S.jobs.length ? runningText(tally) : busy + ', so PageProof is waiting. It carries on when the computer calms down.', { current: firstCurrent() });
   const rest = await RS_JOB.resting();
   const s = await RS_JOB.settings();
   const on = RS_JOB.ENGINES.filter(e => s.engines[e]);
   const broken = await FC.brokenEngines();
   const restingNow = on.filter(e => rest[e] || broken[e]);
   const restText = restingNow.map(e => NAMES[e] + (broken[e] ? ' looks broken and is resting until ' + time(broken[e]) : ' is resting until ' + time(rest[e]))).join('. ');
-  if (on.length && restingNow.length === on.length) return status('resting', restText + '. A search site rests for an hour after an "are you a robot" check (PageProof never tries to get past it), and for 6 hours if it stops giving results.');
-  // The pace: minutes between photos (never faster than this computer allows).
-  const hw = await ppHardware();
+  if (on.length && restingNow.length === on.length && !S.jobs.length) return status('resting', restText + '. A search site rests for an hour after an "are you a robot" check (PageProof never tries to get past it), and for 6 hours if it stops giving results.');
+  // The pace: minutes between photos (never faster than this computer allows), or the pace the
+  // goal needs (4.42). Half speed while a big search runs.
   const order = ['Gentle', 'Steady', 'Faster'];
   const pace = order[Math.min(order.indexOf(k.pace), order.indexOf(hw.limits.pace))] || 'Steady';
-  const gap = FC.PACE[pace] * 60000;
-  const wait = S.last + gap - Date.now();
-  if (wait > 0) return status('waiting', 'Next photo at ' + time(Date.now() + wait) + ' (' + pace + ' pace). ' + tally + '.' + (restText ? ' ' + restText + '.' : ''), { nextAt: Date.now() + wait });
-  // The next photo in line.
-  const [p] = await FC.next(1, S.skip);
-  if (!p) return status('idle', 'Every photo is up to date. PageProof looks again every hour. ' + tally + '.');
+  let gapMin = FC.PACE[pace], why = pace + ' pace';
+  if (k.goal) {
+    try {
+      const cov = await FC.coverage();
+      const g = FC.goalPlan(k, cov.first.never, hw.limits.pace);
+      if (g && !g.done) { gapMin = g.gap; why = 'pace for your goal'; }
+    } catch (e) { console.warn('PageProof Keep searching goal:', e); }
+  }
+  if (big) { gapMin *= 2; why += ', half speed during the big search'; }
+  const gap = gapMin * 60000;
+  // 4.42 per-site lanes (Ben's pick): Google takes about 36 seconds a photo, Yandex and Bing about
+  // 10. Google keeps the pace; Yandex and Bing get a photo every half pace, so while Google is
+  // busy they search another photo (a re-search) instead of waiting.
+  const usable = on.filter(e => !rest[e] && !broken[e]);
+  const busyE = new Set(S.jobs.flatMap(j => j.engines));
+  const g = usable.includes('google'), fastE = usable.filter(e => e !== 'google');
+  const fastGap = on.includes('google') ? gap / 2 : gap;
+  const now = Date.now();
+  const gAt = Math.max(S.lastG + gap, S.lastF + fastGap), fAt = S.lastF + fastGap;
+  const gReady = g && !busyE.has('google') && now >= S.lastG + gap;
+  const fReady = fastE.length > 0 && !fastE.some(e => busyE.has(e)) && now >= fAt;
+  let lane = null;
+  if (gReady && (fReady || !fastE.length)) lane = 'all';              // one photo on every site
+  else if (fReady && !g) lane = 'all';                                  // Google off or resting
+  else if (fReady && most > 1) lane = 'fast';                           // Google busy or not due yet
+  if (!lane) {
+    if (S.jobs.length) return status('running', runningText(tally), { current: firstCurrent() });
+    const at = Math.max(now + 1000, Math.min(g ? gAt : Infinity, fastE.length ? fAt : Infinity));
+    return status('waiting', 'Next photo at ' + time(at) + ' (' + why + '). ' + tally + '.' + (restText ? ' ' + restText + '.' : ''), { nextAt: at });
+  }
+  // The next photo in line (the Yandex and Bing lane takes only photos searched before).
+  const skip = new Set([...S.skip, ...S.bgSkip, ...S.jobs.map(j => j.photoId)]);
+  let [p] = await FC.next(1, skip, lane === 'fast' ? { repeat: true } : {});
+  if (!p && lane === 'fast') { S.lastF = now; return status(S.jobs.length ? 'running' : 'idle', S.jobs.length ? runningText(tally) : 'Every photo is up to date. ' + tally + '.', { current: firstCurrent() }); }
+  if (!p) return status(S.jobs.length ? 'running' : 'idle', S.jobs.length ? runningText(tally) : 'Every photo is up to date. PageProof looks again every hour. ' + tally + '.', { current: firstCurrent() });
   S.skip.add(p.id);
-  const pic = await FC.readPhoto(p);
+  const pic = await FC.readPhoto(p, { burst: true });
   if (pic.error) {
     // Could not be opened: it goes on the Skipped photos list (with the reason) and the line moves on.
-    return status('waiting', pic.soft ? 'Google Drive did not hand over ' + p.name + '. It is tried again later.' : 'Skipped ' + p.name + '. See why in Find copies › Skipped photos.');
+    // A burst frame that waits behind its twin goes straight on to the next photo.
+    if (pic.burst) return setTimeout(tick, 1500);
+    return status(S.jobs.length ? 'running' : 'waiting', pic.soft ? 'Google Drive did not hand over ' + p.name + '. It is tried again later.' : 'Skipped ' + p.name + '. See why in Find copies › Skipped photos.', { current: firstCurrent() });
   }
   // Pause pressed while the photo was being read: it is not searched (and stays due).
   if ((await api.storage.local.get('fcPause')).fcPause) { S.skip.delete(p.id); return; }
-  const job = await RS_JOB.create([pic], { kind: 'keep', auto: true });
+  const engines = lane === 'fast' ? fastE : usable.length ? usable : on;
+  const job = await RS_JOB.create([pic], { kind: 'keep', auto: true, engines });
   if (!job) return status('resting', restText || 'No search sites are switched on. Tick them in Find copies › New search.');
-  S.job = job.id; S.started = Date.now(); S.last = Date.now();
-  S.current = { id: p.id, name: p.name, sub: (p.client || 'Client unknown') + ' · on ' + job.engines.map(e => NAMES[e]).join(', '), thumb: pic.thumb };
+  const j = { id: job.id, tab: null, started: Date.now(), photoId: p.id, engines: job.engines,
+    current: { id: p.id, name: p.name, sub: (p.client || 'Client unknown') + ' · on ' + job.engines.map(e => NAMES[e]).join(', '), thumb: pic.thumb } };
+  S.jobs.push(j);
+  if (job.engines.includes('google')) S.lastG = Date.now();
+  if (job.engines.some(e => e !== 'google')) S.lastF = Date.now();
+  if (typeof PP_STATS !== 'undefined') PP_STATS.add('keep.lane.' + (lane === 'fast' ? 'fast' : 'all'));
   // Pinned: a small icon at the left of the tab bar instead of a full tab.
   try { S.win = (await api.tabs.getCurrent()).windowId; } catch (e) { /* not in a tab */ }   // the tab may have been dragged to another window
   const opts = { windowId: S.win, url: api.runtime.getURL('revsearch.html?job=' + job.id), active: false };
   let t;
   try { t = await api.tabs.create({ ...opts, pinned: true }); } catch (e) { t = await api.tabs.create(opts); }
-  S.tab = t.id;
+  j.tab = t.id;
   if ((await api.storage.local.get('fcPause')).fcPause) { await stopJob('paused'); return; }
-  await status('running', 'Searching one photo. ' + tally + '.', { current: S.current });
+  await status('running', runningText(tally), { current: firstCurrent() });
+  // The other lane may be free straight away (Google busy, Yandex and Bing due).
+  if (S.jobs.length < most) setTimeout(tick, 3000);
 }
 
 // ---------------------------------------------------------------- big searches (4.11, Ben)
@@ -224,6 +284,7 @@ function bgDone() {
   if (BG.frame) BG.frame.remove();
   const id = BG.id;
   Object.assign(BG, { id: null, frame: null, text: '' });
+  S.bgSkip = new Set();
   $('big').hidden = true;
   api.storage.local.set({ fcFifty: { id, beat: 0, running: false } }).catch(() => {});
   FC.backupCopiesSoon();
@@ -241,8 +302,8 @@ async function bgNext() {
       const job = await RS_DB.get('jobs', id).catch(() => null);
       // Deleted, or already finished (its frame said so just before a reload): off the list.
       if (!job || (job.finished && job.pics.every(p => p.ingested || !job.engines.some(e => p.runs[e].state === 'done')))) { await bgDrop(id); continue; }
-      // Keep searching's one-photo search steps aside (it starts again after this one).
-      await stopJob('a big search starts');
+      // 4.42: Keep searching carries on (at half speed) and leaves this search's photos alone.
+      S.bgSkip = new Set(job.pics.map(p => p.fcId).filter(Boolean));
       if ((await api.storage.local.get('fcPause')).fcPause) return;
       Object.assign(BG, { id, since: Date.now(), text: '' });
       const f = document.createElement('iframe');
@@ -250,7 +311,7 @@ async function bgNext() {
       f.title = 'Big search'; f.style.display = 'none';
       document.body.append(f); BG.frame = f;
       bgShow(job);
-      await status('fifty', 'A big search is running in this tab. Keep searching carries on by itself when it finishes.');
+      setTimeout(tick, 1000);
       return;
     }
     closeIfIdle();
@@ -308,8 +369,9 @@ async function fiftyWanted() {
 }
 
 api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg && msg.type === 'fcAutoDone' && msg.job === S.job) {
-    S.job = null; S.tab = null; setTimeout(tick, 2000);
+  const done = msg && msg.type === 'fcAutoDone' && S.jobs.find(j => j.id === msg.job);
+  if (done) {
+    S.jobs = S.jobs.filter(j => j !== done); setTimeout(tick, 2000);
     // The search tab closes straight away, so this window writes the text copy of the finds
     // (Documents › PageProof › found-copies.txt).
     FC.backupCopiesSoon();
@@ -318,10 +380,10 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === 'fcRunnerPing') { sendResponse({ ok: true, win: S.win, ver: MY_VER, tab: S.me }); return false; }
   return false;
 });
-api.tabs.onRemoved.addListener(id => { if (id === S.tab) { S.job = null; S.tab = null; } });
+api.tabs.onRemoved.addListener(id => { S.jobs = S.jobs.filter(j => j.tab !== id); });
 api.storage.onChanged.addListener(ch => {
   // Flags, priority clients or folders changed: work out the line again.
-  if (ch.fcQueueDirty) { FC.resetQueue(); S.skip = new Set(S.current && S.job ? [S.current.id] : []); }
+  if (ch.fcQueueDirty) { FC.resetQueue(); S.skip = new Set(S.jobs.map(j => j.photoId)); }
   if (ch.fcKeep && ch.fcKeep.newValue && !ch.fcKeep.newValue.on) { stopJob().finally(closeIfIdle); return; }
   if (ch.fcBgJobs || ch.fcFiftyWant) bgNext();
   // Pause: stop at once (even in the middle of a step). Resume: carry on straight away.
@@ -334,7 +396,7 @@ api.storage.onChanged.addListener(ch => {
 });
 // Every hour the line is worked out again from scratch.
 // The "every photo once" count is redone too, so Home and the client-finished note stay fresh.
-setInterval(() => { FC.resetQueue(); S.skip = new Set(S.current && S.job ? [S.current.id] : []); FC.coverage().catch(() => {}); }, 3600000);
+setInterval(() => { FC.resetQueue(); S.skip = new Set(S.jobs.map(j => j.photoId)); FC.coverage().catch(() => {}); }, 3600000);
 $('pause').onclick = async () => {
   const p = (await api.storage.local.get('fcPause')).fcPause;
   await api.storage.local.set({ fcPause: p ? 0 : Date.now() });

@@ -1013,6 +1013,8 @@ async function answerCopies(ids, status, label) {
   if (status === 'removed') {
     for (const id of ids) { const c = FCD.copies.find(x => x.id === id); if (c) learn(c); }
   }
+  // 4.42 hot shoots: the rest of that shoot is searched next (Undo puts them back in line too).
+  if (undo && undo.hot) label += ' · ' + undo.hot + (undo.hot === 1 ? ' photo' : ' photos') + ' from the same shoot go next';
   const h = { label, undo: async () => { await undo(); if (undoLic) await undoLic(); }, open: ids.length === 1 ? ids[0] : '' };
   HIST.push(h);
   if (status !== 'new') fastCheck(ids, status);
