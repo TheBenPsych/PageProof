@@ -1167,7 +1167,7 @@ const FC = (() => {
       const ct = c.country || countryOf(c.site);
       if (c.use !== 'social' && ct && !shown.includes(ct)) return false;
       const i = c.acct && info[c.acct.key];
-      return !(i && i.v && i.type === 'Government');
+      return !(i && i.v && i.type === 'Government' && !(/^(instagram\.com|facebook\.com|threads\.net|threads\.com|tiktok\.com)$/.test(c.acct.plat || '') && i.v < 4));
     }).length;
   }
   // Is this copy on a hidden site, or posted by a hidden account? (4.9: an Instagram /p/ link has
