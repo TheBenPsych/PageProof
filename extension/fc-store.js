@@ -531,7 +531,9 @@ const FC = (() => {
   // folder you don't want searched). They are left out with everything inside them.
   async function unpicked() { const p = await meta.get('unpicked'); return Array.isArray(p) ? p : []; }
   const tidyRels = list => [...new Set((list || []).map(r => String(r).replace(/^\/+|\/+$/g, '')).filter(Boolean))].sort();
-  async function setPicked(list, unlist) {
+  // 4.47.5: folders with client_info_ignore.txt that you ticked anyway (inside a ticked folder).
+  async function forced() { const p = await meta.get('forced'); return Array.isArray(p) ? p : []; }
+  async function setPicked(list, unlist, forceList) {
     // A folder inside another ticked folder is already included.
     const clean = tidyRels(list);
     const keep = clean.filter(r => !clean.some(o => o !== r && r.startsWith(o + '/')));
@@ -541,6 +543,7 @@ const FC = (() => {
       const un = tidyRels(unlist).filter(r => keep.some(o => r.startsWith(o + '/')));
       await meta.set('unpicked', un.filter(r => !un.some(o => o !== r && r.startsWith(o + '/'))));
     }
+    if (forceList) await meta.set('forced', tidyRels(forceList).filter(r => keep.some(o => r.startsWith(o + '/'))));
     queueDirty(); backupSoon();
     return keep;
   }
@@ -563,7 +566,7 @@ const FC = (() => {
       // Only ticked folders. (Nothing ticked = nothing read: never the whole drive.)
       // 4.39: a ticked folder that Drive says is not there any more (renamed, moved or deleted) is
       // written down, so Home and Clients can say so instead of the client quietly going quiet.
-      const missing = [], unpick = await unpicked();
+      const missing = [], unpick = await unpicked(), force = await forced();
       for (const rel of picks || []) { try { list.push([rel, await dirAt(rel)]); } catch (e) { if (e && (e.name === 'NotFoundError' || /not (be )?found/i.test(e.message || ''))) missing.push(rel); /* else Drive offline */ } }
       const was = (await meta.get('missingPicks')) || [];
       const now = missing.map(rel => was.find(m => m.rel === rel) || { rel, since: new Date().toISOString() });
@@ -575,7 +578,7 @@ const FC = (() => {
         else for (const [n2, h2] of await listDirs(h)) if (/^registered/i.test(n2)) { base = h2; baseName = n2; break; }
         const info = { ...(await readInfo(h)), ...(base && base !== h ? await readInfo(base) : {}) };
         if (info.id) name = info.id;
-        out.push({ skip: unpick.filter(r => r.startsWith(rel + '/')), name: tidyClient(name), folder: folderRel, base: base || h, baseName: base === h ? '' : baseName, rel: rel + (baseName && base !== h ? '/' + baseName : ''), pick: rel });
+        out.push({ skip: unpick.filter(r => r.startsWith(rel + '/')), force: force.filter(r => r.startsWith(rel + '/')), name: tidyClient(name), folder: folderRel, base: base || h, baseName: base === h ? '' : baseName, rel: rel + (baseName && base !== h ? '/' + baseName : ''), pick: rel });
       }
       // Two ticked folders with the same name: add the folder above to tell them apart.
       const count = {};
@@ -612,7 +615,7 @@ const FC = (() => {
       }
       if (txt.length) {
         const info = await readInfo(dir, txt);
-        if (info.ignore) { if (onDir) onDir(rel, 0, true); return; }
+        if (info.ignore && !(cf.force || []).includes(rel)) { if (onDir) onDir(rel, 0, true); return; }
         if (info.id) ctx = { ...ctx, client: info.id };
       }
       const own = regIn(dir.name);
@@ -2176,7 +2179,7 @@ const FC = (() => {
     const regs = Object.fromEntries(Object.entries((await meta.get('regs')) || {}).filter(([, v]) => v.manual));
     return { app: 'PageProof', version: api.runtime.getManifest().version, saved: new Date().toISOString(), name: (st.lastCase || {}).collector || '', theme: st.ppTheme || 'light',
       search: st.rsSettings || null, keep: st.fcKeep || null, drive: st.fcDrive || null, shownCountries: Array.isArray(st.fcShownCountries) ? st.fcShownCountries : SHOWN_START, showGov: !!st.ppShowGov, showPerson: !!st.ppShowPerson, hardware: st.ppHw || null,
-      clients: clients.map(c => ({ name: c.name, searching: c.searching, priority: !!c.priority, licensed: c.licensed || [], licensedAcc: c.licensedAcc || [] })), flags, regs, picked: await picked(), unpicked: await unpicked(), hist: await histList(), alias: (await meta.get('photoAlias')) || {},
+      clients: clients.map(c => ({ name: c.name, searching: c.searching, priority: !!c.priority, licensed: c.licensed || [], licensedAcc: c.licensedAcc || [] })), flags, regs, picked: await picked(), unpicked: await unpicked(), forced: await forced(), hist: await histList(), alias: (await meta.get('photoAlias')) || {},
       socialSites: st.ppSocialSites || {}, accounts: (await meta.get('acctKept')) || {}, acctLinks: (await meta.get('acctLinks')) || [], acctType: (await meta.get('acctType')) || {} };
   }
   async function writeSettings() {
@@ -2211,6 +2214,7 @@ const FC = (() => {
     if (j.accounts && typeof j.accounts === 'object') { const a = {}; for (const [k, v] of Object.entries(j.accounts)) if (v && typeof v.key === 'string') a[str(k)] = { key: str(v.key), handle: str(v.handle), url: /^https?:\/\//.test(v.url || '') ? str(v.url) : '', plat: str(v.plat), from: v.from === 'browser' ? 'browser' : 'you' }; await meta.set('acctKept', a); }
     if (j.acctType && typeof j.acctType === 'object') { const TY = ['Business', 'Creator', 'Organisation', 'Government', 'News or media', 'Fan page', 'Group', 'Person']; await meta.set('acctType', Object.fromEntries(Object.entries(j.acctType).filter(([k, v]) => typeof k === 'string' && TY.includes(v)).map(([k, v]) => [str(k), v]))); }
     if (Array.isArray(j.acctLinks)) await meta.set('acctLinks', j.acctLinks.filter(Array.isArray).map(g => g.filter(k => typeof k === 'string').map(str)).filter(g => g.length > 1));
+    if (Array.isArray(j.forced)) await meta.set('forced', j.forced.filter(r => typeof r === 'string' && r && !r.split('/').includes('..')).map(r => r.slice(0, 1000)));
     if (Array.isArray(j.unpicked)) await meta.set('unpicked', j.unpicked.filter(r => typeof r === 'string' && r && !r.split('/').includes('..')).map(r => r.slice(0, 1000)));
     if (Array.isArray(j.picked)) await meta.set('picked', j.picked.filter(r => typeof r === 'string' && r && !r.split('/').includes('..')).map(r => r.slice(0, 1000)));
     if (Array.isArray(j.flags)) await meta.set('pendingFlags', j.flags.filter(f => Array.isArray(f) && typeof f[0] === 'string').map(f => [f[0].slice(0, 2000), ['hi', 'pop'].includes(f[1]) ? f[1] : '', f[2] ? 1 : 0]));
@@ -2255,7 +2259,7 @@ const FC = (() => {
   }
 
   return { DB, meta, open, touch, pics, dropDotMatches, checkerRemove, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, inHours, quietOK, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
-    regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, unpicked, setPicked, pickInside, SCAN, applyPendingFlags, missingPicks, movedNote, followMoves, watchFolders, newFolders, newFoldersSeen, goalPlan, workMinutes, exifDate, heatShoot, coolShoot, burstSibling, wakeBurst, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
+    regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, unpicked, forced, setPicked, pickInside, SCAN, applyPendingFlags, missingPicks, movedNote, followMoves, watchFolders, newFolders, newFoldersSeen, goalPlan, workMinutes, exifDate, heatShoot, coolShoot, burstSibling, wakeBurst, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setClients, logWeek, week, weekKey, firstNotes, searchedOnce,
     isPool, shownCountries, setShownCountries, SHOWN_START, ownerFor, pathOf, logReport, USE, useOf, riskOf, spamMarks, randomLabel, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
     backupSoon, backupCopiesSoon, writeSettings, writeCopies, readBackup, restore, restoreCopies, settingsSnapshot, monthsOld, newness, yearOf, quarterOf, dayOf };

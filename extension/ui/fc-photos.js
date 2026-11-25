@@ -32,6 +32,7 @@ V.connect = async () => {
       // Coming back to this step: show what was ticked before, with its folders opened.
       state.csPick = new Set((await FC.picked()) || []);
       state.csUnpick = new Set(await FC.unpicked());
+      state.csForce = new Set(await FC.forced());
       state.csStar = new Set((await FC.DB.all('clients')).filter(c => c.priority && c.pick).map(c => c.pick));
       for (const r of state.csPick) { const parts = r.split('/'); for (let k = 1; k < parts.length; k++) state.csOpen.add(parts.slice(0, k).join('/')); }
     }
@@ -50,10 +51,13 @@ V.connect = async () => {
       if (kids && kids.error) { rows.push(`<div style="padding:6px 0 6px ${20 + depth * 22}px;font-size:13px;color:var(--bad)">This folder could not be opened. Is Google Drive running? <button class="btn ghost sm" data-act="csretry" data-v="${esc(rel)}">Try again</button></div>`); return; }
       for (const f0 of Array.isArray(kids) ? kids : []) {
         const f = { ...f0, ...(state.csInfo.get(f0.rel) || {}) };
-        const on = pick.has(f.rel) && !f.ignore, inherited = under(f.rel), left = inherited && out(f.rel), byAbove = left && !unp.has(f.rel), open = state.csOpen.has(f.rel) && !f.ignore;
+        const on = pick.has(f.rel) && !f.ignore, inherited = under(f.rel), left = inherited && out(f.rel), byAbove = left && !unp.has(f.rel);
+        // 4.47.5: a folder with client_info_ignore.txt inside a ticked folder can be ticked anyway.
+        const canForce = !!f.ignore && inherited && !left, force = canForce && (state.csForce || new Set()).has(f.rel), ign = f.ignore && !force;
+        const open = state.csOpen.has(f.rel) && !ign;
         rows.push(`<div class="crow" style="padding-left:${10 + depth * 22}px">
           <button class="btn ghost sm" style="min-height:28px;width:28px;padding:0" data-act="csopen" data-v="${esc(f.rel)}" aria-label="${open ? 'Close' : 'Open'} ${esc(f.name)}" aria-expanded="${open}">${open ? '▾' : '▸'}</button>
-          <label style="display:flex;gap:10px;align-items:center;flex:1;min-width:0;cursor:pointer"><input type="checkbox" data-act="cspk" data-v="${esc(f.rel)}" ${(on || inherited) && !left && !f.ignore ? 'checked' : ''} ${f.ignore ? 'disabled data-why="Skipped: this folder has client_info_ignore.txt, so it and everything inside it are never searched." title="Skipped: this folder has client_info_ignore.txt"' : byAbove ? 'disabled data-why="Left out: a folder above it is unticked." title="Left out: a folder above it is unticked"' : inherited ? `title="${left ? 'Left out. Tick to search it again.' : 'Included because the folder above it is ticked. Untick to leave it out.'}"` : ''}><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${on ? ';font-weight:700' : ''}${f.ignore || left ? ';text-decoration:line-through;color:var(--faint)' : ''}">${esc(f.name)}</span>${left && !byAbove ? '<span class="tag grey" style="font-size:11px;flex-shrink:0" title="You unticked this folder, so it and everything inside it are not searched">Left out</span>' : ''}${f.ignore ? '<span class="tag grey" style="font-size:11px;flex-shrink:0" title="client_info_ignore.txt is in this folder, so it and everything inside it is never searched">Skipped</span>' : f.id ? `<span class="tag ok" style="font-size:11px;flex-shrink:0" title="client_info.txt names this client">ID: ${esc(f.id)}</span>` : ''}</label>
+          <label style="display:flex;gap:10px;align-items:center;flex:1;min-width:0;cursor:pointer"><input type="checkbox" data-act="${canForce ? 'csforce' : 'cspk'}" data-v="${esc(f.rel)}" ${(on || inherited) && !left && !ign ? 'checked' : ''} ${canForce ? `title="${force ? 'Searched even though it has client_info_ignore.txt. Untick to skip it again.' : 'Skipped: it has client_info_ignore.txt. Tick to search it anyway.'}"` : f.ignore ? 'disabled data-why="Skipped: this folder has client_info_ignore.txt, so it and everything inside it are never searched." title="Skipped: this folder has client_info_ignore.txt"' : byAbove ? 'disabled data-why="Left out: a folder above it is unticked." title="Left out: a folder above it is unticked"' : inherited ? `title="${left ? 'Left out. Tick to search it again.' : 'Included because the folder above it is ticked. Untick to leave it out.'}"` : ''}><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${on ? ';font-weight:700' : ''}${ign || left ? ';text-decoration:line-through;color:var(--faint)' : ''}">${esc(f.name)}</span>${left && !byAbove ? '<span class="tag grey" style="font-size:11px;flex-shrink:0" title="You unticked this folder, so it and everything inside it are not searched">Left out</span>' : ''}${force ? '<span class="tag ok" style="font-size:11px;flex-shrink:0" title="This folder has client_info_ignore.txt, but you ticked it, so it is searched">Searched anyway</span>' : f.ignore ? `<span class="tag grey" style="font-size:11px;flex-shrink:0" title="client_info_ignore.txt is in this folder, so it and everything inside it is never searched${canForce ? '. Tick it to search it anyway.' : ''}">Skipped</span>` : f.id ? `<span class="tag ok" style="font-size:11px;flex-shrink:0" title="client_info.txt names this client">ID: ${esc(f.id)}</span>` : ''}</label>
           ${on ? `<button class="starbtn${state.csStar.has(f.rel) ? ' on' : ''}" data-act="csstar" data-v="${esc(f.rel)}" aria-label="Priority client" title="Priority: searched right after High priority photos">★</button>` : ''}</div>`);
         if (open) {
           if (!Array.isArray(state.csTree.get(f.rel)) && !(state.csTree.get(f.rel) || {}).error) rows.push(`<div class="faint" style="padding:6px 0 6px ${42 + depth * 22}px;font-size:13px">Opening…</div>`);
@@ -180,7 +184,7 @@ function csWarnFor(rel) {
   if (Array.isArray(kids) && kids.length >= 8 && !rel.includes('/')) return `<b>“${esc(name)}” holds ${kids.length} folders.</b> Ticked as it is, everything inside counts as ONE client called “${esc(name)}”, except folders inside that have their own client_info.txt. If these are separate clients, open it with ▸ and tick each client instead.`;
   return '';
 }
-function csReset() { state.csTree = new Map(); state.csInfo = new Map(); state.csOpen = new Set(); state.csPick = null; state.csUnpick = null; state.csStar = new Set(); state.csBusy = ''; }
+function csReset() { state.csTree = new Map(); state.csInfo = new Map(); state.csOpen = new Set(); state.csPick = null; state.csUnpick = null; state.csForce = null; state.csStar = new Set(); state.csBusy = ''; }
 Object.assign(ACTS, {
   csgo: v => {
     const l = document.getElementById('csLabel');
@@ -203,6 +207,11 @@ Object.assign(ACTS, {
     render(true);
   },
   csretry: v => { state.csTree.delete(v); csLoad(v); render(true); },
+  csforce: v => {
+    const fs = state.csForce || (state.csForce = new Set());
+    if (fs.has(v)) fs.delete(v); else { fs.add(v); csLoad(v); }
+    render(true);
+  },
   cspk: v => {
     const p = state.csPick || (state.csPick = new Set());
     const un = state.csUnpick || (state.csUnpick = new Set());
@@ -217,7 +226,7 @@ Object.assign(ACTS, {
   },
   cswarnok: v => { (state.csOk = state.csOk || new Set()).add(v); render(true); },
   cswarnun: v => { ACTS.cspk(v); toast('Unticked. Open the folder above it with ▸ and tick the client\'s own folder.'); },
-  csnone: () => { state.csPick = new Set(); state.csUnpick = new Set(); state.csStar = new Set(); render(true); },
+  csnone: () => { state.csPick = new Set(); state.csUnpick = new Set(); state.csForce = new Set(); state.csStar = new Set(); render(true); },
   csstar: v => { if (state.csStar.has(v)) state.csStar.delete(v); else state.csStar.add(v); render(true); },
   csaddone: async () => {
     let r;
@@ -240,7 +249,7 @@ Object.assign(ACTS, {
     if (l) await FC.setDrive({ label: l.value.trim() || 'G:\\Shared drives' });
     state.csBusy = 'Reading the folders you ticked…'; render(true);
     try {
-      const picks = await FC.setPicked([...(state.csPick || [])], [...(state.csUnpick || [])]);
+      const picks = await FC.setPicked([...(state.csPick || [])], [...(state.csUnpick || [])], [...(state.csForce || [])]);
       const list = await FC.quickClients();
       state.csClients = list.map(c => ({ ...c, searching: c.extra || picks.includes(c.pick), priority: c.extra ? c.priority : state.csStar.has(c.pick) }));
       state.csBusy = ''; state.cs = 3;
