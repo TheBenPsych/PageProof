@@ -522,6 +522,7 @@ function addLink(p, l, engine) {
   if (l.url.length < cur.url.length && RS_UTIL.key(l.url) === key) cur.url = l.url;   // keep the tidier address
   if (!cur.engines.includes(engine)) cur.engines.push(engine);
   cur.exact = cur.exact || !!l.exact;
+  if (engine === 'google' && l.exact) cur.gx = true;      // on Google's own "Exact matches" list
   if ((l.title || '').length > cur.title.length) cur.title = String(l.title).slice(0, 300);
   if (!cur.thumb && l.thumb) cur.thumb = String(l.thumb);
   if (!cur.img && l.img && /^https?:/.test(l.img)) cur.img = l.img;
@@ -555,7 +556,7 @@ async function rememberSeen(p) {
 }
 // Match results are remembered per picture, so a link already checked is never downloaded
 // and compared again in a later search.
-const SAVE_FIELDS = ['pct', 'inl', 'tiles', 'str', 'mid', 'w', 'h', 'from', 'onPage', 'pv', 'img'];   // 4.35: and what their page check found
+const SAVE_FIELDS = ['pct', 'inl', 'tiles', 'str', 'mid', 'w', 'h', 'from', 'onPage', 'pv', 'img', 'cover', 'coverImg', 'second'];   // 4.35: and what their page check found; 4.50: post covers
 function addScores(rec, p) {
   rec.scores = rec.scores || {};
   for (const l of p.links) if (l.sv === SCORE_VERSION && l.pct >= 0 && !l.fromMemory) {
@@ -619,6 +620,7 @@ async function fetchPicture(url, max) {
     if (b.size > 25e6) { PP_STATS.add('dl.tooBig'); return null; }
     const out = await decodeTurn(() => shrinkPicture(b, max));
     if (!out) PP_STATS.add('dl.unreadable');
+    else out.blob = b;               // 4.50: kept for the second look, so it isn't downloaded again
     return out;
   } catch (e) {
     const slow = ctl.signal.aborted;
@@ -772,55 +774,127 @@ function statCheck(m, ms) { const v = PP_VERDICT.score(m); PP_STATS.time('chk.' 
 // "different photo" stops there; anything else is checked again with the full picture.
 async function scoreLink(l) {
   const p = job.pics[l.pic];
-  let quick = null;
-  if (l.thumb && l.thumb !== l.img) {
-    const tb = await fetchPicture(l.thumb);
-    if (tb && Math.min(tb.w, tb.h) >= 80) quick = await measure(p, tb.bmp);
-    freePic(tb);
-    // 4.47: Google's exact matches are never thrown out on the small preview alone.
-    if (quick && verdict(quick) === 'no' && !l.exact) { Object.assign(l, quick); return; }
-  }
-  const full = l.img ? await fetchPicture(l.img) : null;
-  if (full) {
-    if (!l.w) { l.w = full.w; l.h = full.h; }
-    const m = await measure(p, full.bmp);
-    freePic(full);
-    Object.assign(l, await secondLook(p, l, m), { from: 'image' });
-    return;
-  }
-  // 4.35: only the search site's small preview was checked (Google never gives the picture's
-  // own address). pageCheck() then looks for the photo on their page itself.
-  if (quick) { Object.assign(l, await secondLook(p, l, quick), { from: 'preview' }); return; }
-  const tb = l.thumb ? await fetchPicture(l.thumb) : null;
-  if (tb) { const m = await measure(p, tb.bmp); freePic(tb); Object.assign(l, await secondLook(p, l, m), { from: 'preview' }); return; }
-  // 4.37.2: the search site gave no picture that could be downloaded. Before giving up
-  // ("Picture blocked"), read their page once (signed out, like anyone visiting) and check its
-  // own pictures: the share picture first, then the pictures in the article.
-  if (await ownPageCheck(l, p)) return;
-  l.pct = -1; l.sv = SCORE_VERSION;
+  await scoreLinkNow(p, l);
+  markCover(p, l);
+}
+// 4.50: a downloaded picture's file is kept (fetchPicture), so the slower second look opens the
+// same download again at full size (it used to be downloaded a second time).
+const measureKeep = (p, pic) => measure(p, pic.bmp);
+async function scoreLinkNow(p, l) {
+  let quick = null, tb = null;
+  try {
+    if (l.thumb && l.thumb !== l.img) {
+      tb = await fetchPicture(l.thumb);
+      if (tb && Math.min(tb.w, tb.h) >= 80) quick = await measureKeep(p, tb);
+      // 4.47: Google's exact matches are never thrown out on the small preview alone.
+      if (quick && verdict(quick) === 'no' && !l.exact) { Object.assign(l, quick); return; }
+    }
+    if (l.img) {
+      const full = await fetchPicture(l.img);
+      if (full) {
+        try {
+          if (!l.w) { l.w = full.w; l.h = full.h; }
+          const m = await measureKeep(p, full);
+          Object.assign(l, { from: 'image' }, await secondLook(p, l, m, { url: l.img, pic: full }));
+        } finally { freePic(full); }
+        return;
+      }
+    }
+    // 4.35: only the search site's small preview was checked (Google never gives the picture's
+    // own address). pageCheck() then looks for the photo on their page itself.
+    if (quick) { Object.assign(l, { from: 'preview' }, await secondLook(p, l, quick, { url: l.thumb, pic: tb })); return; }
+    if (!tb && l.thumb) tb = await fetchPicture(l.thumb);
+    if (tb) { const m = await measureKeep(p, tb); Object.assign(l, { from: 'preview' }, await secondLook(p, l, m, { url: l.thumb, pic: tb })); return; }
+    // 4.37.2: the search site gave no picture that could be downloaded. Before giving up
+    // ("Picture blocked"), read their page once (signed out, like anyone visiting) and check its
+    // own pictures: the share picture first, then the pictures in the article.
+    if (await ownPageCheck(l, p)) return;
+    l.pct = -1; l.sv = SCORE_VERSION;
+  } finally { freePic(tb); }
+}
+// 4.50 (Ben's pick): a post with several pictures (an Instagram carousel, a Facebook album, TikTok
+// slides, an X post with 4 photos). The search site shows the post's cover, so when your photo is
+// picture 3 the cover is "a different photo" and the post used to be thrown out. When a search
+// site listed the post itself as a match, it is kept as a Maybe ("Checking the post") instead, and
+// Copies found's post check looks at every picture in your signed-in browser: it stays only if
+// your photo is one of them, otherwise it is moved to Removed by itself, as post checks do.
+const POST_URL = /\/(p|reel|reels|tv|status|posts|videos?|permalink|photos?)\/[^/?#]+|story_fbid=|[?&]fbid=|\/share\/[pr]\//i;
+const COVER_MAX = 8;
+function markCover(p, l) {
+  if (l.cover || !l.exact || l.rescued || l.sv !== SCORE_VERSION || baseVerdict(l) !== 'no' || userNo(l) || cardOf(l)) return;
+  let host = '';
+  try { host = new URL(l.url).hostname; } catch (e) { return; }
+  if (!(globalThis.PP_SOCIAL && PP_SOCIAL.isSocial(host)) || !POST_URL.test(l.url)) return;
+  if (typeof RS_FORUM !== 'undefined' && RS_FORUM.is(l.site, l.url)) return;
+  if ((p.covers = (p.covers || 0) + 1) > COVER_MAX) return;
+  l.cover = 1; l.coverImg = l.img || ''; l.img = '';
+  l.from = 'preview'; l.onPage = 'postOnly'; l.pv = PV;
+  PP_STATS.add('chk.cover');
 }
 // 4.47 (Ben's picks): the second look. A Same photo with a thin margin, or a link Google listed
 // under "Exact matches" that the fast check threw out, is checked again more slowly with both
 // pictures at full size (up to 1200 pixels) before it is kept or thrown out. l.second says what
 // happened: kept / maybe / out (a close Same that was not), saved (an exact match the fast check
-// missed), exactNo (still thrown out: "Google said exact" in the thrown-out list).
-async function secondLook(p, l, m) {
+// missed), page (4.50: found on their page), exactNo (still thrown out: "Google said exact").
+// 4.50 (Ben's pick): Yandex and Bing mark every link as exact, so a plainly different photo from
+// them (hardly any matching details) no longer gets the slow look; Google's own exact list still does.
+const someDetails = m => (m.inl || 0) >= 6 || (m.tiles || 0) >= 6;
+async function secondLook(p, l, m, have) {
   const v0 = PP_VERDICT.score(m);
-  const want = PP_VERDICT.close(m) || (l.exact && (v0 === 'no' || v0 === 'cant') && !cardOf(l) && !userNo(l));
+  const missed = l.exact && (v0 === 'no' || v0 === 'cant') && !cardOf(l) && !userNo(l) && (l.gx || someDetails(m));
+  const want = PP_VERDICT.close(m) || missed;
   if (!want || !p.blob) return m;
   let deep = null;
   for (const u of [l.img, l.thumb]) {
     if (!u) continue;
-    const pic = await fetchPicture(u, DEEP);
+    // 4.50: the picture already downloaded for the first check is opened again at full size.
+    const pic = have && have.url === u && have.pic && have.pic.blob ? await decodeTurn(() => shrinkPicture(have.pic.blob, DEEP)) : await fetchPicture(u, DEEP);
     if (!pic) continue;
-    if (Math.min(pic.w, pic.h) < 60) { freePic(pic); continue; }
-    deep = await measure(p, pic.bmp, true);
-    freePic(pic);
+    try {
+      if (Math.min(pic.w, pic.h) < 60) continue;
+      // measure() may hand the picture itself to the checker, so the checker gets a copy.
+      deep = await measure(p, await createImageBitmap(pic.bmp), true);
+    } finally { freePic(pic); }
     if (PP_VERDICT.score(deep) !== 'cant') break;
   }
   const r = PP_VERDICT.second(m, deep, !!l.exact);
+  // 4.50 (Ben's pick): Google said exact, but its small preview still doesn't line up (a headline
+  // over it, a crop). Google never gives the picture itself, so their page is read and its own
+  // pictures are checked at full size (up to 10 such links a photo).
+  if (l.gx && !l.img && (r.how === 'exactNo' || (!r.how && missed))) {
+    const hit = await exactOnPage(p, l);
+    if (hit) { PP_STATS.add('chk.second.page'); return { ...hit.m, second: 'page', fastPct: m.pct, from: 'page', img: hit.u, onPage: hit.card ? 'card' : 'seen', pv: PV, ...(l.w ? {} : { w: hit.w, h: hit.h }) }; }
+  }
   if (r.how) PP_STATS.add('chk.second.' + r.how);
   return { ...r.keep, second: r.how || undefined, fastPct: r.keep === m ? undefined : m.pct };
+}
+const EXACT_PAGE_MAX = 10;
+async function exactOnPage(p, l) {
+  if ((p.exactPages = (p.exactPages || 0) + 1) > EXACT_PAGE_MAX) return null;
+  let social = false;
+  try { social = !!(globalThis.PP_SOCIAL && PP_SOCIAL.isSocial(new URL(l.url).hostname)); } catch (e) { return null; }
+  if (social) return null;            // posts: the post check in your browser does this (markCover)
+  const t0 = Date.now();
+  let hit = null;
+  try {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 12000);
+    const r = await fetch(l.url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal });
+    const html = r.ok && /html/i.test(r.headers.get('content-type') || 'html') ? (await r.text()).slice(0, 3e6) : '';
+    clearTimeout(t);
+    if (html) {
+      const doc = new DOMParser().parseFromString(html.replace(/<script[\s\S]*?<\/script>/gi, ''), 'text/html');
+      for (const u of pagePictures(doc, r.url || l.url, false)) {
+        if (R.stop && !BG) break;
+        const pic = await fetchPicture(u, DEEP);
+        if (!pic) continue;
+        let m;
+        try { m = await measure(p, await createImageBitmap(pic.bmp), true); } finally { freePic(pic); }
+        if (['same', 'maybe'].includes(PP_VERDICT.score(m))) { hit = { m, u, w: pic.w, h: pic.h }; break; }
+      }
+    }
+  } catch (e) { PP_STATS.site(l.url, 'f'); }
+  PP_STATS.add('job.exact.n'); PP_STATS.add('job.exact.' + (hit ? 'ok' : 'fail')); PP_STATS.time('job.exact', Date.now() - t0);
+  return hit;
 }
 async function ownPageCheck(l, p) {
   let social = false;
@@ -884,6 +958,8 @@ const needsPage = l => l.from === 'preview' && l.pv !== PV && !l.rescued && ['sa
 const cardOf = l => !l.rescued && globalThis.PP_SOCIAL && PP_SOCIAL.cardPic ? PP_SOCIAL.cardPic(l.img) : '';
 function verdict(l) {
   const v = baseVerdict(l);
+  // 4.50: a post whose cover is another picture, listed by a search site: Maybe until the post check looks.
+  if (v === 'no' && l.cover && !l.rescued && !userNo(l)) return l.onPage === 'notSeen' ? 'no' : 'maybe';
   if (['same', 'maybe'].includes(v) && cardOf(l)) return 'no';
   if (l.rescued || l.from !== 'preview' || !['same', 'maybe'].includes(v)) return v;
   if (l.pv !== PV) return 'pending';

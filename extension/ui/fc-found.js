@@ -306,6 +306,9 @@ async function readPostPicsInTab() {
   const root = (me && roots.find(r => [...r.querySelectorAll('a[href]')].some(a => idOf(a.href) === me))) || roots[0] || document.querySelector('[role="main"], main') || document.body;
   const out = [];
   const grab = () => {
+    // 4.50: this quiet tab is in the background, where pictures waiting to be scrolled into view
+    // never load: they are told to load straight away.
+    try { for (const i of document.querySelectorAll('img[loading="lazy"]')) i.loading = 'eager'; } catch (e) { /* fine */ }
     for (const el of root.querySelectorAll('img, video')) {
       const inner = el.closest('[role="article"], article');
       if (inner && inner !== root && root.contains(inner)) continue;                      // a comment or a reply
@@ -427,6 +430,9 @@ async function cardSweep() {
   for (const c of xs) await cardRemove(c).catch(() => {});
   return xs.length;
 }
+// 4.50: a post the search site listed whose cover is another picture (a carousel, an album, slides).
+const coverWait = c => !!c.cover && isSoc(c) && (!c.postChk || c.postChk.v !== POSTCHK_V);
+const COVER_WAIT = 'The search site listed this post for your photo, but its first picture is a different one. PageProof looks at every picture of the post in your browser, and keeps it only if your photo is one of them.';
 const notInPost = c => isSoc(c) && !acctPageLink(c) && c.postChk && c.postChk.state === 'notSeen' && !/^https?:/i.test(c.img || '');
 const NOT_IN_POST = c => `${c.postChk.browser === 'notSeen' ? `None of the post's ${c.postChk.n > 1 ? c.postChk.n + ' pictures' : 'pictures'} is your client's photo` : `The post's own ${c.postChk.video ? 'video cover' : 'picture'} is a different photo`}. Google matched a picture somewhere else on that page (a comment, a link preview, a suggested post), and only the post's own pictures count.${c.removedBy === 'postcheck' ? ' So PageProof moved it to Removed. Put it back if you see the photo in the post.' : ' Open the post and look before marking Stolen.'}`;
 const ruleRow = h => `<div class="rrow ${h.lvl}"><span class="tag ${PP_CHECKS.LVL[h.lvl][1]}">${PP_CHECKS.LVL[h.lvl][0]}</span><span>${esc(h.text)}</span></div>`;
@@ -487,6 +493,7 @@ function signals(c) {
   const s = [];
   if (linkCardOf(c)) s.push(['bad', 'warn', 'Only in a link preview: ' + LINK_CARD(c), 'Link preview only']);
   else if (notInPost(c)) s.push(['bad', 'warn', 'Not seen in the post: ' + NOT_IN_POST(c), 'Not in the post']);
+  else if (coverWait(c)) s.push(['warn', 'maybe', COVER_WAIT, 'Checking the post']);
   if (c.match === 'maybe') s.push(['warn', 'maybe', 'Maybe the same photo. Look closely.', 'Maybe the same']);
   if (c.risk.level === 'sus') s.push(['bad', 'warn', 'Suspicious site' + (c.risk.why.length ? ': ' + c.risk.why.join(', ') : ''), 'Suspicious site']);
   else if (c.risk.level === 'watch') s.push(['warn', 'warn', 'Worth a look' + (c.risk.why.length ? ': ' + c.risk.why.join(', ') : ''), 'Worth a look']);
@@ -570,6 +577,7 @@ async function drawer(list) {
   const look = [], fine = [];
   if (linkCardOf(c)) look.push(['bad', 'warn', 'Only in a link preview', LINK_CARD(c), 'openpost', 'Open post']);
   else if (notInPost(c)) look.push(['bad', 'warn', 'Not seen in the post', NOT_IN_POST(c), 'openpost', 'Open post']);
+  else if (coverWait(c)) look.push(['warn', 'maybe', 'Checking the post', COVER_WAIT, 'openpost', 'Open post']);
   if (c.match === 'maybe') look.push(['warn', 'maybe', 'Maybe the same photo', 'The checker is not sure. Compare them closely.', 'compare', 'Compare']);
   if (c.risk.level === 'sus') look.push(['bad', 'warn', 'Suspicious site', c.risk.why.join(' · '), 'dtab', 'Site', 'site']);
   else if (c.risk.level === 'watch') look.push(['warn', 'warn', 'Worth a look', c.risk.why.join(' · '), 'dtab', 'Site', 'site']);

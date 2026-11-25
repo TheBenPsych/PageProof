@@ -93,7 +93,7 @@ function stChecker(m) {
     <div><h3 class="st-h3">Said Maybe</h3>${stStack(parts(cp.maybe))}</div>
     <p class="faint" style="margin:0;font-size:12.5px">Copies you added by hand with "It is a copy" (the checker missed them): ${stN(cp.rescued || 0)} so far, ${stN(c('ans.rescued'))} in this time.</p>
     ${stByKind(cp.byKind)}
-    ${c('chk.second.kept') + c('chk.second.maybe') + c('chk.second.out') + c('chk.second.saved') ? `<p class="faint" style="margin:0;font-size:12.5px">Second look at full size: ${stN(c('chk.second.kept'))} close Same calls kept, ${stN(c('chk.second.maybe'))} made Maybe, ${stN(c('chk.second.out'))} thrown out · ${stN(c('chk.second.saved'))} of Google's exact matches saved, ${stN(c('chk.second.exactNo'))} still different.</p>` : ''}`);
+    ${c('chk.second.kept') + c('chk.second.maybe') + c('chk.second.out') + c('chk.second.saved') ? `<p class="faint" style="margin:0;font-size:12.5px">Second look at full size: ${stN(c('chk.second.kept'))} close Same calls kept, ${stN(c('chk.second.maybe'))} made Maybe, ${stN(c('chk.second.out'))} thrown out · ${stN(c('chk.second.saved'))} of Google's exact matches saved, ${stN(c('chk.second.page'))} found on their page, ${stN(c('chk.second.exactNo'))} still different.</p>` : ''}${c('chk.cover') ? `<p class="faint" style="margin:0;font-size:12.5px">Posts kept for a look at every picture (their cover was another photo): ${stN(c('chk.cover'))}.</p>` : ''}`);
 }
 // 4.47 (Ben's pick): where the checker goes wrong. The checker's answers next to yours for the
 // last 30 days, by kind of site (going by the site's address), so the fix that helps most shows.
@@ -133,7 +133,7 @@ function stSites(m) {
 }
 function stHelpers(m) {
   const D = m.D, c = k => SR().c(D, k);
-  const rows = [['page', 'Their page check (is it in the article?)'], ['own', 'No picture from the search site: read their page'], ['post', 'Post check (is it in the post?)'], ['acct', 'Account reader'], ['repost', 'Repost check'], ['owner', 'Who\'s behind this site']]
+  const rows = [['page', 'Their page check (is it in the article?)'], ['own', 'No picture from the search site: read their page'], ['exact', 'Google said exact: read their page'], ['post', 'Post check (is it in the post?)'], ['acct', 'Account reader'], ['repost', 'Repost check'], ['owner', 'Who\'s behind this site']]
     .filter(([k]) => c('job.' + k + '.n')).map(([k, l]) => [l, stN(c('job.' + k + '.n')), stMs(SR().usual(D, 'job.' + k)), stN(c('job.' + k + '.fail'))]);
   const lim = Object.entries(D.c).filter(([k]) => k.startsWith('limit.'));
   return stCard('Post check, account reader and site limits', 'The helpers that open pages in the background, with a speed limit per site.',

@@ -8,8 +8,22 @@
   const host = location.hostname;
   const engine = /(^|\.)google\.[a-z.]+$/.test(host) ? 'google' : /(^|\.)yandex\.[a-z.]+$/.test(host) ? 'yandex' : /(^|\.)bing\.com$/.test(host) ? 'bing' : null;
   if (!engine) return;
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
   const send = msg => { try { return api.runtime.sendMessage(msg); } catch (e) { return Promise.resolve(null); } };
+  // 4.50 (Ben's pick): this tab sits in the background, where the browser stretches every short
+  // wait to at least a second (ten waits of 0.15 s took 10 s in a test). So the waits come from
+  // PageProof's background clock, which is not slowed down. A tab on screen, or no answer from the
+  // background, uses the page's own timer as before.
+  const pageSleep = ms => new Promise(r => setTimeout(r, ms));
+  const sleep = ms => {
+    if (document.visibilityState === 'visible') return pageSleep(ms);
+    const t0 = Date.now();
+    return Promise.resolve(send({ type: 'rsSleep', ms })).catch(() => null)
+      .then(ok => { const left = ms - (Date.now() - t0); return ok || left <= 5 ? null : pageSleep(left); });
+  };
+  // 4.50 (Ben's pick): pictures that wait until they are scrolled into view never load in a
+  // background tab (0 of 80 in a test, even when scrolled), so they are told to load straight away.
+  // Pictures a page keeps in a data-... attribute until they are seen are read from there (imgSrc).
+  const eager = () => { try { for (const i of document.querySelectorAll('img[loading="lazy"], iframe[loading="lazy"]')) i.loading = 'eager'; } catch (e) { /* fine */ } };
 
   // Sites that belong to the search engines themselves never count as a match.
   const OWN = /(^|\.)(google\.[a-z.]+|gstatic\.com|googleusercontent\.com|googleapis\.com|googlesyndication\.com|doubleclick\.net|yandex\.[a-z.]+|ya\.ru|yastatic\.net|yandex\.net|bing\.com|bing\.net|bingapis\.com|microsoft\.com|msn\.com|live\.com|microsoftonline\.com)$/i;
@@ -113,6 +127,8 @@
   const imgSrc = img => {
     if (!img) return '';
     const tries = [img.currentSrc, img.src, img.getAttribute('data-src'), img.getAttribute('data-iurl'), img.getAttribute('data-lazy-src'), img.getAttribute('data-original')];
+    // 4.50: any other data-... attribute holding a picture address (lazy pictures in a background tab).
+    for (const a of img.attributes) if (/^data-/i.test(a.name) && /^(https?:\/\/|data:image\/)/i.test(a.value)) tries.push(a.value);
     for (const s of tries) {
       if (!s || PLACEHOLDER(s) || !/^(https?:|data:image)/.test(s) || s.length >= 200000) continue;
       try { return new URL(s, location.href).href; } catch (e) { /* not an address */ }
@@ -247,7 +263,9 @@
   async function settle() {
     // Let the results appear, and scroll down a little so more of them load.
     let last = -1, same = 0;
+    eager();
     for (let i = 0; i < 24; i++) {
+      eager();
       const n = document.querySelectorAll('a[href]').length;
       if (n === last && n > 30) { if (++same >= 3) break; } else same = 0;
       last = n;
@@ -258,7 +276,8 @@
     // into view; jumping straight to the bottom skipped the middle, and those results were read
     // with no picture ("Picture blocked").
     const stepH = Math.max(300, Math.round(innerHeight * 0.8));
-    for (let y = 0, n = 0; y < document.body.scrollHeight && n < 60; y += stepH, n++) { window.scrollTo(0, y); await sleep(150); }
+    for (let y = 0, n = 0; y < document.body.scrollHeight && n < 60; y += stepH, n++) { window.scrollTo(0, y); if (n % 4 === 3) eager(); await sleep(150); }
+    eager();
     await sleep(400);
     window.scrollTo(0, 0);
   }

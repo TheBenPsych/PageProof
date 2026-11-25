@@ -11,6 +11,19 @@ const $ = id => document.getElementById(id);
 // 4.42: jobs = the one-photo searches running now (at most 2: one with Google, and Yandex and Bing
 // on another photo while Google is still busy). lastG / lastF = when Google / Yandex and Bing last
 // started a photo. bgSkip = the photos a big search is doing (Keep searching leaves them alone).
+// 4.50: this pinned tab is in the background, where the browser slows its timers (to once a
+// minute after 5 minutes hidden), so the speed ladder's short gaps came late. Its waits come from a
+// worker's clock instead (timer-worker.js, the same one a running search uses).
+const RCLOCK = (() => {
+  let w = null, n = 0;
+  const cbs = new Map();
+  try { w = new Worker('timer-worker.js'); w.onmessage = e => { const c = cbs.get(e.data.id); if (c) { if (c.once) cbs.delete(e.data.id); c.fn(); } }; } catch (e) { w = null; }
+  return {
+    after(ms, fn) { if (!w) return setTimeout(fn, ms); const id = 'w' + (++n); cbs.set(id, { fn, once: true }); w.postMessage({ type: 'after', id, ms }); return id; },
+    every(ms, fn) { if (!w) return setInterval(fn, ms); const id = 'w' + (++n); cbs.set(id, { fn }); w.postMessage({ type: 'every', id, ms }); return id; },
+    cancel(id) { if (typeof id === 'string' && w) { cbs.delete(id); w.postMessage({ type: 'cancel', id }); } else { clearTimeout(id); clearInterval(id); } },
+  };
+})();
 const S = { me: null, jobs: [], lastG: 0, lastF: 0, bgSkip: new Set(), skip: new Set(), win: null, cpu: null, busyTicks: 0, ticking: false, allowAsked: 0 };
 const NAMES = { google: 'Google', yandex: 'Yandex', bing: 'Bing' };
 const MY_VER = api.runtime.getManifest().version;
@@ -249,7 +262,7 @@ async function step() {
     if ((gReady || !g) && (fReady || !fastE.length)) return status('idle', 'Every photo is up to date. PageProof looks again every hour. ' + tally + '.', ladExtra);
     const at = Math.max(now + 1000, Math.min(g ? gAt : Infinity, fastE.length ? fAt : Infinity));
     // The ladder's short gaps (20 to 60 seconds) are shorter than the 30-second check: wake up on time.
-    clearTimeout(S.wake); if (at - now < 30000) S.wake = setTimeout(tick, at - now + 200);
+    RCLOCK.cancel(S.wake); if (at - now < 30000) S.wake = RCLOCK.after(at - now + 200, tick);
     return status('waiting', 'Next photo at ' + time(at) + ' (' + why + '). ' + tally + '.' + (restText ? ' ' + restText + '.' : ''), { nextAt: at, ...ladExtra });
   }
   S.skip.add(p.id);
@@ -257,7 +270,7 @@ async function step() {
   if (pic.error) {
     // Could not be opened: it goes on the Skipped photos list (with the reason) and the line moves on.
     // A burst frame that waits behind its twin goes straight on to the next photo.
-    if (pic.burst) return setTimeout(tick, 1500);
+    if (pic.burst) return RCLOCK.after(1500, tick);
     return status(S.jobs.length ? 'running' : 'waiting', pic.soft ? 'Google Drive did not hand over ' + p.name + '. It is tried again later.' : 'Skipped ' + p.name + '. See why in Find copies › Skipped photos.', { current: firstCurrent() });
   }
   // Pause pressed while the photo was being read: it is not searched (and stays due).
@@ -290,7 +303,7 @@ async function step() {
   if ((await api.storage.local.get('fcPause')).fcPause) { await stopJob('paused'); return; }
   await status('running', runningText(tally), { current: firstCurrent(), ...ladExtra });
   // The other lane may be free straight away (Google busy, Yandex and Bing due).
-  if (S.jobs.length < most) setTimeout(tick, 3000);
+  if (S.jobs.length < most) RCLOCK.after(3000, tick);
 }
 
 // ---------------------------------------------------------------- big searches (4.11, Ben)
@@ -308,7 +321,7 @@ function bgDone() {
   $('big').hidden = true;
   api.storage.local.set({ fcFifty: { id, beat: 0, running: false } }).catch(() => {});
   FC.backupCopiesSoon();
-  bgDrop(id).then(() => setTimeout(() => { bgNext(); tick(); }, 2000));
+  bgDrop(id).then(() => RCLOCK.after(2000, () => { bgNext(); tick(); }));
 }
 let bgBusy = false;
 async function bgNext() {
@@ -395,7 +408,7 @@ async function fiftyWanted() {
 api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const done = msg && msg.type === 'fcAutoDone' && S.jobs.find(j => j.id === msg.job);
   if (done) {
-    S.jobs = S.jobs.filter(j => j !== done); setTimeout(tick, 2000);
+    S.jobs = S.jobs.filter(j => j !== done); RCLOCK.after(2000, tick);
     // The search tab closes straight away, so this window writes the text copy of the finds
     // (Documents › PageProof › found-copies.txt).
     FC.backupCopiesSoon();
@@ -456,9 +469,9 @@ $('open').onclick = e => { e.preventDefault(); api.tabs.create({ url: api.runtim
   addEventListener('beforeunload', e => { if (!reloading && !S.quit && clicked()) { e.preventDefault(); e.returnValue = ''; } });
   api.storage.onChanged.addListener(ch => { if (ch.ppRunnerQuit) S.quit = true; });
   tick();
-  setInterval(tick, 30000);
+  RCLOCK.every(30000, tick);
   bgNext();
-  setInterval(() => { if (BG.id) bgShow(); else bgNext(); }, 10000);
+  RCLOCK.every(10000, () => { if (BG.id) bgShow(); else bgNext(); });
   // "Still here", every 30 seconds, even in the middle of a long job (the weekly read of every
   // folder can take many minutes). Without it the background thought this window had closed and
   // kept opening a new one, which closed itself again straight away, about once a minute.

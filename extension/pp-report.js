@@ -63,6 +63,15 @@ const PP_REPORT = (() => {
         const st = x.status === 'removed' ? (x.removedBy ? 'removedByPageProof' : 'removedByYou') : x.status || 'new';
         m[st] = (m[st] || 0) + 1;
       }
+      // 4.50 (Ben's pick): the checker's own numbers for every copy you answered, so Claude can tune
+      // the checker's limits on your real answers. Numbers only: no site, address, client or photo.
+      // [answer, checker said, %, matching details, squares, closeness, middle, kind, sites, exact list, picture from]
+      const ANS = { stolen: 'S', licensed: 'L', removed: 'R' };
+      out.answersKey = 'answer S=stolen L=licensed R=removed by you H=added by hand | said s=same m=maybe | pct, inl, tiles, str, mid | kind | g/y/b sites | x=exact list | from';
+      out.answers = all.filter(x => x.answered && (/by hand/.test(x.by || '') || (ANS[x.status] && !x.removedBy)))
+        .sort((p, q) => String(q.answered).localeCompare(String(p.answered))).slice(0, 600)
+        .map(x => [/by hand/.test(x.by || '') ? 'H' : ANS[x.status], x.match === 'same' ? 's' : x.match === 'maybe' ? 'm' : '-', x.pct ?? null, x.inl ?? null, x.tiles ?? null, x.str ?? null, x.mid ?? null,
+          typeof PP_CTESTS !== 'undefined' ? PP_CTESTS.kindOf(x) : '', (x.engines || []).map(e => e[0]).join(''), x.exact ? 'x' : '', x.from || '']);
       const spam = FC.spamMarks ? FC.spamMarks(all) : new Map();
       for (const x of all) if (x.status === 'new') { if (spam.has(x.id)) out.spamNew++; if (x.rp && x.rp.state === 'repost') out.repostNew++; }
     } catch (e) { out.error = String(e && e.message || e); }
@@ -186,6 +195,7 @@ const PP_REPORT = (() => {
     L.push('  Fast checker ' + (m.fast == null ? 'not known' : m.fast ? 'on' : 'off') + ' · graphics card ' + (m.gpu == null ? 'not used yet' : m.gpu ? 'in use' : 'not available') + ' · ' + (m.checks || '?') + ' checks at once');
     L.push('  One check: ' + ms(usual(D, 'chk.all')) + ' usual (' + num((t(D, 'chk.all') || {}).n) + ' checks) · Different ' + ms(usual(D, 'chk.no')) + ' · Same ' + ms(usual(D, 'chk.same')) + ' · Maybe ' + ms(usual(D, 'chk.maybe')));
     L.push('  Waiting for a free checker: ' + ms(usual(D, 'chk.wait')) + ' usual, ' + ms((t(D, 'chk.wait') || {}).x) + ' slowest · could not check (over 30 s) ' + num(c(D, 'chk.stuck')));
+    L.push('  Second looks: close Same kept ' + num(c(D, 'chk.second.kept')) + ', made Maybe ' + num(c(D, 'chk.second.maybe')) + ', thrown out ' + num(c(D, 'chk.second.out')) + ' · exact saved ' + num(c(D, 'chk.second.saved')) + ', found on their page ' + num(c(D, 'chk.second.page')) + ', still different ' + num(c(D, 'chk.second.exactNo')) + ' · posts kept to check every picture ' + num(c(D, 'chk.cover')) + ' · slow look ' + ms(usual(D, 'chk.deep')));
     if (m.test) L.push('  Checker test: ' + m.test.right + ' of ' + m.test.n + ' right, ' + ms(m.test.ms) + ' each, ' + new Date(m.test.at).toLocaleString('en-US') + ' (' + Object.values(m.test.groups).map(g => g.label + ' ' + g.right + '/' + g.n).join(', ') + ')');
     else L.push('  Checker test: not run yet');
     if (m.realtest) L.push('  Your real pairs: ' + m.realtest.right + ' of ' + m.realtest.n + ' right (kept but removed ' + m.realtest.wrongKept + ', missed ' + m.realtest.missed + '; ' + Object.entries(m.realtest.byKind || {}).map(([k, v]) => k + ' ' + v.right + '/' + v.n).join(', ') + ')');
@@ -203,7 +213,7 @@ const PP_REPORT = (() => {
     L.push('', 'Problems by website (failed / too slow / blocked us)');
     if (!sites.length) L.push('  None.'); else for (const [s, v] of sites) L.push('  ' + s + ': ' + v.f + ' / ' + v.s + ' / ' + v.b);
     L.push('', 'Helpers');
-    for (const [k, l] of [['page', 'Their page check (during searches)'], ['own', 'No picture from the search site: read their page instead'], ['post', 'Post check (Copies found)'], ['acct', 'Account reader'], ['repost', 'Repost check'], ['owner', 'Who\'s behind this site']]) if (c(D, 'job.' + k + '.n')) L.push('  ' + l + ': ' + num(c(D, 'job.' + k + '.n')) + ' done, ' + ms(usual(D, 'job.' + k)) + ' usual, ' + num(c(D, 'job.' + k + '.fail')) + ' failed');
+    for (const [k, l] of [['page', 'Their page check (during searches)'], ['own', 'No picture from the search site: read their page instead'], ['exact', 'Google said exact: read their page'], ['post', 'Post check (Copies found)'], ['acct', 'Account reader'], ['repost', 'Repost check'], ['owner', 'Who\'s behind this site']]) if (c(D, 'job.' + k + '.n')) L.push('  ' + l + ': ' + num(c(D, 'job.' + k + '.n')) + ' done, ' + ms(usual(D, 'job.' + k)) + ' usual, ' + num(c(D, 'job.' + k + '.fail')) + ' failed');
     const lim = Object.entries(D.c).filter(([k]) => k.startsWith('limit.'));
     if (lim.length) L.push('  Site limits: ' + lim.map(([k, n]) => k.replace('limit.rest.', 'rested ').replace('limit.held.', 'held for ') + ' ' + n).join(', '));
     const km = keepMinutes(D);

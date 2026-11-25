@@ -45,10 +45,10 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     const fakeNo = { pct: 0, inl: 0, tiles: 0, str: 0, mid: null, n: 0, sv: SCORE_VERSION };
     const thin = { pct: 78, inl: 16, tiles: 25, str: 0.9, mid: 0.8, n: 100, sv: SCORE_VERSION };
     const cropUrl = await dataUrl(await jpeg(crop)), otherUrl = await dataUrl(await jpeg(other)), tinyUrl = await dataUrl(await jpeg(tiny));
-    const a = await secondLook(p, { url: 'https://news-example.com/a', img: '', thumb: tinyUrl, exact: true, engines: ['google'] }, fakeNo);
+    const a = await secondLook(p, { url: 'https://news-example.com/a', img: '', thumb: tinyUrl, exact: true, gx: true, engines: ['google'] }, fakeNo);
     const b = await secondLook(p, { url: 'https://blog-example.com/b', img: otherUrl, engines: ['bing'] }, thin);
     const c = await secondLook(p, { url: 'https://blog-example.com/c', img: cropUrl, engines: ['bing'] }, thin);
-    const d = await secondLook(p, { url: 'https://blog-example.com/d', img: otherUrl, exact: true, engines: ['google'] }, fakeNo);
+    const d = await secondLook(p, { url: 'https://blog-example.com/d', img: otherUrl, exact: true, gx: true, engines: ['google'] }, fakeNo);
     const e = await secondLook(p, { url: 'https://blog-example.com/e', img: otherUrl, engines: ['bing'] }, fakeNo);
     return { a: [a.second, PP_VERDICT.score(a), a.pct], b: [b.second, PP_VERDICT.score(b), b.pct], c: [c.second, PP_VERDICT.score(c), c.pct], d: [d.second, PP_VERDICT.score(d)], e: [e.second || '', e === fakeNo] };
   });
