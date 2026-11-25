@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.60.2** (25 Nov 2026).
+Last updated: version **4.61.0** (25 Nov 2026).
 
 ---
 
@@ -111,6 +111,7 @@ Last updated: version **4.60.2** (25 Nov 2026).
 - **Credit search on Google and Bing.** Each wording is searched on both; a page both list (even spelled a little differently) is read once. A robot check rests only that site for an hour and the other carries on. (4.52)
 - **Photos you stopped.** The client's photos page counts photos nobody searches any more, can show only those, and has Stop searching / Search again for picked photos. (4.55)
 - **One at a time: Websites, Social media or All.** A switch at the top picks which copies to go through; the choice is remembered. (4.56)
+- **Searches run in their own minimized window.** All search tabs open in one minimized "PageProof searching" window instead of pinned tabs in yours; Keep searching › Where searches run switches back to pinned tabs. (4.61)
 
 ## 5. Review the copies found
 
@@ -344,3 +345,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.60 | 25 Nov | Site popularity tags and known bad site lists |
 | 4.60.1 | 25 Nov | Fix: "Who's behind it" box removed from the capture page |
 | 4.60.2 | 25 Nov | Fix: Copies found and One at a time stay put while you look |
+| 4.61 | 25 Nov | Search tabs move to a separate minimized window (setting to keep pinned tabs) |
