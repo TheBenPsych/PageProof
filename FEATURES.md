@@ -49,7 +49,6 @@ Last updated: version **4.60.0** (25 Nov 2026).
 - **Clock check:** warns if this computer's clock is off compared with the timestamp services. (4.15)
 - Guides: VERIFYING.md (how anyone checks a pack), TUTORIAL.md, and a Word install guide for the team.
 - **Never short on timestamps.** A timestamp service that doesn't answer is asked again twice, then GlobalSign or Entrust stand in, so every pack gets three trusted timestamps. (4.41)
-- **Who's behind it, in the same pack.** The capture page offers the site's About, Contact and Privacy pages (or the account's profile); each is captured, saved as who/<page>.pdf and covered by the pack's fingerprints and timestamps. (4.45)
 
 ## 3. Look closer at pictures
 

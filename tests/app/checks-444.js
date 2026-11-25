@@ -1,8 +1,7 @@
 // 4.45 Home and evidence release (mechanics review, Ben's picks): Home opens instantly (a kept
 // summary), "Look at these first" (strong claims), "Since you were last here", clients falling
-// behind, and who's behind it captured into the same evidence pack. Made-up sites only.
+// behind, (the who's-behind-it box was removed later). Made-up sites only.
 const { start } = require('./h.js');
-const http = require('http');
 let fails = 0;
 const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m); };
 (async () => {
@@ -57,60 +56,12 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const f = await page.evaluate(() => ({ rows: [...document.querySelectorAll('.crow')].map(r => (r.querySelector('.l1 b') || {}).textContent), tag: document.body.innerText.includes('Strong claims') }));
   ok(f.tag && f.rows.length === 2 && f.rows.includes('thief-example.com') && f.rows.includes('shop-example.com'), 'Look at these first shows only the strong claims: ' + f.rows.join(', '));
 
-  // ---- Who's behind it: the links on the captured page, and capturing them into the pack
-  let base = '';
-  const srv = http.createServer((q, r) => {
-    r.writeHead(200, { 'content-type': 'text/html' });
-    if (q.url === '/about-us') return r.end('<html><body style="background:#cde"><h1>About Example News</h1><p>Owned by Example Media LLC.</p></body></html>');
-    r.end('<html><body><h1>Story</h1><a href="/about-us">About us</a> <a href="/contact">Contact</a> <a href="/privacy-policy">Privacy</a> <a href="https://elsewhere.com/about">Other</a></body></html>');
-  });
-  await new Promise(r => srv.listen(0, '127.0.0.1', r));
-  base = 'http://127.0.0.1:' + srv.address().port;
+  // ---- Who's behind it box: removed (Ben: not useful). The capture page has no box for it.
   const v = await ctx.newPage();
   await v.goto(url('viewer.html')); await v.waitForTimeout(800);
-  const links = await v.evaluate(base => ({
-    site: whoLinks({ url: base + '/story', html: '<a href="/about-us">About us</a> <a href="/contact">Contact</a> <a href="/privacy-policy">Privacy</a> <a href="https://elsewhere.com/about">Other</a>' }).map(w => w.kind + (w.on ? '+' : '-') + ' ' + w.url.replace(base, '')),
-    soc: whoLinks({ url: 'https://x.com/sample_account/status/123', html: '' }).map(w => w.kind + ' ' + w.url),
-  }), base);
-  ok(links.site.join(',') === 'about+ /about-us,contact+ /contact,privacy- /privacy-policy', 'a website gives its About and Contact pages (ticked) and Privacy (not ticked): ' + links.site.join(', '));
-  ok(links.soc.length === 1 && /x\.com\/sample_account$/.test(links.soc[0]), 'a social post gives the account\'s profile page: ' + links.soc.join(', '));
-  const w = await v.evaluate(async base => {
-    const r = await chrome.runtime.sendMessage({ type: 'captureWho', list: [['about', base + '/about-us']] });
-    const g = r && r.pages && r.pages[0];
-    const wr = g && g.id ? await PP_DB.get(g.id) : null;
-    const pdf = wr ? await whoPdf(wr) : null;
-    const log = (await chrome.storage.local.get('log')).log || [];
-    return { ok: r && r.ok, err: g && g.error, who: wr && wr.who, pdf: pdf ? pdf.size : 0, inLog: log.some(e => g && e.id === g.id) };
-  }, base);
-  ok(w.ok && w.who === 'about' && w.pdf > 1000, 'the About page is captured like any page and becomes its own PDF: ' + JSON.stringify(w));
-  ok(!w.inLog, 'it is not listed as a capture of its own (it belongs to the main pack)');
-  // The whole flow on the capture page: capture the story, add its About and Contact pages, save.
-  const sw = ctx.serviceWorkers()[0];
-  const site = await ctx.newPage(); await site.goto(base + '/story'); await site.waitForTimeout(900); await site.bringToFront();
-  const [cv] = await Promise.all([
-    ctx.waitForEvent('page', { predicate: x => x.url().includes('viewer.html?id'), timeout: 120000 }),
-    sw.evaluate(async () => { const [t] = await chrome.tabs.query({ active: true, lastFocusedWindow: true }); startCapture(t); }),
-  ]);
-  cv.on('pageerror', e => { fails++; console.log('PAGEERROR viewer', String(e).slice(0, 300)); });
-  await cv.waitForSelector('#pack');
-  await cv.waitForFunction(() => !document.getElementById('pack').disabled, null, { timeout: 180000 });
-  const box = await cv.evaluate(() => ({ shown: !document.getElementById('whoBox').hidden, rows: [...document.querySelectorAll('#whoList .whorow')].map(r => r.textContent.trim() + (r.querySelector('input').checked ? ' ✓' : '')) }));
-  ok(box.shown && box.rows.includes('About page ✓') && box.rows.includes('Contact page ✓'), 'the capture page offers Who\'s behind it: ' + box.rows.join(', '));
-  await cv.click('#whoAdd');
-  await cv.waitForFunction(() => /Added|Try again/.test(document.getElementById('whoAdd').textContent), null, { timeout: 240000 });
-  const after = await cv.evaluate(() => ({ note: document.getElementById('whoNote').textContent, details: document.getElementById('details').textContent }));
-  ok(/Added to this pack: About page, Contact page/.test(after.note) && /who\/about\.pdf/.test(after.details) && /who\/contact\.pdf/.test(after.details), 'both pages go into the pack and its fingerprints: ' + after.note.slice(0, 120));
-  await cv.fill('#caseRef', 'CASE-0002'); await cv.fill('#collector', 'Tester');
-  const dl = cv.waitForEvent('download', { timeout: 30000 }).catch(() => null);
-  await cv.click('#pack'); await cv.waitForTimeout(600);
-  if (await cv.evaluate(() => !document.getElementById('checkBox').hidden)) await cv.click('#ckAnyway');      // the made-up story page is short
-  const d = await dl;
-  const zip = d ? require('fs').readFileSync(await d.path()) : Buffer.alloc(0);
-  ok(zip.includes('who/about.pdf') && zip.includes('who/contact.pdf') && zip.includes('README.txt'), 'the saved evidence pack holds who/about.pdf and who/contact.pdf' + (d ? '' : ' (no download: ' + await cv.evaluate(() => document.getElementById('checkBox').textContent + ' | ' + document.getElementById('status').textContent) + ')'));
-  await cv.close(); await site.close();
-  const rd = await v.evaluate(() => ppReadme({ captureId: 'PP-TEST', version: '1', url: 'https://site.com', time: new Date().toISOString(), base: 'x', stamps: [], notes: [], who: [{ label: 'About page', name: 'who/about.pdf' }] }));
-  ok(/who\//.test(rd) && /About page \(about\.pdf\)/.test(rd), 'README explains the who/ folder');
-  srv.close();
+  const gone = await v.evaluate(() => ({ box: !!document.getElementById('whoBox'), fn: typeof whoOffer !== 'undefined' || typeof whoLinks !== 'undefined' }));
+  ok(!gone.box && !gone.fn, 'the capture page has no Who\'s behind it box any more');
+  await v.close();
 
   console.log(fails ? fails + ' FAILED' : 'ALL PASS');
   await ctx.close();
