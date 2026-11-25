@@ -438,7 +438,7 @@ function readPostInTab() {
 // The row's first line on the Social media tab: the account leads.
 function socLine(c) {
   const a = c.acct;
-  return `<div class="l1 soc">${platBadge(c)}${a ? acctHtml(a) : '<b class="nofind">Account not found yet</b>'}<span class="pkind">${esc(postWord(c))}</span>${c.status !== 'new' ? tagFor(c) : ''}${rpTags(c)}
+  return `<div class="l1 soc">${platBadge(c)}${a ? acctHtml(a) : '<b class="nofind">Account not found yet</b>'}<span class="pkind">${esc(postWord(c))}</span>${c.status !== 'new' ? tagFor(c) : ''}${typeof clRowTag === 'function' ? clRowTag(c) : ''}${rpTags(c)}
     ${a && c.repeat && c.status === 'new' ? `<span class="tag bad" title="You marked this account stolen before">Marked stolen ${c.repeat === 1 ? 'once' : c.repeat + ' times'} before</span>` : ''}
     ${a ? acctBadges(c) : ''}
     ${!a ? `<button class="btn sm ghost setacct" data-act="openacct" data-v="${esc(c.id)}">Set account</button>` : a.sure === 'likely' ? '<span class="tag warn" title="Read from the page\'s text. Check it once.">Account: likely</span>' : ''}${sigIcons(c)}</div>`;

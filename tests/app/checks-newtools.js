@@ -167,7 +167,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     c.img = 'https://onestolen-example.com/wp-content/uploads/b.jpg'; c.engines = ['google', 'bing']; c.pf = { ok: true, ads: ['Google ads'], sells: { product: false, cart: false, price: '' } };
     await FC.DB.put('copies', c);
     await chrome.storage.local.set({ log: [{ url: c.url, time: new Date().toISOString(), captureId: 'PP-TEST1234', saves: [{ at: new Date().toISOString(), file: 'CASE-77_onestolen-example.com_2026-11-25_PP-TEST1234.zip', caseRef: 'CASE-77' }] }] });
-    FCD = null; state.open = c.id; await render(true); ACTS.dtab('claim'); await new Promise(r => setTimeout(r, 1200));
+    await clSet(c.id, { skip: 'good,owner,capture,report' });   // 4.63: the portal card is the claim's last step
+    FCD = null; state.open = c.id; await render(true); await new Promise(r => setTimeout(r, 1200));
     const box = document.getElementById('portalcard');
     return box ? { labels: [...box.querySelectorAll('.prow .pk')].map(x => x.textContent), text: box.innerText } : null;
   });
