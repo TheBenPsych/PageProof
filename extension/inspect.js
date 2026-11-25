@@ -180,6 +180,22 @@ function render() {
   row('📐', 'Size', (m.width ? m.width + ' × ' + m.height + ' · ' : '') + fmtBytes(m.size) + ' ' + m.format);
   row('🔑', 'SHA-256', c.sha.slice(0, 8) + ' … ' + c.sha.slice(-8), { copy: c.sha });
   $('sumCard').hidden = false;
+  // UI overhaul batch 6: under the picture, the plain-English sentence first, then six fact cards.
+  const facts = $('facts');
+  if (facts) {
+    facts.textContent = '';
+    if (s.sentence && s.level !== 'none') facts.append(el('p', 'tp-plain', s.sentence));
+    const grid = el('div', 'tp-fgrid');
+    const fact = (icon, k, v, none) => { const c = el('div', 'tp-fact' + (v ? '' : ' none')); c.append(el('span', 'fi', icon), el('div', null, '')); c.lastChild.append(el('b', null, k), el('span', null, v || none)); grid.append(c); };
+    fact('📷', 'Camera', [s.camera, s.lens].filter(Boolean).join(' · '), 'Not saved');
+    fact('📅', 'Taken', s.taken, 'Not saved');
+    fact('©', 'Copyright', s.copyright, 'Not saved');
+    fact('🏷️', 'Credit', s.credit || s.creator, 'Not saved');
+    fact('📍', 'Place', s.gps ? s.gps.lat + ', ' + s.gps.lon : '', 'Not saved');
+    fact('🛡️', 'Content Credentials', m.c2pa ? 'Found' + (m.c2pa.generator ? ': ' + m.c2pa.generator : '') : '', 'None found');
+    facts.append(grid);
+    facts.hidden = false;
+  }
 
   // Folded details
   const folds = $('folds');
@@ -259,7 +275,7 @@ async function showGallery(rec) {
   $('domain').textContent = hostOf(rec.page) || 'This page';
   $('url').textContent = rec.page || '';
   $('sub').textContent = 'Click a picture on the right to inspect it';
-  for (const id of ['sumCard', 'caseBox', 'warn', 'ai', 'notice']) $(id).hidden = true;
+  for (const id of ['sumCard', 'caseBox', 'warn', 'ai', 'notice', 'facts']) $(id).hidden = true;
   $('folds').textContent = '';
   for (const b of ['pack', 'pdf', 'markup', 'copy', 'orig', 'compare']) $(b).disabled = true;
   const items = rec.items;

@@ -7,27 +7,25 @@
 <link rel="stylesheet" href="viewer.css">
 <link rel="stylesheet" href="markup.css">
 <link rel="stylesheet" href="ui/tools-look.css">
+<link rel="stylesheet" href="ui/page-look.css">
+<link rel="stylesheet" href="ui/tool-page.css">
 <script src="theme.js"></script>
 <script src="pp-guard.js"></script>
 <script src="ui/tool-icons.js" defer></script>
 </head>
-<body class="with-side">
+<body class="with-side tp tp-markup" data-head="pickLbl">
+  <div class="pg-head tp-head" id="tpHead">
+    <div><h1>Mark up a copy</h1><p>Highlight, box and arrow on a copy. Your evidence pack is never changed.</p></div>
+    <div class="tp-act" id="tpAct"><button id="png" class="tile small" disabled data-why="Add a picture first (Add an image, or drop one here)." title="Save the marked-up copy as a picture file">⬇ Save as PNG</button><button id="pdf" class="tile small" disabled data-why="Add a picture first (Add an image, or drop one here)." title="Save the marked-up copy as a PDF file">⬇ Save as PDF</button><button id="copy" class="main" disabled data-why="Add a picture first (Add an image, or drop one here)." title="Copy the marked-up picture so you can paste it into an email or document (Ctrl+C)">📋 Copy image</button></div>
+  </div>
   <aside id="side">
     <div class="brand"><img src="icons/icon48.png" alt="" width="22" height="22"> PageProof Markup</div>
     <div class="site">
-      <div id="domain">Markup</div>
-      <div id="sub" class="url">Highlight, draw and type on a copy of a capture</div>
+      <div id="domain"></div>
+      <div id="sub" class="url"></div>
       <div id="when"></div>
     </div>
 
-    <section class="out">
-      <h3>Share your marked-up copy</h3>
-      <button id="copy" class="main save" disabled data-why="Add a picture first (Add an image, or drop one here)." title="Copy the marked-up picture so you can paste it into an email or document (Ctrl+C)">📋 Copy image</button>
-      <div class="grid">
-        <button id="png" class="tile small" disabled data-why="Add a picture first (Add an image, or drop one here)." title="Save the marked-up copy as a picture file">⬇ Save as PNG</button>
-        <button id="pdf" class="tile small" disabled data-why="Add a picture first (Add an image, or drop one here)." title="Save the marked-up copy as a PDF file">⬇ Save as PDF</button>
-      </div>
-    </section>
 
     <div id="toolbar" hidden>
       <section>
@@ -66,18 +64,18 @@
     </div>
 
     <nav class="links" id="themeSlot">
-      <label class="filebtn" title="Start over with an evidence pack (.zip), a PageProof PDF, or any picture">📂 Open a different capture<input type="file" id="pick" accept=".zip,.pdf,image/*" hidden></label>
-      <a href="log.html" target="_blank">📒 Capture log</a>
-      <a href="verify.html" target="_blank">✅ Verify a pack</a>
-    </nav>
+      <label class="filebtn" id="pickLbl" title="Start over with an evidence pack (.zip), a PageProof PDF, or any picture">📂 Open a different capture<input type="file" id="pick" accept=".zip,.pdf,image/*" hidden></label>
+          </nav>
   </aside>
 
   <div id="content">
   <div id="status"></div>
 
-  <div class="drop" id="drop" hidden>
+  <div class="drop tp-drop" id="drop" hidden>
+    <div class="ph">🖼️</div>
+    <h2>Drop a capture or picture here</h2>
+    <p class="alt">a picture, a PageProof evidence pack (.zip) or a PageProof PDF, or paste with <kbd>Ctrl</kbd>+<kbd>V</kbd></p>
     <button id="addImage" class="main big">📂 Open a capture or picture</button>
-    <p>Choose a picture, a PageProof evidence pack (.zip) or a PageProof PDF to mark up.<br>You can also drag one onto this page, or paste a picture (Ctrl+V).</p>
   </div>
 
   <main id="stage" hidden>
@@ -92,6 +90,7 @@
   <script src="pdf.js"></script>
   <script src="unzip.js"></script>
   <script src="markup.js"></script>
+  <script src="ui/tool-page.js"></script>
 <script src="ui/why.js"></script>
 </body>
 </html>

@@ -19,3 +19,26 @@
 .mthumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; background: var(--sunk); }
 .mfind { border-color: var(--bad); background: var(--bad-soft); }
 .mini-body a { color: var(--accent); }
+/* UI overhaul batch 8 */
+.mcap .msl { width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,.2); display: grid; place-items: center; font-weight: 800; font-size: 18px; text-transform: uppercase; flex-shrink: 0; }
+.mcap .mct { flex: 1; min-width: 0; }
+.mcap .mct small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mcap > svg { flex-shrink: 0; opacity: .9; }
+.mtiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.mtile { display: flex; flex-direction: column; align-items: flex-start; gap: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; text-align: left; box-shadow: var(--shadow); }
+.mtile:hover { border-color: var(--accent); }
+.mtile b { font-size: 20px; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.mtile span { font-size: 11.5px; color: var(--muted); }
+.mtile.blue b { color: var(--accent); } .mtile.amber b { color: var(--warn); }
+.mthumbs { grid-template-columns: repeat(5, 1fr); }
+.mth { padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--sunk); cursor: pointer; aspect-ratio: 1; }
+.mth img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 0; }
+.mth:hover { border-color: var(--accent); }
+.mth.more { font: inherit; font-weight: 700; font-size: 14px; color: var(--muted); }
+.mline .switch { transform: scale(.85); transform-origin: left center; margin-right: -4px; }
+.mlive { font-size: 12.5px; }
+.mprog { height: 8px; border-radius: 99px; background: var(--sunk); overflow: hidden; }
+.mprog i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+.msec { box-shadow: var(--shadow); }
+.mline b { white-space: nowrap; }
+.mline .tag { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; }

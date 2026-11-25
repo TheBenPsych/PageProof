@@ -29,13 +29,13 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const go = async h => { await page.goto(url('app.html#' + h)); await page.waitForTimeout(1300); };
   await go('help'); await seed(page); await page.reload(); await page.waitForTimeout(1200);
 
-  // 1. Menu: five items
+  // 1. Menu: six items (UI overhaul batch 6 added Tools)
   const nav = await page.evaluate(() => [...document.querySelectorAll('#side a.nav .t b')].map(b => b.textContent.trim()));
-  ok(JSON.stringify(nav) === JSON.stringify(['Home', 'Copies found', 'Clients', 'Evidence', 'Settings']), 'Menu has 5 items: ' + nav.join(', '));
+  ok(JSON.stringify(nav) === JSON.stringify(['Home', 'Copies found', 'Clients', 'Evidence', 'Tools', 'Settings']), 'Menu has 6 items: ' + nav.join(', '));
   await go('keep');
   ok(await page.evaluate(() => !!document.querySelector('#side .nav.on') && /Copies found/.test(document.querySelector('#side .nav.on').textContent) && !!document.querySelector('#side .subs a.on[href="#keep"]')), 'Keep searching lives under Copies found');
   await go('inspect');
-  ok(await page.evaluate(() => /Evidence/.test(document.querySelector('#side .nav.on').textContent)), 'Photo tools light up Evidence');
+  ok(await page.evaluate(() => /Tools/.test(document.querySelector('#side .nav.on').textContent) && !!document.querySelector('#side .subs a.on[href="#inspect"]')), 'Inspect a photo lights up Tools');
 
   // 2. Home: What to do now
   await go('home'); await page.waitForTimeout(800); await shot('414-home');

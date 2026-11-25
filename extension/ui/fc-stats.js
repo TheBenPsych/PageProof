@@ -11,6 +11,11 @@ function stBars(rows, colour) {
   const max = Math.max(1, ...rows.map(r => r[1]));
   return `<div class="st-bars">${rows.map(([l, n, c, why]) => `<div class="st-bar"${why ? ` title="${esc(why)}"` : ''}><span>${esc(l)}</span><span class="st-track"><i style="width:${n ? Math.max(1.5, n / max * 100) : 0}%;background:${c || colour || 'var(--accent)'}"></i></span><b class="num">${stN(n)}</b></div>`).join('')}</div>`;
 }
+// UI overhaul batch 7: "From search to copy" as a funnel: centred bars that narrow, the number on the right.
+function stFunnel(rows) {
+  const max = Math.max(1, ...rows.map(r => r[1]));
+  return `<div class="fun">${rows.map(([l, n, c], i) => `<div class="fun-r"><span class="fun-l">${esc(l)}</span><span class="fun-t"><i style="width:${n ? Math.max(3, n / max * 100) : 0}%;background:${c}"></i></span><b class="num">${stN(n)}</b>${i && rows[0][1] ? `<small class="faint">${Math.round(n / rows[0][1] * 100)}%</small>` : '<small></small>'}</div>`).join('')}</div>`;
+}
 function stStack(parts) {
   const tot = parts.reduce((a, p) => a + p[1], 0);
   if (!tot) return '<p class="faint" style="margin:0;font-size:13px">Nothing yet.</p>';
@@ -52,7 +57,7 @@ function stFound(m) {
   const dropped = SR().DROP.reduce((a, [k]) => a + c('drop.' + k), 0);
   const per = SR().lastDays(30).map(k => SR().c(m.days[k], 'copies.new'));
   return stCard('From search to copy', 'What the searches found, and how much of it became a copy for you to answer.',
-    `<div class="st-funnel">${stBars([['Links found', c('links'), '#2563EB'], ['Thrown out', dropped, '#94A3B8'], ['Same photo', c('kept.same'), 'var(--ok)'], ['Maybe', c('kept.maybe'), '#0EA5E9'], ['New copies', c('copies.new'), 'var(--copy)']])}</div>
+    `<div class="st-funnel">${stFunnel([['Links found', c('links'), '#2563EB'], ['Thrown out', dropped, '#94A3B8'], ['Same photo', c('kept.same'), 'var(--ok)'], ['Maybe', c('kept.maybe'), '#0EA5E9'], ['New copies', c('copies.new'), 'var(--copy)']])}</div>
     <div class="st-grid3">
       <div><small class="muted">Photos searched</small><b class="num">${stN(c('photos'))}</b><small class="faint">${stN(c('photos.withLinks'))} with any link · ${stN(c('photos.withNew'))} with a new copy</small></div>
       <div><small class="muted">You answered</small><b class="num">${stN(c('ans.stolen') + c('ans.licensed') + c('ans.removed'))}</b><small class="faint">Stolen ${stN(c('ans.stolen'))} · Licensed ${stN(c('ans.licensed'))} · Removed ${stN(c('ans.removed'))}</small></div>

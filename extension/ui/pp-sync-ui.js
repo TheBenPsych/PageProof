@@ -167,13 +167,10 @@ V.moving = async () => {
     if (!PP_SYNC.supported) return html;
     const [col, txt] = await PP_SYNC.backupLook();
     const ts = await PP_SYNC.state('team'), t = (await api.storage.local.get('ppTeam')).ppTeam || {};
-    const cards = `<section class="card pad" id="setBackups" style="display:flex;flex-direction:column;gap:12px"><div class="row"><h2>Backups</h2><span class="tag ${SYNC_TAG[col]}" style="margin-left:auto">${col === 'ok' ? 'Backed up' : col === 'bad' ? 'Needs you' : 'Not yet'}</span></div>
-        <p class="muted" style="margin:0;font-size:14px">${esc(txt)}</p>
-        <div class="row" style="gap:8px"><a class="btn" href="#backups">Backups and restore</a><a class="btn ghost" href="#moving">Moving to a new computer</a></div></section>
-      <section class="card pad" id="setTeam" style="display:flex;flex-direction:column;gap:12px"><div class="row"><h2>Team lists</h2><span class="tag ${ts === 'granted' ? 'ok' : ts === 'offline' ? 'bad' : ts === 'prompt' ? 'warn' : 'grey'}" style="margin-left:auto">${ts === 'granted' ? 'Sharing' : ts === 'offline' ? 'Drive isn\'t answering' : ts === 'prompt' ? 'Needs one click' : 'Not set up'}</span></div>
-        <p class="muted" style="margin:0;font-size:14px">${ts === 'granted' ? teamPeopleText(t) + (t.nDisagree ? ` <b style="color:var(--warn)">The team disagrees on ${t.nDisagree}.</b>` : '') : 'Share hidden and approved sites and accounts with your team.'}</p>
-        <a class="btn" style="align-self:flex-start" href="#team">${ts === 'none' ? 'Set it up' : 'Open team lists'}</a></section>`;
-    return html.replace('<div class="grid g2">', '<div class="grid g2">' + cards);
+    const cards = sLine('Backups', esc(txt), `<span class="tag ${SYNC_TAG[col]}">${col === 'ok' ? 'Backed up' : col === 'bad' ? 'Needs you' : 'Not yet'}</span><a class="btn" href="#backups">Backups and restore</a><a class="btn ghost" href="#moving">Moving computer</a>`, 'setBackups') +
+      sLine('Team lists', ts === 'granted' ? teamPeopleText(t) + (t.nDisagree ? ` <b style="color:var(--warn)">The team disagrees on ${t.nDisagree}.</b>` : '') : 'Share hidden and approved sites and accounts with your team.',
+        `<span class="tag ${ts === 'granted' ? 'ok' : ts === 'offline' ? 'bad' : ts === 'prompt' ? 'warn' : 'grey'}">${ts === 'granted' ? 'Sharing' : ts === 'offline' ? 'Drive isn\'t answering' : ts === 'prompt' ? 'Needs one click' : 'Not set up'}</span><a class="btn" href="#team">${ts === 'none' ? 'Set it up' : 'Open team lists'}</a>`, 'setTeam');
+    return html.replace('<!--sync-->', cards);
   };
   V.settings.after = oldAfter;
 }
