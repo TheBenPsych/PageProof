@@ -1,9 +1,10 @@
 // Site pace and "too many requests" rests (Ben, 2026-11-25: Instagram showed him "HTTP ERROR 429"
 // on /p/ post links in his own browser, because PageProof had read many Instagram posts in a row).
 //
-// 1. Instagram and Threads pages are read at most one every 30 seconds by ALL of PageProof together
-//    (search page checks, post checks, account reader, repost check, quiet tabs), and at most
-//    300 a day. Every other site goes as fast as before.
+// 1. Social sites are read at a safe pace by ALL of PageProof together (search page checks, post
+//    checks, account reader, repost check, quiet tabs): Instagram, Threads and LinkedIn one page
+//    every 30 seconds, Facebook 20, X and TikTok 15, Pinterest and Tumblr 10, YouTube 5 (see GAP
+//    and DAY). Other websites go as fast as before.
 // 2. When any site answers 429 ("too many requests"), PageProof leaves that site alone for a while:
 //    1 hour the first time, then 2, 4, 8, at most 12 hours if it happens again within a day.
 //    The background page also sees a 429 in your own tabs (Instagram, Facebook, Threads), so when
@@ -13,10 +14,13 @@
 (() => {
   const api = globalThis.browser || globalThis.chrome;
   const KEY = 'ppSiteRest';
-  const GAP = { 'instagram.com': 30000, 'threads.net': 30000 };
-  const DAY = { 'instagram.com': 300, 'threads.net': 300 };
+  // 4.64 (Ben: "the same rules for other socials"): seconds between two pages of the site, and the
+  // most pages a day, for all of PageProof together. Stricter sites wait longer.
+  const S = 1000;
+  const GAP = { 'instagram.com': 30 * S, 'threads.net': 30 * S, 'linkedin.com': 30 * S, 'facebook.com': 20 * S, 'x.com': 15 * S, 'tiktok.com': 15 * S, 'pinterest.com': 10 * S, 'tumblr.com': 10 * S, 'youtube.com': 5 * S };
+  const DAY = { 'instagram.com': 300, 'threads.net': 300, 'linkedin.com': 150, 'facebook.com': 400, 'x.com': 400, 'tiktok.com': 500, 'pinterest.com': 800, 'tumblr.com': 800, 'youtube.com': 1500 };
   const H = 3600000, FIRST = H, MOST = 12 * H;
-  const NAME = { 'instagram.com': 'Instagram', 'threads.net': 'Threads', 'facebook.com': 'Facebook', 'tiktok.com': 'TikTok', 'x.com': 'X' };
+  const NAME = { 'instagram.com': 'Instagram', 'threads.net': 'Threads', 'facebook.com': 'Facebook', 'tiktok.com': 'TikTok', 'x.com': 'X', 'linkedin.com': 'LinkedIn', 'pinterest.com': 'Pinterest', 'tumblr.com': 'Tumblr', 'youtube.com': 'YouTube' };
   let cache = {};
 
   // instagram.com, threads.net, facebook.com... or the plain site for anything else.
@@ -28,6 +32,10 @@
     if (/(^|\.)(facebook\.com|fb\.com|fb\.watch|fb\.me)$/.test(h)) return 'facebook.com';
     if (/(^|\.)(x|twitter)\.com$/.test(h)) return 'x.com';
     if (/(^|\.)tiktok\.com$/.test(h)) return 'tiktok.com';
+    if (/(^|\.)(linkedin\.com|lnkd\.in)$/.test(h)) return 'linkedin.com';
+    if (/(^|\.)(pinterest\.[a-z.]+|pin\.it)$/.test(h)) return 'pinterest.com';
+    if (/(^|\.)tumblr\.com$/.test(h)) return 'tumblr.com';
+    if (/(^|\.)(youtube\.com|youtu\.be)$/.test(h)) return 'youtube.com';
     return h.replace(/^(www|m|mobile)\./, '');
   }
   const nameOf = s => NAME[s] || s;
@@ -71,7 +79,8 @@
     });
   }
   // A page answered: a 429 starts a rest.
-  function note(url, status) { if (status === 429) return rest(url, '429'); return null; }
+  const TOO_MANY = (status, url) => status === 429 || (status === 999 && siteOf(url) === 'linkedin.com');   // LinkedIn answers 999
+  function note(url, status) { if (TOO_MANY(status, url)) return rest(url, '429'); return null; }
 
   // Waits for this site's turn. false = don't read it now (resting, had enough today, or the wait
   // would be longer than maxWait). Sites without a pace are always true at once (unless resting).
@@ -103,7 +112,7 @@
   async function pfetch(url, opts, maxWait) {
     if (!(await turn(url, maxWait))) return null;
     const r = await fetch(url, opts);
-    if (r && r.status === 429) note(r.url || url, 429);
+    if (r) note(r.url || url, r.status);
     return r;
   }
 
@@ -111,8 +120,8 @@
   // in your own tabs.
   function watch() {
     try {
-      api.webRequest.onCompleted.addListener(d => { if (d.statusCode === 429) rest(d.url, '429'); },
-        { urls: ['*://*.instagram.com/*', '*://*.threads.net/*', '*://*.threads.com/*', '*://*.facebook.com/*'], types: ['main_frame', 'sub_frame', 'xmlhttprequest'] });
+      api.webRequest.onCompleted.addListener(d => { if (TOO_MANY(d.statusCode, d.url)) rest(d.url, '429'); },
+        { urls: ['*://*.instagram.com/*', '*://*.threads.net/*', '*://*.threads.com/*', '*://*.facebook.com/*', '*://*.x.com/*', '*://*.twitter.com/*', '*://*.tiktok.com/*', '*://*.linkedin.com/*', '*://*.pinterest.com/*', '*://*.tumblr.com/*', '*://*.youtube.com/*'], types: ['main_frame', 'sub_frame', 'xmlhttprequest'] });
     } catch (e) { /* no webRequest here */ }
   }
 

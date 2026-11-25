@@ -1,5 +1,5 @@
 type: fix
-title: Instagram no longer says "too many requests"
-news: PageProof was reading Instagram posts very quickly in the background, so Instagram blocked /p/ post links for a while (HTTP ERROR 429), even in your own browser. Now all of PageProof reads at most one Instagram (or Threads) page every 30 seconds and 300 a day. If Instagram still says "too many requests" (in PageProof or in your own tabs), PageProof leaves Instagram alone for 1 hour (longer if it happens again the same day). Settings › Read account details shows when.
-timeline: Instagram paced, rests after "too many requests"
-feature 9: **Instagram paced.** At most one Instagram page every 30 seconds for all of PageProof; a "too many requests" answer makes that site rest 1 hour (up to 12).
+title: Social sites no longer say "too many requests"
+news: PageProof was reading Instagram posts very quickly in the background, so Instagram blocked /p/ post links for a while (HTTP ERROR 429), even in your own browser. Now every social site has a safe pace for all of PageProof together: Instagram, Threads and LinkedIn one page every 30 seconds, Facebook 20, X and TikTok 15, Pinterest and Tumblr 10, YouTube 5, with a daily most. If a site still says "too many requests" (in PageProof or in your own tabs), PageProof leaves it alone for 1 hour (longer if it happens again the same day). Searches never wait for this: a social link that can't be read right now stays a Maybe and Copies found checks the post later.
+timeline: Social sites paced, rest after "too many requests"
+feature 9: **Social sites paced.** Each social site has a safe pace for all of PageProof (Instagram one page every 30 seconds); a "too many requests" answer makes that site rest 1 hour (up to 12). Searches never wait for it.

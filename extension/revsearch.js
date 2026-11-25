@@ -997,12 +997,13 @@ async function pageCheck(l) {
   let state = 'unknown';
   const t0 = Date.now();
   try {
-    // 4.64 (Ben): Instagram at most one page every 30 seconds (and none while it rests after a
-    // "too many requests"). A link that has to wait longer stays a Maybe; Copies found checks it later.
-    if (globalThis.PP_PACE && !(await PP_PACE.turn(l.url, 15000))) throw new Error('paced');
+    // 4.64 (Ben): social sites are read at their own safe pace (Instagram one page every 30 seconds...)
+    // and not at all while one rests after "too many requests". The search never waits for that: a
+    // link whose site isn't free right now stays a Maybe, and Copies found checks the post later.
+    if (globalThis.PP_PACE && !(await PP_PACE.turn(l.url, 0))) throw new Error('paced');
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 12000);
     const r = await fetch(l.url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal });
-    if (r.status === 429 && globalThis.PP_PACE) PP_PACE.note(r.url || l.url, 429);
+    if (globalThis.PP_PACE) PP_PACE.note(r.url || l.url, r.status);
     const type = r.headers.get('content-type') || 'html';
     const html = r.ok && /html/i.test(type) ? (await r.text()).slice(0, 3e6) : '';
     clearTimeout(t);

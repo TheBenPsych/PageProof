@@ -28,6 +28,22 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   });
   ok(p1.a && !p1.b && p1.c && p1.d && p1.waited >= 1300, 'Instagram pages wait their turn, a too-long wait is refused, other sites go at once: ' + JSON.stringify(p1));
   ok(p1.site === 'instagram.com' && p1.th === 'threads.net', 'instagr.am and threads.com count as Instagram and Threads');
+  const p1b = await page.evaluate(async () => ({
+    gaps: ['facebook.com', 'x.com', 'tiktok.com', 'linkedin.com', 'youtube.com'].map(s => PP_PACE.GAP[s] / 1000),
+    sites: ['https://m.facebook.com/a', 'https://twitter.com/a', 'https://www.pinterest.co.uk/pin/1', 'https://youtu.be/x', 'https://www.linkedin.com/in/a'].map(PP_PACE.siteOf),
+    news: PP_PACE.GAP['nytimes.com'] || 0,
+  }));
+  ok(p1b.gaps.join() === '20,15,15,30,5' && p1b.sites.join() === 'facebook.com,x.com,pinterest.com,youtube.com,linkedin.com' && !p1b.news, 'other social sites have their own pace, news sites none: ' + JSON.stringify(p1b));
+  const p1c = await page.evaluate(async () => {
+    globalThis.PP_PACE_GAP = 60000;
+    const a = await PP_PACE.turn('https://www.tiktok.com/@a/video/1', 0);
+    const t0 = Date.now(); const b = await PP_PACE.turn('https://www.tiktok.com/@a/video/2', 0);
+    globalThis.PP_PACE_GAP = 0;
+    return { a, b, ms: Date.now() - t0 };
+  });
+  ok(p1c.a && !p1c.b && p1c.ms < 500, 'a search never waits: a busy site is refused at once (' + p1c.ms + ' ms)');
+  const p1d = await page.evaluate(async () => { await PP_PACE.note('https://www.linkedin.com/posts/x', 999); await PP_PACE.load(); const r = PP_PACE.resting('linkedin.com'); await chrome.storage.local.remove('ppSiteRest'); await PP_PACE.load(); return r; });
+  ok(p1d, "LinkedIn's 999 answer counts as too many requests");
 
   // ---- 2. a 429 from their page: Instagram rests 1 hour, and nothing is fetched while it rests
   code = 429; hits = 0;

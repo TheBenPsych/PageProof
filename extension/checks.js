@@ -109,8 +109,8 @@ const PP_CHECKS = (() => {
       const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 15000);
       const r = await fetch(c.url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal });
       clearTimeout(t);
-      if (r.status === 429 && globalThis.PP_PACE) PP_PACE.note(r.url || c.url, 429);
-      if (!r.ok) return { at, ok: false, why: 'The page answered ' + r.status, paced: r.status === 429 };
+      if (globalThis.PP_PACE) PP_PACE.note(r.url || c.url, r.status);
+      if (!r.ok) return { at, ok: false, why: 'The page answered ' + r.status, paced: r.status === 429 || r.status === 999 };
       if (!/html/i.test(r.headers.get('content-type') || 'html')) return { at, ok: false, why: 'Not a web page' };
       html = (await r.text()).slice(0, 3e6); final = r.url || c.url;
     } catch (e) { return { at, ok: false, why: 'The page did not answer' }; }
