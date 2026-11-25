@@ -123,7 +123,6 @@ Last updated: version **4.52.3** (25 Nov 2026).
 - **Hide a site** (this account / this sub-site / whole domain), **Approve a site** for one client or all, hidden countries. (3.10 to 4.6.5)
 - **Countries: pick the ones to show.** Website copies show only from the countries you pick (United States and Puerto Rico to start); sites whose country isn't known always show. (4.27)
 - **Before you mark Stolen:** rule check by kind of site, photo credit read from their page, signs it was on purpose, date first published, damages hint, and a Ready for legal checklist. (4.4)
-- **Breaking News saver:** saves a photo named the firm's way and checks if it's new or recycled. (4.4)
 - **Site owners** page groups sites run by one company (footer name, shared analytics IDs). **Who's behind this site** helps with OpenCorporates, USPTO and Google lookups. (4.0)
 - **Stolen copies are protected:** never hidden by a bulk Remove or a site hide. (4.15)
 - **Stolen before links:** add a file of links already claimed. A copy on one of those pages gets a red "Stolen before" tag, other pages on the same site or account count as repeat offenders, with a quick filter. (4.23)
@@ -170,7 +169,7 @@ Last updated: version **4.52.3** (25 Nov 2026).
 
 - **Convert files:** picture types (incl. iPhone HEIC, TIFF, AVIF), make pictures and PDFs smaller, rotate/crop/resize, join and split PDFs, save Word/Excel/email files as PDF. Nothing is uploaded. (3.6)
 - **Open odd files:** Outlook .msg and .eml (with attachments), ZIP/RAR/7-Zip/TAR, Mac Pages/Numbers/Keynote. (3.6)
-- **Right-click menu:** Inspect this photo, Find copies of it, Save biggest copy (Save As window), Open biggest copy, Save as Breaking News photo, Capture this page, Capture the linked page. Finds pictures hidden under Instagram/Facebook covers. (3.7 to 4.5.1)
+- **Right-click menu:** Inspect this photo, Find copies of it, Save biggest copy (Save As window), Open biggest copy, Capture this page, Capture the linked page. Finds pictures hidden under Instagram/Facebook covers. (3.7 to 4.5.1)
 - **Copy** a whole capture to the clipboard. (3.0)
 
 ## 8. Easy to use
@@ -222,7 +221,7 @@ Last updated: version **4.52.3** (25 Nov 2026).
 ## Things we tried and took out
 
 So nobody asks for them again by accident:
-PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine saving (2.6), batch "capture a list of links" (4.0), abuse contacts and takedowns (4.0), the self-updater and Update button (4.2.1, 4.13.1), the "still online" checker (4.15), dark mode switch on old pages (3.2.2).
+PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine saving (2.6), batch "capture a list of links" (4.0), abuse contacts and takedowns (4.0), the self-updater and Update button (4.2.1, 4.13.1), the "still online" checker (4.15), dark mode switch on old pages (3.2.2), the Breaking News saver (4.53; the team checks by hand and their platform already checks file-name dates).
 
 ---
 

@@ -98,14 +98,13 @@ const TOOL_LIST = [
     ['search', 'find', 'New search', 'Search a few photos right now.'],
     ['searches', 'loop', 'All searches', 'Every search you have run.'],
     ['skipped', 'flag', 'Skipped photos', 'Photos the search could not use, and why.'],
-    ['bnsave', 'down', 'Save a Breaking News photo', 'Name it the firm\'s way and check if it is new or recycled.'],
     ['owners', 'owner', 'Site owners', 'Sites that belong to one company.'],
     ['hidden', 'ban', 'Hidden and approved sites', 'Sites you never want, and sites that are allowed.'],
     ['health', 'check', 'Is everything working?', 'Lights for each part, and updates.'],
     ['stats', 'eye', 'How PageProof is doing', 'Day-by-day stats, the checker test, and a file to send for help.'],
   ]],
 ];
-const TOOL_RECENT = ['inspect', 'compare', 'markup', 'files', 'openfiles', 'bnsave', 'verify', 'capture', 'weekly'];
+const TOOL_RECENT = ['inspect', 'compare', 'markup', 'files', 'openfiles', 'verify', 'capture', 'weekly'];
 function toolsUsed() { try { return JSON.parse(localStorage.getItem('ppToolsUsed') || '[]').filter(r => TOOL_RECENT.includes(r)); } catch (e) { return []; } }
 function noteToolUsed() {
   const r = (location.hash.slice(1).split('?')[0] || '');

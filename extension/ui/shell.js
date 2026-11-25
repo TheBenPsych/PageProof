@@ -24,7 +24,7 @@ const PP_ROUTES = {
   home: ['home'], search: ['find', 'search'], searches: ['find', 'searches'], results: ['find', 'searches'], found: ['find', 'found'], review: ['find', 'review'], keep: ['find', 'keep'], connect: ['find', 'found'], credit: ['find', 'credit'], watching: ['find', 'watching'],
   clients: ['clients', 'clients'], photos: ['clients', 'clients'], owners: ['clients', 'owners'], who: ['clients', 'owners'], skipped: ['clients', 'skipped'], regs: ['clients', 'regs'],
   library: ['library', 'library'], tocapture: ['library', 'tocapture'], capture: ['library', 'capture'], verify: ['library', 'verify'], weekly: ['library', 'weekly'],
-  tools: ['tools', 'tools'], inspect: ['tools', 'inspect'], compare: ['tools', 'compare'], markup: ['tools', 'markup'], files: ['tools', 'files'], openfiles: ['tools', 'files'], bnsave: ['tools', 'tools'],
+  tools: ['tools', 'tools'], inspect: ['tools', 'inspect'], compare: ['tools', 'compare'], markup: ['tools', 'markup'], files: ['tools', 'files'], openfiles: ['tools', 'files'],
   settings: ['settings', 'settings'], health: ['settings', 'health'], stats: ['settings', 'stats'], hidden: ['settings', 'hidden'], browser: ['settings', 'browser'], setup: ['settings', 'browser'], help: ['settings', 'help'],
   computer: ['settings', 'settings'], whatsnew: ['settings', 'settings'], reconnect: ['settings', 'settings']
 };
@@ -35,7 +35,7 @@ const PP_CRUMBS = {
   who: 'Who\'s behind this site', keep: 'Keep searching', connect: 'Connect your photos', weekly: 'Evidence › Weekly summary', tocapture: 'Evidence › Needs a capture',
   inspect: 'Tools › Inspect a photo', compare: 'Tools › Compare two photos', markup: 'Tools › Mark up a copy', files: 'Tools › Convert files',
   openfiles: 'Tools › Open odd files', library: 'Evidence › All evidence', verify: 'Verify a pack', browser: 'Toolbar and side panel', settings: 'Settings',
-  hidden: 'Settings › Hidden and approved sites', computer: 'Settings › Your computer', whatsnew: 'Settings › What\'s new', health: 'Settings › Is everything working?', stats: 'Settings › How PageProof is doing', skipped: 'Skipped photos', bnsave: 'Tools › Save a Breaking News photo', setup: 'First-time setup', help: 'Help and tutorial'
+  hidden: 'Settings › Hidden and approved sites', computer: 'Settings › Your computer', whatsnew: 'Settings › What\'s new', health: 'Settings › Is everything working?', stats: 'Settings › How PageProof is doing', skipped: 'Skipped photos', setup: 'First-time setup', help: 'Help and tutorial'
 };
 const PP_BADGES = {};
 const PP_STATUS = { html: '', bad: false };   // the last status line drawn (4.40: it sits in the menu)
