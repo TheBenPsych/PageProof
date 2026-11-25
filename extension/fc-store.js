@@ -1639,6 +1639,12 @@ const FC = (() => {
   // talkcorner.forum/amphtml/...). Real news sites use /amp/, not amphtml.
   const AMPHTML = /(^|[-.])amphtml([-.]|$)/;
   const ampPath = u => { try { return /(^|\/)amphtml(\/|$)/i.test(new URL(u).pathname); } catch (e) { return false; } };
+  // Keyword-stuffed search pages (radioalacalle.com/kay+proctor+onlyfans+nude): a made-up page per
+  // search, named by 3+ words joined with + right in the address. Real articles use - between words.
+  // 4+ words on their own, or 3+ words with adult words or a throwaway ending (a shop's red+wedding+dress search stays clear).
+  const PLUS_PAGE = /(^|\/)[^/?#.]+(\+[^/?#+.]+){2,}\/?$/, PLUS_LONG = /(^|\/)[^/?#.]+(\+[^/?#+.]+){3,}\/?$/;
+  const ADULT = /(^|[^a-z])(onlyfans|nudes?|naked|porn\w*|xxx|nsfw|sex|leaked?|topless|hentai|camgirl|escort)([^a-z]|$)/i;
+  const urlBits = u => { try { const x = new URL(u); return { path: decodeURIComponent(x.pathname), all: decodeURIComponent(x.pathname + ' ' + x.search) }; } catch (e) { return { path: '', all: '' }; } };
   const homeOnly = u => { try { const x = new URL(u); return /^\/?(index\.(html?|php))?$/i.test(x.pathname) && !x.search; } catch (e) { return false; } };
   function spamMarks(copies) {
     const out = new Map(), subs = new Map();
@@ -1664,8 +1670,12 @@ const FC = (() => {
       const baseName = p.base.split('.')[0];
       const rndBase = cheap && randomLabel(baseName) && (!/[aeiouy]/.test(baseName) || (baseName.match(/[a-z](?=\d)|\d(?=[a-z])/g) || []).length >= 3);
       const amp = AMPHTML.test(p.sub), ampP = ampPath(c.url);
-      if (!(rnd && (cheap || home || farm >= 3)) && !(randomFarm && (cheap || home)) && !rndBase && !(amp && (rnd || cheap)) && !(ampP && cheap)) continue;
+      const ub = urlBits(c.url), adult = ADULT.test(ub.path.replace(/[-_+/]/g, ' '));
+      const plus = PLUS_LONG.test(ub.path) || (PLUS_PAGE.test(ub.path) && (adult || cheap || rnd));
+      if (!(rnd && (cheap || home || farm >= 3)) && !(randomFarm && (cheap || home)) && !rndBase && !(amp && (rnd || cheap)) && !(ampP && cheap) && !plus && !(adult && (cheap || rnd))) continue;
       const why = [];
+      if (plus) why.push('Search-words page (' + ub.path.replace(/^\/+|\/+$/g, '').split('/').pop().slice(0, 50) + '), not an article');
+      if (adult) why.push('Adult words in the address');
       if (rnd) why.push('Random-looking address (' + first + ')');
       if (rndBase) why.push('Made-up site name (' + baseName + ')');
       if (amp || ampP) why.push('"amphtml" in the address, a spam network mark');
