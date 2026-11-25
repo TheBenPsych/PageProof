@@ -26,11 +26,11 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(fold.after < fold.before && fold.back === fold.before, 'A client heading folds and opens (' + fold.before + ' → ' + fold.after + ' → ' + fold.back + ')');
   await page.evaluate(() => { state.picked = LIST.slice(0, 3); return render(true); }); await page.waitForTimeout(600);
   const b = await page.evaluate(() => { const e = document.querySelector('.bulk.float'); return e ? { pos: getComputedStyle(e).position, t: e.textContent, n: e.querySelectorAll('[data-act="bulk"]').length } : null; });
-  ok(b && b.pos === 'fixed' && /3 picked/.test(b.t) && b.n === 3, 'Ticked rows show a floating bar with Stolen, Licensed and Remove');
+  ok(b && b.pos === 'fixed' && /3 picked/.test(b.t) && b.n === 4, 'Ticked rows show a floating bar with Stolen, Licensed, Remove and Check later');
   await page.evaluate(() => { state.picked = []; state.open = LIST[1]; return render(true); }); await page.waitForTimeout(1300);
   const d = await page.evaluate(() => { const h = document.querySelector('#drawer .dhead'); return { title: !!h.querySelector('.dtitle'), step: h.querySelectorAll('[data-act="dstep"]').length, foot: document.querySelectorAll('#drawer .dfoot2 [data-act="dstep"]').length, strip: document.querySelectorAll('#drawer .dans.ansstrip [data-act="dverdict"]').length }; });
   ok(d.title && d.step === 0, 'Panel top holds only the site name, tag and Close');
-  ok(d.foot === 2 && d.strip === 4, 'Previous / Next sit by the answers; four answers in one strip');
+  ok(d.foot === 2 && d.strip === 5, 'Previous / Next sit by the answers; five answers in one strip');
   await page.evaluate(() => { FCD.copies.forEach(c => { if (c.status === 'new') c.status = 'stolen'; }); state.open = null; state.fFilter = 'New'; return render(true); }); await page.waitForTimeout(700);
   const e = await page.evaluate(() => ({ t: (document.querySelector('.cempty.caught') || {}).textContent || '', keep: !!document.querySelector('.cempty.caught a[href="#keep"]') }));
   ok(/All caught up/.test(e.t) && e.keep, 'No new copies: "All caught up" with a Keep searching button');

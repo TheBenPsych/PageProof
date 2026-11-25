@@ -14,7 +14,7 @@ let FCD = null;          // what's loaded from the copies database (cleared when
 let FCD_STALE = false;
 api.storage.onChanged.addListener(ch => { if (ch.fcChanged || ch.rsHidden || ch.rsAllowed || ch.rsStolen || ch.fcShownCountries || ch.ppSocialSites) FCD_STALE = true; });
 
-const STATUS = { new: ['New', 'copy'], stolen: ['Stolen', 'bad'], licensed: ['Licensed', 'ok'], removed: ['Removed', 'grey'] };
+const STATUS = { new: ['New', 'copy'], later: ['Check later', 'blue'], stolen: ['Stolen', 'bad'], licensed: ['Licensed', 'ok'], removed: ['Removed', 'grey'] };
 const RISK = { ok: ['Looks normal', ''], watch: ['Worth a look', 'warn'], sus: ['Suspicious', 'bad'] };
 const CREDIT = { kept: 'Credits your client', removed: 'Credit removed', '': 'Not checked yet' };
 const FLAG_ICON = {
@@ -682,10 +682,12 @@ async function drawer(list) {
   ${last ? `<button class="undoline" data-act="undo">↶ Undo: ${esc(last.label)}<span class="kbd" style="margin-left:auto">U</span></button>` : ''}
   ${c.status === 'removed' ? `<div class="banner info" style="padding:10px 12px"><span style="flex:1;font-size:14px"><b>Removed</b><br><span class="muted">Hidden from your results. It won't come back for this photo.</span></span><button class="btn" data-act="putback">Put back</button></div>` : `
     ${['stolen', 'licensed'].includes(c.status) ? `<div class="row" style="gap:8px;font-size:13.5px"><span>Your answer: ${tagFor(c)}</span><button class="btn ghost sm" style="margin-left:auto" data-act="changeans">Change answer</button></div>` : ''}
+    ${c.status === 'later' ? `<div class="row" style="gap:8px;font-size:13.5px"><span>${tagFor(c)} Answer it when you're ready.</span><button class="btn ghost sm" style="margin-left:auto" data-act="rowans" data-v="new|${esc(c.id)}">Back to New</button></div>` : ''}
     <div class="dans ansstrip" title="Choose one and the next copy opens here">
       <button class="btn stolen" data-act="dverdict" data-v="stolen"><b>Stolen</b><span class="kbd">Y</span></button>
       <button class="btn licensed" data-act="dverdict" data-v="licensed"><b>Licensed</b><span class="kbd">L</span></button>
       <button class="btn" data-act="dverdict" data-v="removed"><b>Remove</b><span class="kbd">N</span></button>
+      ${c.status === 'later' ? '' : `<button class="btn later" data-act="dverdict" data-v="later" title="Not sure yet: move it to Check later"><b>Check later</b><span class="kbd">C</span></button>`}
       <button class="btn" data-act="dverdict" data-v="skip"><b>Skip</b><span class="kbd">→</span></button>
     </div>`}
     <div class="dfoot2"><span class="dnav"><button class="btn sm icon" data-act="dstep" data-v="-1" aria-label="Previous copy"${idx > 0 ? '' : ' disabled data-why="This is the first copy in the list."'}>‹</button><span class="muted num">${idx >= 0 ? `${idx + 1} of ${list.length}` : ''}</span><button class="btn sm icon" data-act="dstep" data-v="1" aria-label="Next copy"${idx >= 0 && idx < list.length - 1 ? '' : ' disabled data-why="This is the last copy in the list."'}>›</button></span><span style="flex:1"></span><button class="btn sm primary" data-act="evidence">${ic('doc', 15)} Evidence report</button><button class="btn sm" data-act="capturecopy">${ic('capture', 15)} Capture</button><button class="btn sm" data-act="dmore" data-v="${esc(c.id)}" aria-label="More choices" title="More choices">${ic('dots', 15)}</button></div>
@@ -714,23 +716,23 @@ const FCOLS = [['pct', 'Match'], ['client', 'Client'], ['dmg', 'Damages'], ['use
 // UI overhaul: one coloured pill instead of the old number + thin bar. Green = almost surely the same photo.
 const luBar = p => p == null || p < 0 ? '<span class="faint">–</span>' : `<span class="mpill ${p >= 80 ? 'hi' : p >= 50 ? 'mid' : 'lo'}" data-gloss="Lines up"><b class="num">${p}%</b> match</span>`;
 // UI overhaul: the friendly page when every new copy has an answer.
-const caughtUp = nStolen => `<div class="cempty caught" role="status"><span class="cok" aria-hidden="true">${ic('check', 30)}</span><b>All caught up</b>Every new copy has an answer. Keep searching adds new finds here as they come in.
-  <div class="row" style="justify-content:center;gap:8px;margin-top:14px">${nStolen ? `<button class="btn" data-act="ffilter" data-v="Stolen">See the stolen copies (${nStolen})</button>` : ''}<a class="btn" href="#keep">${ic('find', 15)} Keep searching</a></div></div>`;
+const caughtUp = (nStolen, nLater = 0) => `<div class="cempty caught" role="status"><span class="cok" aria-hidden="true">${ic('check', 30)}</span><b>All caught up</b>Every new copy has an answer. Keep searching adds new finds here as they come in.
+  <div class="row" style="justify-content:center;gap:8px;margin-top:14px">${nLater ? `<button class="btn" data-act="ffilter" data-v="Check later">${ic('clock', 15)} Check later (${nLater})</button>` : ''}${nStolen ? `<button class="btn" data-act="ffilter" data-v="Stolen">See the stolen copies (${nStolen})</button>` : ''}<a class="btn" href="#keep">${ic('find', 15)} Keep searching</a></div></div>`;
 // One copy as a row: both pictures, the site, the page link, quiet warning icons, the columns, and the answer buttons.
 function copyRow(c) {
-  const p = FCD.photos.get(c.photo), done = c.status !== 'new', K = state.fCols;
+  const p = FCD.photos.get(c.photo), done = c.status !== 'new' && c.status !== 'later', K = state.fCols;
   const cell = (k, label, html) => K[k] ? `<span class="cc-${k}"><i>${label}</i>${html}</span>` : '';
   return `<div class="frow crow${state.open === c.id ? ' on' : ''}" data-act="openrow" data-v="${esc(c.id)}">
     <input type="checkbox" class="cpick" aria-label="Pick ${esc(isSoc(c) && c.acct ? c.acct.handle : c.site)}" data-act="pick" data-v="${esc(c.id)}" ${state.picked.includes(c.id) ? 'checked' : ''}>
     <div class="cpair" data-hover="${esc(c.id)}"><img class="ours" src="${oursImg(p)}" alt="" loading="lazy"><img class="thumb" src="${theirImg(c)}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>
     <div class="cinfo">
-      ${isSoc(c) ? socLine(c) : `<div class="l1"><b>${esc(c.site)}</b>${done ? tagFor(c) : ''}${embedTag(c)}${sigIcons(c)}${c.sweep ? '<span class="tag blue" title="Found by reading this site\'s own list of pictures (a sweep), not by a search site">Found by sweep</span>' : ''}${typeof ppRowTags === 'function' ? ppRowTags(c) : ''}${c.status === 'removed' && c.removedBy === 'weakmaybe' ? '<span class="tag grey" title="A Maybe under 50% that nobody answered for 30 days. Put back if it is a copy.">Weak Maybe, never answered</span>' : ''}</div>`}
+      ${isSoc(c) ? socLine(c) : `<div class="l1"><b>${esc(c.site)}</b>${done || c.status === 'later' ? tagFor(c) : ''}${embedTag(c)}${sigIcons(c)}${c.sweep ? '<span class="tag blue" title="Found by reading this site\'s own list of pictures (a sweep), not by a search site">Found by sweep</span>' : ''}${typeof ppRowTags === 'function' ? ppRowTags(c) : ''}${c.status === 'removed' && c.removedBy === 'weakmaybe' ? '<span class="tag grey" title="A Maybe under 50% that nobody answered for 30 days. Put back if it is a copy.">Weak Maybe, never answered</span>' : ''}</div>`}
       <a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink" title="Open this page in a new tab"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>${c.alts && c.alts.length ? `<span class="tag grey altn" title="${esc(c.alts.join('\n'))}" data-gloss="Same page">+${c.alts.length} ${c.alts.length === 1 ? 'address' : 'addresses'}</span>` : ''}
       <div class="l3">${esc(c.photoName)}<span class="l3x">${isSoc(c) && c.acct ? ' · ' + esc(c.site) : ''}${c.pct >= 0 && c.pct != null ? ` · <b class="num" data-gloss="Lines up">${c.pct}%</b> lines up` : ''} · ${esc(FC.USE[c.use][0])}${c.country ? ' · ' + esc(c.country) : ''} · found ${shortDate(c.firstSeen).toLowerCase()}</span></div>
     </div>
     <div class="ccols">${cell('pct', 'Match', coverWait(c) ? '<span class="faint" title="The post\'s cover is another picture. PageProof is opening the post to look at all its pictures.">Checking…</span>' : luBar(c.pct))}${cell('client', 'Client', c.clientName ? `<span title="${esc(c.clientName)}">${esc(c.clientName)}</span>` : '<span style="color:var(--warn);font-weight:600">Unknown</span>')}${K.dmg ? (dmgCell(c) ? `<span class="cc-dmg"><i>Damages</i>${dmgCell(c)}</span>` : '<span class="cc-dmg" aria-hidden="true"></span>') : ''}${cell('use', 'Use', `<span title="${esc(FC.USE[c.use][0])}">${esc(FC.USE[c.use][0])}</span>`)}${cell('country', 'Country', `<span>${esc(c.country || 'Not known')}</span>`)}${cell('found', 'Found', `<span>${esc(shortDate(c.firstSeen))}</span>`)}</div>
     <div class="acts">${c.status === 'removed' ? `<button class="btn sm" data-act="rowans" data-v="new|${esc(c.id)}">Put back</button>` : done ? `<button class="btn sm" data-act="rowans" data-v="new|${esc(c.id)}">Change answer</button>`
-      : `<button class="btn sm stolen" data-act="rowans" data-v="stolen|${esc(c.id)}">Stolen</button><button class="btn sm licensed" data-act="rowans" data-v="licensed|${esc(c.id)}">Licensed</button><button class="btn sm" data-act="rowans" data-v="removed|${esc(c.id)}">Remove</button>`}
+      : `<button class="btn sm stolen" data-act="rowans" data-v="stolen|${esc(c.id)}">Stolen</button><button class="btn sm licensed" data-act="rowans" data-v="licensed|${esc(c.id)}">Licensed</button><button class="btn sm" data-act="rowans" data-v="removed|${esc(c.id)}">Remove</button>${c.status === 'later' ? '' : `<button class="btn sm icon" data-act="rowans" data-v="later|${esc(c.id)}" aria-label="Check later" title="Check later: not sure yet">${ic('clock', 17)}</button>`}`}
       <button class="btn sm icon" data-act="rowmenu" data-v="${esc(c.id)}" aria-label="More choices for ${esc(c.site)}">${ic('dots', 18)}</button></div></div>`;
 }
 // 4.56.1: Country for .com and other sites whose ending says nothing. A few sites at a time are read
@@ -923,7 +925,7 @@ V.found = async () => {
   ${FCD.unhid && FCD.unhid.length ? `<div class="banner info" role="status"><div style="flex:1 1 260px;min-width:0"><b>${esc(FCD.unhid.join(', '))} ${FCD.unhid.length === 1 ? 'shows' : 'show'} again</b><div style="font-size:13px">A whole social site can no longer be hidden, only its accounts. Its posts are back on the Social media tab. Hide the accounts you don't want from there.</div></div><button class="btn sm" data-act="unhidok">Got it</button></div>` : ''}
   <section class="card found-card">
     <div class="toolbar tidy">
-      <div class="tabs ansbar" role="tablist" aria-label="Status">${['New', 'Stolen', 'Licensed', 'Removed', 'All'].map(f => `<button role="tab" aria-selected="${state.fFilter === f}" class="${state.fFilter === f ? 'on' : ''}" data-act="ffilter" data-v="${f}"${f === 'All' ? ' title="Every copy except the removed ones"' : ''}>${state.fFilter === f ? '<i class="tick" aria-hidden="true">✓</i>' : ''}${f} <span>${cnt(f)}</span></button>`).join('')}${['Still online', 'Back online', 'Gone'].includes(state.fFilter) ? `<button role="tab" aria-selected="true" class="on" data-act="ffilter" data-v="${state.fFilter}"><i class="tick" aria-hidden="true">✓</i>${state.fFilter} <span>${cnt(state.fFilter)}</span></button>` : ''}</div>
+      <div class="tabs ansbar" role="tablist" aria-label="Status">${['New', 'Check later', 'Stolen', 'Licensed', 'Removed', 'All'].map(f => `<button role="tab" aria-selected="${state.fFilter === f}" class="${state.fFilter === f ? 'on' : ''}" data-act="ffilter" data-v="${f}"${f === 'All' ? ' title="Every copy except the removed ones"' : ''}>${state.fFilter === f ? '<i class="tick" aria-hidden="true">✓</i>' : ''}${f} <span>${cnt(f)}</span></button>`).join('')}${['Still online', 'Back online', 'Gone'].includes(state.fFilter) ? `<button role="tab" aria-selected="true" class="on" data-act="ffilter" data-v="${state.fFilter}"><i class="tick" aria-hidden="true">✓</i>${state.fFilter} <span>${cnt(state.fFilter)}</span></button>` : ''}</div>
       ${social ? `<div class="seg sm" role="radiogroup" aria-label="Show">${[['copies', 'Copies'], ['accounts', 'Accounts']].map(([k, l]) => `<button role="radio" aria-checked="${state.sView === k}" class="${state.sView === k ? 'on' : ''}" data-act="sview" data-v="${k}">${l}</button>`).join('')}</div>` : ''}
       ${dd('fView', 'Group', social ? [['account', 'Account'], ['client', 'Client'], ['photo', 'Photo'], ['site', 'Platform'], ['list', 'None']] : [['client', 'Client'], ['photo', 'Photo'], ['site', 'Site'], ['owner', 'Site owner'], ['list', 'None']], state.fView)}
       ${dd('fWhen', 'Found', Object.entries(WHEN).map(([k, v]) => [k, v[0]]), state.fWhen, false, 'any')}
@@ -976,11 +978,11 @@ V.found = async () => {
     ${shownOn.length ? `<div class="showing" role="status"><span>Showing <b class="num">${rows.length}</b> of <b class="num">${all.filter(c => passStatus(c)).length}</b> ${esc(state.fFilter === 'All' ? '' : state.fFilter.toLowerCase())} copies</span>${shownOn.map(([k, v]) => `<button class="stag" data-act="unfilter" data-v="${k}" title="Turn this filter off">${esc(v)} <span aria-hidden="true">✕</span></button>`).join('')}<button class="sclear" data-act="unfilter" data-v="all">Clear filters</button></div>` : ''}
     ${recent.length ? `<div class="row activebar">
       ${recent.length ? `<span class="faint" style="margin-left:auto">Just hidden</span>${recent.map(h => `<button class="chip" style="cursor:pointer;text-decoration:line-through;text-decoration-color:var(--faint)" data-act="showsite" data-v="${esc(h)}" title="Show ${esc(h)} again">${esc(h)} <span style="text-decoration:none">↺</span></button>`).join('')}` : ''}</div>` : ''}
-    <div class="cbody">${social && state.sView === 'accounts' ? accountsView(all.filter(c => passMain(c) && passStatus(c))) : body || (state.fFilter === 'New' && !active.length && state.fWhen === 'any' && state.fMatch === 'any' ? caughtUp(cnt('Stolen')) : `<div class="cempty"><b>Nothing matches</b>Try another tab, or clear a filter.</div>`)}</div>
-    <div class="row faint cfoot"><span>Keys with a copy open: <span class="kbd">Y</span> stolen <span class="kbd">L</span> licensed <span class="kbd">N</span> remove <span class="kbd">→</span> skip <span class="kbd">U</span> undo <span class="kbd">↑</span><span class="kbd">↓</span> move <span class="kbd">?</span> all keys. Also kept in Documents › PageProof › found-copies.txt.</span></div>
+    <div class="cbody">${social && state.sView === 'accounts' ? accountsView(all.filter(c => passMain(c) && passStatus(c))) : body || (state.fFilter === 'New' && !active.length && state.fWhen === 'any' && state.fMatch === 'any' ? caughtUp(cnt('Stolen'), cnt('Check later')) : state.fFilter === 'Check later' && !rows.length ? `<div class="cempty"><b>Nothing saved to check later</b>Not sure about a copy? Press Check later (or the C key) and it waits here, out of the New list, until you answer it.</div>` : `<div class="cempty"><b>Nothing matches</b>Try another tab, or clear a filter.</div>`)}</div>
+    <div class="row faint cfoot"><span>Keys with a copy open: <span class="kbd">Y</span> stolen <span class="kbd">L</span> licensed <span class="kbd">N</span> remove <span class="kbd">C</span> check later <span class="kbd">→</span> skip <span class="kbd">U</span> undo <span class="kbd">↑</span><span class="kbd">↓</span> move <span class="kbd">?</span> all keys. Also kept in Documents › PageProof › found-copies.txt.</span></div>
   </section>
   ${state.sis ? `<div class="bulk sis"><div style="flex:1 1 300px;min-width:0"><b>Same ${state.sis.same ? 'photo' : 'article'} on ${plural(state.sis.sites.length, 'sister site')} of ${esc(state.sis.owner)}</b><div style="font-size:13px;opacity:.85;overflow-wrap:anywhere">${esc(state.sis.sites.slice(0, 5).join(', '))}${state.sis.sites.length > 5 ? '…' : ''}</div></div><button class="btn" data-act="sisall">Mark ${state.sis.ids.length === 1 ? 'it' : 'all ' + state.sis.ids.length} stolen too</button><button class="btn" data-act="sisno">Not now</button></div>` : ''}
-  ${state.picked.length ? `<div class="bulk float" role="toolbar" aria-label="Answer the picked copies"><b class="num">${state.picked.length} picked</b><i class="bsep" aria-hidden="true"></i><button class="bb stolen" data-act="bulk" data-v="stolen">Stolen</button><button class="bb licensed" data-act="bulk" data-v="licensed">Licensed</button><button class="bb" data-act="bulk" data-v="removed">Remove</button><button class="bb" data-act="bulkhide">${state.fTab === 'social' ? 'Hide accounts' : 'Hide sites'}</button><button class="bb x" data-act="clearpick" aria-label="Clear the picks" title="Clear">✕</button></div>` : ''}
+  ${state.picked.length ? `<div class="bulk float" role="toolbar" aria-label="Answer the picked copies"><b class="num">${state.picked.length} picked</b><i class="bsep" aria-hidden="true"></i><button class="bb stolen" data-act="bulk" data-v="stolen">Stolen</button><button class="bb licensed" data-act="bulk" data-v="licensed">Licensed</button><button class="bb" data-act="bulk" data-v="removed">Remove</button><button class="bb" data-act="bulk" data-v="later">Check later</button><button class="bb" data-act="bulkhide">${state.fTab === 'social' ? 'Hide accounts' : 'Hide sites'}</button><button class="bb x" data-act="clearpick" aria-label="Clear the picks" title="Clear">✕</button></div>` : ''}
   ${await drawer(me === RENDER_N ? (LIST = list) : list)}`;
 };
 // 4.24: one quiet line about spam blog copies: how many are hidden, and buttons to show them or
@@ -1078,7 +1080,7 @@ function bindHover() {
 }
 
 // ---------------------------------------------------------------- answers, with undo
-const VERB = { stolen: 'marked stolen', licensed: 'marked licensed', removed: 'removed', skip: 'skipped', new: 'put back as new' };
+const VERB = { stolen: 'marked stolen', licensed: 'marked licensed', removed: 'removed', later: 'saved to check later', skip: 'skipped', new: 'put back as new' };
 // 4.9.1: an answer or a hide takes the row off the list the moment it's clicked. Saving it can
 // take a second or two in a big library, so until it's saved these remember it, and every redraw
 // in between already leaves the row out.
@@ -1449,7 +1451,7 @@ Object.assign(ACTS, {
     const c = FCD && FCD.copies.find(x => x.id === v);
     if (!c) return;
     const id = esc(c.id), base = FC.baseOf(c.site);
-    openRowMenu(el, `${c.status === 'new' ? `<button data-act="mdo" data-v="skip|${id}">${ic('chev', 16)}<span>Skip for now</span><span class="kbd">→</span></button>` : ''}
+    openRowMenu(el, `${c.status === 'new' ? `<button data-act="mdo" data-v="later|${id}">${ic('clock', 16)}<span>Check later</span><span class="kbd">C</span></button><button data-act="mdo" data-v="skip|${id}">${ic('chev', 16)}<span>Skip for now</span><span class="kbd">→</span></button>` : ''}${c.status === 'later' ? `<button data-act="mdo" data-v="unlater|${id}">${ic('undo', 16)}<span>Back to New</span></button>` : ''}
       ${isSoc(c) && !c.acct ? `<small>Who posted it?</small><button data-act="openacct" data-v="${id}">${ic('who', 16)}<span>Set the account</span></button>` : ''}
       ${!isSoc(c) || c.acct ? `<small>${isSoc(c) ? 'Approve ' + esc(c.acct.handle) : 'Approve this site'}</small>
       ${c.clientName ? `<button data-act="mdo" data-v="okclient|${id}">${ic('check', 16)}<span>For ${esc(c.clientName)} only</span></button>` : ''}
@@ -1478,6 +1480,8 @@ Object.assign(ACTS, {
     if (what === 'evidence') return ACTS.evidence(id);
     if (what === 'who') return ACTS.gowho(id);
     if (what === 'copy') return ACTS.copytext(c.url);
+    if (what === 'later') return ACTS.rowans('later|' + id);
+    if (what === 'unlater') return ACTS.rowans('new|' + id);
     if (what === 'skip') { if (state.open === id) return drawerVerdict('skip'); await answerCopies([id], 'skip', c.site + ' skipped'); toastUndo(c.site + ' skipped. It stays in New.'); return render(true); }
     // The rest are written for the copy that is open, so open it for a moment.
     const was = state.open; state.open = id;
@@ -1761,7 +1765,8 @@ V.review = async () => {
         <button class="stolen" data-act="rverdict" data-v="stolen"><b>Stolen</b><span class="kbd">Y</span></button>
         <button class="licensed" data-act="rverdict" data-v="licensed" title="OK for ${esc(c.clientName || 'this client')} only"><b>Licensed</b><span class="kbd">L</span></button>
         <button data-act="rverdict" data-v="removed" title="Not wanted: hide it"><b>Remove</b><span class="kbd">N</span></button>
-        <button data-act="rverdict" data-v="skip" title="Decide later"><b>Skip</b><span class="kbd">→</span></button>
+        <button class="later" data-act="rverdict" data-v="later" title="Not sure yet: move it to Check later in All copies found"><b>Check later</b><span class="kbd">C</span></button>
+        <button data-act="rverdict" data-v="skip" title="Show it again at the end of this list"><b>Skip</b><span class="kbd">→</span></button>
       </div>
       <div class="row rvmore"><button class="btn" data-act="rvcompare">${ic('layers', 16)} Compare</button><button class="btn" data-act="evidence" data-v="${esc(c.id)}">${ic('doc', 16)} Evidence report</button><button class="btn" data-act="rvcapture">${ic('capture', 16)} Capture</button>${stopBtn(c)}
         ${isSoc(c) && !c.acct ? `<a class="btn" href="#found?open=${encodeURIComponent(c.id)}">${ic('who', 16)} Set the account</a>` : ''}
@@ -1781,7 +1786,7 @@ V.review = async () => {
       </dl>
     </aside>
   </div>
-  <p class="faint" style="font-size:13px;margin:0">Keys: <span class="kbd">Y</span> stolen <span class="kbd">L</span> licensed <span class="kbd">N</span> remove <span class="kbd">→</span> skip <span class="kbd">U</span> undo <span class="kbd">S</span> switch view <span class="kbd">?</span> all keys</p>`;
+  <p class="faint" style="font-size:13px;margin:0">Keys: <span class="kbd">Y</span> stolen <span class="kbd">L</span> licensed <span class="kbd">N</span> remove <span class="kbd">C</span> check later <span class="kbd">→</span> skip <span class="kbd">U</span> undo <span class="kbd">S</span> switch view <span class="kbd">?</span> all keys</p>`;
 };
 V.review.guard = V.found.guard;
 V.review.after = () => {
@@ -1827,7 +1832,7 @@ document.addEventListener('keydown', e => {
   const r = route();
   if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey)) { if (HIST.length && ['found', 'review', 'owners'].includes(r)) { e.preventDefault(); undoLast(); } return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  const map = { y: 'stolen', l: 'licensed', n: 'removed', Delete: 'removed', ArrowRight: 'skip' };
+  const map = { y: 'stolen', l: 'licensed', n: 'removed', Delete: 'removed', c: 'later', ArrowRight: 'skip' };
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   // 4.15: holding a key down gives ONE answer, not one copy after another.
   if (e.repeat && (map[k] || k === 'u')) { e.preventDefault(); return; }
@@ -1835,7 +1840,7 @@ document.addEventListener('keydown', e => {
   if (r === 'found' && state.open) {
     if (k === 'Escape') { state.open = ''; render(true); return; }
     const c = FCD && FCD.copies.find(x => x.id === state.open);
-    if (map[k] && c && c.status !== 'removed') { e.preventDefault(); drawerVerdict(map[k]); }
+    if (map[k] && c && c.status !== 'removed' && !(map[k] === 'later' && c.status === 'later')) { e.preventDefault(); drawerVerdict(map[k]); }
   } else if (r === 'review' && state.rvTab === 'review') {
     if (map[k]) { e.preventDefault(); ACTS.rverdict(map[k]); }
     else if (k === 's') { state.cmpMode = state.cmpMode === 'side' ? 'swipe' : 'side'; render(true); }
