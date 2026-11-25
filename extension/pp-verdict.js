@@ -1,6 +1,7 @@
 // The photo checker's answer rules, shared by the search results page (revsearch.js) and the
 // Checker test (Settings › How PageProof is doing), so the test gives exactly the answers a real
 // search would. Nothing here downloads or reads anything.
+const FEW_SAME = 40;
 const PP_VERDICT = {
   // A line-up result (align.js, or the photo-check worker's answer) turned into the numbers kept
   // for each found picture.
@@ -30,6 +31,7 @@ const PP_VERDICT = {
   // middle only just lining up) gets a second, slower look at full size before it reaches
   // Copies found. About 1 in 4 Same answers were removed by hand, and they were mostly these.
   close(l) {
+    if (PP_VERDICT.fewSame(l)) return true;
     if (PP_VERDICT.score(l) !== 'same') return false;
     return l.pct < 85 || l.inl < 20 || (l.mid !== null && l.mid !== undefined && l.mid < 0.55);
   },
@@ -41,6 +43,7 @@ const PP_VERDICT = {
     const v0 = PP_VERDICT.score(fast);
     if (!deep || PP_VERDICT.score(deep) === 'cant') return { keep: fast, how: '' };
     const v1 = PP_VERDICT.score(deep);
+    if (PP_VERDICT.fewSame(fast)) return v1 === 'same' ? { keep: deep, how: 'kept' } : v1 === 'maybe' ? { keep: fast, how: 'maybe' } : { keep: deep, how: 'out' };
     if (v0 === 'same') {
       if (v1 === 'same') return { keep: fast, how: 'kept' };
       return { keep: deep, how: v1 === 'maybe' ? 'maybe' : 'out' };
@@ -48,6 +51,8 @@ const PP_VERDICT = {
     if (exact && (v1 === 'same' || v1 === 'maybe')) return { keep: deep, how: 'saved' };
     return { keep: fast, how: exact ? 'exactNo' : '' };
   },
+  // 4.52: would be Same but for too few matching details (see score).
+  fewSame(l) { return PP_VERDICT.score(l) === 'maybe' && PP_VERDICT.score({ ...l, inl: FEW_SAME }) === 'same' && l.inl < FEW_SAME; },
   // Same photo, Maybe or Different, from the numbers alone ('cant' = could not be checked).
   // See revsearch.js (baseVerdict) for how these limits were found.
   score(l) {
@@ -61,7 +66,12 @@ const PP_VERDICT = {
     const midOk = l.mid === null || l.mid === undefined || l.mid >= 0.42;
     // Most of the shared area must line up. Copies with a big headline over them (about 55%)
     // land in Maybe, as do different shots in front of the same logo wall (about 50%).
-    if (midOk && l.str >= 0.8 && ((l.pct >= 75 && l.inl >= 15 && l.tiles >= 20) || (l.pct >= 85 && l.inl >= 10))) return 'same';
+    if (midOk && l.str >= 0.8 && ((l.pct >= 75 && l.inl >= 15 && l.tiles >= 20) || (l.pct >= 85 && l.inl >= 10))) {
+      // 4.52 (Ben's pick): a Same with under 40 matching details is a Maybe. In Ben's answers every
+      // such Same (mostly small news pictures, 75-98%) was removed; every kept copy had 200 or more.
+      // These still get the full-size second look, which makes them Same when it finds enough.
+      return l.inl >= FEW_SAME ? 'same' : 'maybe';
+    }
     // A high % on its own means nothing: two different photos can "line up" over a tiny shared patch.
     if (l.inl >= 11 && l.tiles >= 12 && l.pct >= 40) return 'maybe';
     return 'no';

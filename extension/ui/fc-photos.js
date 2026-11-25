@@ -700,6 +700,7 @@ V.keep = async () => {
       <div class="ktile"><b class="num">~${Math.round(rate.ladOn ? rate.googlePerDay : perHour * hrs).toLocaleString()}</b><span>photos a day at this ${rate.ladOn ? 'speed step' : 'pace'}${today.quick ? ' · ' + today.quick + ' quick looks today' : ''}</span></div>
     </div>
   </section>
+  ${typeof ntKeepExtras === 'function' ? await ntKeepExtras() : ''}
   <div class="grid g2">
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
       <h2>How it searches</h2>
@@ -780,7 +781,7 @@ Object.assign(ACTS, {
     const k = await FC.keep();
     const n = Math.min(k.perDay, 100);
     toast('Getting the next ' + n + ' photos ready…');
-    const ps = await FC.next(n + 10, new Set(), { first: k.fiftyWhich === 'first' });
+    const ps = await FC.next(n + 10, new Set(), { first: k.fiftyWhich === 'first', hold: true });
     const pics = [];
     for (const p of ps) {
       if (pics.length >= n) break;
@@ -788,8 +789,9 @@ Object.assign(ACTS, {
       toast('Getting photo ' + (pics.length + 1) + ' of ' + Math.min(n, ps.length) + ' ready from Google Drive…');
       { const pic = await FC.readPhoto(p); if (!pic.error) pics.push(pic); }
     }
-    if (!pics.length) return toast('Nothing to search right now. Every photo is up to date.');
+    if (!pics.length) { api.storage.local.remove('fcHold').catch(() => {}); return toast('Nothing to search right now. Every photo is up to date.'); }
     const job = await RS_JOB.create(pics, { kind: 'fifty' });
+    api.storage.local.remove('fcHold').catch(() => {});
     if (!job) return toast('Turn on at least one search site in New search first.');
     await RS_JOB.open(job);
   },

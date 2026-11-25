@@ -155,11 +155,23 @@ const PP_REPORT = (() => {
       if (c(T, 'strain.resumed') >= 2) out.push(['warn', 'A search page restarted ' + c(T, 'strain.resumed') + ' times today', 'This happens when the browser runs out of memory or the page is reloaded.']);
       if ((T.x || {})['mem.page'] > 1500) out.push(['warn', 'A PageProof page used ' + num(T.x['mem.page']) + ' MB of memory today', 'More than usual. Closing other tabs can help.']);
     }
-    // Keep searching barely ran on the last weekday (only when it is switched on).
+    // Keep searching was held up on the last weekday (only when it is switched on). Only the minutes
+    // PageProof was open and recording count, big searches count as searching, and pauses you made
+    // yourself are your choice, so they never raise this flag.
     if (m && m.keep && m.keep.on) {
       const wk = [...recent].reverse().find(([k]) => k !== today && ![0, 6].includes(new Date(k + 'T12:00').getDay()));
-      if (wk) { const km = keepMinutes(wk[1]); const work = Object.entries(km.hours).filter(([h]) => h >= 8 && h < 18).reduce((a, [, s]) => a + Object.entries(s).filter(([x]) => (KEEP[x] || [0, ''])[1] === 'work').reduce((b, [, n]) => b + n, 0), 0);
-        if (work < 180) out.push(['warn', 'Keep searching only ran ' + Math.round(work / 6) / 10 + ' hours on ' + dayName(wk[0]), 'Between 8 AM and 6 PM. See Keep searching below for what stopped it.']); }
+      if (wk) {
+        const km = keepMinutes(wk[1]), held = {}; let seen = 0;
+        for (const [h, s] of Object.entries(km.hours)) if (+h >= 8 && +h < 18) for (const [x, n] of Object.entries(s)) {
+          const g = (KEEP[x] || [0, 'off'])[1]; if (g === 'off') continue;
+          seen += n; if (g === 'stop' && x !== 'paused') held[x] = (held[x] || 0) + n;
+        }
+        const bad = Object.values(held).reduce((a, n) => a + n, 0);
+        if (bad >= 60 && bad >= seen * 0.25) {
+          const top = Object.entries(held).sort((a, b) => b[1] - a[1])[0][0];
+          out.push(['warn', 'Keep searching was held up ' + Math.round(bad / 6) / 10 + ' hours on ' + dayName(wk[0]), 'Between 8 AM and 6 PM, mostly: ' + KEEP[top][0].toLowerCase() + '. Pauses you made and big searches are not counted.']);
+        }
+      }
     }
     if (m && m.test && m.test.right < m.test.n) out.push([m.test.right / m.test.n < 0.9 ? 'bad' : 'warn', 'The checker test got ' + m.test.right + ' of ' + m.test.n + ' right', 'On the computer it was made on it gets all ' + m.test.n + ' right. Save stats for Claude and send the file.']);
     return out;
@@ -242,6 +254,10 @@ const PP_REPORT = (() => {
       const u = m.usage || {}, mb = b => (b == null ? 'not known' : (b / 1048576).toFixed(1) + ' MB');
       L.push('', 'Storage');
       L.push('  Settings and lists ' + mb(u.local) + ' (no limit: ' + (api.runtime.getManifest().permissions || []).includes('unlimitedStorage') + ') · everything ' + mb(u.all) + ' · kept safe from clean-up: ' + (u.persisted == null ? 'not known' : u.persisted ? 'yes' : 'no') + ' · failed saves: ' + (m.saveFail ? m.saveFail.n + ', last ' + new Date(m.saveFail.at).toLocaleString() : '0'));
+    }
+    if (typeof ntExtraRows === 'function') {
+      L.push('', 'Extra searches');
+      for (const r of ntExtraRows(D)) L.push('  ' + r.name + ': ' + r.work + ' · copies found ' + num(r.found) + ' · time ' + r.mins + ' min (' + r.worth + ')');
     }
     L.push('', 'Computer strain');
     L.push('  Searches slowed down: busy ' + num(c(D, 'strain.eased.busy')) + ', memory ' + num(c(D, 'strain.eased.memory')) + ', battery ' + num(c(D, 'strain.eased.battery')) + ' · Keep searching waited for a busy computer ' + Math.round((km.by.busy || 0)) + ' min · search pages restarted ' + num(c(D, 'strain.resumed')) + ' · highest page memory ' + ((D.x || {})['mem.page'] ? num(D.x['mem.page']) + ' MB' : 'not known'));

@@ -1137,12 +1137,60 @@ const FC = (() => {
   // are none left. ⚑ High priority photos (and "Try again") always go first.
   // first = true (Today's 50 set to "Never searched first"): never-searched photos first, then
   // the normal line.
+  // 4.51.2 (Ben): a photo another search already has is never picked again. Two searches
+  // started minutes apart (Today's 50 "Next in line", then "Never searched first") both began
+  // with the same photos: the first search was still checking its matches, and each page keeps
+  // its own copy of the line for up to an hour, so neither knew. Now every pick leaves out
+  // (1) photos in a search from the last day that are waiting, searching or being checked, and
+  // (2) photos searched or quick-looked since this page made its line.
+  let CLAIM = null;
+  async function claimed() {
+    if (CLAIM && Date.now() - CLAIM.at < 3000) return CLAIM.ids;
+    const ids = new Set(), cut = Date.now() - DAY;
+    // Photos a big search is still getting ready from Google Drive (its search isn't saved yet).
+    try { const h = (await api.storage.local.get('fcHold')).fcHold; if (h && Date.now() - h.at < 15 * 60000) for (const id of h.ids || []) ids.add(id); } catch (e) { /* none */ }
+    try {
+      if (typeof RS_DB !== 'undefined') for (const j of await (RS_DB.since ? RS_DB.since('jobs', cut) : RS_DB.all('jobs'))) {
+        if (!j || !Array.isArray(j.pics) || (Date.parse(j.created) || 0) < cut) continue;
+        const live = !j.finished && !j.stoppedAt;
+        for (const q of [...j.pics, ...(j.alike || [])]) {
+          if (!q || !q.fcId || q.ingested) continue;
+          const searched = q.runs && Object.values(q.runs).some(r => r && r.state === 'done');
+          if (live || searched) ids.add(q.fcId);
+        }
+      }
+    } catch (e) { /* no searches saved yet */ }
+    CLAIM = { at: Date.now(), ids };
+    return ids;
+  }
+  function claimReset() { CLAIM = null; }
   async function next(n = 1, skip = new Set(), opts = {}) {
+    const used = new Set(skip);
+    for (const id of await claimed()) used.add(id);
+    const out = [];
+    let stale = false;
+    for (let round = 0; round < 6 && out.length < n; round++) {
+      const got = await pickLine(n - out.length, used, { ...opts, solo: n === 1 && !opts.first });
+      if (!got.length) break;
+      const since = new Date(QUEUE_AT || 0).toISOString();
+      for (const p of got) {
+        used.add(p.id);
+        // Searched (or quick-looked) by another page since this line was made: skip it.
+        if ((p.lastSearched || '') > since || (p.quickAt || '') > since || (p.alikeAt || '') > since) { stale = true; continue; }
+        out.push(p);
+      }
+    }
+    if (stale) QUEUE = null;
+    // A big search (Today's 50, New search) holds its photos while they are read from Drive.
+    if (opts.hold && out.length) await api.storage.local.set({ fcHold: { at: Date.now(), ids: out.map(p => p.id) } }).catch(() => {});
+    return out;
+  }
+  async function pickLine(n = 1, skip = new Set(), opts = {}) {
     if (!QUEUE || Date.now() - QUEUE_AT > 3600000) await buildQueue();
     const k = await keep();
     const share = [2, 3, 4].includes(k.firstShare) ? k.firstShare : 3;
     // Keep searching (one photo at a time) remembers whose turn it is between photos.
-    const solo = n === 1 && !opts.first;
+    const solo = opts.solo != null ? opts.solo : n === 1 && !opts.first;
     let turn = solo ? ((await api.storage.local.get('fcFirstTurn')).fcFirstTurn || 0) : 0;
     const used = new Set(skip);
     let qi = 0, fi = 0;
@@ -1703,7 +1751,7 @@ const FC = (() => {
       // A small picture that is too big to keep is left out (cutting it short would break it).
       const th = String(l.thumb || '');
       const base = { url: other ? c.url : l.url, key: other ? c.key : l.key, pk: pageKey(other ? c.url : l.url), site: other ? c.site : l.site, title: l.title || '', thumb: th.length <= 60000 ? th : '', img: l.img || '', engines: l.engines || [], exact: !!l.exact,
-        pct: l.pct, inl: l.inl, tiles: l.tiles, str: l.str, mid: l.mid, match: l.verdict, w: l.w, h: l.h, from: l.from || '', onPage: l.onPage || '', cover: l.cover ? 1 : 0 };
+        pct: l.pct, inl: l.inl, tiles: l.tiles, str: l.str, mid: l.mid, match: l.verdict, w: l.w, h: l.h, from: l.from || '', onPage: l.onPage || '', cover: l.cover ? 1 : 0, coverImg: l.cover ? l.coverImg || '' : '' };
       if (c) {
         if (!base.thumb && c.thumb) base.thumb = c.thumb;
         if (!base.thumb && !c.thumb && c.th) delete base.thumb;      // its preview is already kept
@@ -1960,7 +2008,13 @@ const FC = (() => {
       if (status === 'stolen' || status === 'licensed' || status === 'removed') tally[c.client || ''] = (tally[c.client || ''] || 0) + 1;
       // 4.47: a Same photo you removed goes into your own checker test set (on this computer only).
       // Not for big bulk removes (a whole site at once), which say little about the checker.
-      if (status === 'removed' && got.length <= 5 && !extra.removedBy && before[before.length - 1].status !== 'removed' && c.match === 'same' && typeof PP_CTESTS !== 'undefined') PP_CTESTS.keep(c, 'different');
+      // 4.52 (Ben's pick): every kind of answer is kept (Stolen and Licensed as real copies, removed
+      // Same and Maybe as different pictures), so the checker can be tuned on both.
+      const was = before[before.length - 1].status;
+      if (got.length <= 5 && !extra.removedBy && was !== status && ['same', 'maybe'].includes(c.match) && typeof PP_CTESTS !== 'undefined') {
+        if (status === 'removed') PP_CTESTS.keep(c, 'different');
+        else if ((status === 'stolen' || status === 'licensed') && was === 'new') PP_CTESTS.keep(c, 'copy');
+      }
     }
     await DB.putMany('copies', got);
     if (rejects) { try { await RS_REJECT.save(); } catch (e) { /* lists not loaded */ } }
@@ -2493,7 +2547,7 @@ const FC = (() => {
     }
   }
 
-  return { SET_ASIDE, DB, meta, open, touch, pics, dropDotMatches, checkerRemove, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, inHours, quietOK, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
+  return { claimed, claimReset, SET_ASIDE, DB, meta, open, touch, pics, dropDotMatches, checkerRemove, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, inHours, quietOK, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, unpicked, forced, setPicked, pickInside, SCAN, applyPendingFlags, missingPicks, movedNote, followMoves, watchFolders, newFolders, newFoldersSeen, goalPlan, workMinutes, exifDate, heatShoot, coolShoot, burstSibling, wakeBurst, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setStopped, setClients, logWeek, week, weekKey, firstNotes, searchedOnce, dayLog, speed, ladder, LADDER, alikeFrames, mixYears, mixLine,
     isPool, shownCountries, setShownCountries, SHOWN_START, ownerFor, pathOf, logReport, USE, useOf, riskOf, spamMarks, randomLabel, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,

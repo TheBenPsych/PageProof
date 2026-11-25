@@ -31,6 +31,8 @@ const RS_DB = {
   del: (store, key) => RS_DB.run(store, 'readwrite', s => s.delete(key)),
   all: (store) => RS_DB.run(store, 'readonly', s => s.getAll()),
   keys: (store) => RS_DB.run(store, 'readonly', s => s.getAllKeys()),
+  // Searches made since a time: their keys are 'rs' + the time in ms, so they sort by time.
+  since: (store, ms) => RS_DB.run(store, 'readonly', s => s.getAll(IDBKeyRange.lowerBound('rs' + Math.floor(ms)))),
 };
 
 // ---------- site names ----------

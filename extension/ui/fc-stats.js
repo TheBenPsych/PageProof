@@ -140,6 +140,13 @@ function stHelpers(m) {
     (rows.length ? stTable(['Helper', 'Done', 'Usual time', 'Failed'], rows) : '<p class="faint" style="margin:0">None of them has run yet.</p>') +
     (lim.length ? `<p class="faint" style="margin:0;font-size:12.5px">Site limits: ${lim.map(([k, n]) => esc(k.startsWith('limit.rest.') ? k.slice(11) + ' rested 6 hours' : k === 'limit.held.limit' ? 'waited for a site\'s limit' : 'waited for a resting site') + ' ' + stN(n) + '×').join(' · ')}</p>` : ''));
 }
+// Extra searches (sweeps, Credit search, Watching): what they did, what they found, time spent.
+function stExtra(m) {
+  if (typeof ntExtraRows !== 'function') return '';
+  const rows = ntExtraRows(m.D);
+  return stCard('Extra searches: are they worth it?', 'Sweeps, Credit search and Watching run between photo searches. Time spent is the time they kept Keep searching busy.',
+    stTable(['Search', 'What it did', 'Copies found', 'Time spent', 'Time per copy'], rows.map(r => [r.name, r.work, stN(r.found), r.mins.toLocaleString() + ' min', r.worth])));
+}
 function stKeep(m) {
   const K = SR().KEEP, km = SR().keepMinutes(m.D);
   const cls = s => (K[s] || [0, 'off'])[1];
@@ -216,6 +223,7 @@ V.stats = async () => {
   <div class="st-two">${stKeep(m)}${stDrive(m)}</div>
   <div class="st-two">${stCover(m)}${stStrain(m)}</div>
   ${stHelpers(m)}
+  ${stExtra(m)}
   ${await stSaveCard(m)}`;
 };
 

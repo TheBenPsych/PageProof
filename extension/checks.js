@@ -287,16 +287,11 @@ const PP_CHECKS = (() => {
     ];
   }
 
-  // ---------------------------------------------------------------- Breaking News file names
-  // 11.23.26_Council hearing walkout_Quinn.jpg · POOL photos: 10.29.26_POOL_Courthouse arraignment_Park.jpg
+  // ---------------------------------------------------------------- POOL photos (shared with other papers)
   const short = d => (d.getMonth() + 1) + '.' + d.getDate() + '.' + String(d.getFullYear()).slice(2);
-  const part = s => clean(s).replace(/[\\/:*?"<>|_]+/g, ' ').replace(/\s+/g, ' ').trim();
-  function bnName({ date, subject, last, pool, ext = 'jpg' }) {
-    return [short(date), pool ? 'POOL' : '', part(subject) || 'Subject', part(last) || 'Lastname'].filter(Boolean).join('_') + '.' + ext;
-  }
   const POOL = /(^|[_\s.-])POOL([_\s.-]|$)/;
   const isPool = name => POOL.test(String(name || ''));
 
-  return { KINDS, KIND_NAME, LVL, guessKind, rules, readPage, onPurpose, pubDate, dateIn, damages, legal, captureOf, bnName, isPool, fmt, short, fileKey, creditNear, AGENCY };
+  return { KINDS, KIND_NAME, LVL, guessKind, rules, readPage, onPurpose, pubDate, dateIn, damages, legal, captureOf, isPool, fmt, short, fileKey, creditNear, AGENCY };
 })();
 if (typeof module !== 'undefined') module.exports = PP_CHECKS;

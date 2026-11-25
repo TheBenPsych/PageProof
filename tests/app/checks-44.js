@@ -1,6 +1,5 @@
 // Checks for 4.4: the firm-rule check before Stolen, their page read for you (credit, prices, ads),
-// date first published and damages hint, Ready for legal, research steps, POOL photos skipped,
-// and Save as Breaking News photo with its new-or-recycled check.
+// date first published and damages hint, Ready for legal, research steps, POOL photos skipped.
 // Pretend sites and pretend pictures only, served from this computer.
 const { start } = require('./h.js');
 const http = require('http');
@@ -14,8 +13,6 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const d = C.dateIn('10.29.26_Council_Ortiz.jpg');
   ok(d && d.getFullYear() === 2026 && d.getMonth() === 9 && d.getDate() === 29, 'Reads 10.29.26 from a file name');
   ok(!C.dateIn('12.31.99_x.jpg') || C.dateIn('12.31.99_x.jpg').getFullYear() === 1999, 'A two-digit year in the future is not taken as this century');
-  ok(C.bnName({ date: new Date(2026, 2, 5), subject: 'Council hearing', last: 'Ortiz' }) === '3.5.26_Council hearing_Ortiz.jpg' || /^3\.5\.26_Council.?hearing_Ortiz\.jpg$/.test(C.bnName({ date: new Date(2026, 2, 5), subject: 'Council hearing', last: 'Ortiz' })), 'Breaking News name has no leading zeros: ' + C.bnName({ date: new Date(2026, 2, 5), subject: 'Council hearing', last: 'Ortiz' }));
-  ok(/^3\.5\.26_POOL_/.test(C.bnName({ date: new Date(2026, 2, 5), subject: 'Trial', last: 'Ortiz', pool: true })), 'POOL photos get _POOL_ after the date');
   ok(C.isPool('10.29.26_POOL_Trial_Ortiz.jpg') && !C.isPool('10.29.26_Pooltable_Ortiz.jpg'), 'POOL is found only as its own word');
   const now = new Date(2026, 10, 23);
   ok(/Register by/.test(C.damages({ date: new Date(2026, 9, 1) }, {}, now).title), 'Damages: unregistered and inside 3 months says Register by');
@@ -93,35 +90,6 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   // ---- POOL photos are skipped
   const pool = await page.evaluate(async () => { const p = (await FC.DB.all('photos'))[3]; return FC.plan({ ...p, name: '10.29.26_POOL_Trial_Ortiz.jpg' }); });
   ok(pool && pool.pool && !pool.due, 'Keep searching skips POOL photos');
-
-  // ---- Save as Breaking News photo
-  await page.evaluate(b => chrome.storage.local.set({ bnPending: { src: b + '/pics/IMG_1.png', page: b + '/news/story', title: 'Story', at: Date.now(), credit: 'Photo: Someone', date: '2026-10-29T10:00:00Z', alt: 'Council hearing', headline: 'Council walks out' } }), base);
-  await go('bnsave'); await page.waitForTimeout(1500);
-  const bn = await page.evaluate(() => ({ t: document.querySelector('#view').innerText, img: !!document.querySelector('.frame img'), date: document.querySelector('#bnDate').value }));
-  ok(bn.img && bn.date === '2026-10-29', 'The Breaking News page shows the photo and the article date (' + bn.date + ')');
-  const cl = await page.evaluate(() => state.bn.clients[0]);
-  await page.selectOption('#bnClient', cl); await page.waitForTimeout(400);
-  await page.fill('#bnSubject', 'Council hearing'); await page.fill('#bnLast', 'Ortiz'); await page.waitForTimeout(300);
-  const nm = await page.evaluate(() => document.getElementById('bnName').textContent);
-  ok(nm === '10.29.26_Council hearing_Ortiz.jpg' || /^10\.29\.26_Council.?hearing_Ortiz\.jpg$/.test(nm), 'File name is made as you type: ' + nm);
-  await page.check('#bnPool'); await page.waitForTimeout(200);
-  ok(/^10\.29\.26_POOL_/.test(await page.evaluate(() => document.getElementById('bnName').textContent)), 'Ticking POOL adds _POOL_');
-  for (let i = 0; i < 60 && await page.evaluate(() => state.bn.check && state.bn.check.running); i++) await page.waitForTimeout(500);
-  const ch = await page.evaluate(() => ({ c: state.bn.check, t: document.querySelector('#view').innerText }));
-  ok(ch.c && !ch.c.running && ch.c.total > 0 && /New|Recycled|Maybe/.test(ch.t), 'New or recycled check ran over ' + (ch.c ? ch.c.total : 0) + ' photos');
-  ok(await page.evaluate(() => !document.querySelector('[data-act="bnsave"]').disabled), 'Save is ready once the boxes are filled');
-
-  // Recycled: give one of that client's photos the same look as this picture
-  const rec = await page.evaluate(async () => {
-    const blob = await (await fetch(state.bn.src)).blob(), look = await FC.lookHash(blob);
-    const p = (await FC.DB.by('photos', 'client', state.bn.client))[0]; p.look = look; await FC.DB.put('photos', p);
-    await bnCheck(); return p.name;
-  });
-  await page.waitForTimeout(800);
-  ok(/Recycled/.test(await page.evaluate(() => document.querySelector('#view').innerText)) && /\S/.test(rec), 'A photo we already have shows Recycled');
-
-  await go('tools');
-  ok(await page.evaluate(() => !!document.querySelector('a.tool[href="#bnsave"]')), 'Tools lists Save a Breaking News photo');
 
   await ctx.close(); srv.close();
   console.log(fails ? fails + ' FAILED' : 'ALL PASS');

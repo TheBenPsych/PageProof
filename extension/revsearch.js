@@ -837,11 +837,13 @@ function markCover(p, l) {
 // happened: kept / maybe / out (a close Same that was not), saved (an exact match the fast check
 // missed), page (4.50: found on their page), exactNo (still thrown out: "Google said exact").
 // 4.50 (Ben's pick): Yandex and Bing mark every link as exact, so a plainly different photo from
-// them (hardly any matching details) no longer gets the slow look; Google's own exact list still does.
+// them (hardly any matching details) no longer gets the slow look.
+// 4.52: Google's own exact list too: Ben's stats showed about 1,750 such looks in a day and a half
+// that saved none, and reading their page found 1 copy in 41 tries at about 22 seconds each.
 const someDetails = m => (m.inl || 0) >= 6 || (m.tiles || 0) >= 6;
 async function secondLook(p, l, m, have) {
   const v0 = PP_VERDICT.score(m);
-  const missed = l.exact && (v0 === 'no' || v0 === 'cant') && !cardOf(l) && !userNo(l) && (l.gx || someDetails(m));
+  const missed = l.exact && (v0 === 'no' || v0 === 'cant') && !cardOf(l) && !userNo(l) && someDetails(m);
   const want = PP_VERDICT.close(m) || missed;
   if (!want || !p.blob) return m;
   let deep = null;
@@ -860,7 +862,7 @@ async function secondLook(p, l, m, have) {
   const r = PP_VERDICT.second(m, deep, !!l.exact);
   // 4.50 (Ben's pick): Google said exact, but its small preview still doesn't line up (a headline
   // over it, a crop). Google never gives the picture itself, so their page is read and its own
-  // pictures are checked at full size (up to 10 such links a photo).
+  // pictures are checked at full size (4.52: up to 3 such links a photo, 8 pictures each).
   if (l.gx && !l.img && (r.how === 'exactNo' || (!r.how && missed))) {
     const hit = await exactOnPage(p, l);
     if (hit) { PP_STATS.add('chk.second.page'); return { ...hit.m, second: 'page', fastPct: m.pct, from: 'page', img: hit.u, onPage: hit.card ? 'card' : 'seen', pv: PV, ...(l.w ? {} : { w: hit.w, h: hit.h }) }; }
@@ -868,7 +870,7 @@ async function secondLook(p, l, m, have) {
   if (r.how) PP_STATS.add('chk.second.' + r.how);
   return { ...r.keep, second: r.how || undefined, fastPct: r.keep === m ? undefined : m.pct };
 }
-const EXACT_PAGE_MAX = 10;
+const EXACT_PAGE_MAX = 3, EXACT_PAGE_PICS = 8;
 async function exactOnPage(p, l) {
   if ((p.exactPages = (p.exactPages || 0) + 1) > EXACT_PAGE_MAX) return null;
   let social = false;
@@ -883,7 +885,7 @@ async function exactOnPage(p, l) {
     clearTimeout(t);
     if (html) {
       const doc = new DOMParser().parseFromString(html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\son([a-z]+\s*=)/gi, ' data-pp-on$1'), 'text/html');
-      for (const u of pagePictures(doc, r.url || l.url, false)) {
+      for (const u of pagePictures(doc, r.url || l.url, false).slice(0, EXACT_PAGE_PICS)) {
         if (R.stop && !BG) break;
         const pic = await fetchPicture(u, DEEP);
         if (!pic) continue;
@@ -1817,7 +1819,7 @@ async function renderPast() {
   const jobs = (await RS_DB.all('jobs')).sort((a, b) => b.created.localeCompare(a.created));
   await RS_LISTS.load();
   const KIND = { keep: 'Keep searching', fifty: 'Today\'s 50' };
-  const head = pgHead('All searches', 'The last 40 searches are kept. Every copy they found is also in Copies found.',
+  const head = pgHead('All searches', 'Big searches are kept for 90 days. Keep searching\'s one-photo searches are kept for 2 days. Every copy they found is also in Copies found.',
     h('a', { class: 'pg-btn primary', href: appUrl('search'), onclick: e => goApp('search', e), text: '🔎 New search' }));
   // What each search found, worked out once.
   const info = j => {

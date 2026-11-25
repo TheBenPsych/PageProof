@@ -64,11 +64,34 @@ const RS_JOB = (() => {
       alike: (opts.alike || []).slice(0, 3).map((p, k) => ({ ...p, i: 100 + k })),
     };
     await RS_DB.put('jobs', job.id, job);
-    try {
-      const keys = (await RS_DB.keys('jobs')).sort();
-      for (const k of keys.slice(0, Math.max(0, keys.length - 40))) await RS_DB.del('jobs', k);
-    } catch (e) { /* ignore */ }
+    try { await prune(); } catch (e) { /* ignore */ }
     return job;
+  }
+  // How long searches are kept (4.53.1, Ben). Before, only the last 40 searches were kept, so on a
+  // busy day Keep searching's one-photo searches pushed every big search out of All searches in
+  // under an hour. Now the two are kept apart:
+  //  - big searches (New search, Today's 50, photos you picked): 90 days, at most 300
+  //  - Keep searching's one-photo searches: 2 days, at most 600
+  // A search that is still running is never removed. Checked at most every 10 minutes.
+  const KEEP = { bigDays: 90, bigMost: 300, smallDays: 2, smallMost: 600 };
+  async function prune(force) {
+    const now = Date.now();
+    const last = (await api.storage.local.get('rsPruneAt')).rsPruneAt || 0;
+    if (!force && now - last < 10 * 60000) return;
+    await api.storage.local.set({ rsPruneAt: now });
+    const jobs = (await RS_DB.all('jobs')).filter(j => j && j.id).sort((a, b) => String(b.created).localeCompare(String(a.created)));
+    const small = j => j.kind === 'keep' && (j.pics || []).length <= 1;
+    const live = j => !j.finished && !j.stoppedAt && now - (Date.parse(j.created) || 0) < 2 * 864e5;
+    const drop = [];
+    for (const [isSmall, days, most] of [[true, KEEP.smallDays, KEEP.smallMost], [false, KEEP.bigDays, KEEP.bigMost]]) {
+      let n = 0;
+      for (const j of jobs.filter(x => small(x) === isSmall)) {
+        if (live(j)) { n++; continue; }
+        const old = now - (Date.parse(j.created) || 0) > days * 864e5;
+        if (old || n >= most) drop.push(j.id); else n++;
+      }
+    }
+    for (const id of drop) await RS_DB.del('jobs', id);
   }
   // Hand a search to the small pinned Keep searching tab, which runs it in the background (one big
   // search at a time, in the order they were started), so no page has to stay open and no new tab
@@ -92,5 +115,5 @@ const RS_JOB = (() => {
     try { await api.tabs.create(here ? { url, windowId: here.windowId, index: here.index + 1, active: true } : { url, active: true }); }
     catch (e) { await api.tabs.create({ url, active: true }); }
   }
-  return { prepare, create, open, queue, settings, resting, ENGINES };
+  return { prepare, create, open, queue, settings, resting, prune, KEEP, ENGINES };
 })();

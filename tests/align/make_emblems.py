@@ -95,6 +95,21 @@ def add_cases(OUT, D, manifest, make, S, T, jpeg):
     jpeg(B.resize((300, 200), Image.LANCZOS), 70).save(f'{OUT}/podium-other-shot-tiny.png'); manifest.append({'orig': 'podium.png', 'copy': 'podium-other-shot-tiny.png', 'G': None})
     img, G = make(A, S(1.5) @ T(-40, -250), (420, 380)); jpeg(img, 80).save(f'{OUT}/podium__real-crop.png')
     manifest.append({'orig': 'podium.png', 'copy': 'podium__real-crop.png', 'G': G[:2].tolist()})
+    # 1b. (4.52) a close-up of ONLY the seal on another podium: no person, no crowd, just the seal on
+    #     a plain front, like a news site's "presidential seal" stock photo. Plus a real tight crop.
+    def seal_closeup(W, H, seal_box, seed):
+        im = Image.new('RGB', (W, H), (20, 24, 50)); d = ImageDraw.Draw(im)
+        d.polygon([(W * 0.05, H * 0.02), (W * 0.95, H * 0.02), (W * 0.92, H * 0.98), (W * 0.08, H * 0.98)], fill=(52, 58, 72))
+        a = np.asarray(im).astype(float) + np.random.default_rng(seed).normal(0, 4, (H, W, 3)); im = Image.fromarray(np.clip(a, 0, 255).astype('uint8'))
+        s, m = SL; s2 = s.resize((seal_box[2] - seal_box[0], seal_box[3] - seal_box[1]), Image.LANCZOS)
+        im.paste(s2, seal_box[:2], m.resize(s2.size, Image.LANCZOS)); return ImageEnhance.Brightness(im).enhance(1.1)
+    B = seal_closeup(1000, 600, (340, 140, 660, 460), 9); jpeg(B, 85).save(f'{OUT}/podium-seal-closeup.png'); manifest.append({'orig': 'podium.png', 'copy': 'podium-seal-closeup.png', 'G': None})
+    # tight: the seal fills the frame. Another camera: turned a little, light from one side, softer
+    B = seal_closeup(700, 700, (60, 60, 640, 640), 10).rotate(4, Image.BICUBIC)
+    g = np.linspace(0.75, 1.2, 700)[None, :, None]
+    B = Image.fromarray(np.clip(np.asarray(B).astype(float) * g, 0, 255).astype('uint8')).filter(ImageFilter.GaussianBlur(1.5)); jpeg(B, 85).save(f'{OUT}/podium-seal-closeup-tight.png'); manifest.append({'orig': 'podium.png', 'copy': 'podium-seal-closeup-tight.png', 'G': None})
+    img, G = make(A, S(3) @ T(-110, -230), (420, 420)); jpeg(img, 85).save(f'{OUT}/podium__real-tight-crop.png')
+    manifest.append({'orig': 'podium.png', 'copy': 'podium__real-tight-crop.png', 'G': G[:2].tolist()})
     # 2. a big crest on the wall behind the speaker (left part of the frame); other shot: zoomed, the
     #    speaker somewhere else, so only the crest is shared
     def relit(im, seed):
