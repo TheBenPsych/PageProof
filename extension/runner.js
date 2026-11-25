@@ -167,10 +167,12 @@ async function chores() {
     // Who's behind new sites: one site at a time, only sites with copies you still care about.
     if (now - (m.owner || 0) > 120000) {
       ch.owner = now;
-      const known = new Set((await FC.DB.all('sites')).map(f => f.site));
+      const known = new Set((await FC.DB.all('sites')).filter(f => !f.partial).map(f => f.site));
       const want = (await FC.allCopies()).find(c => c.status !== 'removed' && !known.has(c.site));
       if (want) await FC.lookup(want.site, want.url);
     }
+    // 4.56.1: the country of new copies on .com and other sites whose ending says nothing.
+    if (FC.fillCountries && now - (m.cc || 0) > 60000) { ch.cc = now; await FC.fillCountries(await FC.allCopies(), 6); }
   } catch (e) { console.warn('PageProof chores', e); }
   await FC.meta.set('chores', ch);
 }
