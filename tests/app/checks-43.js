@@ -27,7 +27,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   // ---- One at a time
   await go('review');
   const rv = await page.evaluate(() => ({ ans: [...document.querySelectorAll('.rvans button')].map(b => b.textContent.replace(/\s+/g, ' ').trim()), prog: (document.querySelector('.rvprog b') || {}).textContent, link: !!document.querySelector('.rvsite a.curl'), page: !!document.querySelector('#pgbox'), more: [...document.querySelectorAll('.rvmore .btn')].map(b => b.textContent.trim()).join('|'), site: document.querySelector('.rvsite h2').textContent }));
-  ok(rv.ans.length === 4 && /^Stolen ?Y$/.test(rv.ans[0]) && /^Skip/.test(rv.ans[3]), 'One at a time has the wide answer row: ' + rv.ans.join(', '));
+  ok(rv.ans.length === 5 && /^Stolen ?Y$/.test(rv.ans[0]) && /^Check later/.test(rv.ans[3]) && /^Skip/.test(rv.ans[4]), 'One at a time has the wide answer row: ' + rv.ans.join(', '));
   ok(/^1 of \d/.test(rv.prog) && rv.link && rv.page, 'One at a time shows progress, the page link and Their page (' + rv.prog + ')');
   ok(/Compare/.test(rv.more) && /Evidence report/.test(rv.more) && /Capture/.test(rv.more) && /Approve site/.test(rv.more), 'One at a time has Compare, Evidence report, Capture and Approve site');
   await shot('review');

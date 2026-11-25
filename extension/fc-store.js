@@ -1496,7 +1496,7 @@ const FC = (() => {
   }
 
   // ---------------------------------------------------------------- copies found
-  // A copy is one link for one photo. status: new · stolen · licensed · removed
+  // A copy is one link for one photo. status: new · later (Check later) · stolen · licensed · removed
   // (skip keeps it new, but puts it at the back of the review line).
   // online: up · gone · back
   const SOCIAL = /(^|\.)(facebook|fb|instagram|twitter|x|threads|tiktok|pinterest|reddit|tumblr|linkedin|vk|weibo|youtube|flickr|snapchat|telegram|t)\.(com|net|me|org|ru)$/;
@@ -1621,7 +1621,7 @@ const FC = (() => {
   // 4.24: spam blog farms. Throwaway sites with a made-up name (serecoun.blog, adfomusto.blog) that
   // put each copy on a random-looking address of their own (ass4c61.serecoun.blog). Only signs
   // PageProof can see in the links; nothing is answered by itself. Returns Map copy id -> reasons.
-  const SPAM_END = /\.(blog|xyz|top|shop|online|site|buzz|click|icu|cyou|rest|monster|lol|cfd|sbs|bond|live|fun|space|store|vip|win|loan|work|info|biz|pw|tk|ml|ga|cf|gq|life|world|today|club|website|pics|homes|beauty|hair|quest|autos|boats|mom|skin|makeup|cam|bar|uno|press|digital|ink|wiki|link|asia|mobi|cc|ws)$/;
+  const SPAM_END = /\.(blog|xyz|top|shop|online|site|buzz|click|icu|cyou|rest|monster|lol|cfd|sbs|bond|live|fun|space|store|vip|win|loan|work|info|biz|pw|tk|ml|ga|cf|gq|life|world|today|club|website|pics|homes|beauty|hair|quest|autos|boats|mom|skin|makeup|cam|bar|uno|press|digital|ink|wiki|link|asia|mobi|cc|ws|fit|forum|yoga|help|best|guru|lat|run|kim|men|party|review|stream|download|racing|date|faith|trade|science|accountant|cricket|gdn|fyi|email|ltd|baby|bet|casa|charity|cooking|dog|horse|lifestyle|motorcycles|rocks|sale|shopping|tattoo|wang|ren|beer|blue|pink|red|black|vin|wine)$/;
   // Big blog and website hosts: everyone there gets their own sub-address, so these are never a farm.
   const BLOG_HOSTS = /(^|\.)(wordpress\.com|blogspot\.[a-z.]+|blogger\.com|tumblr\.com|medium\.com|substack\.com|wixsite\.com|weebly\.com|github\.io|netlify\.app|vercel\.app|pages\.dev|squarespace\.com|webflow\.io|jimdofree\.com|jimdosite\.com|over-blog\.com|livejournal\.com|ghost\.io|typepad\.com|home\.blog|art\.blog|travel\.blog|food\.blog|music\.blog|photo\.blog|business\.blog|news\.blog|fashion\.blog|data\.blog|video\.blog|car\.blog|game\.blog|design\.blog|family\.blog|school\.blog|health\.blog|film\.blog|sport\.blog|tech\.blog)$/;
   // A random-looking name part: letters and numbers mixed up (ass4c61, kl77lfl, vemv18u0g), or a long
@@ -1633,6 +1633,12 @@ const FC = (() => {
     if (/\d/.test(l) && /[a-z]/.test(l) && flips >= 2) return true;
     return l.length >= 6 && /[bcdfghjklmnpqrstvwxz]{5,}/.test(l);
   }
+  // the name part may be several words joined by - (uqumo2us-amphtml): any random-looking piece counts.
+  const randomPiece = l => String(l || '').split(/[-.]/).some(randomLabel);
+  // "amphtml" in the address is a mark of one spam network (uqumo2us-amphtml.beauty-glam.makeup,
+  // talkcorner.forum/amphtml/...). Real news sites use /amp/, not amphtml.
+  const AMPHTML = /(^|[-.])amphtml([-.]|$)/;
+  const ampPath = u => { try { return /(^|\/)amphtml(\/|$)/i.test(new URL(u).pathname); } catch (e) { return false; } };
   const homeOnly = u => { try { const x = new URL(u); return /^\/?(index\.(html?|php))?$/i.test(x.pathname) && !x.search; } catch (e) { return false; } };
   function spamMarks(copies) {
     const out = new Map(), subs = new Map();
@@ -1650,12 +1656,19 @@ const FC = (() => {
     for (const c of copies) {
       const p = parts(c);
       if (skip(c, p)) continue;
-      const first = p.sub.split('.')[0], rnd = !!first && randomLabel(first);
+      const first = p.sub.split('.')[0], rnd = !!first && randomPiece(first);
       const cheap = SPAM_END.test(p.base), home = homeOnly(c.url), farm = (subs.get(p.base) || new Set()).size;
-      const randomFarm = farm >= 3 && [...subs.get(p.base)].filter(x => randomLabel(x.split('.')[0])).length >= 2;
-      if (!(rnd && (cheap || home || farm >= 3)) && !(randomFarm && (cheap || home))) continue;
+      const randomFarm = farm >= 3 && [...subs.get(p.base)].filter(x => randomPiece(x.split('.')[0])).length >= 2;
+      // the site name itself made up, on a throwaway ending (fw65mw.fit). Stricter than for the
+      // sub-address: no vowels at all, or letters and numbers switching 3+ times (k9dog, mp3juice don't count).
+      const baseName = p.base.split('.')[0];
+      const rndBase = cheap && randomLabel(baseName) && (!/[aeiouy]/.test(baseName) || (baseName.match(/[a-z](?=\d)|\d(?=[a-z])/g) || []).length >= 3);
+      const amp = AMPHTML.test(p.sub), ampP = ampPath(c.url);
+      if (!(rnd && (cheap || home || farm >= 3)) && !(randomFarm && (cheap || home)) && !rndBase && !(amp && (rnd || cheap)) && !(ampP && cheap)) continue;
       const why = [];
       if (rnd) why.push('Random-looking address (' + first + ')');
+      if (rndBase) why.push('Made-up site name (' + baseName + ')');
+      if (amp || ampP) why.push('"amphtml" in the address, a spam network mark');
       if (cheap) why.push('Throwaway ending .' + p.base.split('.').pop());
       if (farm >= 3) why.push(p.base + ' shows up under ' + farm + ' different made-up addresses');
       if (home) why.push('Only the home page, no article');
@@ -1944,7 +1957,7 @@ const FC = (() => {
   }
   // One time (4.14): fold copies already saved that are the same page. The answered one is kept
   // (or the oldest one if none is answered); a group with two different answers is left alone.
-  const RANK = { stolen: 4, licensed: 3, removed: 2, new: 1 };
+  const RANK = { stolen: 4, licensed: 3, removed: 2, later: 1, new: 1 };
   async function mergeSamePages() {
     if (await meta.get('pageMerge')) return 0;
     return navigator.locks.request('pp-page-merge', async () => {
@@ -2071,7 +2084,7 @@ const FC = (() => {
       if (typeof PP_STATS !== 'undefined' && status !== 'skip' && c.status !== status && extra.removedBy !== 'weakmaybe') {
         PP_STATS.add('ans.' + status);
         if (c.status === 'removed' && status === 'new') PP_STATS.add('ans.putBack' + (c.removedBy ? '.' + c.removedBy : ''));
-        else if (c.status !== 'new') PP_STATS.add('ans.changed');
+        else if (c.status !== 'new' && c.status !== 'later') PP_STATS.add('ans.changed');
       }
       if (status === 'skip') { c.skipped = now; }
       else { c.status = status; c.answered = now; delete c.skipped; }
@@ -2089,7 +2102,7 @@ const FC = (() => {
       const was = before[before.length - 1].status;
       if (got.length <= 5 && !extra.removedBy && was !== status && ['same', 'maybe'].includes(c.match) && typeof PP_CTESTS !== 'undefined') {
         if (status === 'removed') PP_CTESTS.keep(c, 'different');
-        else if ((status === 'stolen' || status === 'licensed') && was === 'new') PP_CTESTS.keep(c, 'copy');
+        else if ((status === 'stolen' || status === 'licensed') && (was === 'new' || was === 'later')) PP_CTESTS.keep(c, 'copy');
       }
     }
     await DB.putMany('copies', got);
