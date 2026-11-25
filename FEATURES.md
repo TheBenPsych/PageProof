@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.54.0** (25 Nov 2026).
+Last updated: version **4.55.0** (25 Nov 2026).
 
 ---
 
@@ -110,6 +110,7 @@ Last updated: version **4.54.0** (25 Nov 2026).
 - **Search now on Credit search runs on that page**, with a progress bar (wordings searched, pages read, copies found, credit but no photo) and a summary when it finishes. A page showing a copy already in Copies found is no longer listed as "credit but none of their photos". (4.52)
 - **Extra searches card on Keep searching.** Sweeps, Credit search and Watching each show what they are doing now and their last 7 days: work done, copies found and time spent. (4.52)
 - **Credit search on Google and Bing.** Each wording is searched on both; a page both list (even spelled a little differently) is read once. A robot check rests only that site for an hour and the other carries on. (4.52)
+- **Photos you stopped.** The client's photos page counts photos nobody searches any more, can show only those, and has Stop searching / Search again for picked photos. (4.55)
 
 ## 5. Review the copies found
 
@@ -141,6 +142,7 @@ Last updated: version **4.54.0** (25 Nov 2026).
 - **Company card and status.** Each site gets a company card with the firm's fields (entity name type, entity name, other names, state, entity number, what the registry says, registered agent, addresses, DMCA agent) and status: Seemingly viable, Not a viable entity or Not checked yet. The status shows on every copy from that site, Ready for legal needs an active company, and copies on a site that is not a viable entity go to the bottom. (4.51)
 - **Legal portal card.** A Stolen copy's Claim tab shows the portal's Add Infringement boxes in the portal's order (Artwork, Discovery Date and Method, Infringing Domain, Page URL, Infringer Use, Paid Ads, Sells Product, Agency Case #, Damages, Infringing Image Url, Note), filled from the copy. Click a line to copy it, or Copy all. It also shows the Certificate and Application numbers to check and the screengrab file to upload. (4.52)
 - **Portal card drop-downs.** Lines that are drop-downs in the portal say exactly which choice to pick (Reverse Image Search; Website, Social Media or Embed; Commercial or Editorial; Yes or No; Statutory, Actual or Cannot Determine Damages). (4.52.3)
+- **Stop searching this photo.** From a copy's details panel, ⋯ menu or One at a time; Keep searching and Today's 50 skip it, copies stay, Undo or "Search again" on the client's photos page brings it back. (4.55)
 
 ## 6. Social media accounts
 
@@ -322,3 +324,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.53 | 25 Nov | Breaking News saver removed |
 | 4.53.1 | 25 Nov | Fix: Big searches kept 90 days, one-photo searches 2 days |
 | 4.54 | 25 Nov | Checker tuned on your answers (few-detail Same is Maybe, Weak Maybes folded, test pairs from every answer) |
+| 4.55 | 25 Nov | Stop searching a photo from Copies found |
