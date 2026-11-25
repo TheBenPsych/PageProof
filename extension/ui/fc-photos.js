@@ -4,12 +4,31 @@ Object.assign(state, { cs: 0, csClients: null, csBusy: '', csTree: new Map(), cs
 
 // ---------------------------------------------------------------- Connect your photos
 const CS_STEPS = ['Install Drive for desktop', 'Stream your files', 'Pick your clients', 'Check and start'];
-V.connect = async () => {
+// 4.56 (Ben's pick): the folder layout, drawn once and shown in first-time setup and on the
+// folder step. Made-up names only.
+function ppFolderGuide() {
+  const L = (lvl, icon, name, note, cls = '') => `<div class="fl" style="padding-left:${lvl * 22}px"><span class="fi" aria-hidden="true">${icon}</span><span class="fn ${cls}">${name}</span>${note ? `<span class="fnote">${note}</span>` : ''}</div>`;
+  return `<div class="fltree" role="img" aria-label="Example folder layout: top folder, client, Registered images, year, quarter with registration number, photos">
+    ${L(0, '📁', 'G:\\Shared drives\\Photos', 'the top folder you pick')}
+    ${L(1, '📁', '<b>Example Client</b>', 'one folder per client = the client\'s name')}
+    ${L(2, '📁', 'Registered images', '')}
+    ${L(3, '📁', '2026', 'year')}
+    ${L(4, '📁', '<b class="flok">VA 2-123-456</b> Q4', 'registration number in the name (or 1-… while it is still an application)')}
+    ${L(5, '🖼', 'photo.jpg', '')}
+    ${L(1, '📁', 'No longer monitoring', '<span class="tag bad">Skipped</span> has client_info_ignore.txt', 'flskip')}
+    ${L(1, '📁', 'Recycled - not to use', '<span class="tag bad">Skipped</span> the name says not to use or recycled', 'flskip')}
+  </div>
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px">
+    <div class="ppchk"><b>Do</b><ul class="hwlist"><li>One folder per client</li><li>A year folder, then a quarter (or day) folder</li><li>Put the VA or 1- number in the quarter folder's name, <i>or</i> keep an Excel file named with the number in that folder</li></ul></div>
+    <div class="ppchk"><b>PageProof skips</b><ul class="hwlist"><li>Folders with <b>client_info_ignore.txt</b></li><li>Names with "not to use", "do not use" or "recycled"</li><li>Anything you leave unticked</li></ul></div>
+  </div>`;
+}
+
+// The body of one Connect your photos step. nav() draws the Back / Next row (empty in first-time setup,
+// which has its own).
+async function csBody(s, nav) {
   const d = await FC.drive();
   const st = await FC.driveState(false);
-  const s = state.cs;
-  const dots = `<ol class="steps csteps" aria-label="Steps">${CS_STEPS.map((t, i) => `<li class="${i < s ? 'done' : i === s ? 'cur' : 'wait'}"${i === s ? ' aria-current="step"' : ''}><span class="s">${i < s ? '✓' : i + 1}</span>${t}</li>`).join('')}</ol>`;
-  const nav = (back, next, nextLabel = 'Next') => `<div class="row" style="margin-top:6px">${back ? '<button class="btn" data-act="csgo" data-v="-1">Back</button>' : ''}${next ? `<button class="btn primary" style="margin-left:auto" data-act="${next}" data-v="1">${nextLabel}</button>` : ''}</div>`;
   let body = '';
   if (s === 0) body = `<h2>1. Install Google Drive for desktop</h2>
     <p class="muted" style="margin:0">PageProof reads your company's photos straight from the shared Google Drive, through the Drive app on this computer. Nothing is uploaded anywhere and nothing in Drive is changed: PageProof only reads.</p>
@@ -75,6 +94,7 @@ V.connect = async () => {
     const extras = await FC.extraHandles();
     body = `<h2>3. Pick your clients</h2>
     <p class="muted" style="margin:0">Choose the top folder (for example G: › Shared drives, or one shared drive). Then click <b>▸</b> to open a folder and <b>tick only the folders you search</b>. Each ticked folder is one client, and everything inside it is searched. Star the ones that matter most.</p>
+    <details><summary class="muted" style="cursor:pointer;font-weight:600">How should the folders look?</summary><div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">${ppFolderGuide()}</div></details>
     <p class="faint" style="margin:0;font-size:13px">PageProof reads the same text files as your other platform: a folder with <b>client_info.txt</b> gets that client ID as its name (also for folders deeper inside a ticked folder), and a folder with <b>client_info_ignore.txt</b> is skipped with everything inside it. The ID and Skipped tags appear a moment after a folder opens.</p>
     <div class="row"><button class="btn${root ? '' : ' primary'}" data-act="cspick">${ic('files', 18)} ${root ? 'Choose a different top folder' : 'Choose the top folder'}</button>${root && st === 'granted' ? `<button class="btn primary" data-act="csaddone">＋ Add one folder</button>` : ''}${st === 'prompt' ? '<button class="btn primary" data-act="csallow">Allow PageProof to read it</button>' : ''}${state.csBusy ? `<span class="muted">${esc(state.csBusy)}</span>` : ''}</div>
     ${root ? `<span class="faint" style="font-size:12.5px;margin-top:-6px">Top folder: <b>${esc(root.name)}</b>. "Add one folder" opens the folder window so you can go straight to a big folder and pick it.</span>` : ''}
@@ -89,12 +109,19 @@ V.connect = async () => {
   } else {
     const list = state.csClients || [];
     const on = list.filter(c => c.searching);
-    body = `<h2>4. Check and start</h2>
-    <p class="muted" style="margin:0">PageProof expects each client's folder to look like this. Other layouts work too; dates are read from folder names.</p>
-    <div class="tree mono" style="font-size:13px">Photos<br>&nbsp;› <b>Client name</b><br>&nbsp;&nbsp;&nbsp;› Registered images<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;› 2026<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;› Q4 (or 1-12345678901 Q4)<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;› photo.jpg</div>
-    <dl class="facts"><dt>Searching for</dt><dd>${on.length ? esc(on.map(c => c.name).slice(0, 8).join(', ')) + (on.length > 8 ? ' and ' + (on.length - 8) + ' more' : '') : '<span style="color:var(--warn)">No clients ticked</span>'}</dd><dt>Priority</dt><dd>${esc(on.filter(c => c.priority).map(c => c.name).join(', ') || 'None')}</dd><dt>Then</dt><dd>PageProof reads every folder once (this can take a while with lots of photos), then Keep searching starts. You can change all of this later in Clients and photos.</dd></dl>
+    body = `<h2>4. Check your folders and start</h2>
+    <p class="muted" style="margin:0">PageProof looked through the client folders you ticked (folder names only, the newest 3 years). Nothing in Drive is changed.</p>
+    ${await csCheckHtml()}
+    <dl class="facts"><dt>Searching for</dt><dd>${on.length ? esc(on.map(c => c.name).slice(0, 8).join(', ')) + (on.length > 8 ? ' and ' + (on.length - 8) + ' more' : '') : '<span style="color:var(--warn)">No clients ticked</span>'}</dd><dt>Priority</dt><dd>${esc(on.filter(c => c.priority).map(c => c.name).join(', ') || 'None')}</dd><dt>Then</dt><dd>PageProof reads every folder once (this can take a while with lots of photos), then Keep searching starts. A ! or ✕ never stops the search: it only tells you what to fix. You can change all of this later in Clients and photos.</dd></dl>
     ${nav(true, on.length ? 'csstart' : '', 'Yes, start searching')}`;
   }
+  return body;
+}
+V.connect = async () => {
+  const s = state.cs;
+  const dots = `<ol class="steps csteps" aria-label="Steps">${CS_STEPS.map((t, i) => `<li class="${i < s ? 'done' : i === s ? 'cur' : 'wait'}"${i === s ? ' aria-current="step"' : ''}><span class="s">${i < s ? '✓' : i + 1}</span>${t}</li>`).join('')}</ol>`;
+  const nav = (back, next, nextLabel = 'Next') => `<div class="row" style="margin-top:6px">${back ? '<button class="btn" data-act="csgo" data-v="-1">Back</button>' : ''}${next ? `<button class="btn primary" style="margin-left:auto" data-act="${next}" data-v="1">${nextLabel}</button>` : ''}</div>`;
+  const body = await csBody(s, nav);
   return `${head('Find copies', 'Connect your photos', 'One-time setup so PageProof can search your clients\' photos from the shared Google Drive.')}
   ${dots}<section class="card pad wiz" style="display:flex;flex-direction:column;gap:14px;max-width:820px">${body}</section>
   <p class="faint" style="font-size:13px">Just want to search a few photos from your computer? <a href="#search">New search</a> works without this.</p>`;
@@ -104,12 +131,14 @@ V.connect.noAutoRedraw = true;
 // Open a folder in the background: its folders show first, then the client_info tags fill in
 // a few at a time. The page is redrawn as things arrive.
 let csDrawT = null, csHoldAt = 0;
+// Is the folder-ticking step on screen (on Connect your photos, or inside first-time setup)?
+const csPickOn = () => (state.shown === 'connect' && state.cs === 2) || (state.shown === 'setup' && !!(SETUP[state.setup] || {}).pick);
 // Keep saying "setup is open" while someone sits on the folder step.
-setInterval(() => { if (state.shown === 'connect' && state.cs === 2 && !document.hidden) { csHoldAt = Date.now(); ppApi.storage.local.set({ fcSetupAt: csHoldAt }).catch(() => {}); } }, 30000);
+setInterval(() => { if (csPickOn() && !document.hidden) { csHoldAt = Date.now(); ppApi.storage.local.set({ fcSetupAt: csHoldAt }).catch(() => {}); } }, 30000);
 // Redraw at most every 300 ms. (It must not keep pushing the redraw back while tags are still
 // being read, or a big folder shows nothing until every tag is in.)
 const csDraw = now => {
-  const go = () => { csDrawT = null; if (state.shown === 'connect' && state.cs === 2) render(true); };
+  const go = () => { csDrawT = null; if (csPickOn()) render(true); };
   if (now) { clearTimeout(csDrawT); go(); } else if (!csDrawT) csDrawT = setTimeout(go, 300);
 };
 // The folder list is remembered (names and client_info tags), so opening a folder again shows it
@@ -188,8 +217,105 @@ function csWarnFor(rel) {
   if (Array.isArray(kids) && kids.length >= 8 && !rel.includes('/')) return `<b>“${esc(name)}” holds ${kids.length} folders.</b> Ticked as it is, everything inside counts as ONE client called “${esc(name)}”, except folders inside that have their own client_info.txt. If these are separate clients, open it with ▸ and tick each client instead.`;
   return '';
 }
+// ---------------------------------------------------------------- 4.56: check the ticked folders
+// After ticking, each client folder is looked at quickly (folder names, and the files of the newest
+// quarter folders): are there photos, year folders, a registration number for each quarter? Nothing
+// is changed and it never stops the search; it only says what to fix. At most 15 seconds a client,
+// newest 3 years only, so a client with years of photos on a slow Drive never holds anything up.
+const CK_IMG = /\.(jpe?g|png|webp|gif|bmp|avif|tiff?|heic|heif)$/i, CK_SHEET = /\.(xlsx|xlsm|xls|csv|ods|pdf|docx?)$/i;
+const CK_YEAR = /^\s*(?:year|fy)?[\s._-]*((?:19|20)\d{2})(?!\d)/i;
+async function csCheckOne(cf) {
+  const t0 = Date.now(), late = () => Date.now() - t0 > 15000;
+  const r = { name: cf.name, photos: false, years: [], quarters: 0, numbered: 0, missing: [], partial: false, noReg: false, err: '' };
+  const ls = async h => { const d = [], f = []; for await (const [n, x] of h.entries()) { if (/^[.$~]/.test(n)) continue; if (x.kind === 'directory') { if (!FC.SET_ASIDE.test(n)) d.push([n, x]); } else f.push(n); } return { d, f }; };
+  const regFile = f => f.some(n => CK_SHEET.test(n) && FC.regIn(n));
+  try {
+    if (!cf.extra && !cf.baseName && !/^registered/i.test(String(cf.rel || '').split('/').pop())) r.noReg = true;
+    const top = await ls(cf.base);
+    if (top.f.some(n => CK_IMG.test(n))) r.photos = true;
+    const upReg = !!(FC.regIn(cf.folder || '') || FC.regIn(cf.baseName || '') || regFile(top.f));
+    const years = top.d.filter(([n]) => CK_YEAR.test(n)).sort((a, b) => b[0].localeCompare(a[0]));
+    r.years = years.map(([n]) => +CK_YEAR.exec(n)[1]);
+    for (const [yn, yh] of years.slice(0, 3)) {
+      if (late()) { r.partial = true; break; }
+      const y = await ls(yh);
+      if (y.f.some(n => CK_IMG.test(n))) r.photos = true;
+      const yReg = upReg || !!FC.regIn(yn) || regFile(y.f);
+      if (!y.d.length) { r.quarters++; if (yReg) r.numbered++; else r.missing.push(yn); continue; }
+      for (const [qn, qh] of y.d) {
+        if (late()) { r.partial = true; break; }
+        r.quarters++;
+        let ok = yReg || !!FC.regIn(qn);
+        if (!ok || !r.photos) { const q = await ls(qh); if (q.f.some(n => CK_IMG.test(n))) r.photos = true; if (regFile(q.f)) ok = true; }
+        if (ok) r.numbered++; else r.missing.push(yn + ' › ' + qn);
+      }
+    }
+    // Photos kept somewhere else (day folders, no year folders): look a little deeper for just one.
+    if (!r.photos) {
+      const queue = [[cf.base, 0]];
+      let seen = 0;
+      while (queue.length && !r.photos && !late() && seen < 40) {
+        const [h, dep] = queue.shift(); seen++;
+        const x = await ls(h);
+        if (x.f.some(n => CK_IMG.test(n))) r.photos = true;
+        if (dep < 4) for (const [, h2] of x.d) queue.push([h2, dep + 1]);
+      }
+      if (!r.photos && late()) r.partial = true;
+    }
+  } catch (e) { r.err = 'Google Drive could not open this folder (' + ((e && e.name) || 'error') + ').'; }
+  return r;
+}
+// What one check says: [level ok|warn|bad, headline, details].
+function csCheckSay(r) {
+  if (r.err) return ['bad', 'Could not be read', r.err + ' Is Google Drive running?'];
+  if (!r.photos) return r.partial ? ['warn', 'No photos found yet', 'PageProof looked for 15 seconds and found none. The full read will look everywhere.'] : ['bad', 'No photos found', 'This folder has no photos in it. Was the right folder ticked?'];
+  const notes = [];
+  let lvl = 'ok';
+  if (!r.years.length) { lvl = 'warn'; notes.push('No year folders, so PageProof can\'t tell which photos are newest. They are searched in name order.'); }
+  if (r.missing.length) { lvl = 'warn'; notes.push(`${plural(r.missing.length, 'folder has', 'folders have')} no VA or 1- number in the name and no Excel file named with one: ${esc(r.missing.slice(0, 4).join(', '))}${r.missing.length > 4 ? ' and more' : ''}. Photos there are still searched; their evidence report will say "No registration number found".`); }
+  if (r.noReg) notes.push('No Registered images folder, so everything in the client folder is searched.');
+  if (lvl === 'ok') {
+    const ys = r.years.length ? `Years ${Math.min(...r.years)}${r.years.length > 1 ? '-' + Math.max(...r.years) : ''} found.` : '';
+    notes.unshift(`${ys} ${r.quarters ? 'A registration number on every folder checked.' : ''}`.trim() || 'Photos found.');
+  }
+  return [lvl, lvl === 'ok' ? 'Looks good' : r.missing.length && r.years.length ? plural(r.missing.length, 'folder', 'folders') + ' with no number' : !r.years.length ? 'No year folders' : 'Check this', notes.join(' ')];
+}
+function csCheckStart() {
+  if (state.csCheck) return;
+  state.csCheck = { busy: true, res: new Map() };
+  const ck = state.csCheck;
+  (async () => {
+    let list = [];
+    try { list = await FC.clientFolders(); } catch (e) { ck.err = String(e.message || e); }
+    const want = new Set((state.csClients || []).filter(c => c.searching).map(c => c.name));
+    list = list.filter(c => !want.size || want.has(c.name));
+    ck.total = list.length;
+    let i = 0;
+    const worker = async () => { while (i < list.length && state.csCheck === ck) { const cf = list[i++]; ck.res.set(cf.name, await csCheckOne(cf)); if (csCheckOn()) render(true); } };
+    await Promise.all(Array.from({ length: Math.min(3, list.length) }, worker));
+    ck.busy = false;
+    if (state.csCheck === ck && csCheckOn()) render(true);
+  })();
+}
+const csCheckOn = () => (state.shown === 'connect' && state.cs === 3) || (state.shown === 'setup' && !!(SETUP[state.setup] || {}).check);
+async function csCheckHtml() {
+  csCheckStart();
+  const ck = state.csCheck;
+  const docs = await RS_DOCS.state(), root = await FC.rootHandle(), drv = await FC.driveState(false);
+  const row = (lvl, title, text) => `<div class="ckrow"><span class="ckic ${lvl}" aria-hidden="true">${lvl === 'ok' ? '✓' : lvl === 'warn' ? '!' : lvl === 'bad' ? '✕' : '…'}</span><div style="flex:1;min-width:0"><b>${title}</b><br><span class="muted" style="font-size:13.5px">${text}</span></div></div>`;
+  const rows = [
+    root && drv === 'granted' ? row('ok', 'Google Drive is connected', `PageProof can read ${esc(root.name)}.`) : row('bad', 'Google Drive is not connected', 'Go back a step and choose the top folder.'),
+    docs === 'granted' ? row('ok', 'Documents › PageProof is ready', 'Your lists and backups are kept there.') : row('warn', 'Documents › PageProof is not set up', 'Your lists will only be kept inside the browser. Set it up later in Settings › Backups.'),
+  ];
+  for (const [name, r] of [...ck.res].sort((x, y) => x[0].localeCompare(y[0]))) { const [lvl, t, d] = csCheckSay(r); rows.push(row(lvl, `${esc(name)} <span class="tag ${lvl === 'ok' ? 'ok' : lvl === 'warn' ? 'warn' : 'bad'}" style="margin-left:4px">${esc(t)}</span>`, d)); }
+  if (ck.busy) rows.push(row('wait', `Checking ${ck.total ? (ck.res.size + 1) + ' of ' + ck.total : 'your clients'}…`, 'About 15 seconds a client at most.'));
+  const bad = [...ck.res.values()].filter(r => csCheckSay(r)[0] !== 'ok').length;
+  return `<div class="ckbox">${rows.join('')}</div>
+    ${!ck.busy ? `<div class="row" style="gap:8px"><span class="muted" style="font-size:13.5px">${bad ? plural(bad, 'client needs', 'clients need') + ' a look. You can fix the folders in Drive and check again, or start anyway.' : 'Everything looks good.'}</span><button class="btn sm" data-act="cscheck" style="margin-left:auto">Check again</button></div>` : ''}`;
+}
 function csReset() { state.csTree = new Map(); state.csInfo = new Map(); state.csOpen = new Set(); state.csPick = null; state.csUnpick = null; state.csForce = null; state.csStar = new Set(); state.csBusy = ''; }
 Object.assign(ACTS, {
+  cscheck: () => { state.csCheck = null; render(true); },
   csgo: v => {
     const l = document.getElementById('csLabel');
     if (l) FC.setDrive({ label: l.value.trim() || 'G:\\Shared drives\\Photos' });
@@ -248,7 +374,7 @@ Object.assign(ACTS, {
     if (!n.trim()) return toast('Type the client\'s name first.');
     try { await FC.pickExtra(n); render(true); } catch (e) { if (e.name !== 'AbortError') toast('That folder could not be opened.'); }
   },
-  cssave: async () => {
+  cssave: async v => {
     const l = document.getElementById('csLabel');
     if (l) await FC.setDrive({ label: l.value.trim() || 'G:\\Shared drives' });
     state.csBusy = 'Reading the folders you ticked…'; render(true);
@@ -256,11 +382,12 @@ Object.assign(ACTS, {
       const picks = await FC.setPicked([...(state.csPick || [])], [...(state.csUnpick || [])], [...(state.csForce || [])]);
       const list = await FC.quickClients();
       state.csClients = list.map(c => ({ ...c, searching: c.extra || picks.includes(c.pick), priority: c.extra ? c.priority : state.csStar.has(c.pick) }));
-      state.csBusy = ''; state.cs = 3;
+      state.csBusy = ''; state.cs = 3; state.csCheck = null;
     } catch (e) { state.csBusy = 'Those folders could not be read: ' + (e.message || e); }
-    render(true);
+    if (v !== 'quiet') render(true);
+    return !state.csBusy;
   },
-  csstart: async () => {
+  csstart: async v => {
     const list = state.csClients || [];
     const names = new Set(list.map(c => c.name));
     // Folders you didn't tick: forgotten if nothing was found for them, otherwise kept (not searched).
@@ -279,7 +406,8 @@ Object.assign(ACTS, {
     await FC.setKeep({ on: true });
     state.csClients = null; state.cs = 0; csReset();
     api.runtime.sendMessage({ type: 'fcKeepWake' }).catch(() => {});
-    location.hash = 'keep';
+    // From first-time setup: stay in setup (its last step follows). Otherwise show Keep searching.
+    if (v !== 'setup') location.hash = 'keep';
     toast('Reading your photo folders. Keep searching starts as soon as there are photos to search.');
     FC.scan({ full: true, progress: t => { state.scanText = t; } }).then(r => { state.scanText = ''; if (r && r.photos != null) toast(r.photos.toLocaleString() + ' photos found in ' + plural(r.clients, 'client folder') + '.'); render(true); });
   },

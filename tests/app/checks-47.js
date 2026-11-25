@@ -77,7 +77,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   });
   ok(p.look, 'Panel has the "Look at these" box');
   ok(p.tabs.join() === 'Summary,Their page,Claim,Site' && p.shown.join() === 'sum', 'Four tabs, Summary open first');
-  ok(p.pinned && p.ans === 4, 'Answer buttons are pinned at the bottom of the panel');
+  ok(p.pinned && p.ans === 5, 'Answer buttons are pinned at the bottom of the panel');
   ok(p.noReg, 'Still no "Add the number" box in the panel');
   await page.click('.dtabs [data-v="claim"]'); await page.waitForTimeout(300);
   const cl = await page.evaluate(() => ({ shown: [...document.querySelectorAll('.dpane')].filter(p => !p.hidden).map(p => p.dataset.tab).join(), rules: !!document.querySelector('.dpane[data-tab="claim"] #rulesbox'), dmg: /Dates and damages/.test(document.querySelector('.dpane[data-tab="claim"]').textContent) }));

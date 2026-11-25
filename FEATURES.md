@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.56.1** (25 Nov 2026).
+Last updated: version **4.59.0** (25 Nov 2026).
 
 ---
 
@@ -145,6 +145,7 @@ Last updated: version **4.56.1** (25 Nov 2026).
 - **Legal portal card.** A Stolen copy's Claim tab shows the portal's Add Infringement boxes in the portal's order (Artwork, Discovery Date and Method, Infringing Domain, Page URL, Infringer Use, Paid Ads, Sells Product, Agency Case #, Damages, Infringing Image Url, Note), filled from the copy. Click a line to copy it, or Copy all. It also shows the Certificate and Application numbers to check and the screengrab file to upload. (4.52)
 - **Portal card drop-downs.** Lines that are drop-downs in the portal say exactly which choice to pick (Reverse Image Search; Website, Social Media or Embed; Commercial or Editorial; Yes or No; Statutory, Actual or Cannot Determine Damages). (4.52.3)
 - **Stop searching this photo.** From a copy's details panel, ⋯ menu or One at a time; Keep searching and Today's 50 skip it, copies stay, Undo or "Search again" on the client's photos page brings it back. (4.55)
+- **Check later.** A copy you're not sure about goes to its own Check later tab (button or C key), out of the New list, until you answer it. Undo works. (4.58)
 
 ## 6. Social media accounts
 
@@ -192,6 +193,7 @@ Last updated: version **4.56.1** (25 Nov 2026).
 - **Look at these first.** Copies that are the same photo on a site stolen from before, a shop, or with the credit removed get their own red line on Home. (4.45)
 - **Since you were last here.** After 4 hours away (or the first visit of the day) Home lists new copies, clients finished, search sites that rested and anything that stopped. (4.45)
 - **Clients falling behind.** A ★ priority client not searched for 10 days, switched off, or with its folder missing, and a goal date that can't be met, show on Home. (4.45)
+- **One first-time setup.** A picture of how the photo folders should look, Google Drive and client folders inside setup, a check of each client folder (photos, year folders, registration numbers), and a "What this computer can do" step comparing Light, Normal and Strong. Skip photos for now if you only capture pages. (4.57)
 
 ## 9. Safety nets
 
@@ -332,3 +334,8 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.56 | 25 Nov | One at a time can show Websites only or Social media only |
 | 4.56.1 | 25 Nov | Fix: Country filled in for .com sites from the page's address and language |
 | 4.56.1 | 25 Nov | Small fixes |
+| 4.57 | 25 Nov | One first-time setup with folder guide, folder check and computer limits |
+| 4.57.1 | 25 Nov | Fix: Spam blogs filter catches amphtml and made-up site names |
+| 4.58 | 25 Nov | Check later button and tab for copies you're not sure about |
+| 4.58.1 | 25 Nov | Fix: Resume shows at once on the Keep searching tab |
+| 4.59 | 25 Nov | Just hidden list folded away; Site gone tag for copies on websites that no longer exist; Spam blogs filter catches search-words pages and spam-only endings |

@@ -695,7 +695,7 @@ td a.tag:hover{filter:brightness(.96)}
 .rvsite h2{margin:0;overflow-wrap:anywhere}
 .rvsite .curl{align-self:flex-start;max-width:100%}
 .rvsite .l3{color:var(--muted);font-size:13.5px}
-.rvans{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.rvans{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
 .rvans button{display:flex;align-items:center;justify-content:center;gap:10px;min-height:54px;padding:0 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:15.5px;cursor:pointer}
 .rvans button:hover{border-color:var(--faint)}
 .rvans .stolen{border-color:var(--bad);background:var(--bad-soft)} .rvans .stolen b{color:var(--bad)}
@@ -710,6 +710,7 @@ td a.tag:hover{filter:brightness(.96)}
 .rvok .tmenu span{color:var(--muted);font-size:12.5px}
 .split.rv .dsec{display:flex;flex-direction:column;gap:8px}
 @media (max-width:700px){.rvans{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.rvans .later b,.dans.ansstrip .btn.later b{color:var(--accent)} .rvans button b{white-space:nowrap}
 
 /* Firm checks in the copy details panel (checks.js) */
 .rrow{display:flex;gap:8px;align-items:flex-start;font-size:13.5px;border-radius:10px;padding:8px 10px;background:var(--sunk)}
@@ -1171,7 +1172,7 @@ h2 .ahandle{font-size:13px}
 .dans.ansstrip .btn:first-child{border-left:0}
 .dans.ansstrip .btn .kbd{font-size:10.5px;opacity:.75}
 :root .dans.ansstrip .btn.stolen,:root .dans.ansstrip .btn.licensed{border:0;border-left:1px solid var(--line)}
-.dans.ansstrip .btn.stolen{box-shadow:inset 0 -3px 0 var(--bad)} .dans.ansstrip .btn.licensed{box-shadow:inset 0 -3px 0 var(--ok)}
+.dans.ansstrip .btn.stolen{box-shadow:inset 0 -3px 0 var(--bad)} .dans.ansstrip .btn.licensed{box-shadow:inset 0 -3px 0 var(--ok)} .dans.ansstrip .btn.later{box-shadow:inset 0 -3px 0 var(--accent)}
 .dans.ansstrip .btn.stolen:first-child{border-left:0}
 .dfoot2{align-items:center;flex-wrap:nowrap}
 .dfoot2 .btn{white-space:nowrap}
@@ -1433,5 +1434,19 @@ tr.rowlink td.chev{color:var(--faint);font-size:18px;text-align:center} tr.rowli
 @media (max-width:560px){.ptl .prow{grid-template-columns:1fr 20px}.ptl .prow .pk{grid-column:1/-1}}
 .ptl .pick{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:1px 6px;border-radius:5px;background:var(--sunk);color:var(--accent);margin-right:4px;vertical-align:1px}
 .ptl .prow .pv small{display:block;font-size:11.5px;margin-top:2px}
+/* 4.56 first-time setup: wider steps, folder picture, computer levels, folder check */
+.wiz.wide{max-width:840px}
+.fltree{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:2px;overflow-x:auto}
+.fltree .fl{display:flex;align-items:baseline;gap:8px;min-height:28px;flex-wrap:wrap}
+.fltree .fi{width:20px;flex:none}.fltree .fn{font-family:var(--f-mono,ui-monospace,Consolas,monospace);font-size:14px}
+.fltree .fnote{font-size:12.5px;color:var(--faint)}.fltree .flok{color:var(--ok)}.fltree .flskip{color:var(--bad);text-decoration:line-through}
+.hwlvs{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.hwlv{border:2px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:2px;font-size:13.5px}
+.hwlv.me{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.hwlv dl{display:grid;grid-template-columns:1fr auto;gap:2px 8px;margin:8px 0 0}.hwlv dt{color:var(--muted)}.hwlv dd{margin:0;font-weight:700;text-align:right}
+.ckbox{border:1px solid var(--line);border-radius:10px;padding:2px 14px}
+.ckrow{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)}.ckrow:last-child{border-bottom:0}
+.ckic{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-weight:800;color:#fff;flex:none;font-size:13px}
+.ckic.ok{background:var(--ok)}.ckic.warn{background:var(--warn)}.ckic.bad{background:var(--bad)}.ckic.wait{background:var(--faint)}
 /* 4.56: Websites / Social media / All switch on One at a time */
 .seg.rvkind button .num{font-size:12px;opacity:.75;margin-left:4px}

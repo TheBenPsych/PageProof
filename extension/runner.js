@@ -178,10 +178,12 @@ async function chores() {
 }
 
 async function tick() {
-  if (S.ticking) return;
+  // A Pause or Resume that comes in while a step is running is not lost: one more step runs after it.
+  if (S.ticking) { S.again = true; return; }
   if (await stale()) return;
   S.ticking = true;
   try { await step(); } catch (e) { console.warn('PageProof Keep searching', e); await status('waiting', 'Something went wrong. Trying again in a minute.'); } finally { S.ticking = false; }
+  if (S.again) { S.again = false; tick(); }
 }
 async function step() {
   const k = await FC.keep();
@@ -431,7 +433,9 @@ api.storage.onChanged.addListener(ch => {
   // Pause: stop at once (even in the middle of a step). Resume: carry on straight away.
   if (ch.fcPause) {
     if (ch.fcPause.newValue) pauseAll().then(async () => { const t = (await api.storage.local.get('fcToday')).fcToday; const n = t && t.day === new Date().toDateString() ? t.searched : 0; status('paused', await pausedText(n + ' photos searched today')); });
-    else { S.held = null; bgNext(); }
+    // Resume: say so at once. Before, the tab still said Paused for the few seconds the first
+    // photo took to start, so Resume looked like it had done nothing.
+    else { S.held = null; status('waiting', 'Carrying on where it stopped…'); bgNext(); }
   }
   if (ch.fcAcctRead) { S.acct = ch.fcAcctRead.newValue; if (S.lastSt && !S.ticking) status(S.lastSt.state, S.lastText, S.lastExtra || {}); }
   if (ch.fcKeep || ch.fcPause) tick();
