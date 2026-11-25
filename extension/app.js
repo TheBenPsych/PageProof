@@ -729,6 +729,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Search a Skipped folder anyway', 'A folder marked Skipped (it has client_info_ignore.txt) inside a ticked client can now be ticked in folder setup. It shows Searched anyway and its photos are searched. The file stays as it is, so your other tool still skips it.'],
   ['Photo counts update while folders are read', 'While PageProof reads your photo folders, Clients and photos now updates after each client, so you no longer need to refresh the page to see what it found.'],
   ['Untick folders inside a client', '"No longer monitoring" folders are searched again like any other folder. In folder setup you can now untick any folder inside a ticked client to leave it out (it shows Left out), and tick it again to put it back.'],
   ['Every year of a client\'s photos is read', 'A client whose first folder read was cut short (page closed, Drive busy) only showed its two newest quarters. Now any client not yet read all the way through gets a full read of every year at the next hourly look. Folders called "No longer monitoring" are skipped, and one folder Drive can\'t open no longer stops the whole read.'],

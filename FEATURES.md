@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.47.4** (24 Nov 2026).
+Last updated: version **4.47.5** (24 Nov 2026).
 
 ---
 
@@ -283,3 +283,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.47.2 | 24 Nov | Fix: All years of every client are read; "No longer monitoring" folders skipped |
 | 4.47.3 | 24 Nov | Fix: Untick folders inside a client; "No longer monitoring" searched again |
 | 4.47.4 | 24 Nov | Fix: Photo counts update while folders are read |
+| 4.47.5 | 24 Nov | Fix: Search a Skipped folder anyway |
