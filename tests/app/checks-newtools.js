@@ -173,7 +173,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   });
   const want = ['Artwork', 'Discovery Date', 'Discovery Method', 'Date of Infringement', 'Infringement Type', 'Infringing Domain', 'Infringement Page URL', 'Infringer Use', 'Paid Ads', 'Sells Product', 'Archive URL', 'Agency Case #', 'Damages', 'Infringing Image Url 1', 'Note'];
   ok(pc && pc.labels.join('|') === want.join('|'), 'the portal card has the portal\'s boxes in its order: ' + (pc ? pc.labels.join(' · ') : 'no card'));
-  ok(pc && /b\.jpg/.test(pc.text) && /Reverse image search \(Google Lens, Bing\)/.test(pc.text) && /onestolen-example\.com\/story-/.test(pc.text) && /Yes \(Google ads\)/.test(pc.text) && /CASE-77/.test(pc.text) && /uploads\/b\.jpg/.test(pc.text) && /PP-TEST1234/.test(pc.text) && /Application # 1-14100259930/.test(pc.text) && /CASE-77_onestolen/.test(pc.text),
+  ok(pc && /b\.jpg/.test(pc.text) && /Reverse image search \(Google Lens, Bing\)/.test(pc.text) && /onestolen-example\.com\/story-/.test(pc.text) && /Yes\s+Google ads/.test(pc.text) && /Reverse Image Search/.test(pc.text) && /\bWebsite\b/.test(pc.text) && /Cannot Determine Damages/.test(pc.text) && /CASE-77/.test(pc.text) && /uploads\/b\.jpg/.test(pc.text) && /PP-TEST1234/.test(pc.text) && /Application # 1-14100259930/.test(pc.text) && /CASE-77_onestolen/.test(pc.text),
     'it fills artwork, method, page, paid ads, case #, picture link, note, the numbers to check and the screengrab file');
   if (process.env.SHOT) await page.locator('#portalcard').screenshot({ path: process.env.SHOT });
   await page.click('#portalcard [data-act="pcopy"][data-v="page"]'); await page.waitForTimeout(400);

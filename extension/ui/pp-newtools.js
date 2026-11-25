@@ -179,25 +179,32 @@ async function ntPortalValues(c, p, reg) {
   const pf = c.pf && c.pf.ok ? c.pf : null;
   const kinds = (await FC.meta.get('siteKinds')) || {};
   const kind = kinds[FC.baseOf(c.site)] || '';
-  const USE = { copied: 'Copied onto their site', embedded: 'Shown from another site', social: 'Social media post', shop: 'Shop or ad (commercial)', unknown: '' };
+  // The portal's drop-down choices (Ben's screenshots, 2026-11-25), so the card says exactly which to pick.
+  const useKind = c.use || FC.useOf(c);
+  const sells = !!(pf && pf.sells && (pf.sells.product || pf.sells.cart || pf.sells.price));
+  const commercial = useKind === 'shop' || sells || kind === 'company';
+  const editorial = !commercial && ['nonprofit', 'university', 'gov', 'church', 'person', 'celeb', 'ugc'].includes(kind);
   const pub = p ? PP_CHECKS.pubDate(p) : null;
   const dmg = PP_CHECKS.damages(pub, reg);
   const imgs = [...new Set([c.img, ...(c.alts || []).filter(u => /\.(jpe?g|png|webp|gif)(\?|$)/i.test(u))].filter(u => /^https?:/.test(u || '')))];
   const page = (c.rp && c.rp.post) || c.url || '';
   const e = typeof entOf === 'function' ? entOf(c.site) || {} : {};
   const note = [
-    'Found ' + ntDate(c.firstSeen) + ' by ' + NT_METHOD(c) + '.',
+    'Found ' + ntDate(c.firstSeen) + ' by PageProof, ' + NT_METHOD(c).replace(/^./, x => x.toLowerCase()) + '.',
     c.pct != null ? 'Match ' + c.pct + '%' + (c.match === 'same' ? ' (same photo)' : '') + '.' : '',
     e.entity ? 'Company: ' + e.entity + (e.state ? ', ' + e.state : '') + (e.status ? ' (' + e.status + ')' : '') + '.' : '',
     cap && cap.captureId ? 'PageProof capture ' + cap.captureId + (save && save.at ? ', saved ' + ntDate(save.at) : '') + '.' : '',
   ].filter(Boolean).join(' ');
   return {
     artwork: (p && p.name) || c.photoName || '', cert: (reg && reg.va) || '', app: (reg && reg.app) || '',
-    discDate: ntDate(c.firstSeen), discMethod: NT_METHOD(c), infDate: '',
-    infType: kind ? PP_CHECKS.KIND_NAME[kind] || '' : '', domain: FC.baseOf(c.site || ''), page,
-    use: USE[c.use || FC.useOf(c)] || '', ads: pf ? (pf.ads && pf.ads.length ? 'Yes (' + pf.ads.join(', ') + ')' : 'No') : '',
-    sells: pf ? (pf.sells && (pf.sells.product || pf.sells.cart || pf.sells.price) ? 'Yes' + (pf.sells.price ? ' (' + pf.sells.price + ')' : '') : 'No') : '',
-    archive: '', caseNo: (save && save.caseRef) || '', damages: dmg && dmg.title && pub ? dmg.title : '',
+    discDate: ntDate(c.firstSeen), discMethod: 'Reverse Image Search', infDate: '',
+    infType: useKind === 'social' ? 'Social Media' : useKind === 'embedded' ? 'Embed' : c.site ? 'Website' : '', domain: FC.baseOf(c.site || ''), page,
+    use: commercial ? 'Commercial' : editorial ? 'Editorial' : '', ads: pf ? (pf.ads && pf.ads.length ? 'Yes' : 'No') : '', adsWhy: pf && pf.ads && pf.ads.length ? pf.ads.join(', ') : '',
+    sells: pf ? (sells ? 'Yes' : 'No') : '', sellsWhy: sells && pf.sells.price ? 'Price ' + pf.sells.price : '',
+    archive: '', caseNo: (save && save.caseRef) || '',
+    // Statutory: registered or applied, and the window is open. Actual: no number and the 3 months passed.
+    damages: !pub ? 'Cannot Determine Damages' : dmg.lvl === 'ok' ? 'Statutory' : dmg.lvl === 'bad' ? 'Actual' : 'Cannot Determine Damages',
+    damagesWhy: dmg && dmg.title ? dmg.title : '',
     images: imgs, note, screengrab: (save && save.file) || '',
   };
 }
@@ -205,9 +212,9 @@ async function ntPortalValues(c, p, reg) {
 const NT_PORTAL = [
   ['artwork', 'Artwork', 'Pick the photo in the portal'],
   ['discDate', 'Discovery Date', ''], ['discMethod', 'Discovery Method', ''],
-  ['infDate', 'Date of Infringement', 'Check the date on their page'], ['infType', 'Infringement Type', 'Pick the kind of site on the Claim tab first'],
+  ['infDate', 'Date of Infringement', 'Check the date on their page'], ['infType', 'Infringement Type', 'Other'],
   ['domain', 'Infringing Domain', ''], ['page', 'Infringement Page URL', ''],
-  ['use', 'Infringer Use', 'Not known'], ['ads', 'Paid Ads', 'Their page not read yet'], ['sells', 'Sells Product', 'Their page not read yet'],
+  ['use', 'Infringer Use', 'Commercial or Editorial: no shop or product found. Set the kind of site on this tab to help'], ['ads', 'Paid Ads', 'Their page not read yet'], ['sells', 'Sells Product', 'Their page not read yet'],
   ['archive', 'Archive URL', 'None made'], ['caseNo', 'Agency Case #', 'Not on a saved capture yet'], ['damages', 'Damages', 'Publish date not known'],
   ['images', 'Infringing Image Url', 'No picture link'], ['note', 'Note', ''],
 ];
@@ -215,10 +222,12 @@ async function ppPortalCard(c, p, reg) {
   if (!c || c.status !== 'stolen') return '';
   const v = await ntPortalValues(c, p, reg);
   NT.portal = { id: c.id, v };
-  const row = (k, label, empty, val, i) => `<button class="prow${val ? '' : ' empty'}" data-act="pcopy" data-v="${k}${i != null ? '|' + i : ''}" title="${val ? 'Copy ' + esc(label) : esc(empty)}"${val ? '' : ' disabled'}><span class="pk">${esc(label)}${i != null ? ' ' + (i + 1) : ''}</span><span class="pv">${esc(val || empty || 'Not known')}</span><span class="pc" aria-hidden="true">⧉</span></button>`;
+  const DROP = { discMethod: 1, infType: 1, use: 1, ads: 1, sells: 1, damages: 1 };
+  const sub = k => k === 'ads' && v.adsWhy ? `<small class="faint">${esc(v.adsWhy)}</small>` : k === 'sells' && v.sellsWhy ? `<small class="faint">${esc(v.sellsWhy)}</small>` : k === 'damages' && v.damagesWhy ? `<small class="faint">${esc(v.damagesWhy)}</small>` : k === 'discMethod' ? `<small class="faint">${esc(NT_METHOD(c))}</small>` : '';
+  const row = (k, label, empty, val, i) => `<button class="prow${val ? '' : ' empty'}" data-act="pcopy" data-v="${k}${i != null ? '|' + i : ''}" title="${val ? (DROP[k] ? 'Pick this in the drop-down: ' : 'Copy ') + esc(val) : esc(empty)}"${val ? '' : ' disabled'}><span class="pk">${esc(label)}${i != null ? ' ' + (i + 1) : ''}</span><span class="pv">${DROP[k] && val ? '<span class="pick">Pick</span> ' : ''}${esc(val || empty || 'Not known')}${DROP[k] && val ? sub(k) : ''}</span><span class="pc" aria-hidden="true">⧉</span></button>`;
   const rows = NT_PORTAL.map(([k, label, empty]) => k === 'images' ? (v.images.length ? v.images.map((u, i) => row(k, label, empty, u, i)).join('') : row(k, label + ' 1', empty, '')) : row(k, label, empty, v[k])).join('');
   return `<section class="dsec" id="portalcard"><div class="dsh">Add Infringement (legal portal)</div>
-    <p class="faint" style="margin:0;font-size:12.5px">The portal's form, in its order. Click a line to copy it, then paste it into the same box in the portal. Drop-downs: pick the closest choice.</p>
+    <p class="faint" style="margin:0;font-size:12.5px">The portal's form, in its order. Click a line to copy it, then paste it into the same box in the portal. Lines marked <span class="pick">Pick</span> are drop-downs: choose exactly that.</p>
     <div class="ptl">${rows}</div>
     <div class="pchk"><span class="faint">After you pick the artwork, the portal should show</span> <b>Certificate # ${esc(v.cert || '—')}</b> · <b>Application # ${esc(v.app || '—')}</b>${!v.cert && !v.app ? ' <span class="tag warn">No number found in Drive</span>' : ''}</div>
     <div class="row" style="gap:8px;flex-wrap:wrap"><span class="faint" style="font-size:12.5px">Infringement Files › Upload Screengrab:</span>${v.screengrab ? `<button class="btn ghost sm" data-act="pcopy" data-v="screengrab">${esc(v.screengrab)} ⧉</button><span class="faint" style="font-size:12px">in Downloads › PageProof</span>` : '<span class="tag warn">Capture the page first</span>'}</div>
