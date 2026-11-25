@@ -15,7 +15,8 @@ self.onmessage = async e => {
   let out = null, err = null;
   try {
     if (!A) throw new Error('no original');
-    const best = await PP_ALIGN.align(A, m.bmp, undefined, { fast: true });
+    // 4.47: m.deep = the slower, full-size second look (close calls, Google's exact matches).
+    const best = await PP_ALIGN.align(A, m.bmp, undefined, { fast: !m.deep });
     out = best ? { lines: best.sc.lines, inliers: best.inliers || 0, matched: best.sc.matched, strength: best.sc.strength, midTex: best.sc.midTex, midMatched: best.sc.midMatched, inside: best.sc.inside } : { none: true };
     // Could count as a copy: check it isn't only a repeating press wall, a logo, or another shot
     // of the same building that lines up.

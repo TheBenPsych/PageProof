@@ -126,6 +126,7 @@ body.over #main { outline: 3px dashed var(--accent); outline-offset: -10px; bord
 .tag.sim { background: #f1f5f9; color: #475569; }
 .tag.maybe { background: #fef3c7; color: #92400e; }
 .tag.google { background: #e0e7ff; color: #3730a3; }
+.tag.exact { background: #fef3c7; color: #92400e; }
 .tag.yandex { background: #ffedd5; color: #9a3412; }
 .tag.bing { background: #e0f2fe; color: #075985; }
 .tag.new { background: #fef3c7; color: #92400e; }

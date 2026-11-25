@@ -197,24 +197,87 @@ const PP_EVIDENCE = (() => {
       ['Their copy (today)', copyNow ? { t: copyNow.sha + (copyNow.which === 'preview' ? '  (the search site\'s preview: the full picture would not download)' : ''), mono: true } : { t: 'Could not be downloaded when this report was made', color: MUTED }],
       copyNow ? ['Downloaded from', { t: copyNow.src.startsWith('data:') ? '(shown inside the search page)' : copyNow.src, mono: true, max: 2 }] : null,
     ]);
+    // 4.47 (Ben's pick): page 2, the match itself.
+    let ov = null;
+    if (copyNow && opts.overlay !== false) { try { ov = await matchPage(ours, copyNow.bmp, copy, id, opts); } catch (e) { console.warn('PageProof: no match picture', e); } }
     // Footer.
     x.strokeStyle = LINE; x.lineWidth = 1.5; x.beginPath(); x.moveTo(M, H - 70); x.lineTo(W - M, H - 70); x.stroke();
     font(14); x.fillStyle = '#6B7280';
     x.fillText('Made by PageProof ' + api.runtime.getManifest().version + ' on this computer. Nothing was uploaded. Each result was downloaded and lined up with the client\'s photo on this computer.', M, H - 44);
-    x.textAlign = 'right'; x.fillText('Match ID ' + id + '  ·  Page 1 of 1', W - M, H - 22); x.textAlign = 'left';
+    x.textAlign = 'right'; x.fillText('Match ID ' + id + '  ·  Page 1 of ' + (ov ? 2 : 1), W - M, H - 22); x.textAlign = 'left';
     if (copyNow && copyNow.bmp.close) copyNow.bmp.close();
-    return { canvas: c, id, credit: cr, copySha: copyNow && copyNow.sha };
+    return { canvas: c, id, credit: cr, copySha: copyNow && copyNow.sha, match: ov };
+  }
+
+  // 4.47 (Ben's pick): the match picture. Your client's photo with their copy laid over it in the
+  // same place (the Compare line-up, worked out again here at full size), the matching details
+  // marked and the shared area outlined, and one plain sentence under it. Returns
+  // { canvas, details, pct } or null when the two can't be lined up.
+  async function matchPage(ours, theirs, copy, id, opts) {
+    if (typeof PP_ALIGN === 'undefined') return null;
+    await PP_ALIGN.ready;
+    const big = await createImageBitmap(ours.blob);
+    const f = Math.min(1, 1400 / Math.max(big.width, big.height));
+    const A = f < 1 ? await createImageBitmap(big, { resizeWidth: Math.round(big.width * f), resizeHeight: Math.round(big.height * f), resizeQuality: 'high' }) : big;
+    if (A !== big) big.close && big.close();
+    try {
+      const best = await PP_ALIGN.align(A, theirs, undefined, { pts: true });
+      if (!best || best.sc.lines < 0.3) return null;
+      const W = 1240, H = 1754, M = 64;
+      const c = new OffscreenCanvas(W, H), x = c.getContext('2d');
+      const FONT = 'system-ui, "Segoe UI", Arial, sans-serif';
+      const font = (px, bold) => { x.font = (bold ? 'bold ' : '') + px + 'px ' + FONT; };
+      const INK = '#111827', MUTED = '#4B5563', BLUE = '#2A4BE0', ORANGE = '#C2410C', LINE = '#D1D5DB';
+      x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
+      font(15, true); x.fillStyle = '#6B7280'; x.fillText('PAGEPROOF · EVIDENCE OF USE · THE MATCH', M, 70);
+      font(30, true); x.fillStyle = INK; x.fillText('How the two pictures line up', M, 106);
+      font(15); x.fillStyle = MUTED; x.textAlign = 'right'; x.fillText('Match ID ' + id, W - M, 70); x.textAlign = 'left';
+      // The picture: your photo, their copy over it at half strength, in the place it fits.
+      const BW = W - 2 * M, BH = 1000, top = 140;
+      const k = Math.min(BW / A.width, BH / A.height), ox = M + (BW - A.width * k) / 2, oy = top + (BH - A.height * k) / 2;
+      x.fillStyle = '#F3F4F6'; x.fillRect(M, top, BW, BH);
+      x.drawImage(A, ox, oy, A.width * k, A.height * k);
+      x.save();
+      x.beginPath(); x.rect(ox, oy, A.width * k, A.height * k); x.clip();
+      x.translate(ox, oy);
+      x.globalAlpha = 0.5; PP_ALIGN.drawCopy(x, theirs, best, k); x.globalAlpha = 1;
+      // The shared area: where their copy sits on your photo.
+      x.strokeStyle = ORANGE; x.lineWidth = 4; x.setLineDash([14, 8]); PP_ALIGN.drawCopy(x, theirs, best, k, 0, 0, true); x.setLineDash([]);
+      // The matching details.
+      const pts = best.pts || [];
+      for (const [px, py] of pts) { x.beginPath(); x.arc(px * k, py * k, 4.5, 0, Math.PI * 2); x.fillStyle = '#22C55E'; x.fill(); x.lineWidth = 1.5; x.strokeStyle = '#fff'; x.stroke(); }
+      x.restore();
+      x.strokeStyle = BLUE; x.lineWidth = 4; x.strokeRect(ox, oy, A.width * k, A.height * k);
+      const pct = Math.round(best.sc.lines * 100), details = best.inliers || pts.length;
+      let y = top + BH + 56;
+      font(24, true); x.fillStyle = INK;
+      x.fillText(details ? `${details.toLocaleString('en-US')} details line up across ${pct}% of the shared area.` : `${pct}% of the shared area lines up.`, M, y);
+      y += 40; font(17); x.fillStyle = MUTED;
+      const lines = [
+        "Blue edge: your client's photo. Dashed orange: where their copy sits on it once lined up" + (best.flip ? ' (their copy is mirrored)' : '') + '.',
+        'Their copy is laid over the photo at half strength, so anything that differs shows as a double image.',
+        details ? 'Green dots: matching details, the same small points found in both pictures, in the same places.' : '',
+        "Lettering, logos or a headline put over the copy don't count against the match: only the photo itself is compared.",
+        'Worked out on this computer when this report was made, with the copy as downloaded today. Anyone can repeat it on the Compare page.',
+      ].filter(Boolean);
+      for (const t of lines) { x.fillText(t.length > 120 ? t.slice(0, 118) + '…' : t, M, y); y += 30; }
+      x.strokeStyle = LINE; x.lineWidth = 1.5; x.beginPath(); x.moveTo(M, H - 70); x.lineTo(W - M, H - 70); x.stroke();
+      font(14); x.fillStyle = '#6B7280'; x.textAlign = 'right'; x.fillText('Match ID ' + id + '  ·  Page 2 of 2', W - M, H - 22); x.textAlign = 'left';
+      return { canvas: c, details, pct };
+    } finally { A.close && A.close(); }
   }
 
   // Make the PDF. Returns { blob, name, id }.
   async function make(ours, copy, opts = {}) {
     const pg = await page(ours, copy, opts);
     const jpg = await pg.canvas.convertToBlob({ type: 'image/jpeg', quality: 0.9 });
-    const pdf = makePdf([{ jpeg: new Uint8Array(await jpg.arrayBuffer()), width: pg.canvas.width, height: pg.canvas.height }],
+    const pages = [{ jpeg: new Uint8Array(await jpg.arrayBuffer()), width: pg.canvas.width, height: pg.canvas.height }];
+    if (pg.match) { const j2 = await pg.match.canvas.convertToBlob({ type: 'image/jpeg', quality: 0.9 }); pages.push({ jpeg: new Uint8Array(await j2.arrayBuffer()), width: pg.match.canvas.width, height: pg.match.canvas.height }); }
+    const pdf = makePdf(pages,
       { title: 'PageProof evidence report', subject: ours.name + ' found on ' + copy.url });
     const base = ours.name.replace(/\.[a-z0-9]+$/i, '').replace(/[^\w.-]+/g, '_').slice(0, 40);
     const name = 'PageProof_evidence_' + (opts.caseNo ? opts.caseNo.replace(/[^\w.-]+/g, '_') + '_' : '') + base + '_' + copy.site.replace(/[^\w.-]+/g, '_') + '_' + pg.id + '.pdf';
-    return { blob: pdf, name, id: pg.id, credit: pg.credit, copySha: pg.copySha };
+    return { blob: pdf, name, id: pg.id, credit: pg.credit, copySha: pg.copySha, match: pg.match ? { details: pg.match.details, pct: pg.match.pct } : null };
   }
   // Ask for the case number when saving (it is never kept in a box, so it can't be left on the
   // wrong case). Resolves with the number ('' if left empty) or null if cancelled.
