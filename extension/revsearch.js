@@ -1055,6 +1055,11 @@ function fiftyBeat(running) {
   if (!job || (job.kind !== 'fifty' && !BG)) return;   // any big search in the pinned tab
   api.storage.local.set({ fcFifty: { id: job.id, beat: running ? Date.now() : 0, running: !!running } }).catch(() => {});
 }
+// Ben (after 4.49): a search you stop says so in plain words, so a stopped site is never
+// mistaken for one that skipped a photo by itself.
+const STOPPED = 'Stopped by you while this site was searching the photo';
+const STOPPED_BEFORE = 'Stopped by you before this site searched the photo';
+const byYou = r => r && r.state === 'skip' && /^Stopped/.test(r.why || '');
 async function runJob(onlyEngines) {
   R.running = true; R.stop = false;
   job.started = true; delete job.finished; saveJob(true);
@@ -1080,7 +1085,10 @@ async function runJob(onlyEngines) {
   }
   renderSoon();
   await Promise.all(workers);
-  if (R.stop) for (const p of job.pics) for (const e of job.engines) if (p.runs[e].state === 'wait') { p.runs[e].state = 'skip'; p.runs[e].why = 'Stopped before this search started'; }
+  if (R.stop) for (const p of job.pics) for (const e of job.engines) if (p.runs[e].state === 'wait') { p.runs[e].state = 'skip'; p.runs[e].why = STOPPED_BEFORE; }
+  // Stop keeps the results so far: the links already found are still checked (and their copies
+  // go to Copies found), so make sure the checks carry on.
+  if (R.stop && R.scoreQ.length) scoreAll();
   R.running = false;
   job.finished = new Date().toISOString();
   saveJob(true); renderSoon();
@@ -1330,6 +1338,7 @@ function sqState(q, kept) {
   const n = sameCount(q);
   if (n) return ['same', plural(n, 'same photo', 'same photo') + (kept > n ? ', ' + (kept - n) + ' maybe' : '')];
   if (kept) return ['maybe', kept + ' maybe'];
+  if (job.engines.some(e => byYou(q.runs[e]))) return ['bad', 'not finished: stopped by you'];
   if (job.engines.some(e => ['skip', 'fail'].includes(q.runs[e].state))) return ['bad', 'skipped on a search site'];
   return ['nothing', 'nothing found'];
 }
@@ -1360,11 +1369,13 @@ function feedCard(busy, done, total) {
       const r = q.runs[e];
       if (!r.at) continue;
       if (r.state === 'done') ev.push([r.at, ENGINES[e].short + ': ' + plural(q.links.filter(l => l.engines.includes(e)).length, 'link') + ' for ' + n, '']);
+      else if (byYou(r)) ev.push([r.at, ENGINES[e].short + ' stopped by you on ' + n, '']);
       else if (['skip', 'fail'].includes(r.state)) ev.push([r.at, ENGINES[e].short + ' skipped ' + n, 'warn']);
     }
     if (q.t1) {
-      const k = visibleLinks(q, { raw: true, withHidden: false }).filter(l => ['same', 'maybe'].includes(verdict(l))), ns = k.filter(isSame).length;
-      ev.push([q.t1 + 1, k.length ? 'Photo ' + (q.i + 1) + ': ' + (ns ? ns + ' same' + (k.length > ns ? ', ' : '') : '') + (k.length > ns ? (k.length - ns) + ' maybe' : '') + ' sent to Copies found' : 'Photo ' + (q.i + 1) + ': nothing found', k.length ? 'hit' : '']);
+      const vis = visibleLinks(q, { raw: true, withHidden: false });
+      const k = vis.filter(l => ['same', 'maybe'].includes(verdict(l))), ns = k.filter(isSame).length, pend = vis.filter(l => verdict(l) === 'pending').length;
+      ev.push([q.t1 + 1, pend && !k.length ? 'Photo ' + (q.i + 1) + ': checking ' + plural(pend, 'picture') + ' found' : k.length ? 'Photo ' + (q.i + 1) + ': ' + (ns ? ns + ' same' + (k.length > ns ? ', ' : '') : '') + (k.length > ns ? (k.length - ns) + ' maybe' : '') + ' sent to Copies found' : 'Photo ' + (q.i + 1) + ': nothing found', k.length ? 'hit' : '']);
     }
   }
   ev.sort((a, b) => b[0] - a[0]);
@@ -1391,7 +1402,7 @@ function renderResults() {
   const acts = busy
     ? [h('button', { class: 'pg-btn stop', text: '⏹ Stop and keep results so far', onclick: () => {
         if (R.watch) { api.runtime.sendMessage({ type: 'ppBgStop', job: job.id }).catch(() => {}); banner([h('b', { text: 'Stopping… ' }), 'The searches already running finish their page, then it stops.'], 'info'); return; }
-        R.stop = true; for (const t of [...R.tasks.values()]) finishTask(t, 'skip', 'Stopped');
+        R.stop = true; job.stoppedAt = new Date().toISOString(); for (const t of [...R.tasks.values()]) finishTask(t, 'skip', STOPPED);
       } })]
     : [left ? h('button', { class: 'pg-btn', text: '🔁 Search the rest (' + left + ')', onclick: () => {
         for (const p of job.pics) for (const e of job.engines) if (['skip', 'fail'].includes(p.runs[e].state)) p.runs[e].state = 'wait';
@@ -1457,9 +1468,12 @@ function renderResults() {
       if (r.pageUrl) openTab(r.pageUrl);
     } }, fav(e), ' ' + ENGINES[e].short + ' tab');
   };
-  const problems = job.engines.map(e => p.runs[e]).filter(r => r.why && r.state !== 'done').map(r => r.why);
+  const stoppedE = job.engines.filter(e => byYou(p.runs[e])).map(e => ENGINES[e].short);
+  const problems = job.engines.map(e => p.runs[e]).filter(r => r.why && r.state !== 'done' && !byYou(r)).map(r => r.why);
+  if (stoppedE.length) problems.unshift('You stopped this search, so ' + stoppedE.join(' and ') + ' did not search this photo. ' + (job.engines.some(e => p.runs[e].state === 'done') ? 'The links the other sites found are still checked. ' : '') + 'Press "Search the rest" to search it on ' + stoppedE.join(' and ') + ' too.');
   const state = searching ? 'Searching… ' + statusLine(p)
-    : nPend ? 'Checking ' + plural(nPend, 'picture') + ' found against yours…'
+    : stoppedE.length && !kept && !nPend ? 'Not finished: stopped by you'
+    : nPend ? (stoppedE.length ? 'Stopped by you. ' : '') + 'Checking ' + plural(nPend, 'picture') + ' found against yours…'
       : kept ? plural(kept, 'copy', 'copies') + ' of this photo ' + (p.ingested ? 'added to' : 'going to') + ' Copies found (' + nSame + ' same photo, ' + nMaybe + ' maybe)'
         : 'No copies found for this photo';
   const wasOpen = $('thrown') ? $('thrown').open : false;
@@ -1479,7 +1493,7 @@ function renderResults() {
     h('div', { class: 'res-engs' }, job.engines.map(e => {
       const mine = all.filter(l => l.engines.includes(e)), r = p.runs[e];
       const ns = mine.filter(l => verdict(l) === 'same').length, nm = mine.filter(l => verdict(l) === 'maybe').length, no = mine.filter(l => ['no', 'cant'].includes(verdict(l))).length;
-      const st = { done: 'done', go: 'searching', captcha: 'robot check', wait: 'waiting', skip: 'skipped', fail: 'failed' }[r.state] || r.state;
+      const st = byYou(r) ? 'stopped by you' : { done: 'done', go: 'searching', captcha: 'robot check', wait: 'waiting', skip: 'skipped', fail: 'failed' }[r.state] || r.state;
       return h('div', { class: 'res-eng' }, h('b', {}, fav(e), ' ' + ENGINES[e].short, h('span', { class: 'pg-chip' + (r.state === 'done' ? ' ok' : ['skip', 'fail', 'captcha'].includes(r.state) ? ' warn' : ''), text: st })),
         h('span', { text: plural(mine.length, 'link') + ' found · ' + (ns + nm) + ' kept' }),
         h('div', { class: 'res-bar' }, h('b', { style: 'flex:' + ns }), h('em', { style: 'flex:' + nm }), h('u', { style: 'flex:' + (no || (mine.length ? 0 : 1)) })),
@@ -1711,7 +1725,7 @@ async function initResults() {
   const clicked = () => !navigator.userActivation || navigator.userActivation.hasBeenActive;
   if (!BG) window.addEventListener('beforeunload', e => { if (R.running && clicked()) { e.preventDefault(); e.returnValue = ''; } });
   if (BG) api.runtime.onMessage.addListener(msg => {
-    if (msg && msg.type === 'ppBgStop' && msg.job === job.id && R.running) { R.stop = true; for (const t of [...R.tasks.values()]) finishTask(t, 'skip', 'Stopped'); }
+    if (msg && msg.type === 'ppBgStop' && msg.job === job.id && R.running) { R.stop = true; job.stoppedAt = new Date().toISOString(); for (const t of [...R.tasks.values()]) finishTask(t, 'skip', STOPPED); }
     return false;
   });
   window.addEventListener('pagehide', () => { if (saveTimer) saveJob(true); });
