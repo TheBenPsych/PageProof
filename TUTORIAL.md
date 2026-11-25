@@ -304,11 +304,26 @@ Pick **PageProof** itself, never the **Install** folder inside it. Install holds
 
 Open the full PageProof page (click the PageProof icon › **Open full PageProof**). The menu on the left has five items: **Home** (a list of what to do now, most urgent first), **Copies found** (with One at a time, Keep searching and your searches), **Clients**, **Evidence** (your captures, **Needs a capture**, Verify and the photo tools) and **Settings** (Is everything working, hidden sites, Help). The bar at the top has a **search box**, **Undo** and **Capture a page**. The thin line at the bottom shows whether Drive is connected and searching is running; anything stopped turns red with a **Fix it** button.
 
-**Set up once: Connect your photos (4 steps).**
+**Set up once.** This is part of **first-time setup** (it opens by itself after installing). Setup first shows **how the photo folders should look**:
+
+```
+G:\Shared drives\Photos            the top folder you pick
+  Example Client                    one folder per client = the client's name
+    Registered images
+      2026                          year
+        VA 2-123-456 Q4             registration number in the name (or 1-... while it's an application)
+          photo.jpg
+  No longer monitoring              skipped (has client_info_ignore.txt)
+  Recycled - not to use             skipped (the name says not to use or recycled)
+```
+
+Instead of the number in the folder name, an Excel file named with the number in that folder works too. Skipped this part during setup? Home has a **Connect them** button, which opens **Connect your photos** with the same 4 steps:
 1. Install **Google Drive for desktop** (google.com/drive/download) and sign in with your work account. File Explorer then shows **Google Drive (G:)**.
 2. In Drive's ⚙ **Preferences › Google Drive**, choose **Stream files** (so your disk doesn't fill up).
 3. Press **Choose the top folder** and pick it (for example G: › Shared drives, or one shared drive). Click **▸** to open a folder and see the folders inside, then **tick only the folders you search**. Each ticked folder is one client and everything inside it is searched. Or press **＋ Add one folder** to go straight to a big folder in the folder window. Press ★ on the clients that matter most. PageProof reads the same text files as your other monitoring platform: a folder with **client_info.txt** (`client_id=…`) is named after that client ID, even deep inside a ticked folder, and a folder with **client_info_ignore.txt** (`ignore_client=true`) is marked **Skipped** and never searched, with everything inside it. Check the address in the box matches what File Explorer shows (it goes in the evidence report). Everything inside a ticked folder is searched, "No longer monitoring" folders too. To leave a folder out, open the ticked folder with ▸ and **untick** the folder inside it (it shows **Left out**); tick it again to put it back. A folder marked **Skipped** (it has client_info_ignore.txt) inside a ticked folder can be ticked too: it then shows **Searched anyway**, and the file itself is left as it is for your other tool.
-4. Press **Yes, start searching**. PageProof reads every folder once (this can take a while), then **Keep searching** starts.
+4. **Check your folders.** PageProof looks at each ticked client (folder names, newest 3 years, about 15 seconds each) and marks it ✓ Looks good, ! (no year folders, or quarters with no VA or 1- number) or ✕ (no photos found). Nothing is changed and a ! never stops the search; fix the folders in Drive and press **Check again**, or start anyway. Press **Start searching**. PageProof reads every folder once (this can take a while), then **Keep searching** starts.
+
+Setup also shows **What this computer can do**: how many photo checks and search tabs it runs at once, the fastest pace and about how long today's 50 take, next to the Light, Normal and Strong levels. Change the level later in Settings › Your computer.
 
 After the browser restarts, it may ask for **one click on Allow** to read the photos again. A note pops up and a yellow bar shows on the Find copies pages.
 

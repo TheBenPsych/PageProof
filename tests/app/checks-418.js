@@ -113,7 +113,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.goto(url('app.html#moving')); await page.waitForTimeout(1000);
   ok(await page.evaluate(() => (document.body.textContent.match(/Step \d of 3/g) || []).length === 3), 'Moving to a new computer has 3 steps');
   await page.evaluate(() => { state.setup = 2; location.hash = 'setup'; }); await page.waitForTimeout(1500);
-  ok(await page.evaluate(() => /Step 3 of 5/.test(document.body.textContent) && /Back up and share/.test(document.body.textContent) && !!document.querySelector('[data-act="teamcopy"]') && document.querySelectorAll('.dmenu').length >= 2), 'setup step 3 is Back up and share with the team guide and pictures');
+  ok(await page.evaluate(() => /Step 3 of \d+/.test(document.body.textContent) && /Back up and share/.test(document.body.textContent) && !!document.querySelector('[data-act="teamcopy"]') && document.querySelectorAll('.dmenu').length >= 2), 'setup step 3 is Back up and share with the team guide and pictures');
 
   // Google Drive stops answering
   await page.evaluate(async () => { const root = await navigator.storage.getDirectory(); const my = await root.getDirectoryHandle('My Drive'); await my.removeEntry('PageProof Team', { recursive: true }); await PP_SYNC.sync(); });
