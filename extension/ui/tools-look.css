@@ -14,7 +14,7 @@ h1,h2,h3,#side #domain,#side .brand{font-family:"Plus Jakarta Sans","Segoe UI Va
 html.framed #side .brand{display:none}
 #side h3{opacity:1;color:var(--t-muted)}
 #side .url,#side #sub,#side #when{opacity:1;color:var(--t-muted)}
-#side .site,#side .card,#side #caseBox,#side details.fold,#side .slot,#side .gonote,#side #sentence{background:var(--t-sunk);border-radius:12px}
+#side .site,#side .card,#side #caseBox,#side #whoBox,#side details.fold,#side .slot,#side .gonote,#side #sentence{background:var(--t-sunk);border-radius:12px}
 #side .tile,#side button.task,#side .chip,#side .how button,#side .ghost,#side .pickbtn{background:var(--t-surface);color:var(--t-ink);border:1px solid var(--t-line);border-radius:10px}
 #side .tile:not(:disabled):hover,#side button.task:hover,#side .chip:hover,#side .how button:hover,#side .ghost:hover,#side .pickbtn:hover{background:var(--t-surface);border-color:var(--t-accent);filter:none}
 #side .chip.on,#side .how button.on,#side .chip.on:hover{background:var(--t-accent-soft);color:var(--t-accent);border-color:var(--t-accent)}
