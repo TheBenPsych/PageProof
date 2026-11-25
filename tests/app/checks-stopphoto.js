@@ -38,7 +38,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.locator('.drawer [data-act="dmore"]').click(); await page.waitForTimeout(400);
   const mi = page.locator('#rowMenu [data-act="stopphoto"]');
   ok(await mi.count() === 1, 'More menu has Stop searching this photo');
-  await mi.click(); await page.waitForTimeout(1000);
+  // The panel can redraw while it reads their page, so click it straight away (as other checks do).
+  await page.evaluate(() => document.querySelector('#rowMenu [data-act="stopphoto"]').click()); await page.waitForTimeout(1000);
   ok(await page.evaluate(async c => !!(await FC.DB.get('photos', c.photo)).stopped, c), 'More menu stops it');
   // Backup carries it
   ok(await page.evaluate(async c => { FC.backupSoon(true); const s = await FC.settingsSnapshot(); return JSON.stringify(s.flags || []).includes(c.photo); }, c).catch(() => false), 'Settings backup lists the stopped photo');
