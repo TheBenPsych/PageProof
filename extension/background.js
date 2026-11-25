@@ -963,6 +963,15 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   api.storage.session.get(k).then(r => sendResponse({ mine: !!r[k] })).catch(() => sendResponse({ mine: false }));
   return true;
 });
+// 4.50 (Ben's pick): the clock for PageProof's search tabs. A search tab sits in the background,
+// and the browser stretches every short wait in a hidden tab to at least a second (tested: ten
+// waits of 0.15 s took 10 s). rsearch.js asks here instead: "answer me in N ms". The background's
+// own timers are not slowed down. Only waits up to 5 seconds, only from search tabs.
+api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (!msg || msg.type !== 'rsSleep' || !sender.tab || sender.id !== api.runtime.id) return false;
+  setTimeout(() => { try { sendResponse(true); } catch (e) { /* tab gone */ } }, Math.max(0, Math.min(5000, +msg.ms || 0)));
+  return true;
+});
 // Messages from PageProof's own pages (never from websites).
 api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || sender.id !== api.runtime.id) return false;
