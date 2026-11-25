@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.52.2** (25 Nov 2026).
+Last updated: version **4.52.3** (25 Nov 2026).
 
 ---
 
@@ -141,6 +141,7 @@ Last updated: version **4.52.2** (25 Nov 2026).
 - **Find the company, the firm's way.** Who's behind this site lists every name the site goes by (footer, Terms of service, Privacy, About, the site's data, the domain record and the site's Facebook Page transparency), marks each as a brand or a company, and gives a 3-step checklist: names, brand to company (Justia, USPTO, OpenCorporates, SEC), is it active (state search, past lawsuits, DMCA agent directory, Delaware last). (4.51)
 - **Company card and status.** Each site gets a company card with the firm's fields (entity name type, entity name, other names, state, entity number, what the registry says, registered agent, addresses, DMCA agent) and status: Seemingly viable, Not a viable entity or Not checked yet. The status shows on every copy from that site, Ready for legal needs an active company, and copies on a site that is not a viable entity go to the bottom. (4.51)
 - **Legal portal card.** A Stolen copy's Claim tab shows the portal's Add Infringement boxes in the portal's order (Artwork, Discovery Date and Method, Infringing Domain, Page URL, Infringer Use, Paid Ads, Sells Product, Agency Case #, Damages, Infringing Image Url, Note), filled from the copy. Click a line to copy it, or Copy all. It also shows the Certificate and Application numbers to check and the screengrab file to upload. (4.52)
+- **Portal card drop-downs.** Lines that are drop-downs in the portal say exactly which choice to pick (Reverse Image Search; Website, Social Media or Embed; Commercial or Editorial; Yes or No; Statutory, Actual or Cannot Determine Damages). (4.52.3)
 
 ## 6. Social media accounts
 
@@ -317,3 +318,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.52 | 25 Nov | Credit search on Google and Bing, progress on its own page, Extra searches card and stats |
 | 4.52.1 | 25 Nov | Fix: Keep searching flag counts fairly |
 | 4.52.2 | 25 Nov | Fix: Fewer wasted slow looks on Google matches |
+| 4.52.3 | 25 Nov | Fix: Portal card shows the exact drop-down choices |
