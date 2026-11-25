@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.60.0** (25 Nov 2026).
+Last updated: version **4.60.1** (25 Nov 2026).
 
 ---
 
@@ -341,3 +341,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.58.1 | 25 Nov | Fix: Resume shows at once on the Keep searching tab |
 | 4.59 | 25 Nov | Just hidden list folded away; Site gone tag for copies on websites that no longer exist; Spam blogs filter catches search-words pages and spam-only endings |
 | 4.60 | 25 Nov | Site popularity tags and known bad site lists |
+| 4.60.1 | 25 Nov | Fix: "Who's behind it" box removed from the capture page |
