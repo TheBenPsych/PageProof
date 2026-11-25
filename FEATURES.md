@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.51.1** (25 Nov 2026).
+Last updated: version **4.51.2** (25 Nov 2026).
 
 ---
 
@@ -306,3 +306,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.50 | 24 Nov | Search tabs at full speed in the background, every result picture loads, Google exact matches read on their page, multi-picture posts checked, fewer slow second looks |
 | 4.51 | 24 Nov | Credit search, Watching, Registrations, company card |
 | 4.51.1 | 25 Nov | Fix: Set-aside folders skipped, fewer extension page errors |
+| 4.51.2 | 25 Nov | Fix: Two searches never pick the same photos |
