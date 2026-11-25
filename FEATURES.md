@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.51.2** (25 Nov 2026).
+Last updated: version **4.51.3** (25 Nov 2026).
 
 ---
 
@@ -106,6 +106,7 @@ Last updated: version **4.51.2** (25 Nov 2026).
 - **Posts with several pictures.** A post a search site listed whose cover is another photo is kept as "Checking the post", and the post check looks at every picture in your browser before it stays or goes. (4.50)
 - **Credit search.** Once a week per wording, in your hours, PageProof asks Google for pages that print a client's photo credit ("Photo: Harbor Times", made-up example) and compares their pictures with that client's photos. Matches go to New as "Found by credit search"; pages that credit the client but show none of their photos are listed to look at by hand. A robot check rests Google for an hour and is never got around. (4.51)
 - **Watching.** A site or social account with 2 or more Stolen copies is watched: once a week only its new posts (its news feed or sitemap, or the account's newest posts) are compared with every client's photos. Old Stolen pages are never opened again. Add or stop watching any site or account by hand. (4.51)
+- **Seal close-ups aren't copies.** A close-up showing only a seal or emblem that also appears in your photo is thrown out. (4.51.3)
 
 ## 5. Review the copies found
 
@@ -307,3 +308,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.51 | 24 Nov | Credit search, Watching, Registrations, company card |
 | 4.51.1 | 25 Nov | Fix: Set-aside folders skipped, fewer extension page errors |
 | 4.51.2 | 25 Nov | Fix: Two searches never pick the same photos |
+| 4.51.3 | 25 Nov | Fix: Close-ups of a podium seal no longer count as copies |
