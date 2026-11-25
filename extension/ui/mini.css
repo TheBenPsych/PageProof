@@ -1,4 +1,4 @@
-/* The toolbar menu (popup) and the side panel. */
+/* The toolbar menu (popup). */
 .mini-body { margin: 0; padding: 12px; background: var(--bg); color: var(--ink); font-size: 14px; }
 .mini-body.popup { width: 340px; }
 .mhead { display: flex; align-items: center; gap: 8px; font-size: 15px; margin-bottom: 10px; }
@@ -37,8 +37,6 @@
 .mth.more { font: inherit; font-weight: 700; font-size: 14px; color: var(--muted); }
 .mline .switch { transform: scale(.85); transform-origin: left center; margin-right: -4px; }
 .mlive { font-size: 12.5px; }
-.mprog { height: 8px; border-radius: 99px; background: var(--sunk); overflow: hidden; }
-.mprog i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
 .msec { box-shadow: var(--shadow); }
 .mline b { white-space: nowrap; }
 .mline .tag { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; }

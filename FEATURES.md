@@ -186,7 +186,7 @@ Last updated: version **4.64.0** (25 Nov 2026).
 - **Two full redesigns** (4.0 and 4.2): clean menu, top search, new blue shield logo, one blue theme everywhere. (4.0, 4.2, 4.9.3)
 - **Short menu:** Home, Copies found, Clients, Evidence, Settings. (4.14)
 - **Home to-do list** of what to do now, status line at the bottom, same page headers everywhere. (4.14)
-- **Toolbar popup** with a big Capture button, and a **side panel** that stays open beside any site. (4.0)
+- **Toolbar popup** with a big Capture button. (4.0; the side panel was removed later)
 - **First-time setup** in a few steps, a 5-step tour, and a What's new page after updates. (4.0)
 - **Light and dark mode** (dark inside every tool), text size switch, line icons, keyboard help on `?`. (4.3)
 - **Evidence library** with picture cards. (4.14)

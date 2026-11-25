@@ -1,4 +1,4 @@
-// 4.8.2: the "new copies" number (menu badge, toolbar dot, side panel) must match Copies found.
+// 4.8.2: the "new copies" number (menu badge, toolbar dot, pop-up) must match Copies found.
 // Copies on hidden sites or from hidden countries are not shown, so they must not be counted.
 const { start } = require('./h.js');
 process.env.NP = 200; process.env.NC = 60;

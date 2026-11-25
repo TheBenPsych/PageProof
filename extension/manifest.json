@@ -32,7 +32,6 @@
     "tabGroups",
     "alarms",
     "notifications",
-    "sidePanel",
     "system.cpu",
     "system.memory",
     "declarativeNetRequestWithHostAccess",
@@ -94,8 +93,5 @@
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
-  },
-  "side_panel": {
-    "default_path": "sidepanel.html"
   }
 }

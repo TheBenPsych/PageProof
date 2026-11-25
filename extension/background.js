@@ -1035,7 +1035,6 @@ api.runtime.onInstalled.addListener(d => {
   if (d.reason === 'install') api.tabs.create({ url: api.runtime.getURL('app.html#setup') });
   // 4.13.1: PageProof no longer asks GitHub for new versions (Ben hands updates out himself). Forget the old notes.
   if (d.reason === 'update') api.storage.local.remove(['ppUpdate', 'ppGhToken']).catch(() => {});
-  try { api.sidePanel && api.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }); } catch (e) { /* no side panel */ }
   if (api.alarms) api.alarms.clear('rsDaily');
 });
 // A search site tab asks "am I one of PageProof's search tabs?" (rsearch.js), to show the

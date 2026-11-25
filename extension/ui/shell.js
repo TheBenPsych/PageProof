@@ -34,7 +34,7 @@ const PP_CRUMBS = {
   review: 'One at a time', clients: 'Clients and photos', photos: 'Clients and photos', owners: 'Site owners',
   who: 'Who\'s behind this site', keep: 'Keep searching', connect: 'Connect your photos', weekly: 'Evidence › Weekly summary', tocapture: 'Evidence › Needs a capture',
   inspect: 'Tools › Inspect a photo', compare: 'Tools › Compare two photos', markup: 'Tools › Mark up a copy', files: 'Tools › Convert files',
-  openfiles: 'Tools › Open odd files', library: 'Evidence › All evidence', verify: 'Verify a pack', browser: 'Toolbar and side panel', settings: 'Settings',
+  openfiles: 'Tools › Open odd files', library: 'Evidence › All evidence', verify: 'Verify a pack', browser: 'Toolbar', settings: 'Settings',
   hidden: 'Settings › Hidden and approved sites', computer: 'Settings › Your computer', whatsnew: 'Settings › What\'s new', health: 'Settings › Is everything working?', stats: 'Settings › How PageProof is doing', skipped: 'Skipped photos', setup: 'First-time setup', help: 'Help and tutorial'
 };
 const PP_BADGES = {};

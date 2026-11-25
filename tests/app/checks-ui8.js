@@ -1,5 +1,5 @@
-// UI overhaul batch 8: the toolbar pop-up and side panel (capture card names the page, three number
-// tiles, Keep searching switch, photos on the page as small pictures, today's progress bar) and the
+// UI overhaul batch 8: the toolbar pop-up (capture card names the page, three number
+// tiles, Keep searching switch, photos on the page as small pictures) and the
 // capture progress card (four steps, "Screen N of M", outlined Stop, light or dark).
 const { start } = require('./h.js');
 process.env.NP = 120; process.env.NC = 40;
@@ -18,17 +18,18 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
 
   const sp = await ctx.newPage(); await sp.setViewportSize({ width: 400, height: 760 });
   sp.on('pageerror', e => { fails++; console.log('PAGEERROR', String(e).slice(0, 300)); });
-  await sp.goto(url('sidepanel.html')); await web.bringToFront(); await sp.waitForTimeout(2500);
+  await sp.goto(url('popup.html')); await web.bringToFront(); await sp.waitForTimeout(300);
+  await sp.evaluate(() => draw()); await sp.waitForTimeout(1500); // draw again now the website is the active tab
   const r = await sp.evaluate(() => ({
     cap: (document.querySelector('#cap small') || {}).textContent || '', badge: (document.querySelector('#cap .msl') || {}).textContent || '',
     tiles: [...document.querySelectorAll('.mtiles .mtile')].map(t => t.dataset.go), sw: !!document.querySelector('#keepon'),
-    thumbs: document.querySelectorAll('.mthumbs .mth img').length, more: (document.querySelector('.mth.more') || {}).textContent || '', prog: !!document.querySelector('.mprog'),
+    thumbs: document.querySelectorAll('.mthumbs .mth img').length, more: (document.querySelector('.mth.more') || {}).textContent || '', panel: !!document.getElementById('panel'),
   }));
   ok(/example-news\.com · An example story/.test(r.cap) && r.badge === 'e', 'Capture card names the page with a letter badge: ' + r.cap);
   ok(r.tiles.join(',') === 'review,tocapture,keep', 'Three number tiles: new copies, to capture, searched today');
   ok(r.sw, 'Keep searching is one line with a switch');
   ok(r.thumbs === 4 && r.more === '+3', 'Photos on this page as 4 small pictures and +3');
-  ok(r.prog, 'Side panel shows today\'s progress bar');
+  ok(!r.panel, 'The side panel is gone: no "Keep it open beside this page" button');
   await sp.click('#keepon'); await sp.waitForTimeout(900);
   ok(await sp.evaluate(async () => (await FC.keep()).on === false), 'The switch turns Keep searching off');
   await sp.close();

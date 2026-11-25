@@ -507,17 +507,13 @@ async function libCsv() {
 }
 
 // =====================================================================================
-// Toolbar and side panel
+// Toolbar
 // =====================================================================================
-V.browser = async () => `${head('In your browser', 'Toolbar and side panel', 'Keep PageProof one click away on every website.')}
+V.browser = async () => `${head('In your browser', 'Toolbar', 'Keep PageProof one click away on every website.')}
   <div class="grid g2">
     <section class="card pad" style="display:flex;flex-direction:column;gap:10px"><h2>1. Pin the icon</h2>
       <p class="muted" style="margin:0">Click the jigsaw piece ${ic('files', 14)} next to the address bar, then the pin beside <b>PageProof</b>. The icon then stays in the toolbar.</p>
       <p class="muted" style="margin:0">Click the icon for the toolbar menu: <b>Capture this page</b>, the photos on the page, and <b>Open full PageProof</b>.</p></section>
-    <section class="card pad" style="display:flex;flex-direction:column;gap:10px"><h2>2. Keep it open beside the page</h2>
-      <p class="muted" style="margin:0">The side panel stays open while you browse. It shows what PageProof knows about the page you're on, with Capture and the photos on the page.</p>
-      <button class="btn primary" data-act="sidepanel" style="align-self:flex-start">${ic('panel', 18)} Open the side panel</button>
-      <span class="faint" style="font-size:12.5px">Works in Chrome and Edge.</span></section>
     <section class="card pad" style="display:flex;flex-direction:column;gap:10px"><h2>Keyboard shortcut</h2>
       <p class="muted" style="margin:0"><span class="kbd" id="shortcut2">Alt+Shift+P</span> captures the page you're on straight away.</p>
       <button class="btn" data-act="shortcuts" style="align-self:flex-start">Change the shortcut</button></section>
@@ -1077,7 +1073,7 @@ const SETUP = [
   async () => `<div style="text-align:center;display:flex;flex-direction:column;gap:10px;align-items:center"><span class="tag ok" style="font-size:14px;padding:4px 12px">✓ You're set</span><h2 style="font-size:24px">Two things to keep it handy</h2></div>
     <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">
       <div class="card pad" style="display:flex;flex-direction:column;gap:6px"><b>1. Pin the icon</b><span class="muted" style="font-size:14px">Click the jigsaw piece next to the address bar, then the pin beside PageProof.</span></div>
-      <div class="card pad" style="display:flex;flex-direction:column;gap:6px"><b>2. Open the side panel</b><span class="muted" style="font-size:14px">Click the PageProof icon, then "Keep it open beside this page".</span></div>
+      <div class="card pad" style="display:flex;flex-direction:column;gap:6px"><b>2. Capture in one key press</b><span class="muted" style="font-size:14px">Alt+Shift+P captures the page you're on straight away.</span></div>
     </div>
     ${(await FC.drive()).done ? '' : '<p class="faint" style="margin:0;font-size:13px;text-align:center">Photos not connected yet. Home has a Connect them button whenever you\'re ready.</p>'}`
 ];
@@ -1146,9 +1142,6 @@ async function act(a, v, el) {
     api.runtime.sendMessage({ type: 'captureTab', tabId: t.id });
   }
   else if (a === 'libcsv') libCsv();
-  else if (a === 'sidepanel') {
-    try { const w = await api.windows.getCurrent(); await api.sidePanel.open({ windowId: w.id }); } catch (e) { toast('Your browser has no side panel. Use Chrome or Edge.'); }
-  }
   else if (a === 'shortcuts') api.tabs.create({ url: /Edg\//.test(navigator.userAgent) ? 'edge://extensions/shortcuts' : 'chrome://extensions/shortcuts' });
   else if (a === 'docschoose') { try { await RS_DOCS.choose(); await RS_LISTS.load(); await RS_LISTS.save(); toast('PageProof folder ready'); } catch (e) { if (e.name === 'PhotosFolder' || e.name === 'InstallFolder') toast(e.message); else if (e.name !== 'AbortError') toast('Chrome refused that folder. Make a new folder called PageProof inside Documents and pick that.'); } render(true); }
   else if (a === 'docsallow') { await RS_DOCS.allow(); render(true); }
