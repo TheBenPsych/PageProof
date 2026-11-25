@@ -331,3 +331,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.55.1 | 25 Nov | Fix: Updater and release build retry GitHub hiccups |
 | 4.56 | 25 Nov | One at a time can show Websites only or Social media only |
 | 4.56.1 | 25 Nov | Fix: Country filled in for .com sites from the page's address and language |
+| 4.56.1 | 25 Nov | Small fixes |
