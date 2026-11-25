@@ -563,6 +563,7 @@ V.settings = async () => {
       '<!--sync-->' +
       sLine('PageProof folder', 'Documents › PageProof. Keeps your lists as text files, so they survive updates and reinstalls.', docsCtl))}
     ${sec('lists', 'Lists',
+      await popLines() +
       sLine('Hidden and approved sites', `${RS_LISTS.hidden.length.toLocaleString()} hidden · ${RS_LISTS.allowed.length.toLocaleString()} approved · ${RS_REJECT.items.length.toLocaleString()} rejected links.`, '<a class="btn" href="#hidden">See and edit</a>'))}
     ${sec('help', 'Help',
       sLine('Is everything working?', 'Lights for Google Drive, Keep searching, each search site and your backup.', '<a class="btn" href="#health">Check now</a>') +
@@ -571,6 +572,26 @@ V.settings = async () => {
     </div>
   </div>`;
 };
+// 4.58: the site lists PageProof downloads by itself: how popular a site is, and known bad sites.
+async function popLines() {
+  const day = t => t ? new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  let h = '';
+  if (typeof PP_POP !== 'undefined') {
+    const i = await PP_POP.info();
+    h += sLine('Site popularity list', i.date ? `The Tranco list of the world's ${(i.n || 0).toLocaleString()} most visited websites, from ${day(i.date)}. Gives each copy's site a Top 1K to Top 1M tag. Updated about once a week, kept on this computer.${i.err ? ' Last try failed: ' + esc(i.err) : ''}`
+      : `Not downloaded yet (a few MB, once a week).${i.err ? ' Last try failed: ' + esc(i.err) : ' It downloads by itself when you open Copies found.'}`, `<button class="btn" data-act="popnow" ${PP_POP.busy() ? 'disabled' : ''}>${PP_POP.busy() ? 'Downloading…' : 'Download now'}</button>`);
+  }
+  if (typeof PP_BAD !== 'undefined') {
+    const i = await PP_BAD.info(), src = i.src || {};
+    const parts = PP_BAD.SOURCES.map(s => src[s.id] && src[s.id].n ? `${s.name} ${src[s.id].n.toLocaleString()}` + (src[s.id].err ? ' (last try failed)' : '') : `${s.name}: ${src[s.id] && src[s.id].err ? 'failed, ' + src[s.id].err : 'not yet'}`);
+    h += sLine('Known bad site lists', `Free public lists of piracy, scam, phishing and malware sites${i.date ? `, last put together ${day(i.date)}` : ''}. Their copies get a red tag and count as Suspicious. ${esc(parts.join(' · '))}.`, `<button class="btn" data-act="badnow" ${PP_BAD.busy() ? 'disabled' : ''}>${PP_BAD.busy() ? 'Downloading…' : 'Download now'}</button>`);
+  }
+  return h;
+}
+Object.assign(ACTS, {
+  popnow: async () => { const p = PP_POP.refresh(true); render(true); const r = await p; toast(r.err ? 'The popularity list could not download: ' + r.err : 'Popularity list ready: ' + (r.n || 0).toLocaleString() + ' sites.'); if (typeof dropFC === 'function') dropFC(); render(true); },
+  badnow: async () => { const p = PP_BAD.refresh(true); render(true); const r = await p; toast(r.errs && r.errs.length ? 'Some lists could not download: ' + r.errs.join('; ') : 'Known bad site lists ready.'); if (typeof dropFC === 'function') dropFC(); render(true); },
+});
 V.settings.after = () => {
   // The index lights up the section on screen.
   if (!window.ppSpyOn) {

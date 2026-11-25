@@ -198,6 +198,19 @@ async function stSaveCard(m) {
 }
 
 // ---------------------------------------------------------------- the page
+// 4.58: website copies by how popular their site is (Tranco list). Counts only.
+async function stPop() {
+  if (typeof PP_POP === 'undefined' || !(await PP_POP.info()).date) return '';
+  const cs = (await FC.allCopies()).filter(c => c.status !== 'removed' && FC.useOf(c) !== 'social');
+  const R = await PP_POP.ranks(cs.map(c => c.site)).catch(() => new Map());
+  const rows = [['Top 1K', 4], ['Top 10K', 3], ['Top 100K', 2], ['Top 1M', 1], ['Small sites', 0], ['Shared platforms (blogs, shops)', -1]].map(([l, lv]) => {
+    const xs = cs.filter(c => PP_POP.level(R.has(c.site) ? R.get(c.site) : null) === lv);
+    return [l, xs.length, lv >= 3 ? 'var(--warn)' : lv === -1 ? '#94A3B8' : 'var(--accent)', xs.filter(c => c.status === 'stolen').length + ' marked stolen'];
+  });
+  let bad = 0;
+  if (typeof PP_BAD !== 'undefined') { await PP_BAD.prepare(cs.map(c => c.site)).catch(() => {}); bad = cs.filter(c => PP_BAD.of(c.site, R.get(c.site))).length; }
+  return stCard('Copies by site popularity', 'Website copies (not removed), by how visited the site is. Hover a bar for how many you marked stolen.', stBars(rows) + (typeof PP_BAD !== 'undefined' ? `<p class="faint" style="margin:0;font-size:13px">${stN(bad)} on a known bad site list (piracy, scam, phishing, malware).</p>` : ''));
+}
 V.stats = async () => {
   const fresh = state.stModel && state.stModel.range === state.stRange && Date.now() - state.stModel.at < 30000;
   const m = fresh ? state.stModel : Object.assign(await PP_REPORT.model(state.stRange), { at: Date.now() });
@@ -222,6 +235,7 @@ V.stats = async () => {
   <div class="st-two">${stDrops(m)}${stSites(m)}</div>
   <div class="st-two">${stKeep(m)}${stDrive(m)}</div>
   <div class="st-two">${stCover(m)}${stStrain(m)}</div>
+  ${await stPop()}
   ${stHelpers(m)}
   ${stExtra(m)}
   ${await stSaveCard(m)}`;
