@@ -563,6 +563,7 @@ V.settings = async () => {
       '<!--sync-->' +
       sLine('PageProof folder', 'Documents › PageProof. Keeps your lists as text files, so they survive updates and reinstalls.', docsCtl))}
     ${sec('lists', 'Lists',
+      await popLines() +
       sLine('Hidden and approved sites', `${RS_LISTS.hidden.length.toLocaleString()} hidden · ${RS_LISTS.allowed.length.toLocaleString()} approved · ${RS_REJECT.items.length.toLocaleString()} rejected links.`, '<a class="btn" href="#hidden">See and edit</a>'))}
     ${sec('help', 'Help',
       sLine('Is everything working?', 'Lights for Google Drive, Keep searching, each search site and your backup.', '<a class="btn" href="#health">Check now</a>') +
@@ -571,6 +572,26 @@ V.settings = async () => {
     </div>
   </div>`;
 };
+// 4.58: the site lists PageProof downloads by itself: how popular a site is, and known bad sites.
+async function popLines() {
+  const day = t => t ? new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  let h = '';
+  if (typeof PP_POP !== 'undefined') {
+    const i = await PP_POP.info();
+    h += sLine('Site popularity list', i.date ? `The Tranco list of the world's ${(i.n || 0).toLocaleString()} most visited websites, from ${day(i.date)}. Gives each copy's site a Top 1K to Top 1M tag. Updated about once a week, kept on this computer.${i.err ? ' Last try failed: ' + esc(i.err) : ''}`
+      : `Not downloaded yet (a few MB, once a week).${i.err ? ' Last try failed: ' + esc(i.err) : ' It downloads by itself when you open Copies found.'}`, `<button class="btn" data-act="popnow" ${PP_POP.busy() ? 'disabled' : ''}>${PP_POP.busy() ? 'Downloading…' : 'Download now'}</button>`);
+  }
+  if (typeof PP_BAD !== 'undefined') {
+    const i = await PP_BAD.info(), src = i.src || {};
+    const parts = PP_BAD.SOURCES.map(s => src[s.id] && src[s.id].n ? `${s.name} ${src[s.id].n.toLocaleString()}` + (src[s.id].err ? ' (last try failed)' : '') : `${s.name}: ${src[s.id] && src[s.id].err ? 'failed, ' + src[s.id].err : 'not yet'}`);
+    h += sLine('Known bad site lists', `Free public lists of piracy, scam, phishing and malware sites${i.date ? `, last put together ${day(i.date)}` : ''}. Their copies get a red tag and count as Suspicious. ${esc(parts.join(' · '))}.`, `<button class="btn" data-act="badnow" ${PP_BAD.busy() ? 'disabled' : ''}>${PP_BAD.busy() ? 'Downloading…' : 'Download now'}</button>`);
+  }
+  return h;
+}
+Object.assign(ACTS, {
+  popnow: async () => { const p = PP_POP.refresh(true); render(true); const r = await p; toast(r.err ? 'The popularity list could not download: ' + r.err : 'Popularity list ready: ' + (r.n || 0).toLocaleString() + ' sites.'); if (typeof dropFC === 'function') dropFC(); render(true); },
+  badnow: async () => { const p = PP_BAD.refresh(true); render(true); const r = await p; toast(r.errs && r.errs.length ? 'Some lists could not download: ' + r.errs.join('; ') : 'Known bad site lists ready.'); if (typeof dropFC === 'function') dropFC(); render(true); },
+});
 V.settings.after = () => {
   // The index lights up the section on screen.
   if (!window.ppSpyOn) {
@@ -731,6 +752,8 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['"Who\'s behind it" box taken off the capture page', 'The capture page no longer shows the "Who\'s behind it" box that offered to add the site\'s About, Contact and Privacy pages into the pack. The evidence pack now holds only the page you captured. The Who\'s behind this site page in Copies found is unchanged.'],
+  ['How popular each site is, and known bad sites', 'Website copies now show how popular their site is (Top 1K, Top 10K, Top 100K, Top 1M), from the free Tranco list of the world\'s most visited websites. Big sites (top 10K) get a gold tag and a gold edge, and there is a "Big sites" quick filter, a "Site popularity" filter and a "Most popular site" sort. PageProof also checks copies against free lists of known piracy, scam, phishing and malware sites (The Block List Project, URLhaus, OpenPhish): those get a red tag, count as Suspicious, and have their own "Known bad sites" quick filter. The lists download by themselves and are kept on this computer, so no site name is sent anywhere. See them in Settings › Lists.'],
   ['Just hidden list folded away', 'The row of sites you just hid on Copies found is now folded into a small "Just hidden (N)". Click it to see the sites and bring one back.'],
   ['Sites that no longer exist are hidden', 'When a copy is found, PageProof checks once whether its website still exists. If the address leads nowhere (like a site that was shut down), the copy gets a grey Site gone tag and is hidden along with the spam blogs. Show them brings them back. Copies you already have are checked a few dozen at a time while you use Copies found.'],
   ['More spam pages caught', 'The Spam blogs filter now also catches made-up search pages named by words joined with + (like site.com/name+onlyfans+nude), and any copy on an ending used almost only by spam sites (.run, .fit, .forum, .makeup, .cfd, .sbs and similar). Real news articles, even about adult topics, are left alone.'],

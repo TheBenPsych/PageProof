@@ -3,7 +3,7 @@
 // (Stolen, Licensed, Remove, Skip), undo for every answer, hiding sites and countries, and
 // grouping by client, photo, site or site owner.
 Object.assign(state, {
-  open: '', picked: [], fFilter: 'New', fq: '', fWhen: 'any', fMatch: 'any', fYear: 'Any', fQuarter: 'Any', fPhoto: '', sis: null, fView: 'client', fSort: 'act', fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fStrong: false, fVia: '', fKnown: '', fSpam: 'hide', fOwner: '',
+  open: '', picked: [], fFilter: 'New', fq: '', fWhen: 'any', fMatch: 'any', fYear: 'Any', fQuarter: 'Any', fPhoto: '', sis: null, fView: 'client', fSort: 'act', fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fStrong: false, fVia: '', fKnown: '', fSpam: 'hide', fOwner: '', fPop: 'Any',
   showFilters: false, fFresh: false, dTab: 'sum', dTabFor: '', dView: '', slide: 50, fCols: null, exp: [], more: 250, qi: 0, cmpMode: 'side', cut: 50, rvTab: 'review', recentHides: [],
 });
 const HIST = [];         // every answer and hide, newest last, so each one can be undone in turn
@@ -74,6 +74,11 @@ async function readFC() {
     const pub = PP_CHECKS.pubDate(p);
     c.dmg = pub ? PP_CHECKS.damages(pub, regSync(p, regs)) : null;
   }
+  // 4.58: how popular each website is (Tranco top 1 million list, kept on this computer).
+  if (typeof PP_BAD !== 'undefined') await PP_BAD.prepare(copies.filter(c => !isSoc(c)).map(c => c.site)).catch(() => {});
+  const popR = typeof PP_POP !== 'undefined' ? await PP_POP.ranks(copies.filter(c => !isSoc(c)).map(c => c.site)).catch(() => new Map()) : new Map();
+  for (const c of copies) { c.pop = !isSoc(c) && popR.has(c.site) ? popR.get(c.site) : null; c.popL = typeof PP_POP !== 'undefined' ? PP_POP.level(c.pop) : -1; c.bad = !isSoc(c) && typeof PP_BAD !== 'undefined' ? PP_BAD.of(c.site, c.pop) : null;
+    if (c.bad) { c.risk = { ...c.risk, level: 'sus', why: [c.bad.label, ...(c.risk.why || []).filter(w => w !== c.bad.label)] }; } }
   const ownerList = await FC.owners([...new Set(copies.filter(c => c.status !== 'removed').map(c => c.site))]);
   const ownerOf = new Map();
   for (const o of ownerList) for (const s of o.sites) ownerOf.set(s, o);
@@ -161,9 +166,29 @@ async function loadOurs(root = document) {
 // ---------------------------------------------------------------- the filters
 function passMain(c) {
   return (state.fClient === 'Any' || (c.clientName || 'Client unknown') === state.fClient) && (state.fUse === 'Any' || c.use === state.fUse) &&
-    (state.fRisk === 'Any' || c.risk.level === state.fRisk) && (state.fCredit === 'Any' || (c.credit || '') === state.fCredit) && (!state.fShop || c.use === 'shop') && (!state.fRepeat || (c.repeat > 0 && c.status === 'new')) && (!state.fKnown || (state.fKnown === 'only' ? c.known : !c.known)) && (state.fSpam !== 'only' || !!c.spam) &&
+    (state.fRisk === 'Any' || c.risk.level === state.fRisk) && (state.fCredit === 'Any' || (c.credit || '') === state.fCredit) && (!state.fShop || c.use === 'shop') && (!state.fRepeat || (c.repeat > 0 && c.status === 'new')) && (!state.fKnown || (state.fKnown === 'only' ? c.known : !c.known)) && (state.fSpam !== 'only' || !!c.spam) && popPass(c) &&
     (!state.fOwner || (FCD.ownerOf.get(c.site) || {}).key === state.fOwner) && (state.fPlat === 'Any' || platOf(c).key === state.fPlat) &&
     (!state.fAcct || (state.fAcct === '~' ? !c.acct : !!c.acct && acctGroup(c.acct.key) === acctGroup(state.fAcct))) && (!state.fFresh || (c.dmg && c.dmg.end && Date.now() <= c.dmg.end.getTime())) && (!isSoc(c) || passAcct(c)) && passMore(c);
+}
+// 4.58: site popularity filter. Top 10K also shows the Top 1K sites, and so on.
+const POPF = { '1k': 4, '10k': 3, '100k': 2, '1m': 1 };
+function popPass(c) {
+  if (state.fBad && !c.bad) return false;
+  if (!state.fPop || state.fPop === 'Any') return true;
+  if (state.fPop === 'small') return c.popL === 0;
+  return c.popL >= (POPF[state.fPop] || 0);
+}
+const POP_LABEL = { '1k': 'Top 1K sites', '10k': 'Top 10K sites', '100k': 'Top 100K sites', '1m': 'Top 1M sites', small: 'Small sites' };
+// The popularity tag on a row (Top 1K to Top 1M; small sites get none, to keep rows quiet),
+// and the red tag for a site on a known bad site list.
+function popTag(c) {
+  let h = '';
+  if (c.bad) h += `<span class="tag bad" title="${esc(c.bad.why)}">${esc(c.bad.label)}</span>`;
+  if (c.popL >= 1 && typeof PP_POP !== 'undefined') {
+    const t = PP_POP.tier(c.pop);
+    h += `<span class="tag poptag${c.popL >= 3 ? ' big' : ''}" title="${esc(t.why)} From the Tranco list.">${c.popL >= 3 ? '★ ' : ''}${t.label}</span>`;
+  }
+  return h;
 }
 // The newer filters: the search box, found when, how strong the match is, photo year and quarter.
 function passMore(c) {
@@ -668,6 +693,8 @@ async function drawer(list) {
     <a class="lookup" href="#who" data-act="gowho" data-v="${esc(c.id)}">${ic('owner', 18)}<span><b>Who's behind this site</b><br><span class="muted" style="font-size:13px">${f ? esc(f.names && f.names[0] ? 'Probably ' + f.names[0] : 'Names, contacts and domain facts') : 'Read names, contacts and domain facts off the site'}</span></span><span style="margin-left:auto">${ic('chev', 16)}</span></a>
     <dl class="facts">
       ${o && o.real ? `<dt>Site owner</dt><dd><a href="#owners" data-act="gowner" data-v="${esc(o.key)}" style="font-weight:600">${esc(o.name)}</a><br><span class="muted" style="font-size:13px">${esc(o.kind)}${o.sites.length > 1 ? ' · ' + FCD.copies.filter(x => o.sites.includes(x.site) && x.status !== 'removed').length + ' copies on their sites' : ''}</span></dd>` : ''}
+      ${c.bad ? `<dt>Known bad site</dt><dd><b style="color:var(--bad)">${esc(c.bad.label)}</b><br><span class="muted" style="font-size:13px">${esc(c.bad.why)}</span></dd>` : ''}
+      ${typeof PP_POP !== 'undefined' && c.pop != null ? `<dt>How popular</dt><dd>${esc(PP_POP.tier(c.pop).label)}${c.pop ? ` <span class="muted">· number ${c.pop.toLocaleString()} in the world</span>` : ''}<br><span class="muted" style="font-size:13px">${c.pop ? 'From the Tranco list of the 1 million most visited websites.' : 'Not in the Tranco list of the 1 million most visited websites.'}</span></dd>` : typeof PP_POP !== 'undefined' && PP_POP.platform(c.site) ? `<dt>How popular</dt><dd>On a big shared platform<br><span class="muted" style="font-size:13px">The platform is huge, but this page belongs to one user or seller, so no rank is shown.</span></dd>` : ''}
       <dt>Site check</dt><dd>${RISK[c.risk.level][0]}${c.risk.why.length ? `<br><span class="muted" style="font-size:13px">${esc(c.risk.why.join(' · '))}</span>` : ''}</dd>
       ${c.country ? `<dt>Country</dt><dd>${esc(c.country)}${c.countryHow ? `<br><span class="muted" style="font-size:13px">From ${esc(c.countryHow)}</span>` : ''}${isSoc(c) ? '' : FCD.countries.includes(c.country) ? ` <button class="btn ghost sm" data-act="hidecountry" data-v="${esc(c.country)}">Stop showing this country</button>` : ` <button class="btn ghost sm" data-act="showcountry" data-v="${esc(c.country)}">Show this country</button>`}</dd>` : ''}
     </dl>
@@ -725,11 +752,11 @@ const caughtUp = (nStolen, nLater = 0) => `<div class="cempty caught" role="stat
 function copyRow(c) {
   const p = FCD.photos.get(c.photo), done = c.status !== 'new' && c.status !== 'later', K = state.fCols;
   const cell = (k, label, html) => K[k] ? `<span class="cc-${k}"><i>${label}</i>${html}</span>` : '';
-  return `<div class="frow crow${state.open === c.id ? ' on' : ''}" data-act="openrow" data-v="${esc(c.id)}">
+  return `<div class="frow crow${state.open === c.id ? ' on' : ''}${c.popL >= 3 ? ' bigsite' : ''}" data-act="openrow" data-v="${esc(c.id)}">
     <input type="checkbox" class="cpick" aria-label="Pick ${esc(isSoc(c) && c.acct ? c.acct.handle : c.site)}" data-act="pick" data-v="${esc(c.id)}" ${state.picked.includes(c.id) ? 'checked' : ''}>
     <div class="cpair" data-hover="${esc(c.id)}"><img class="ours" src="${oursImg(p)}" alt="" loading="lazy"><img class="thumb" src="${theirImg(c)}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>
     <div class="cinfo">
-      ${isSoc(c) ? socLine(c) : `<div class="l1"><b>${esc(c.site)}</b>${done || c.status === 'later' ? tagFor(c) : ''}${embedTag(c)}${sigIcons(c)}${c.sweep ? '<span class="tag blue" title="Found by reading this site\'s own list of pictures (a sweep), not by a search site">Found by sweep</span>' : ''}${typeof ppRowTags === 'function' ? ppRowTags(c) : ''}${c.status === 'removed' && c.removedBy === 'weakmaybe' ? '<span class="tag grey" title="A Maybe under 50% that nobody answered for 30 days. Put back if it is a copy.">Weak Maybe, never answered</span>' : ''}</div>`}
+      ${isSoc(c) ? socLine(c) : `<div class="l1"><b>${esc(c.site)}</b>${popTag(c)}${done || c.status === 'later' ? tagFor(c) : ''}${embedTag(c)}${sigIcons(c)}${c.sweep ? '<span class="tag blue" title="Found by reading this site\'s own list of pictures (a sweep), not by a search site">Found by sweep</span>' : ''}${typeof ppRowTags === 'function' ? ppRowTags(c) : ''}${c.status === 'removed' && c.removedBy === 'weakmaybe' ? '<span class="tag grey" title="A Maybe under 50% that nobody answered for 30 days. Put back if it is a copy.">Weak Maybe, never answered</span>' : ''}</div>`}
       <a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink" title="Open this page in a new tab"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>${c.alts && c.alts.length ? `<span class="tag grey altn" title="${esc(c.alts.join('\n'))}" data-gloss="Same page">+${c.alts.length} ${c.alts.length === 1 ? 'address' : 'addresses'}</span>` : ''}
       <div class="l3">${esc(c.photoName)}<span class="l3x">${isSoc(c) && c.acct ? ' · ' + esc(c.site) : ''}${c.pct >= 0 && c.pct != null ? ` · <b class="num" data-gloss="Lines up">${c.pct}%</b> lines up` : ''} · ${esc(FC.USE[c.use][0])}${c.country ? ' · ' + esc(c.country) : ''} · found ${shortDate(c.firstSeen).toLowerCase()}</span></div>
     </div>
@@ -740,6 +767,14 @@ function copyRow(c) {
 }
 // 4.56.1: Country for .com and other sites whose ending says nothing. A few sites at a time are read
 // in the background while Copies found is open; the list redraws when some got a country.
+// 4.58: the site popularity list and the known bad site lists are downloaded quietly while
+// Copies found is open: popularity about once a week, bad sites about once a day.
+function popSoon() {
+  if (navigator.webdriver) return;   // the automatic checks never download the real lists
+  const redraw = r => { if (r && r.n) { dropFC(); if (state.shown === 'found') render(true); } };
+  if (typeof PP_POP !== 'undefined' && !PP_POP.busy()) PP_POP.refresh().then(redraw).catch(() => {});
+  if (typeof PP_BAD !== 'undefined' && !PP_BAD.busy()) PP_BAD.refresh().then(redraw).catch(() => {});
+}
 let CC_BUSY = false;
 function fillCountriesSoon() {
   if (CC_BUSY || !FCD || !FC.fillCountries) return;
@@ -757,6 +792,7 @@ V.found = async () => {
   const me = RENDER_N;      // a newer redraw started meanwhile: this one is thrown away, so it must not change LIST
   await loadFC();
   fillCountriesSoon();
+  popSoon();
   if (!state.fCols || !state.dView) {
     const pr = await api.storage.local.get(['fcCols', 'fcDView']).catch(() => ({}));
     state.fCols = Object.assign({ pct: true, client: true, dmg: true, use: true, country: true, found: true }, pr.fcCols || {});
@@ -779,7 +815,7 @@ V.found = async () => {
   const social = state.fTab === 'social';
   if (!social && (state.fView === 'account' || state.sView === 'accounts')) { state.fView = 'client'; state.sView = 'copies'; }
   if (social && state.fView === 'owner') state.fView = 'account';
-  const sorters = { act: (a, b) => actScore(b) - actScore(a), pct: (a, b) => (b.pct || 0) - (a.pct || 0), risk: (a, b) => ({ sus: 2, watch: 1, ok: 0 }[b.risk.level] - { sus: 2, watch: 1, ok: 0 }[a.risk.level]), newest: (a, b) => (b.firstSeen || '').localeCompare(a.firstSeen || ''), fol: (a, b) => (folOf(b) ?? -1) - (folOf(a) ?? -1) || actScore(b) - actScore(a) };
+  const sorters = { act: (a, b) => actScore(b) - actScore(a), pct: (a, b) => (b.pct || 0) - (a.pct || 0), risk: (a, b) => ({ sus: 2, watch: 1, ok: 0 }[b.risk.level] - { sus: 2, watch: 1, ok: 0 }[a.risk.level]), newest: (a, b) => (b.firstSeen || '').localeCompare(a.firstSeen || ''), pop: (a, b) => (b.popL - a.popL) || ((a.pop || 9e9) - (b.pop || 9e9)) || actScore(b) - actScore(a), fol: (a, b) => (folOf(b) ?? -1) - (folOf(a) ?? -1) || actScore(b) - actScore(a) };
   // 5d (Ben): copies on a site whose company is "Not a viable entity" go to the bottom.
   const low = c => (typeof ppEntLow === 'function' && ppEntLow(c) ? 1 : 0), srt = sorters[state.fSort] || sorters.act;
   const rows = all.filter(c => passMain(c) && passStatus(c)).sort((a, b) => low(a) - low(b) || srt(a, b));
@@ -879,6 +915,8 @@ V.found = async () => {
   if (rows.length > shown) body += `<div class="more-row"><button class="btn" data-act="fmore">Show ${Math.min(250, rows.length - shown)} more (${rows.length - shown} not shown)</button></div>`;
   const active = [['fClient', state.fClient], ['fUse', state.fUse === 'Any' ? 'Any' : FC.USE[state.fUse][0]], ['fRisk', state.fRisk === 'Any' ? 'Any' : RISK[state.fRisk][0]], ['fCredit', state.fCredit === 'Any' ? 'Any' : CREDIT[state.fCredit]],
     ['fYear', state.fYear === 'Any' ? 'Any' : 'Year ' + state.fYear], ['fQuarter', state.fQuarter === 'Any' ? 'Any' : 'Quarter ' + state.fQuarter]].filter(([, v]) => v !== 'Any');
+  if (state.fPop && state.fPop !== 'Any') active.push(['fPop', POP_LABEL[state.fPop] || 'Site popularity']);
+  if (state.fBad) active.push(['fBad', 'Known bad sites']);
   if (state.fShop) active.push(['fShop', 'Selling something']);
   if (state.fRepeat) active.push(['fRepeat', 'Repeat offenders']);
   if (state.fStrong) active.push(['fStrong', 'Strong claims']);
@@ -935,12 +973,14 @@ V.found = async () => {
       ${dd('fMatch', 'Match', [['any', 'All'], ['exact', 'Exact', 'The same photo, 95% or more lines up'], ['strong', 'Strong', '80% or more lines up'], ['loose', 'Loose', 'Less, or only a few details match']], state.fMatch, false, 'any')}
       <button class="ddb${state.showFilters ? ' on' : ''}${active.length ? ' chosen' : ''}" data-act="togglefilters" aria-expanded="${state.showFilters}">＋ More filters${active.length ? ` <b class="num">${active.length}</b>` : ''}</button>
       <span style="flex:1"></span>
-      ${dd('fSort', 'Sort', [['act', 'Best to act on'], ['pct', 'Lines up most'], ...(social ? [['fol', 'Most followers']] : [['risk', 'Most suspicious']]), ['newest', 'Newest']], state.fSort, true)}
+      ${dd('fSort', 'Sort', [['act', 'Best to act on'], ['pct', 'Lines up most'], ...(social ? [['fol', 'Most followers']] : [['risk', 'Most suspicious'], ['pop', 'Most popular site', 'Biggest websites first (Tranco top 1 million list)']]), ['newest', 'Newest']], state.fSort, true)}
       <details class="ddw right" data-dd="cols"><summary class="ddb gear" aria-label="Columns" title="Pick the columns">${ic('settings', 16)}</summary><div class="ddm">${FCOLS.map(([k, l]) => `<label><input type="checkbox" data-act="fcol" data-v="${k}" ${state.fCols[k] ? 'checked' : ''}> ${esc(l)}</label>`).join('')}<span class="faint" style="font-size:12px;padding:4px 10px 6px">Narrow windows show fewer columns.</span></div></details>
     </div>
     <div class="qfrow" aria-label="Quick filters"><span class="qflabel">Quick filters</span>
       ${qf('Found today', newL.filter(c => new Date(c.firstSeen).toDateString() === new Date().toDateString()).length, state.fWhen === 'today', 'ftoday', '1', 'accent')}
       ${social ? qf('Known stolen accounts', newL.filter(c => c.repeat > 0).length, state.fRepeat, 'qtoggle', 'repeat', 'bad') : qf('Suspicious sites', newL.filter(c => c.risk.level === 'sus').length, state.fRisk === 'sus', 'qtoggle', 'sus', 'bad')}
+      ${!social && newL.some(c => c.popL >= 3) ? qf('Big sites (top 10K)', newL.filter(c => c.popL >= 3).length, state.fPop === '10k', 'qtoggle', 'bigsite', 'warn') : ''}
+      ${!social && newL.some(c => c.bad) ? qf('Known bad sites', newL.filter(c => c.bad).length, state.fBad, 'qtoggle', 'badsite', 'bad') : ''}
       ${qf('Published in the last 3 months', newL.filter(fresh).length, state.fFresh, 'qtoggle', 'fresh', 'ok')}
       ${!social && spamN ? qf('Spam blogs', spamN, state.fSpam === 'only', 'qtoggle', 'spam', 'faint') : ''}
       ${RS_STOLEN.items.length ? qf('Stolen before', all.filter(c => c.known && c.status !== 'removed' && !ruleHidden(c)).length, state.fKnown === 'only', 'qtoggle', 'known', 'bad') : ''}
@@ -970,6 +1010,7 @@ V.found = async () => {
       ${sel('fQuarter', 'Quarter', [['Any', 'Any'], [1, 'Q1'], [2, 'Q2'], [3, 'Q3'], [4, 'Q4']], state.fQuarter)}
       ${sel('fUse', 'Used as', [['Any', 'Any'], ...Object.entries(FC.USE).map(([k, v]) => [k, v[0]])], state.fUse)}
       ${sel('fRisk', 'Site check', [['Any', 'Any'], ['ok', 'Looks normal'], ['watch', 'Worth a look'], ['sus', 'Suspicious']], state.fRisk)}
+      ${social ? '' : sel('fPop', 'Site popularity', [['Any', 'Any'], ['1k', 'Top 1K (biggest)'], ['10k', 'Top 10K or bigger'], ['100k', 'Top 100K or bigger'], ['1m', 'Top 1M or bigger'], ['small', 'Small sites only']], state.fPop)}
       ${sel('fCredit', 'Credit', [['Any', 'Any'], ['kept', 'Credits your client'], ['removed', 'Credit removed'], ['', 'Not checked yet']], state.fCredit)}
       <div class="countries">
         <span style="font-weight:600">Countries</span>
@@ -1387,10 +1428,10 @@ Object.assign(ACTS, {
   qcredit: v => { state.fCredit = v; state.fFilter = 'All'; render(true); },
   togglefilters: () => { state.showFilters = !state.showFilters; render(true); },
   unfilter: v => {
-    if (v === 'all') Object.assign(state, { fWhen: 'any', fMatch: 'any', fVer: 'Any', fFol: 'Any', fType: 'Any', fCountry: 'Any', fAcct: '', fPlat: 'Any', fFresh: false, fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fStrong: false, fVia: '', fKnown: '', fSpam: 'hide', fOwner: '', fYear: 'Any', fQuarter: 'Any', fPhoto: '', fq: '' });
+    if (v === 'all') Object.assign(state, { fWhen: 'any', fMatch: 'any', fVer: 'Any', fFol: 'Any', fType: 'Any', fCountry: 'Any', fAcct: '', fPlat: 'Any', fFresh: false, fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fStrong: false, fVia: '', fKnown: '', fSpam: 'hide', fOwner: '', fPop: 'Any', fBad: false, fYear: 'Any', fQuarter: 'Any', fPhoto: '', fq: '' });
     else if (v === 'fWhen' || v === 'fMatch') state[v] = 'any';
     else if (v === 'fSpam') state.fSpam = 'hide';
-    else state[v] = v === 'fShop' || v === 'fRepeat' || v === 'fFresh' || v === 'fStrong' ? false : ['fOwner', 'fPhoto', 'fq', 'fAcct', 'fKnown', 'fVia'].includes(v) ? '' : 'Any';
+    else state[v] = v === 'fShop' || v === 'fBad' || v === 'fRepeat' || v === 'fFresh' || v === 'fStrong' ? false : ['fOwner', 'fPhoto', 'fq', 'fAcct', 'fKnown', 'fVia'].includes(v) ? '' : 'Any';
     render(true);
   },
   // Group by, Found, Match: the little switches above the list.
@@ -1402,6 +1443,8 @@ Object.assign(ACTS, {
     else if (v === 'knownhide') state.fKnown = state.fKnown === 'hide' ? '' : 'hide';
     else if (v === 'spam') state.fSpam = state.fSpam === 'only' ? 'hide' : 'only';
     else if (v === 'sus') state.fRisk = state.fRisk === 'sus' ? 'Any' : 'sus';
+    else if (v === 'bigsite') state.fPop = state.fPop === '10k' ? 'Any' : '10k';
+    else if (v === 'badsite') state.fBad = !state.fBad;
     else if (v === 'fresh') { state.fFresh = !state.fFresh; if (state.fFresh) state.fFilter = 'New'; }
     else if (v === 'shop') state.fShop = !state.fShop;
     else if (v === 'credit') state.fCredit = state.fCredit === 'removed' ? 'Any' : 'removed';
@@ -1637,8 +1680,8 @@ Object.assign(ACTS, {
   gowho: v => { const c = FCD.copies.find(x => x.id === v); if (c) { state.who = { site: c.site, url: c.url, copy: c.id }; location.hash = 'who'; } },
   fcsv: async () => {
     await loadFC();
-    const head = ['Status', 'Client', 'Photo', 'Site', 'Page', 'Lines up %', 'Match', 'Used as', 'Site check', 'Country', 'First seen', 'Last seen', 'Times seen', 'Found by'];
-    const rows = FCD.copies.map(c => [STATUS[c.status][0], c.clientName, c.photoName, c.site, c.url, c.pct == null ? '' : c.pct, c.match, FC.USE[c.use][0], RISK[c.risk.level][0], c.country || '', (c.firstSeen || '').slice(0, 10), (c.lastSeen || '').slice(0, 10), c.times || 1, c.by || '']);
+    const head = ['Status', 'Client', 'Photo', 'Site', 'Page', 'Lines up %', 'Match', 'Used as', 'Site check', 'Country', 'Site popularity', 'World rank', 'Known bad site', 'First seen', 'Last seen', 'Times seen', 'Found by'];
+    const rows = FCD.copies.map(c => [STATUS[c.status][0], c.clientName, c.photoName, c.site, c.url, c.pct == null ? '' : c.pct, c.match, FC.USE[c.use][0], RISK[c.risk.level][0], c.country || '', c.pop == null || typeof PP_POP === 'undefined' ? '' : PP_POP.tier(c.pop).label, c.pop || '', c.bad ? c.bad.label : '', (c.firstSeen || '').slice(0, 10), (c.lastSeen || '').slice(0, 10), c.times || 1, c.by || '']);
     // Spreadsheet programs run cells that start with = + - @ as formulas, so those get a ' first.
     const q = v => { let t = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; };
     const a = document.createElement('a');

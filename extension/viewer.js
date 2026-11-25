@@ -607,27 +607,6 @@ async function start() {
   $('detailsBox').hidden = false;
 
   $('pack').disabled = false;
-  whoOffer(rec, async list => {
-    // Capture each page, turn it into a PDF, add it to the pack and seal the pack again.
-    $('pack').disabled = true;
-    try {
-      const r = await api.runtime.sendMessage({ type: 'captureWho', list: list.map(w => [w.kind, w.url]) });
-      if (!r || !r.ok) throw new Error((r && r.error) || 'no answer');
-      for (const g of r.pages) {
-        const w = list.find(x => x.url === g.url) || { label: g.kind, kind: g.kind };
-        if (!g.id) { w.error = g.error; continue; }
-        const wr = await PP_DB.get(g.id);
-        if (!wr) { w.error = 'not saved'; continue; }
-        const bytes = await bytesOf(await whoPdf(wr));
-        const name = 'who/' + w.kind + '.pdf';
-        files.splice(files.findIndex(f => f.name === 'VERIFY-THIS-PACK.html'), 0, { name, bytes, url: wr.url });
-        who.push({ label: w.label, url: wr.url, name, time: wr.time });
-        PP_DB.del(g.id).catch(() => {});
-      }
-      if (who.length) { await seal(); showDetails(); }
-      return list;
-    } finally { $('pack').disabled = false; }
-  });
   pill.className = 'pill';
   pill.textContent = '\u2714 Captured';
   const savePack = async auto => {
@@ -747,70 +726,6 @@ async function readyToSave() {
 }
 
 // ---------- 4.15: is the client's photo on this capture? (Ben's idea 2) ----------
-// 4.45 (Ben's pick): who's behind it. The pages that show who posted the copy: the account's
-// profile on social sites; the About, Contact and Privacy pages on websites (found from the links
-// on the captured page). [{ kind, label, url, on }]
-function whoLinks(rec) {
-  const out = [];
-  try {
-    const a = typeof PP_SOCIAL !== 'undefined' ? PP_SOCIAL.fromUrl(rec.url) : null;
-    if (a && a.url && a.url.replace(/\/$/, '') !== rec.url.replace(/\/$/, '')) return [{ kind: 'profile', label: 'Profile page of ' + a.handle, url: a.url, on: true }];
-    if (a) return [];
-  } catch (e) { /* not a social post */ }
-  let home;
-  try { home = new URL(rec.url); } catch (e) { return out; }
-  const doc = new DOMParser().parseFromString(String(rec.html || '').replace(/\son([a-z]+\s*=)/gi, ' data-pp-on$1'), 'text/html');
-  const KINDS = [['about', 'About page', /\b(about|about us|who we are|our story|impressum|imprint|über uns|a propos|quienes somos)\b/i, /\/(about|about-us|who-we-are|impressum|imprint)\b/i],
-    ['contact', 'Contact page', /\b(contact|contact us|get in touch|kontakt|contacto)\b/i, /\/(contact|contact-us|kontakt|contacto)\b/i],
-    ['privacy', 'Privacy policy', /\b(privacy|datenschutz|privacidad)\b/i, /\/(privacy|privacy-policy|datenschutz)\b/i]];
-  for (const [kind, label, txt, path] of KINDS) {
-    let best = null;
-    for (const el of doc.querySelectorAll('a[href]')) {
-      let u; try { u = new URL(el.getAttribute('href'), rec.url); } catch (e) { continue; }
-      if (!/^https?:$/.test(u.protocol) || u.hostname.replace(/^www\./, '') !== home.hostname.replace(/^www\./, '')) continue;
-      if (path.test(u.pathname) || txt.test((el.textContent || '').trim().slice(0, 40))) { best = u.href.split('#')[0]; if (path.test(u.pathname)) break; }
-    }
-    if (best && best !== rec.url) out.push({ kind, label, url: best, on: kind !== 'privacy' });
-  }
-  return out;
-}
-function whoOffer(rec, add) {
-  const list = whoLinks(rec);
-  if (!list.length || params.get('auto')) return;
-  $('whoBox').hidden = false;
-  $('whoList').innerHTML = '';
-  for (const w of list) {
-    const l = document.createElement('label'); l.className = 'whorow';
-    const c = document.createElement('input'); c.type = 'checkbox'; c.checked = w.on; c.onchange = () => { w.on = c.checked; };
-    const t = document.createElement('span'); t.textContent = w.label; t.title = w.url;
-    l.append(c, ' ', t); $('whoList').append(l);
-  }
-  $('whoAdd').onclick = async () => {
-    const pick = list.filter(w => w.on);
-    if (!pick.length) return;
-    $('whoAdd').disabled = true; $('whoAdd').textContent = 'Capturing ' + pick.length + (pick.length === 1 ? ' page…' : ' pages…');
-    try {
-      const done = await add(pick);
-      const ok = done.filter(w => !w.error), bad = done.filter(w => w.error);
-      $('whoNote').hidden = false;
-      $('whoNote').textContent = (ok.length ? 'Added to this pack: ' + ok.map(w => w.label).join(', ') + '. Fingerprints and timestamps were made again for the whole pack.' : '') + (bad.length ? ' Could not capture: ' + bad.map(w => w.label).join(', ') + '.' : '');
-      $('whoAdd').textContent = ok.length ? '✔ Added' : 'Try again';
-      $('whoAdd').disabled = !!ok.length;
-      if (typeof PP_STATS !== 'undefined') PP_STATS.add('cap.who', ok.length);
-    } catch (e) { $('whoNote').hidden = false; $('whoNote').textContent = 'Could not capture them: ' + e.message; $('whoAdd').textContent = 'Try again'; $('whoAdd').disabled = false; }
-  };
-}
-// A "who's behind it" capture as its own PDF (same look as the main capture).
-async function whoPdf(wr) {
-  for (const part of [wr.main, ...wr.sections]) for (const t of part.tiles) t.bmp = await loadBitmap(t.src);
-  const s = wr.main.tiles[0].bmp.width / wr.innerWidth, plan = layout(wr, s);
-  const pageH = Math.round(plan.W * 1.4142), pages = [];
-  for (let y0 = 0; y0 < plan.H; y0 += pageH) {
-    const h = Math.min(pageH, plan.H - y0);
-    pages.push({ jpeg: await bytesOf(await toBlob(renderSlice(plan, y0, h), 'image/jpeg', 0.92)), width: plan.W, height: h });
-  }
-  return makePdf(pages, { title: 'PageProof capture of ' + new URL(wr.url).hostname, subject: wr.url + ' captured ' + wr.time });
-}
 async function findOurs(rec) {
   const api = globalThis.browser || globalThis.chrome;
   const $ = id => document.getElementById(id);
