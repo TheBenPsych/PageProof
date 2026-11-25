@@ -98,61 +98,105 @@ const PP_WATCH = (() => {
     due.sort((a, b) => a.t - b.t || a.pri - b.pri);
     return due[0] || null;
   }
-  // Google's address for a text search. Tests point it at a local page.
-  const searchUrl = (q, first) => (globalThis.PP_CREDIT_URL || (q2 => 'https://www.google.com/search?q=' + encodeURIComponent(q2) + (first ? '' : '&tbs=qdr:m')))(q, first);
-  // Runs INSIDE the Google tab: the result links, or a robot check.
-  function readResultsInTab() {
+  // The text search engines (Ben, 2026-11-25: Google and Bing; a link both find is read once).
+  const ENGINES = ['google', 'bing'];
+  const ENG_NAME = { google: 'Google', bing: 'Bing' };
+  // Each engine's address for a text search (newer than a month after the first search). Tests point it at a local page.
+  const searchUrl = (q, first, eng) => (globalThis.PP_CREDIT_URL || ((q2, f, e) => e === 'bing'
+    ? 'https://www.bing.com/search?q=' + encodeURIComponent(q2) + (f ? '' : '&filters=ex1%3a%22ez3%22')
+    : 'https://www.google.com/search?q=' + encodeURIComponent(q2) + (f ? '' : '&tbs=qdr:m')))(q, first, eng);
+  // Runs INSIDE the search tab: the result links, or a robot check.
+  function readResultsInTab(eng) {
     const body = (document.body ? document.body.innerText : '').slice(0, 4000);
-    if (/\/sorry\//.test(location.pathname) || /unusual traffic|not a robot|captcha/i.test(body) || document.querySelector('form#captcha-form, #recaptcha, iframe[src*="recaptcha"]')) return { robot: true };
+    if (/\/sorry\/|\/challenge/.test(location.pathname) || /unusual traffic|not a robot|captcha|verify you are (a )?human/i.test(body) || document.querySelector('form#captcha-form, #recaptcha, iframe[src*="recaptcha"], iframe[src*="challenges.cloudflare"], #b_captcha')) return { robot: true };
     const out = [];
-    for (const h of document.querySelectorAll('#search a h3, #rso a h3, a h3')) {
-      const a = h.closest('a');
-      const u = a && a.href;
-      if (!u || !/^https?:/.test(u) || /(^|\.)google\./.test(new URL(u).hostname) || out.some(x => x.url === u)) continue;
-      out.push({ url: u, title: h.textContent.trim().slice(0, 160) });
-      if (out.length >= 20) break;
-    }
+    const push = (u, title) => {
+      if (!u || !/^https?:/.test(u) || out.some(x => x.url === u)) return;
+      try { if (/(^|\.)(google|bing|microsoft|msn)\./.test(new URL(u).hostname)) return; } catch (e) { return; }
+      out.push({ url: u, title: String(title || '').trim().slice(0, 160) });
+    };
+    // Bing wraps links in bing.com/ck/a?...&u=a1<base64>; the real address is inside.
+    const unwrap = u => {
+      try {
+        const x = new URL(u);
+        if (/bing\.com$/.test(x.hostname) && x.pathname.startsWith('/ck/')) {
+          const v = (x.searchParams.get('u') || '').replace(/^a1/, '').replace(/-/g, '+').replace(/_/g, '/');
+          return atob(v + '==='.slice((v.length + 3) % 4));
+        }
+      } catch (e) { /* keep it */ }
+      return u;
+    };
+    if (eng === 'bing') for (const a of document.querySelectorAll('#b_results li.b_algo h2 a, li.b_algo h2 a')) { push(unwrap(a.href), a.textContent); if (out.length >= 20) break; }
+    else for (const h of document.querySelectorAll('#search a h3, #rso a h3, a h3')) { const a = h.closest('a'); push(a && a.href, h.textContent); if (out.length >= 20) break; }
     return { links: out };
   }
-  async function googleResting() {
+  async function engineResting(eng) {
     const r = (await api.storage.local.get('fcRest').catch(() => ({}))).fcRest || {};
-    return (r.google || 0) > Date.now();
+    return (r[eng] || 0) > Date.now();
   }
-  async function restGoogle() {
+  // Every engine resting after a robot check: nothing to search with.
+  async function allResting() { for (const e of ENGINES) if (!(await engineResting(e))) return false; return true; }
+  async function restEngine(eng) {
     const r = (await api.storage.local.get('fcRest').catch(() => ({}))).fcRest || {};
-    r.google = Date.now() + 3600000;
+    r[eng] = Date.now() + 3600000;
     await api.storage.local.set({ fcRest: r });
-    stat('credit.robot');
+    stat('credit.robot'); stat('credit.robot.' + eng);
   }
-  // One Google search: its links go on the queue of pages to read.
+  // A link the same page under two spellings: compare without #, tracking bits and the end slash.
+  const linkKey = u => { try { const x = new URL(u); x.hash = ''; for (const k of [...x.searchParams.keys()]) if (/^(utm_|fbclid|gclid|ocid|msclkid)/i.test(k)) x.searchParams.delete(k); return (x.hostname.replace(/^www\./, '') + x.pathname.replace(/\/+$/, '') + (x.search || '')).toLowerCase(); } catch (e) { return u; } };
+  async function readEngine(eng, words, first) {
+    let tab, res = null;
+    try {
+      tab = await PP_SOCIAL.openQuiet(searchUrl(words, first, eng));
+      await new Promise(r => setTimeout(r, 1200));
+      const [r] = await api.scripting.executeScript({ target: { tabId: tab.id }, func: readResultsInTab, args: [eng] });
+      res = r && r.result;
+    } catch (e) { res = null; } finally { if (tab) PP_SOCIAL.closeQuiet(tab); }
+    return res;
+  }
+  // One wording on Google and Bing: the links go on the queue of pages to read, each page once.
   async function creditSearch(w, s) {
     if (typeof PP_SOCIAL === 'undefined' || !PP_SOCIAL.openQuiet || !api.scripting) return { why: 'no tabs here' };
     const first = !s.done[w.key];
-    let tab, res = null;
-    try {
-      tab = await PP_SOCIAL.openQuiet(searchUrl(w.words, first));
-      await new Promise(r => setTimeout(r, 1200));
-      const [r] = await api.scripting.executeScript({ target: { tabId: tab.id }, func: readResultsInTab });
-      res = r && r.result;
-    } catch (e) { res = null; } finally { if (tab) PP_SOCIAL.closeQuiet(tab); }
-    if (!res) return { why: 'Google could not be read' };
-    if (res.robot) { await restGoogle(); return { robot: true }; }
+    const by = new Map(), per = {}, used = [];
+    let robots = 0, unread = 0;
+    for (const eng of ENGINES) {
+      if (await engineResting(eng)) continue;
+      used.push(eng);
+      const res = await readEngine(eng, w.words, first);
+      if (!res) { unread++; stat('credit.fail.' + eng); continue; }
+      if (res.robot) { robots++; await restEngine(eng); continue; }
+      per[eng] = (res.links || []).length;
+      stat('credit.search.' + eng); stat('credit.links.' + eng, per[eng]);
+      for (const l of res.links || []) {
+        const k = linkKey(l.url);
+        const had = by.get(k);
+        if (had) { if (!had.engines.includes(eng)) had.engines.push(eng); } else by.set(k, { ...l, engines: [eng] });
+      }
+    }
+    if (!used.length || robots + unread === used.length) {
+      if (robots) return { robot: true, why: robots === used.length ? '' : 'the search sites could not be read' };
+      return { why: used.length ? 'the search sites could not be read' : 'every search site is resting after a robot check' };
+    }
     if (typeof RS_LISTS !== 'undefined' && Date.now() - LISTS_AT > 10 * 60000) { try { await RS_LISTS.load(); LISTS_AT = Date.now(); } catch (e) { /* use what is loaded */ } }
     const cl = await FC.DB.get('clients', w.client);
     const licensed = (cl && cl.licensed) || [];
     const own = ((typeof FC_RULES !== 'undefined' ? await FC_RULES.ownSites() : {})[w.client]) || [];
-    let added = 0;
-    for (const l of res.links || []) {
+    const seenKeys = new Set([...Object.keys(s.seen).map(linkKey), ...s.queue.map(q => linkKey(q.url))]);
+    let added = 0, both = 0;
+    for (const l of by.values()) {
+      if (l.engines.length > 1) both++;
       const site = hostOf(l.url);
-      if (!site || s.seen[l.url] || s.queue.some(q => q.url === l.url)) continue;
+      if (!site || seenKeys.has(linkKey(l.url))) continue;
       const base = FC.baseOf(site);
       if (skipSite(site, l.url) || licensed.some(x => FC.baseOf(x) === base) || own.some(x => FC.baseOf(x) === base)) continue;
-      s.queue.push({ url: l.url, title: l.title, client: w.client, words: w.words }); added++;
+      s.queue.push({ url: l.url, title: l.title, client: w.client, words: w.words, engines: l.engines }); added++;
+      seenKeys.add(linkKey(l.url));
     }
     s.done[w.key] = Date.now();
-    s.log.push({ at: new Date().toISOString(), client: w.client, words: w.words, links: (res.links || []).length, added });
-    stat('credit.search');
-    return { added, links: (res.links || []).length };
+    s.log.push({ at: new Date().toISOString(), client: w.client, words: w.words, links: by.size, added, per, both });
+    stat('credit.search'); if (both) stat('credit.links.both', both);
+    return { added, links: by.size, per, both, robot: robots > 0 };
   }
   // One page from the queue: its pictures compared with that client's photos.
   async function creditPage(q, s) {
@@ -187,7 +231,7 @@ const PP_WATCH = (() => {
     const s = await creditState();
     if (s.queue.length) { const q = s.queue.shift(); await putCreditState(s); await creditPage(q, s); await putCreditState(s); return true; }
     if (!opts.force && Date.now() - (s.lastSearch || 0) < cfg.every * 60000) return false;
-    if (await googleResting()) return false;
+    if (await allResting()) return false;
     const w = opts.words ? { client: opts.client, words: opts.words, key: opts.client + '\n' + opts.words } : await nextWording(cfg, s);
     if (!w) return false;
     s.lastSearch = Date.now();
@@ -211,21 +255,24 @@ const PP_WATCH = (() => {
     const cfg = await creditCfg();
     const words = wordsFor(cfg, client);
     stat('credit.now');
-    const r = RUN = { client, start: Date.now(), beat: Date.now(), phase: 'search', words: words.length, wDone: 0, now: '', links: 0, pages: 0, read: 0, found: 0, known: 0, failed: 0, nomatch: 0, end: 0, why: '' };
+    const r = RUN = { client, start: Date.now(), beat: Date.now(), phase: 'search', words: words.length, wDone: 0, now: '', links: 0, pages: 0, read: 0, found: 0, known: 0, failed: 0, nomatch: 0, per: {}, both: 0, end: 0, why: '' };
     const save = async () => { r.beat = Date.now(); await api.storage.local.set({ [RUN_KEY]: { ...r } }).catch(() => {}); };
     await save();
     const tick = setInterval(save, 20000);
     try {
       for (const w of words) {
         if (typeof PP_SOCIAL !== 'undefined' && PP_SOCIAL.halt && PP_SOCIAL.halt.on && !(await api.storage.local.get('fcPause')).fcPause) PP_SOCIAL.halt.on = false;
-        if (await googleResting()) { r.why = 'robot'; break; }
+        if (await allResting()) { r.why = 'robot'; break; }
         r.now = w; await save();
         const st = await creditState();
         const res = await creditSearch({ client, words: w, key: client + '\n' + w }, st);
         await putCreditState(st);
         r.wDone++;
-        if (res && res.robot) { r.why = 'robot'; break; }
+        if (res && res.robot && !res.links) { r.why = 'robot'; break; }
+        if (res && res.robot) r.robotOne = true;
         if (res && res.why) { r.why = res.why; }
+        if (res && res.per) for (const [e, n] of Object.entries(res.per)) r.per[e] = (r.per[e] || 0) + n;
+        r.both += (res && res.both) || 0;
         r.links += (res && res.links) || 0;
         r.pages += (res && res.added) || 0;
         await save();
@@ -442,6 +489,6 @@ const PP_WATCH = (() => {
     } finally { busy = false; }
   }
 
-  return { DEFAULT_WORDS, creditRun, runInfo, runActive, live: () => RUN, creditCfg, setCreditCfg, creditState, wordsFor, creditStep, creditNow, readResultsInTab, readFeed, findFeed, watchList, watchAdd, watchOff, watchNow, watchDrop, watchStep, step, nearest, looks, dropLooks: () => { LOOKS = null; } };
+  return { DEFAULT_WORDS, ENGINES, ENG_NAME, creditRun, runInfo, runActive, live: () => RUN, creditCfg, setCreditCfg, creditState, wordsFor, creditStep, creditNow, readResultsInTab, readFeed, findFeed, watchList, watchAdd, watchOff, watchNow, watchDrop, watchStep, step, nearest, looks, dropLooks: () => { LOOKS = null; } };
 })();
 if (typeof module !== 'undefined') module.exports = PP_WATCH;

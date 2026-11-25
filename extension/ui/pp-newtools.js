@@ -16,6 +16,7 @@ async function ntKeepNote() {
 }
 
 // ================================================================ 1. Credit search
+const ntPer = per => { const p = Object.entries(per || {}); return p.length ? p.map(([e, n]) => (PP_WATCH.ENG_NAME[e] || e) + ' listed ' + n).join(', ') : 'Nothing listed'; };
 // "Search now" runs here, on this page, with its own progress card (Ben, 2026-11-25).
 function ntRunCard(r) {
   if (!r) return '';
@@ -24,10 +25,10 @@ function ntRunCard(r) {
   const at = (r.wDone || 0) + (r.read || 0);
   const pct = done ? 100 : total ? Math.max(3, Math.round(at / total * 100)) : 3;
   const step = done ? '' : r.phase === 'search'
-    ? `Searching Google for wording ${Math.min((r.wDone || 0) + 1, r.words)} of ${r.words}: <span class="mono">${esc(r.now || '')}</span>`
+    ? `Searching Google and Bing for wording ${Math.min((r.wDone || 0) + 1, r.words)} of ${r.words}: <span class="mono">${esc(r.now || '')}</span>`
     : `Reading credited page ${Math.min((r.read || 0) + 1, r.pages || 1)} of ${r.pages || 0}: <span class="mono" style="overflow-wrap:anywhere">${esc(r.now || '')}</span>`;
   const mins = Math.max(1, Math.round(((r.end || Date.now()) - r.start) / 60000));
-  const why = r.why === 'robot' ? '<div class="banner warn" style="padding:10px 12px"><span>Google asked for a robot check, so this stopped. Google rests for an hour. PageProof never tries to get past one.</span></div>'
+  const why = r.why === 'robot' ? '<div class="banner warn" style="padding:10px 12px"><span>Google and Bing both asked for a robot check, so this stopped. They rest for an hour. PageProof never tries to get past one.</span></div>'
     : r.why ? `<div class="banner warn" style="padding:10px 12px"><span>Something went wrong: ${esc(r.why)}.</span></div>` : '';
   return ntCard(done ? `Search for ${esc(r.client)} finished` : `Searching ${esc(r.client)}'s credit lines`, `
     <div class="row" style="gap:10px;flex-wrap:nowrap"><span class="bar" style="flex:1;height:10px"><i style="width:${pct}%${done ? ';background:var(--ok)' : ''}"></i></span><b class="num">${pct}%</b></div>
@@ -37,7 +38,7 @@ function ntRunCard(r) {
       <div class="clue"><b>${r.read || 0} of ${r.pages || 0}</b><span class="muted">new pages read</span></div>
       <div class="clue"><b>${r.found || 0}</b><span class="muted">copies found</span></div>
       <div class="clue"><b>${r.nomatch || 0}</b><span class="muted">credit but none of their photos</span></div></div>
-    ${done ? `<p class="faint" style="margin:0;font-size:12.5px">Took about ${plural(mins, 'minute')}. Google listed ${plural(r.links || 0, 'page')}; pages read before were skipped.${r.known ? ' ' + plural(r.known, 'page') + ' showed a copy already in Copies found.' : ''}${r.failed ? ' ' + plural(r.failed, 'page') + ' would not open.' : ''}</p>` : '<p class="faint" style="margin:0;font-size:12.5px">You can use other pages while this runs. Keep this PageProof tab open.</p>'}
+    ${done ? `<p class="faint" style="margin:0;font-size:12.5px">Took about ${plural(mins, 'minute')}. ${ntPer(r.per)}${r.both ? ', ' + r.both + ' found by both (read once)' : ''}; pages read before were skipped.${r.robotOne ? ' One search site asked for a robot check and rests for an hour; the other carried on.' : ''}${r.known ? ' ' + plural(r.known, 'page') + ' showed a copy already in Copies found.' : ''}${r.failed ? ' ' + plural(r.failed, 'page') + ' would not open.' : ''}</p>` : '<p class="faint" style="margin:0;font-size:12.5px">You can use other pages while this runs. Keep this PageProof tab open.</p>'}
     ${why}`, done && r.found ? `<a class="btn primary" href="#found?via=credit">See the ${plural(r.found, 'copy', 'copies')}</a>` : '');
 }
 let NT_RUN_T = null;
@@ -54,16 +55,17 @@ function ntRunWatch() {
 }
 V.credit = async () => {
   const [cfg, s, clients] = [await PP_WATCH.creditCfg(), await PP_WATCH.creditState(), (await FC.DB.all('clients')).filter(c => c.searching !== false).sort((a, b) => (b.priority ? 1 : 0) - (a.priority ? 1 : 0) || a.name.localeCompare(b.name))];
-  const rest = ((await api.storage.local.get('fcRest').catch(() => ({}))).fcRest || {}).google || 0;
-  const hd = head('Copies found', 'Credit search', 'PageProof asks Google for pages that print a client\'s photo credit, like "Photo: Harbor Times", then compares the pictures on those pages with that client\'s photos. This finds heavy crops and edits a picture search can miss. Each wording is searched once a week, in your hours, alongside Keep searching.',
+  const R = (await api.storage.local.get('fcRest').catch(() => ({}))).fcRest || {};
+  const resting = PP_WATCH.ENGINES.filter(e => (R[e] || 0) > Date.now());
+  const hd = head('Copies found', 'Credit search', 'PageProof asks Google and Bing for pages that print a client\'s photo credit, like "Photo: Harbor Times", then compares the pictures on those pages with that client\'s photos. A page both of them find is read once. This finds heavy crops and edits a picture search can miss. Each wording is searched once a week, in your hours, alongside Keep searching.',
     `<label class="row" style="gap:8px;font-weight:600">${sSwitch('data-act="crediton"', cfg.on, 'Credit search on')} ${cfg.on ? 'On' : 'Off'}</label>`);
   const last = s.log.slice(-5).reverse();
   const status = ntCard('What it has done', `<div class="grid g3" style="gap:10px">
       <div class="clue"><b>${(s.found || 0).toLocaleString()}</b><span class="muted">copies found by a credit</span></div>
       <div class="clue"><b>${(s.pages || 0).toLocaleString()}</b><span class="muted">credited pages read</span></div>
       <div class="clue"><b>${s.queue.length}</b><span class="muted">pages waiting to be read</span></div></div>
-    ${rest > Date.now() ? `<div class="banner warn" style="padding:10px 12px"><span>Google asked for a robot check, so it rests until ${new Date(rest).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. PageProof never tries to get past one.</span></div>` : ''}
-    ${last.length ? `<table class="ntt">${last.map(l => `<tr><td>${esc(shortDate(l.at))}</td><td><b>${esc(l.client)}</b> <span class="mono">${esc(l.words)}</span></td><td>${plural(l.links, 'page')} listed · ${l.added} new to read</td></tr>`).join('')}</table>` : '<p class="muted" style="margin:0">No searches yet. Press Search now next to a client to run one here, or leave it on and it runs within about 15 minutes alongside Keep searching.</p>'}`, `<a class="btn" href="#found?via=credit">See what it found</a>`);
+    ${resting.map(e => `<div class="banner warn" style="padding:10px 12px"><span>${PP_WATCH.ENG_NAME[e]} asked for a robot check, so it rests until ${new Date(R[e]).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${resting.length < PP_WATCH.ENGINES.length ? ' and the other search site carries on' : ''}. PageProof never tries to get past one.</span></div>`).join('')}
+    ${last.length ? `<table class="ntt">${last.map(l => `<tr><td>${esc(shortDate(l.at))}</td><td><b>${esc(l.client)}</b> <span class="mono">${esc(l.words)}</span></td><td>${l.per ? esc(ntPer(l.per)) + (l.both ? ' · ' + l.both + ' by both' : '') : plural(l.links, 'page') + ' listed'} · ${l.added} new to read</td></tr>`).join('')}</table>` : '<p class="muted" style="margin:0">No searches yet. Press Search now next to a client to run one here, or leave it on and it runs within about 15 minutes alongside Keep searching.</p>'}`, `<a class="btn" href="#found?via=credit">See what it found</a>`);
   const rows = clients.map(cl => {
     const c = cfg.clients[cl.name] || {}, on = c.on !== false;
     const words = PP_WATCH.wordsFor(cfg, cl.name);
@@ -110,7 +112,7 @@ function ntExtraRows(D) {
   const per = (m, n) => n ? (m / n < 1 ? 'under 1 min' : '~' + Math.round(m / n).toLocaleString() + ' min') + ' a copy' : 'no copies yet';
   return [
     { k: 'sweep', name: 'Sweeps of stolen sites', work: `${c('sweep.pic').toLocaleString()} pictures checked · ${c('sweep.page').toLocaleString()} pages · ${c('sweep.map').toLocaleString()} sitemaps`, found: c('sweep.found'), mins: mins('sweep.step'), runs: c('sweep.done') },
-    { k: 'credit', name: 'Credit search', work: `${c('credit.search').toLocaleString()} Google searches · ${c('credit.page').toLocaleString()} pages read · ${c('credit.none').toLocaleString()} credit but no photo${c('credit.known') ? ' · ' + c('credit.known').toLocaleString() + ' already known' : ''}${c('credit.robot') ? ' · ' + c('credit.robot') + ' robot checks' : ''}`, found: c('credit.found'), mins: mins('credit.step'), runs: c('credit.search') },
+    { k: 'credit', name: 'Credit search', work: `${c('credit.search').toLocaleString()} searches (Google ${c('credit.search.google').toLocaleString()}, Bing ${c('credit.search.bing').toLocaleString()}) · links Google ${c('credit.links.google').toLocaleString()}, Bing ${c('credit.links.bing').toLocaleString()}, both ${c('credit.links.both').toLocaleString()} · ${c('credit.page').toLocaleString()} pages read · ${c('credit.none').toLocaleString()} credit but no photo${c('credit.known') ? ' · ' + c('credit.known').toLocaleString() + ' already known' : ''}${c('credit.robot') ? ' · robot checks: Google ' + c('credit.robot.google') + ', Bing ' + c('credit.robot.bing') : ''}`, found: c('credit.found'), mins: mins('credit.step'), runs: c('credit.search') },
     { k: 'watch', name: 'Watching', work: `${c('watch.check').toLocaleString()} checks · ${c('watch.post').toLocaleString()} new posts · ${c('watch.pic').toLocaleString()} pictures${c('watch.wall') ? ' · ' + c('watch.wall') + ' asked to log in' : ''}`, found: c('watch.found'), mins: mins('watch.step'), runs: c('watch.check') },
   ].map(r => ({ ...r, worth: per(r.mins, r.found) }));
 }
@@ -135,7 +137,7 @@ async function ntKeepExtras() {
     const last = st.log[st.log.length - 1];
     if (live && !live.end) creditNow = `<b>Searching ${esc(live.client)}'s credit lines</b> on the Credit search page: ${live.wDone} of ${live.words} wordings, ${live.read} of ${live.pages} pages read.`;
     else if (!cfg.on) creditNow = 'Off. Turn it on from the Credit search page.';
-    else creditNow = (st.queue.length ? `<b>${plural(st.queue.length, 'credited page')} waiting to be read.</b> ` : '') + (last ? `Last search ${esc(shortDate(last.at))}: ${esc(last.client)}, <span class="mono">${esc(last.words)}</span> (${plural(last.links, 'page')} listed).` : 'No searches yet.') + ` One Google search every ${cfg.every} minutes at most.`;
+    else creditNow = (st.queue.length ? `<b>${plural(st.queue.length, 'credited page')} waiting to be read.</b> ` : '') + (last ? `Last search ${esc(shortDate(last.at))}: ${esc(last.client)}, <span class="mono">${esc(last.words)}</span> (${last.per ? esc(ntPer(last.per)) : plural(last.links, 'page') + ' listed'}).` : 'No searches yet.') + ` One wording on Google and Bing every ${cfg.every} minutes at most.`;
   } catch (e) { /* none */ }
   try {
     const items = (await PP_WATCH.watchList()).filter(x => !x.off);

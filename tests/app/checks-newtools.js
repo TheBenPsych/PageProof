@@ -38,6 +38,10 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     hits.push(q.url);
     const send = (type, body) => { r.writeHead(200, { 'content-type': type }); r.end(body); };
     // a fake Google results page, and one that asks for a robot check
+    // a fake Bing page: its links go through bing.com/ck/a?u=a1<base64>, and one has a trailing slash
+    const b64 = u => 'a1' + Buffer.from(u).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    if (q.url.startsWith('/bing?q=robot')) return send('text/html', '<html><body><div id="b_captcha">Verify you are human</div></body></html>');
+    if (q.url.startsWith('/bing')) return send('text/html', `<html><body><ol id="b_results"><li class="b_algo"><h2><a href="https://www.bing.com/ck/a?!&&p=x&u=${b64(base + '/credited-1/')}&ntb=1">Harbor parade story</a></h2></li><li class="b_algo"><h2><a href="${base}/credited-2#top">Another story</a></h2></li><li class="b_algo"><h2><a href="https://www.microsoft.com/x">Microsoft</a></h2></li></ol></body></html>`);
     if (q.url.startsWith('/search?q=robot')) return send('text/html', '<html><body>Our systems have detected unusual traffic from your computer network.</body></html>');
     if (q.url.startsWith('/search')) return send('text/html', `<html><body><div id="search"><a href="${base}/credited-1"><h3>Harbor parade story</h3></a><a href="${base}/credited-2"><h3>Another story</h3></a><a href="https://www.google.com/x"><h3>Google itself</h3></a></div></body></html>`);
     if (q.url === '/credited-1') return send('text/html', `<html><head><title>Parade</title><meta property="og:image" content="${base}/img/ours.jpg"></head><body>Photo: Harbor Times</body></html>`);
@@ -58,7 +62,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
 
   // ---- 1 Credit search
   const cr = await page.evaluate(async base => {
-    globalThis.PP_CREDIT_URL = q => base + '/search?q=' + encodeURIComponent(q);
+    globalThis.PP_CREDIT_URL = (q, f, e) => base + (e === 'bing' ? '/bing' : '/search') + '?q=' + encodeURIComponent(q);
     const cfg = await PP_WATCH.creditCfg();
     const words = PP_WATCH.wordsFor(cfg, 'Harbor Times');
     for (let i = 0; i < 4; i++) await PP_WATCH.creditStep({ force: true, client: 'Harbor Times', words: words[0] });
@@ -70,6 +74,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(cr.found.length === 1 && cr.found[0] === '/credited-1 a.jpg', 'a credited page showing the client\'s photo goes to New, tagged credit: ' + cr.found.join(', '));
   ok(cr.nomatch.includes('/credited-2') && cr.queue === 0 && cr.log >= 1, 'a credited page with none of their photos is listed to look at by hand; Google\'s own links are skipped: ' + JSON.stringify(cr));
   const rb = await page.evaluate(async () => { await PP_WATCH.creditStep({ force: true, client: 'Harbor Times', words: 'robot' }); const r = (await chrome.storage.local.get('fcRest')).fcRest || {}; const again = await PP_WATCH.creditStep({ client: 'Harbor Times', words: 'x' }); return { rest: (r.google || 0) > Date.now(), again }; });
+  const bingRest = await page.evaluate(async () => ((await chrome.storage.local.get('fcRest')).fcRest || {}).bing > Date.now());
+  ok(bingRest, 'Bing\'s robot check rests Bing for an hour too');
   ok(rb.rest && rb.again === false, 'a robot check makes Google rest for an hour, and no more credit searches run meanwhile');
   await page.evaluate(() => chrome.storage.local.set({ fcRest: {} }));
   await page.goto(url('app.html#credit')); await page.waitForTimeout(1500);
@@ -79,6 +85,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   // Search now runs on the Credit search page itself, with its own progress (Ben, 2026-11-25)
   await page.evaluate(async () => { const s = await PP_WATCH.creditState(); s.seen = {}; s.done = {}; s.nomatch = []; await FC.meta.set('creditState', s); await chrome.storage.local.remove('fcCreditRun'); });
   await page.evaluate(() => render(true)); await page.waitForTimeout(800);
+  hits.length = 0;
   await page.click('button[data-act="creditnow"][data-v="Harbor Times"]');
   let mid = '';
   for (let i = 0; i < 40 && !mid; i++) { await page.waitForTimeout(100); const t = await page.evaluate(() => (document.getElementById('creditrun') || {}).innerText || ''); if (/Searching Harbor Times/i.test(t)) mid = t; }
@@ -86,7 +93,9 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   let fin = '';
   for (let i = 0; i < 60 && !fin; i++) { await page.waitForTimeout(500); const t = await page.evaluate(() => (document.getElementById('creditrun') || {}).innerText || ''); if (/finished/i.test(t)) fin = t; }
   const ksTabs = await page.evaluate(async () => (await chrome.tabs.query({})).filter(t => /runner\.html/.test(t.url || '')).length);
-  ok(/finished/i.test(fin) && /3 of 3/.test(fin) && /2 of 2/.test(fin) && /already in Copies found/.test(fin) && ksTabs === 0, 'it finishes there with counts (3 wordings, 2 pages read, the known copy noted), no Keep searching tab needed: ' + fin.replace(/\s+/g, ' ').slice(0, 220));
+  const c1 = hits.filter(h => /^\/credited-1\/?$/.test(h)).length, c2 = hits.filter(h => /^\/credited-2/.test(h)).length;
+  ok(/Google listed 6, Bing listed 6/.test(fin) && /6 found by both \(read once\)/.test(fin), 'Google and Bing both searched; links both found (a Bing redirect, a trailing slash, a #) are merged: ' + (fin.match(/Google listed[^;]*/) || [''])[0]);
+  ok(/finished/i.test(fin) && /3 of 3/.test(fin) && /2 of 2/.test(fin) && /already in Copies found/.test(fin) && ksTabs === 0 && c1 === 1 && c2 === 1, 'it finishes there with counts (3 wordings, 2 pages read once each, the known copy noted), no Keep searching tab needed: ' + fin.replace(/\s+/g, ' ').slice(0, 220));
 
   // ---- 2 Watching
   const wl = await page.evaluate(async () => (await PP_WATCH.watchList()).map(x => x.key + ':' + x.stolen));
@@ -116,12 +125,12 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     'Credit search and Watching count what they did and how long it took: ' + JSON.stringify(Object.fromEntries(Object.entries(sx.c).filter(([k]) => /^(credit|watch|sweep)\./.test(k)))));
   await page.evaluate(() => { location.hash = '#keep'; }); await page.waitForTimeout(2000);
   const kx = await page.evaluate(() => document.body.innerText);
-  ok(/Extra searches/.test(kx) && /Sweeps of stolen sites/.test(kx) && /Credit search/.test(kx) && /Watching/.test(kx) && /Google searches/.test(kx) && /Last search/.test(kx), 'Keep searching shows each extra search: what it is doing now and its last 7 days');
+  ok(/Extra searches/.test(kx) && /Sweeps of stolen sites/.test(kx) && /Credit search/.test(kx) && /Watching/.test(kx) && /Google \d+, Bing \d+/.test(kx) && /Last search/.test(kx), 'Keep searching shows each extra search: what it is doing now and its last 7 days');
   await page.evaluate(() => { location.hash = '#stats'; }); await page.waitForTimeout(2500);
   const tx = await page.evaluate(() => document.body.innerText);
   ok(/Extra searches: are they worth it\?/i.test(tx) && /Time per copy/i.test(tx), 'How PageProof is doing has an "are they worth it?" table');
   const rep = await page.evaluate(async () => PP_REPORT.text(await PP_REPORT.model('today')));
-  ok(/Extra searches/.test(rep) && /Credit search: \d+ Google searches/.test(rep), 'the stats file for Claude has the extra searches too');
+  ok(/Extra searches/.test(rep) && /Credit search: \d+ searches \(Google \d+, Bing \d+\)/.test(rep), 'the stats file for Claude has the extra searches too');
 
   // ---- 3 Registrations
   await page.goto(url('app.html#regs')); await page.waitForTimeout(2000);
