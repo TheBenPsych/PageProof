@@ -978,7 +978,10 @@ fn main(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_id) l: vec3u
       try {
         const nav = typeof navigator !== 'undefined' ? navigator : null;
         if (!nav || !nav.gpu) throw new Error('no WebGPU in this browser');
-        const ad = await nav.gpu.requestAdapter({ powerPreference: 'high-performance' });
+        // 4.51.1: Windows ignores "use the strong graphics card" and logs a warning every time it is
+        // asked (Ben saw dozens on the extensions page), so it is only asked for elsewhere.
+        const win = /windows/i.test((nav.userAgentData && nav.userAgentData.platform) || nav.platform || nav.userAgent || '');
+        const ad = await nav.gpu.requestAdapter(win ? {} : { powerPreference: 'high-performance' });
         if (!ad) throw new Error('no graphics card offered');
         // A "fallback" adapter is the processor pretending to be a graphics card: slower than the normal way.
         if (ad.info && ad.info.isFallbackAdapter && !(typeof self !== 'undefined' && self.PP_GPU_ANY)) throw new Error('only a software graphics card');

@@ -759,7 +759,7 @@ function whoLinks(rec) {
   } catch (e) { /* not a social post */ }
   let home;
   try { home = new URL(rec.url); } catch (e) { return out; }
-  const doc = new DOMParser().parseFromString(String(rec.html || ''), 'text/html');
+  const doc = new DOMParser().parseFromString(String(rec.html || '').replace(/\son([a-z]+\s*=)/gi, ' data-pp-on$1'), 'text/html');
   const KINDS = [['about', 'About page', /\b(about|about us|who we are|our story|impressum|imprint|über uns|a propos|quienes somos)\b/i, /\/(about|about-us|who-we-are|impressum|imprint)\b/i],
     ['contact', 'Contact page', /\b(contact|contact us|get in touch|kontakt|contacto)\b/i, /\/(contact|contact-us|kontakt|contacto)\b/i],
     ['privacy', 'Privacy policy', /\b(privacy|datenschutz|privacidad)\b/i, /\/(privacy|privacy-policy|datenschutz)\b/i]];
