@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.59.0** (25 Nov 2026).
+Last updated: version **4.60.0** (25 Nov 2026).
 
 ---
 
@@ -146,6 +146,8 @@ Last updated: version **4.59.0** (25 Nov 2026).
 - **Portal card drop-downs.** Lines that are drop-downs in the portal say exactly which choice to pick (Reverse Image Search; Website, Social Media or Embed; Commercial or Editorial; Yes or No; Statutory, Actual or Cannot Determine Damages). (4.52.3)
 - **Stop searching this photo.** From a copy's details panel, ⋯ menu or One at a time; Keep searching and Today's 50 skip it, copies stay, Undo or "Search again" on the client's photos page brings it back. (4.55)
 - **Check later.** A copy you're not sure about goes to its own Check later tab (button or C key), out of the New list, until you answer it. Undo works. (4.58)
+- **How popular the site is.** Website copies get Top 1K / 10K / 100K / 1M tags from the free Tranco list (downloaded weekly, looked up offline). Gold tag and edge for the top 10K, "Big sites" quick filter, Site popularity filter, "Most popular site" sort, World rank in the Download file and a card on the stats page. Social sites, free blog hosts and marketplaces get no rank. (4.60)
+- **Known bad sites.** Free lists of piracy, scam, phishing and malware sites (The Block List Project, URLhaus, OpenPhish), downloaded by themselves and looked up offline. Red tag, counts as Suspicious, "Known bad sites" quick filter. A top 10K site is only flagged by the piracy list. (4.60)
 
 ## 6. Social media accounts
 
@@ -339,3 +341,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.58 | 25 Nov | Check later button and tab for copies you're not sure about |
 | 4.58.1 | 25 Nov | Fix: Resume shows at once on the Keep searching tab |
 | 4.59 | 25 Nov | Just hidden list folded away; Site gone tag for copies on websites that no longer exist; Spam blogs filter catches search-words pages and spam-only endings |
+| 4.60 | 25 Nov | Site popularity tags and known bad site lists |
