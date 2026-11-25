@@ -31,6 +31,12 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(r.tiles === 3 && r.rows === 3 && r.dots === 9, 'Search results: 3 tiles, one row per photo with 3 search site lights');
   ok(/Bing.*some skipped/.test(r.lights), 'Search site lights say when a site skipped photos (' + r.lights + ')');
   ok(r.thrown, 'Thrown out is a quiet folded line');
+  // The page redraws while a search runs: the photo list keeps where you scrolled it to.
+  await rs.evaluate(async () => { const j = await RS_DB.get('jobs', 'j1'); j.id = 'j2'; j.pics = Array.from({ length: 40 }, (_, i) => ({ ...j.pics[1], i, name: 'photo' + i + '.jpg' })); await RS_DB.put('jobs', 'j2', j); });
+  await rs.setViewportSize({ width: 1300, height: 700 });
+  await rs.goto(url('revsearch.html?job=j2')); await rs.waitForTimeout(1500);
+  const sc = await rs.evaluate(async () => { const l = document.querySelector('.res-list'); l.scrollTop = 600; const before = l.scrollTop; renderResults(); await new Promise(r => setTimeout(r, 100)); return { before, after: document.querySelector('.res-list').scrollTop }; });
+  ok(sc.before > 300 && Math.abs(sc.after - sc.before) < 2, 'Search results: the photo list keeps its scroll when the page redraws (' + sc.before + ' -> ' + sc.after + ')');
   await page.goto(url('app.html#keep')); await page.waitForTimeout(1800);
   const k = await page.evaluate(() => ({ now: (document.querySelector('.know') || {}).textContent || '', lights: [...document.querySelectorAll('.englights .e')].map(e => e.textContent).join('|'), tiles: document.querySelectorAll('.ktiles .ktile').length, info: document.querySelectorAll('.kinfo[title]').length }));
   ok(/Searching now/.test(k.now) && /photo9\.jpg/.test(k.now), 'Keep searching: live card shows the photo being searched');

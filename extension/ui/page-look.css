@@ -79,7 +79,12 @@ body.over .pg-drop{border-color:var(--p-accent);background:var(--p-accent-soft)}
 .pg-list{display:flex;flex-direction:column;padding:0;overflow:hidden}
 .pg-row{display:grid;grid-template-columns:48px minmax(0,1fr) auto auto;gap:14px;align-items:center;padding:12px 16px;border-top:1px solid var(--p-line);background:transparent;border-left:0;border-right:0;border-bottom:0;font:inherit;color:inherit;text-align:left;width:100%}
 .pg-row:first-child{border-top:0}
-button.pg-row{cursor:pointer} button.pg-row:hover,.pg-row.on{background:var(--p-sunk)}
+button.pg-row,.pg-row[role=button]{cursor:pointer;transition:background .12s,box-shadow .12s}
+/* Clickable rows light up on hover (and keyboard focus) so you can tell they open something. */
+button.pg-row:hover,.pg-row[role=button]:hover,button.pg-row:focus-visible,.pg-row[role=button]:focus-visible,.pg-row.on{background:var(--p-sunk)}
+button.pg-row:hover,.pg-row[role=button]:hover,button.pg-row:focus-visible,.pg-row[role=button]:focus-visible{background:var(--p-accent-soft);box-shadow:inset 3px 0 0 var(--p-accent)}
+button.pg-row:hover .t b,.pg-row[role=button]:hover .t b{color:var(--p-accent)}
+.pg-row[role=button]:focus-visible,button.pg-row:focus-visible{outline:none}
 .pg-row.on{box-shadow:inset 3px 0 0 var(--p-accent)}
 .pg-row img.th{width:48px;height:40px;border-radius:8px;object-fit:cover;background:var(--p-sunk);display:block}
 .pg-row .t{min-width:0;display:flex;flex-direction:column;gap:3px}

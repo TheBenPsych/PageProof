@@ -656,7 +656,7 @@ let POOL_SIZE = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1
 // This computer's limits (ui/hardware.js), read fresh each time a search opens, so a new speed
 // level in Settings › Your computer counts from the next search on.
 let LIM = { checks: POOL_SIZE, tabs: 3, dl: POOL_SIZE + 4, decode: POOL_SIZE + 1 };
-// Easing off: while the computer is busy (processor flat out for a minute, memory nearly full, a
+// Easing off: while the computer is busy (memory nearly full, a
 // laptop low on battery) a running search drops to ONE photo check, ONE picture opened and ONE
 // search tab, and goes back to full speed a minute after the computer calms down. It never stops,
 // so today's 50 still finishes. (Only the work on this computer changes; how fast the search sites
@@ -1341,7 +1341,14 @@ function renderResults() {
       h('summary', {}, h('span', { text: 'Thrown out' }), h('span', { class: 'pg-chip', text: out.length }), out.length ? h('span', { class: 'pg-faint', text: 'Different photo ' + nNo + ' · Can\'t check ' + (out.length - nNo) }) : null),
       h('div', { class: 'in' }, h('p', { class: 'pg-faint', style: 'margin:0', text: 'These were not added to Copies found. If one really is your photo, press "＋ It is a copy" and it goes there.' }),
         out.length ? h('div', { class: 'list' }, h('div', { class: 'site' }, out.map(l => rowFor(p, l)))) : h('div', { class: 'none', text: searching || nPend ? 'Nothing thrown out yet.' : 'Nothing was thrown out for this photo.' }))));
+  // The page redraws every few seconds while a search runs: keep where the photo list (and the
+  // thrown-out list) were scrolled to, so scrolling isn't thrown back to the top.
+  const oldList = document.querySelector('.res-list'), oldIn = document.querySelector('#thrown .list');
+  const keepTop = oldList ? oldList.scrollTop : 0, keepIn = oldIn ? oldIn.scrollTop : 0, pageY = window.scrollY;
   $('main').replaceChildren(...[head, bgNote, tiles, sum, h('div', { class: 'res-grid' }, list, sel)].filter(Boolean));
+  if (keepTop) list.scrollTop = keepTop;
+  const newIn = document.querySelector('#thrown .list'); if (newIn && keepIn) newIn.scrollTop = keepIn;
+  if (window.scrollY !== pageY) window.scrollTo(0, pageY);
 }
 
 // ---------- the Evidence report (one PDF for one use) ----------
