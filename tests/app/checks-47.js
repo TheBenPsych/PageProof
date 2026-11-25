@@ -54,6 +54,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(dm.nodate === '', 'No date in the file name: the Damages cell is empty');
   ok(await page.evaluate(() => [...document.querySelectorAll('.crow .cc-client')].every(e => e.offsetWidth > 0)), 'Client column shows on a wide window');
   ok(await page.evaluate(() => document.querySelectorAll('.crow .sig .tag svg').length > 0 && !document.querySelector('.crow .l1 .tag.bad:not(.sig .tag)')), 'Rows use small warning icons instead of word tags');
+  ok(await page.evaluate(() => [...document.querySelectorAll('.crow .sig .tag')].every(t => t.textContent.trim().length > 2)), 'Each row warning says what it means next to its icon (e.g. Suspicious site)');
   ok(await page.evaluate(() => !!document.querySelector('.crow .mpill')), 'Match pill on each row');
   // Columns menu: turn Country off, it stays off after reload
   await page.click('[data-dd="cols"] > summary'); await page.click('[data-act="fcol"][data-v="country"]'); await page.waitForTimeout(700);
