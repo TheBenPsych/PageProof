@@ -749,6 +749,9 @@ const FC = (() => {
         client.readErrors = cf.errors || 0;
         total += client.photos;
         await DB.put('clients', client);
+        // 4.47.4: each client's photos show on the open pages as soon as that client is read
+        // (before, nothing changed on screen until every client was done).
+        touch('photos');
       }
       await meta.set('regs', regs);
       let moved = 0;
