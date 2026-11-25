@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.49.3** (24 Nov 2026).
+Last updated: version **4.50.0** (24 Nov 2026).
 
 ---
 
@@ -101,6 +101,9 @@ Last updated: version **4.49.3** (24 Nov 2026).
 - **Look-alike frames share a search.** Nearly identical frames from the same shoot come along with a photo's search and every find is checked against them; they get their own search after the first pass. (4.49)
 - **Speed meter.** Photos searched a day this week, plus a done-by date per client and overall, on Clients and photos and Keep searching. First searches mix in random older years (1 in 3). (4.49)
 - **Copies inside collages are found.** Side by side, stacked, three panels or a photo pasted over a corner: the other picture is left out of the score. (4.49.1)
+- **Search tabs at full speed.** The waits inside a background search tab come from PageProof's own clock (a hidden tab's waits are stretched to a second each), and every result picture is told to load straight away, so results lower down the list keep their picture. (4.50)
+- **Google exact matches read on their page.** When Google lists a page under Exact matches but its small preview doesn't line up, the page's own pictures are checked at full size (up to 10 links a photo). (4.50)
+- **Posts with several pictures.** A post a search site listed whose cover is another photo is kept as "Checking the post", and the post check looks at every picture in your browser before it stays or goes. (4.50)
 
 ## 5. Review the copies found
 
@@ -295,3 +298,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.49.1 | 24 Nov | Fix: Copies inside collages are found |
 | 4.49.2 | 24 Nov | Fix: Personal X accounts are no longer called Business |
 | 4.49.3 | 24 Nov | Fix: Stopped searches say so, and years mix better |
+| 4.50 | 24 Nov | Search tabs at full speed in the background, every result picture loads, Google exact matches read on their page, multi-picture posts checked, fewer slow second looks |
