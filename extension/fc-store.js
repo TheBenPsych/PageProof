@@ -268,8 +268,40 @@ const FC = (() => {
   const touch = what => api.storage.local.set({ fcChanged: { what, at: Date.now() } }).catch(() => {});
 
   // ---------------------------------------------------------------- settings
-  const KEEP_DEFAULT = { on: false, pace: 'Steady', hours: 'work', from: 8, to: 18, weekdays: true, fiftyTime: '09:00', fiftyAuto: false, perDay: 50, firstShare: 3, fiftyWhich: 'next' };
+  const KEEP_DEFAULT = { on: false, pace: 'Steady', hours: 'work', from: 8, to: 18, weekdays: true, fiftyTime: '09:00', fiftyAuto: false, perDay: 50, firstShare: 3, fiftyWhich: 'next', ladder: true, ladderTop: 40 };
   const PACE = { Gentle: 10, Steady: 5, Faster: 2 };      // minutes between photos
+  // Speed ladder (Ben's pick): on Faster, Keep searching climbs one step after every calm hour
+  // (no "are you a robot" check on that lane's sites): one photo every 2 minutes, then 90, 60,
+  // 40 seconds (30 if picked). A robot check still rests that site for an hour (PageProof never
+  // tries to get past one), and its lane comes back two steps slower and stays there for the
+  // rest of the day. The next day starts one step below where the day before ended.
+  // Two lanes: g = Google, f = Yandex and Bing (their photos come twice as often as Google's).
+  const LADDER = [120, 90, 60, 40, 30];                      // seconds between photos
+  const LADDER_LANES = { g: ['google'], f: ['yandex', 'bing'] };
+  const ladderTop = k => LADDER.indexOf([60, 40, 30].includes(+k.ladderTop) ? +k.ladderTop : 40);
+  async function ladder(k, now = Date.now()) {
+    const st = await api.storage.local.get(['fcLadder', 'fcRobotAt']);
+    const L = st.fcLadder || {}, robot = st.fcRobotAt || {};
+    const day = new Date(now).toDateString(), top = ladderTop(k);
+    let changed = false;
+    for (const lane of ['g', 'f']) {
+      let s = L[lane];
+      if (!s || typeof s.step !== 'number') { s = { step: 0, at: now, cap: top, day }; changed = true; }
+      if (s.day !== day) { s = { step: Math.max(0, Math.min(s.step, top) - 1), at: now, cap: top, day }; changed = true; }
+      const hit = Math.max(0, ...LADDER_LANES[lane].map(e => robot[e] || 0));
+      if (hit > s.at) {
+        s = { ...s, step: Math.max(0, s.step - 2), at: now, drops: (s.drops || 0) + 1 }; s.cap = s.step; changed = true;
+        if (typeof PP_STATS !== 'undefined') PP_STATS.add('keep.ladder.down');
+      } else if (s.step < Math.min(s.cap, top) && now - s.at >= 3600000) {
+        s = { ...s, step: s.step + 1, at: now }; changed = true;
+        if (typeof PP_STATS !== 'undefined') PP_STATS.add('keep.ladder.up');
+      }
+      if (s.step > top) { s = { ...s, step: top }; changed = true; }
+      L[lane] = s;
+    }
+    if (changed) await api.storage.local.set({ fcLadder: L });
+    return { g: L.g, f: L.f, top, gSec: LADDER[L.g.step], fSec: LADDER[L.f.step] };
+  }
   async function keep() { return { ...KEEP_DEFAULT, ...((await api.storage.local.get('fcKeep')).fcKeep || {}) }; }
   // Inside the hours picked on Keep searching (8 AM to 6 PM on weekdays unless changed).
   function inHours(k, d = new Date()) {
@@ -968,7 +1000,7 @@ const FC = (() => {
     if (client && client.priority) return { tier: 1, due: due || (since > 7 && age <= 3) };
     return { tier: age <= 3 ? 2 : 4, due };
   }
-  let QUEUE = null, QUEUE_AT = 0, FIRST = [];
+  let QUEUE = null, QUEUE_AT = 0, FIRST = [], QUICKED = new Set();
   // quiet = only this page's list (a photo was just searched: the Keep searching window skips it
   // anyway). Otherwise every page rebuilds its list (flags, clients or folders changed).
   function queueDirty(quiet) { QUEUE = null; if (!quiet) api.storage.local.set({ fcQueueDirty: Date.now() }).catch(() => {}); }
@@ -981,7 +1013,7 @@ const FC = (() => {
     const t0 = Date.now();
     const clients = new Map((await DB.all('clients')).map(c => [c.name, c]));
     const photos = await DB.all('photos');
-    const out = [], fresh = new Map(), waitBurst = [];
+    const out = [], fresh = new Map(), waitBurst = [], quicked = new Set();
     for (const p of photos) {
       if (p.gone || p.doubleOf) continue;
       const c = clients.get(p.client);
@@ -989,6 +1021,7 @@ const FC = (() => {
       // Never searched yet: the "every photo once" line (4.10, Ben).
       // 4.42 bursts: a frame that looks almost the same as one already searched (with nothing found)
       // waits until every other photo has had its first search.
+      if (!searchedOnce(p) && !cantSearch(p) && p.quickAt) quicked.add(p.id);
       if (!searchedOnce(p) && !cantSearch(p)) { if (p.burstWait) { waitBurst.push(p); continue; } if (!fresh.has(p.client)) fresh.set(p.client, []); fresh.get(p.client).push(p); }
       const pl = plan(p, c);
       // Only photos that are due. (Photos that are not due used to sit at the end of the line,
@@ -1001,15 +1034,39 @@ const FC = (() => {
     out.sort((a, b) => a.tier - b.tier || (!!a.last - !!b.last) || b.order - a.order || a.last.localeCompare(b.last));
     QUEUE = out; QUEUE_AT = Date.now();
     FIRST = firstLine(fresh, clients).concat(waitBurst.sort((a, b) => (b.order || 0) - (a.order || 0)).map(p => p.id));
+    QUICKED = quicked;
     perf('searchLine', Date.now() - t0, photos.length);
     return out;
   }
   // The never-searched line: ★ priority clients first, then the clients take turns (one photo
   // each, round and round) so no client stays at 0% while another finishes. Newest photos first
   // inside each client.
+  // Random years (Ben): inside each client, 2 of every 3 first searches are its newest photos
+  // and 1 comes from a randomly picked older year, so every year gets looked at from the start.
+  const yearOfP = p => p.year || p.exifY || 0;
+  function mixYears(list, rnd = Math.random) {
+    const years = new Map();
+    for (const p of list) { const y = yearOfP(p); if (!years.has(y)) years.set(y, []); years.get(y).push(p); }
+    if (years.size < 2) return list;
+    const used = new Set(), out = [];
+    let ni = 0;
+    const nextNew = () => { while (ni < list.length && used.has(list[ni].id)) ni++; return list[ni]; };
+    while (out.length < list.length) {
+      let p = null;
+      if (out.length % 3 === 2) {
+        const head = nextNew(), hy = head ? yearOfP(head) : null;
+        const left = [...years.entries()].filter(([y, l]) => y !== hy && l.some(o => !used.has(o.id)));
+        if (left.length) { const [, l] = left[Math.floor(rnd() * left.length)]; p = l.find(o => !used.has(o.id)); }
+      }
+      p = p || nextNew();
+      if (!p) break;
+      used.add(p.id); out.push(p);
+    }
+    return out;
+  }
   function firstLine(fresh, clients) {
     const turns = names => {
-      const lists = names.map(n => fresh.get(n).sort((a, b) => (b.order || 0) - (a.order || 0)));
+      const lists = names.map(n => mixYears(fresh.get(n).sort((a, b) => (b.order || 0) - (a.order || 0))));
       const ids = [];
       for (let i = 0, any = true; any; i++) { any = false; for (const l of lists) if (i < l.length) { ids.push(l[i].id); any = true; } }
       return ids;
@@ -1034,6 +1091,16 @@ const FC = (() => {
     let qi = 0, fi = 0;
     // 4.42 per-site lanes: Yandex and Bing's extra photos are re-searches only (photos searched
     // before, not ⚑ High, new or hot), so every first search still gets all three sites.
+    // Speed-ups: the Yandex and Bing lane's quick looks. Photos never searched and never quick-
+    // looked, in the same order as the first-search line (then re-searches, below).
+    if (opts.quick) {
+      const ids = [];
+      // Google resting or off: ⚑ High priority photos (and "Try again") are not left waiting.
+      if (opts.high) for (const q of QUEUE) { if (ids.length >= n || q.tier > 0) break; if (!used.has(q.id)) { ids.push(q.id); used.add(q.id); } }
+      for (const id of FIRST) { if (ids.length >= n) break; if (!used.has(id) && !QUICKED.has(id)) { ids.push(id); used.add(id); } }
+      if (ids.length) return (await DB.getMany('photos', ids)).filter(Boolean);
+      opts = { ...opts, repeat: true };
+    }
     if (opts.repeat) {
       const ids = [];
       for (const q of QUEUE) { if (ids.length >= n) break; if (q.tier > 0 && q.last && !used.has(q.id)) { ids.push(q.id); used.add(q.id); } }
@@ -1063,7 +1130,7 @@ const FC = (() => {
     const g = { top: [0, 0], recent: [0, 0], year: [0, 0], older: [0, 0] };
     let quiet = 0, doubles = 0, total = 0;
     // Every photo searched at least once (4.10): per client [searched once, can be searched, can't].
-    const first = { done: 0, total: 0, cant: 0, pool: 0, broken: 0, week: 0, clients: {} };
+    const first = { done: 0, total: 0, cant: 0, pool: 0, broken: 0, week: 0, quick: 0, clients: {} };
     const weekAgo = new Date(Date.now() - 7 * DAY).toISOString();
     for (const p of await DB.all('photos')) {
       if (p.gone) continue;
@@ -1071,9 +1138,10 @@ const FC = (() => {
       const c = clients.get(p.client);
       if (!c || c.searching !== true) continue;
       total++;
-      const fc = first.clients[p.client] = first.clients[p.client] || [0, 0, 0];
+      // [searched once (with Google), can be searched, can't, quick look or more (any site)]
+      const fc = first.clients[p.client] = first.clients[p.client] || [0, 0, 0, 0];
       if (cantSearch(p)) { first.cant++; fc[2]++; if (isPool(p.name)) first.pool++; else first.broken++; }
-      else { first.total++; fc[1]++; if (searchedOnce(p)) { first.done++; fc[0]++; } }
+      else { first.total++; fc[1]++; if (searchedOnce(p)) { first.done++; fc[0]++; } if (searchedOnce(p) || p.quickAt) { first.quick++; fc[3]++; } }
       if (p.firstAt && p.firstAt > weekAgo) first.week++;
       const since = ageDays(p.lastSearched), age = monthsOld(p);
       const k = p.flag === 'hi' || (c && c.priority) ? 'top' : age <= 3 ? 'recent' : age <= 12 ? 'year' : 'older';
@@ -1152,12 +1220,43 @@ const FC = (() => {
   }
   // Another frame of the same burst: same folder, looks almost the same, searched with nothing found.
   const folderOf = id => String(id).slice(0, String(id).lastIndexOf('/') + 1);
+  // How alike two frames' "look" fingerprints must be (of 64 bits): 10 before the speed-ups,
+  // now 14, because a waiting frame is also checked against its twin's finds (alikeFrames).
+  const ALIKE = 14;
+  // Speed-ups (Ben's pick): look-alike frames share one search. Before a photo's search, up to
+  // 6 never-searched photos next to it in the same folder are opened; those that look almost
+  // the same (and the ones already waiting behind it) come along: every link the search finds
+  // is checked against them too, and they wait for their own search until every other photo had
+  // its first search. Returns up to 3 ready pictures (with fcId), for RS_JOB.create's alike.
+  async function alikeFrames(p, look) {
+    if (!look) return [];
+    const dir = folderOf(p.id);
+    const all = (await DB.prefix('photos', dir)).filter(o => folderOf(o.id) === dir && !o.gone).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    const at = all.findIndex(o => o.id === p.id);
+    const near = all.filter((o, i) => o.id !== p.id && Math.abs(i - at) <= 3 && !searchedOnce(o) && !cantSearch(o) && !o.doubleOf && (!o.burstWait || o.burstWait === p.id))
+      .sort((a, b) => (a.burstWait === p.id ? 0 : 1) - (b.burstWait === p.id ? 0 : 1));
+    const out = [];
+    for (const o of near) {
+      if (out.length >= 3) break;
+      try {
+        const file = await fileFor(o);
+        if (!o.look) { o.look = await lookHash(file); await DB.put('photos', o); }
+        if (o.burstWait !== p.id && hamming(o.look, look) > ALIKE) continue;
+        const pic = await RS_JOB.prepare(file, { fcId: o.id, folderKey: o.rel });
+        if (!pic || pic.error) continue;
+        if (o.burstWait !== p.id) { o.burstWait = p.id; o.burstChecked = 1; await DB.put('photos', o); queueDirty(true); }
+        out.push(pic);
+      } catch (e) { /* not readable now: it gets its own search */ }
+    }
+    if (out.length && typeof PP_STATS !== 'undefined') PP_STATS.add('keep.alike.n', out.length);
+    return out;
+  }
   async function burstSibling(p) {
     if (!p.look) return null;
     const dir = folderOf(p.id);
     for (const o of await DB.prefix('photos', dir)) {
       if (o.id === p.id || o.gone || !o.look || folderOf(o.id) !== dir || !searchedOnce(o) || o.copies || o.stolen) continue;
-      if (hamming(o.look, p.look) <= 10 && (!o.w || !p.w || Math.abs(o.w / o.h - p.w / p.h) < 0.2)) return o;
+      if (hamming(o.look, p.look) <= ALIKE && (!o.w || !p.w || Math.abs(o.w / o.h - p.w / p.h) < 0.2)) return o;
     }
     return null;
   }
@@ -1516,7 +1615,12 @@ const FC = (() => {
 
   // Add what one photo's search found. links = the search's links for that photo, with their
   // match result (verdict 'same' or 'maybe'). by = 'Keep searching' | 'Daily 50' | 'New search'.
-  async function ingest(pic, links, by) {
+  // opts.engines: the search sites that really searched this photo. A photo's first search
+  // without Google (Yandex and Bing's quick-look lane, or Google resting) is a "quick look": its
+  // copies are added, but it still counts as never searched until Google has searched it too
+  // (unless Google is switched off). opts.shared: a look-alike frame checked against another
+  // frame's search: its copies are added, it gets its own search later.
+  async function ingest(pic, links, by, opts = {}) {
     const p = await photoForPic(pic);
     p.hash = p.hash || pic.hash; p.w = p.w || pic.w; p.h = p.h || pic.h; p.size = p.size || pic.size;
     if (!p.look && pic.blob) { try { p.look = await lookHash(pic.blob); } catch (e) { /* skip */ } }
@@ -1567,15 +1671,29 @@ const FC = (() => {
     keepSoon(out.filter(c => c.times === 1 && c.status === 'new'));
     const all = await copiesOf(p.id);
     const firstTime = !searchedOnce(p);
-    if (firstTime) p.firstAt = now;            // its first search ever (the "every photo once" count)
-    p.searches = (p.searches || 0) + 1;
-    p.lastSearched = now;
-    delete p.retry;
-    p.empty = links.length ? 0 : (p.empty || 0) + 1;
-    // A hot shoot photo has had its turn.
-    if (p.hot) delete p.hot;
-    // 4.42 bursts: this frame found copies, so the frames that waited behind it go now.
-    if (fresh > 0) await wakeBurst(p).catch(() => {});
+    let gOn = true;
+    if (opts.engines) try { gOn = (((await api.storage.local.get('rsSettings')).rsSettings || {}).engines || {}).google !== false; } catch (e) { /* default on */ }
+    const quick = !opts.shared && !!opts.engines && firstTime && gOn && !opts.engines.includes('google');
+    if (opts.shared) {
+      // A look-alike frame: a copy of it turned up in its twin's search, so it goes next.
+      p.alikeAt = now;
+      if (fresh > 0) { delete p.burstWait; p.hot = now; }
+    } else if (quick) {
+      p.quickAt = now; p.quickN = (p.quickN || 0) + 1;
+      delete p.retry;
+      // The quick look found a copy: Google searches it next.
+      if (fresh > 0) { p.hot = now; await wakeBurst(p).catch(() => {}); }
+    } else {
+      if (firstTime) p.firstAt = now;            // its first search ever (the "every photo once" count)
+      p.searches = (p.searches || 0) + 1;
+      p.lastSearched = now;
+      delete p.retry;
+      p.empty = links.length ? 0 : (p.empty || 0) + 1;
+      // A hot shoot photo has had its turn.
+      if (p.hot) delete p.hot;
+      // 4.42 bursts: this frame found copies, so the frames that waited behind it go now.
+      if (fresh > 0) await wakeBurst(p).catch(() => {});
+    }
     p.copies = all.filter(c => c.status !== 'removed').length;
     p.stolen = all.filter(c => c.status === 'stolen').length;
     if (all.length && pic.thumb && !p.thumb && !p.th) { p.thumb = pic.thumb; const pr = splitPic(p); if (pr) await pics.putMany([pr]); }
@@ -1585,9 +1703,11 @@ const FC = (() => {
     const day = new Date().toDateString();
     const t = (await api.storage.local.get('fcToday')).fcToday || {};
     const today = t.day === day ? t : { day, searched: 0, found: 0 };
-    today.searched++; today.found += fresh;
+    if (quick) today.quick = (today.quick || 0) + 1; else if (!opts.shared) today.searched++;
+    today.found += fresh;
     await api.storage.local.set({ fcToday: today, fcLastSearch: Date.now() });
-    await logWeek({ searched: 1, found: fresh, first: firstTime ? 1 : 0, client: p.client || '' });
+    if (!opts.shared) await dayLog(quick ? { quick: 1 } : { full: 1, first: firstTime ? 1 : 0 });
+    await logWeek({ searched: quick || opts.shared ? 0 : 1, found: fresh, first: firstTime && !quick && !opts.shared ? 1 : 0, client: p.client || '' });
     queueDirty(true); backupCopiesSoon(); touch('copies');
     return { photo: p, fresh };
   }
@@ -1721,7 +1841,7 @@ const FC = (() => {
   // ---------------------------------------------------------------- your answers
   // Each change returns an "undo" that puts every touched copy back exactly as it was.
   async function wakeBurst(p) {
-    const waiting = (await DB.prefix('photos', folderOf(p.id))).filter(o => o.burstWait && (o.burstWait === p.id || (p.look && o.look && hamming(o.look, p.look) <= 10)));
+    const waiting = (await DB.prefix('photos', folderOf(p.id))).filter(o => o.burstWait && (o.burstWait === p.id || (p.look && o.look && hamming(o.look, p.look) <= ALIKE)));
     for (const o of waiting) { delete o.burstWait; o.hot = new Date().toISOString(); }
     if (waiting.length) { await DB.putMany('photos', waiting); queueDirty(); }
     return waiting.length;
@@ -1883,6 +2003,25 @@ const FC = (() => {
 
   // ---------------------------------------------------------------- the week, for the weekly summary
   const weekKey = (d = new Date()) => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x.toISOString().slice(0, 10); };
+  // Speed meter (Ben's pick): searches per day for the last 3 weeks. full = searched with
+  // Google (or every site switched on), first = of those, first searches, quick = quick looks.
+  async function dayLog(add, d = new Date()) {
+    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const all = (await api.storage.local.get('fcDays')).fcDays || {};
+    const o = all[key] = all[key] || { full: 0, first: 0, quick: 0 };
+    for (const k of ['full', 'first', 'quick']) if (add[k]) o[k] = (o[k] || 0) + add[k];
+    for (const k of Object.keys(all).sort().slice(0, -21)) delete all[k];
+    await api.storage.local.set({ fcDays: all });
+  }
+  // This week's speed: the average per day over the last 7 days that had any searches.
+  async function speed() {
+    const all = (await api.storage.local.get('fcDays')).fcDays || {};
+    const cut = new Date(Date.now() - 7 * DAY), key = cut.getFullYear() + '-' + String(cut.getMonth() + 1).padStart(2, '0') + '-' + String(cut.getDate()).padStart(2, '0');
+    const days = Object.entries(all).filter(([k, v]) => k > key && (v.full || v.quick));
+    const sum = f => days.reduce((a, [, v]) => a + (v[f] || 0), 0);
+    const n = days.length;
+    return { days: n, full: n ? sum('full') / n : 0, first: n ? sum('first') / n : 0, quick: n ? sum('quick') / n : 0, today: all[Object.keys(all).sort().pop()] || null };
+  }
   async function logWeek(add) {
     const k = 'week:' + weekKey();
     const w = (await meta.get(k)) || { searched: 0, found: 0, stolen: 0, licensed: 0, removed: 0, wentOffline: 0, backOnline: 0, clients: {}, offline: [], back: [] };
@@ -2260,7 +2399,7 @@ const FC = (() => {
 
   return { DB, meta, open, touch, pics, dropDotMatches, checkerRemove, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, inHours, quietOK, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, unpicked, forced, setPicked, pickInside, SCAN, applyPendingFlags, missingPicks, movedNote, followMoves, watchFolders, newFolders, newFoldersSeen, goalPlan, workMinutes, exifDate, heatShoot, coolShoot, burstSibling, wakeBurst, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
-    photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setClients, logWeek, week, weekKey, firstNotes, searchedOnce,
+    photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setClients, logWeek, week, weekKey, firstNotes, searchedOnce, dayLog, speed, ladder, LADDER, alikeFrames, mixYears,
     isPool, shownCountries, setShownCountries, SHOWN_START, ownerFor, pathOf, logReport, USE, useOf, riskOf, spamMarks, randomLabel, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
     backupSoon, backupCopiesSoon, writeSettings, writeCopies, readBackup, restore, restoreCopies, settingsSnapshot, monthsOld, newness, yearOf, quarterOf, dayOf };
 })();

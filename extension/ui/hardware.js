@@ -9,10 +9,12 @@
 //   tabs:   search tabs open at once (all sites together; each tab costs 150-300 MB)
 //   dl:     found pictures downloaded at once (waiting on the internet costs almost nothing)
 //   decode: found pictures opened at once (a big picture takes 50-100 MB for a moment)
-//   pace:   fastest Keep searching pace allowed
+//   pace:   fastest Keep searching pace allowed. Speed-ups (Ben's pick): since the photo checker got
+//           about 3 times faster (4.16), a Normal computer may use Faster (and the speed ladder)
+//           and a Light one Steady. The "computer busy" brake still slows them down.
 const PP_HW_LIMITS = {
-  Light:  { checks: 1, tabs: 1, dl: 3, decode: 1, pace: 'Gentle', ram: 'up to 300 MB', fifty: 'about 45 minutes' },
-  Normal: { checks: 2, tabs: 2, dl: 5, decode: 2, pace: 'Steady', ram: 'up to 600 MB', fifty: 'about 25 minutes' },
+  Light:  { checks: 1, tabs: 1, dl: 3, decode: 1, pace: 'Steady', ram: 'up to 300 MB', fifty: 'about 45 minutes' },
+  Normal: { checks: 2, tabs: 2, dl: 5, decode: 2, pace: 'Faster', ram: 'up to 600 MB', fifty: 'about 25 minutes' },
   Strong: { checks: 4, tabs: 3, dl: 8, decode: 3, pace: 'Faster', ram: 'up to 1 GB',   fifty: 'about 15 minutes' },
 };
 // The limits for this exact computer. A Strong computer with lots of cores and memory gets more

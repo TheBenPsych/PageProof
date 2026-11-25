@@ -31,6 +31,7 @@ async function stale() {
   return true;
 }
 const time = t => new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+const secText = sec => sec >= 120 ? Math.round(sec / 60) + ' minutes' : sec >= 60 && sec % 60 === 0 ? (sec / 60) + (sec === 60 ? ' minute' : ' minutes') : sec + ' seconds';
 
 // The account details reader (main PageProof page, 4.30.2) says how far it is in fcAcctRead.
 function acctLine() {
@@ -219,33 +220,38 @@ async function step() {
       if (g && !g.done) { gapMin = g.gap; why = 'pace for your goal'; }
     } catch (e) { console.warn('PageProof Keep searching goal:', e); }
   }
-  if (big) { gapMin *= 2; why += ', half speed during the big search'; }
-  const gap = gapMin * 60000;
-  // 4.42 per-site lanes (Ben's pick): Google takes about 36 seconds a photo, Yandex and Bing about
-  // 10. Google keeps the pace; Yandex and Bing get a photo every half pace, so while Google is
-  // busy they search another photo (a re-search) instead of waiting.
+  // Speed-ups: per-site lanes. Google keeps the pace; Yandex and Bing get a photo every half
+  // pace. The speed ladder (Ben's pick, on Faster) makes both lanes faster after every calm hour
+  // and slower after a robot check (FC.ladder).
+  let gapG = gapMin * 60000, gapF = (on.includes('google') ? gapMin / 2 : gapMin) * 60000, lad = null;
+  if (k.ladder !== false && pace === 'Faster' && gapMin <= FC.PACE.Faster) {
+    lad = await FC.ladder(k);
+    gapG = lad.gSec * 1000; gapF = (on.includes('google') ? lad.fSec / 2 : lad.fSec) * 1000;
+    why = 'speed step ' + (lad.g.step + 1) + ' of ' + (lad.top + 1) + ', 1 photo every ' + secText(lad.gSec);
+  }
+  if (big) { gapG *= 2; gapF *= 2; why += ', half speed during the big search'; }
+  const ladExtra = lad ? { ladder: { g: lad.g.step, f: lad.f.step, top: lad.top, gSec: lad.gSec, fSec: lad.fSec, cap: lad.g.cap } } : {};
   const usable = on.filter(e => !rest[e] && !broken[e]);
   const busyE = new Set(S.jobs.flatMap(j => j.engines));
   const g = usable.includes('google'), fastE = usable.filter(e => e !== 'google');
-  const fastGap = on.includes('google') ? gap / 2 : gap;
   const now = Date.now();
-  const gAt = Math.max(S.lastG + gap, S.lastF + fastGap), fAt = S.lastF + fastGap;
-  const gReady = g && !busyE.has('google') && now >= S.lastG + gap;
+  const gAt = S.lastG + gapG, fAt = S.lastF + gapF;
+  const gReady = g && !busyE.has('google') && now >= gAt;
   const fReady = fastE.length > 0 && !fastE.some(e => busyE.has(e)) && now >= fAt;
-  let lane = null;
-  if (gReady && (fReady || !fastE.length)) lane = 'all';              // one photo on every site
-  else if (fReady && !g) lane = 'all';                                  // Google off or resting
-  else if (fReady && most > 1) lane = 'fast';                           // Google busy or not due yet
-  if (!lane) {
-    if (S.jobs.length) return status('running', runningText(tally), { current: firstCurrent() });
-    const at = Math.max(now + 1000, Math.min(g ? gAt : Infinity, fastE.length ? fAt : Infinity));
-    return status('waiting', 'Next photo at ' + time(at) + ' (' + why + '). ' + tally + '.' + (restText ? ' ' + restText + '.' : ''), { nextAt: at });
-  }
-  // The next photo in line (the Yandex and Bing lane takes only photos searched before).
+  // The Google lane takes the next photo in line. The Yandex and Bing lane (Speed-ups, Ben's
+  // pick) gives never-searched photos a quick look, in the same order, then re-searches.
   const skip = new Set([...S.skip, ...S.bgSkip, ...S.jobs.map(j => j.photoId)]);
-  let [p] = await FC.next(1, skip, lane === 'fast' ? { repeat: true } : {});
-  if (!p && lane === 'fast') { S.lastF = now; return status(S.jobs.length ? 'running' : 'idle', S.jobs.length ? runningText(tally) : 'Every photo is up to date. ' + tally + '.', { current: firstCurrent() }); }
-  if (!p) return status(S.jobs.length ? 'running' : 'idle', S.jobs.length ? runningText(tally) : 'Every photo is up to date. PageProof looks again every hour. ' + tally + '.', { current: firstCurrent() });
+  let lane = null, p = null;
+  if (gReady) { [p] = await FC.next(1, skip); if (p) lane = 'google'; }
+  if (!lane && fReady && (most > 1 || !S.jobs.length)) { [p] = await FC.next(1, skip, { quick: true, high: !g }); if (p) lane = 'fast'; }
+  if (!lane) {
+    if (S.jobs.length) return status('running', runningText(tally), { current: firstCurrent(), ...ladExtra });
+    if ((gReady || !g) && (fReady || !fastE.length)) return status('idle', 'Every photo is up to date. PageProof looks again every hour. ' + tally + '.', ladExtra);
+    const at = Math.max(now + 1000, Math.min(g ? gAt : Infinity, fastE.length ? fAt : Infinity));
+    // The ladder's short gaps (20 to 60 seconds) are shorter than the 30-second check: wake up on time.
+    clearTimeout(S.wake); if (at - now < 30000) S.wake = setTimeout(tick, at - now + 200);
+    return status('waiting', 'Next photo at ' + time(at) + ' (' + why + '). ' + tally + '.' + (restText ? ' ' + restText + '.' : ''), { nextAt: at, ...ladExtra });
+  }
   S.skip.add(p.id);
   const pic = await FC.readPhoto(p, { burst: true });
   if (pic.error) {
@@ -256,15 +262,25 @@ async function step() {
   }
   // Pause pressed while the photo was being read: it is not searched (and stays due).
   if ((await api.storage.local.get('fcPause')).fcPause) { S.skip.delete(p.id); return; }
-  const engines = lane === 'fast' ? fastE : usable.length ? usable : on;
-  const job = await RS_JOB.create([pic], { kind: 'keep', auto: true, engines });
+  // Which sites: the Yandex and Bing lane uses those two. The Google lane adds them when they are
+  // free, unless they gave this never-searched photo a quick look in the last 60 days.
+  const firstTime = !FC.searchedOnce(p);
+  const looked = firstTime && p.quickAt && Date.now() - Date.parse(p.quickAt) < 60 * 864e5;
+  const engines = lane === 'fast' ? fastE : ['google', ...(fReady && !looked ? fastE : [])];
+  // Look-alike frames (Speed-ups, Ben's pick): frames from the same shoot that look almost the
+  // same come along, and every link found is checked against them too.
+  let alike = [];
+  if (firstTime) {
+    try { p.look = p.look || await FC.lookHash(pic.blob); alike = await FC.alikeFrames(p, p.look); } catch (e) { console.warn('PageProof look-alike frames:', e); }
+  }
+  const job = await RS_JOB.create([pic], { kind: 'keep', auto: true, engines, alike });
   if (!job) return status('resting', restText || 'No search sites are switched on. Tick them in Find copies › New search.');
   const j = { id: job.id, tab: null, started: Date.now(), photoId: p.id, engines: job.engines,
-    current: { id: p.id, name: p.name, sub: (p.client || 'Client unknown') + ' · on ' + job.engines.map(e => NAMES[e]).join(', '), thumb: pic.thumb } };
+    current: { id: p.id, name: p.name, sub: (p.client || 'Client unknown') + ' · ' + (lane === 'fast' && firstTime ? 'quick look on ' : 'on ') + job.engines.map(e => NAMES[e]).join(', ') + (alike.length ? ' · with ' + alike.length + ' look-alike frame' + (alike.length > 1 ? 's' : '') : ''), thumb: pic.thumb } };
   S.jobs.push(j);
   if (job.engines.includes('google')) S.lastG = Date.now();
   if (job.engines.some(e => e !== 'google')) S.lastF = Date.now();
-  if (typeof PP_STATS !== 'undefined') PP_STATS.add('keep.lane.' + (lane === 'fast' ? 'fast' : 'all'));
+  if (typeof PP_STATS !== 'undefined') PP_STATS.add('keep.lane.' + (lane === 'fast' ? (firstTime ? 'quick' : 'fast') : job.engines.length > 1 ? 'all' : 'google'));
   // Pinned: a small icon at the left of the tab bar instead of a full tab.
   try { S.win = (await api.tabs.getCurrent()).windowId; } catch (e) { /* not in a tab */ }   // the tab may have been dragged to another window
   const opts = { windowId: S.win, url: api.runtime.getURL('revsearch.html?job=' + job.id), active: false };
@@ -272,7 +288,7 @@ async function step() {
   try { t = await api.tabs.create({ ...opts, pinned: true }); } catch (e) { t = await api.tabs.create(opts); }
   j.tab = t.id;
   if ((await api.storage.local.get('fcPause')).fcPause) { await stopJob('paused'); return; }
-  await status('running', runningText(tally), { current: firstCurrent() });
+  await status('running', runningText(tally), { current: firstCurrent(), ...ladExtra });
   // The other lane may be free straight away (Google busy, Yandex and Bing due).
   if (S.jobs.length < most) setTimeout(tick, 3000);
 }

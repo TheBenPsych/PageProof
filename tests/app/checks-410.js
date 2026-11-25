@@ -56,7 +56,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(r.firstOnly.slice(0, 3).every(x => x.startsWith('A/')) && r.firstOnly[3].startsWith('B/') && r.firstOnly[4].startsWith('C/0'), 'Today\'s 50 "Never searched first": priority client, then clients take turns');
   ok(r.solo[5] === 'B/3.jpg' && /C\/R/.test(r.solo[3]), 'Keep searching remembers the turn between photos');
   ok(r.hi === 'd:C/15.jpg', '⚑ High priority still goes first');
-  ok(r.cov.done === 12 && r.cov.total === 20 && r.cov.never === 8 && r.cov.cant === 2 && r.cov.clients.C.join() === '12,13,2' && r.cov.clients.A.join() === '0,3,0', 'Counts: searched once, never searched, can\'t be searched (POOL, broken) apart');
+  ok(r.cov.done === 12 && r.cov.total === 20 && r.cov.never === 8 && r.cov.cant === 2 && r.cov.clients.C.join() === '12,13,2,12' && r.cov.clients.A.join() === '0,3,0,0', 'Counts: searched once, never searched, can\'t be searched (POOL, broken) apart');
 
   // A search marks the first time; a client reaching 100% leaves a note.
   const f = await page.evaluate(async () => {
