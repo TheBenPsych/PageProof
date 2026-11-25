@@ -70,7 +70,18 @@ const PP_WATCH = (() => {
     return { on: c.on !== false, every: c.every || 15, clients: c.clients || {} };
   }
   async function setCreditCfg(cfg) { await FC.meta.set('creditCfg', cfg); FC.touch('credit'); }
-  async function creditState() { return (await FC.meta.get('creditState')) || { done: {}, queue: [], seen: {}, nomatch: [], log: [], found: 0, pages: 0 }; }
+  async function creditState() {
+    const s = (await FC.meta.get('creditState')) || { done: {}, queue: [], seen: {}, nomatch: [], log: [], found: 0, pages: 0 };
+    // 4.61: a page that was being read when PageProof stopped (an update, the tab closed) goes back
+    // to the front of the line, so it is not lost. Tried at most 3 times. (Only once it is clearly
+    // not being read any more: 5 minutes.)
+    if (s.cur && Date.now() - (s.cur.at || 0) > 5 * 60000) {
+      const q = { ...s.cur.q, tries: (s.cur.q.tries || 0) + 1 };
+      delete s.cur;
+      if (q.tries <= 3 && !s.queue.some(x => x.url === q.url && x.client === q.client)) s.queue.unshift(q);
+    }
+    return s;
+  }
   async function putCreditState(s) {
     // Keep it small: pages seen in the last 60 days, the last 200 pages with no match, last 60 runs.
     const cut = Date.now() - 60 * DAY;
@@ -229,7 +240,7 @@ const PP_WATCH = (() => {
     if (!cfg.on && !opts.force) return false;
     if (!opts.force && await runActive()) return false;   // a "Search now" is running on the Credit search page
     const s = await creditState();
-    if (s.queue.length) { const q = s.queue.shift(); await putCreditState(s); await creditPage(q, s); await putCreditState(s); return true; }
+    if (s.queue.length) { const q = s.queue.shift(); s.cur = { q, at: Date.now() }; await putCreditState(s); await creditPage(q, s); delete s.cur; await putCreditState(s); return true; }
     if (!opts.force && Date.now() - (s.lastSearch || 0) < cfg.every * 60000) return false;
     if (await allResting()) return false;
     const w = opts.words ? { client: opts.client, words: opts.words, key: opts.client + '\n' + opts.words } : await nextWording(cfg, s);
@@ -249,13 +260,17 @@ const PP_WATCH = (() => {
   }
   async function runInfo() { return (await api.storage.local.get(RUN_KEY).catch(() => ({})))[RUN_KEY] || null; }
   let RUN = null;
-  async function creditRun(client) {
+  // prev (4.61): a run that was cut off (an update closed its page): it carries on from the wording
+  // it had reached, with its counts so far, then reads that client's pages still in line.
+  async function creditRun(client, prev) {
     if (RUN && !RUN.end) return RUN;
-    if (await runActive()) return null;
+    if (!prev && await runActive()) return null;      // (a cut-off run's own note still looks fresh)
     const cfg = await creditCfg();
-    const words = wordsFor(cfg, client);
-    stat('credit.now');
-    const r = RUN = { client, start: Date.now(), beat: Date.now(), phase: 'search', words: words.length, wDone: 0, now: '', links: 0, pages: 0, read: 0, found: 0, known: 0, failed: 0, nomatch: 0, per: {}, both: 0, end: 0, why: '' };
+    let words = wordsFor(cfg, client);
+    if (!prev) stat('credit.now');
+    const r = RUN = prev ? { ...prev, client, beat: Date.now(), now: '', end: 0, resumed: (prev.resumed || 0) + 1, words: words.length }
+      : { client, start: Date.now(), beat: Date.now(), phase: 'search', words: words.length, wDone: 0, now: '', links: 0, pages: 0, read: 0, found: 0, known: 0, failed: 0, nomatch: 0, per: {}, both: 0, end: 0, why: '' };
+    if (prev) words = prev.phase === 'read' ? [] : words.slice(Math.min(prev.wDone || 0, words.length));
     const save = async () => { r.beat = Date.now(); await api.storage.local.set({ [RUN_KEY]: { ...r } }).catch(() => {}); };
     await save();
     const tick = setInterval(save, 20000);
@@ -283,9 +298,11 @@ const PP_WATCH = (() => {
         const i = st.queue.findIndex(q => q.client === client);
         if (i < 0) break;
         const [q] = st.queue.splice(i, 1);
+        st.cur = { q, at: Date.now() };
         await putCreditState(st);
         r.now = q.url; await save();
         const how = await creditPage(q, st);
+        delete st.cur;
         await putCreditState(st);
         r.read++;
         if (how === 'found') r.found++; else if (how === 'known') r.known = (r.known || 0) + 1; else if (how === 'none') r.nomatch++; else r.failed = (r.failed || 0) + 1;
@@ -295,6 +312,30 @@ const PP_WATCH = (() => {
     } catch (e) { r.why = r.why || String(e && e.message || e); }
     finally { clearInterval(tick); PP_STATS_T('credit.step', r.start); r.phase = 'done'; r.now = ''; r.end = Date.now(); await save(); }
     return r;
+  }
+
+  // 4.61 (Ben): a "Search now" cut off by an update (its page closed with it) carries on in the
+  // PageProof page that opens next. Only one page takes it (a lock), only if nothing has said it is
+  // still running for 90 seconds, and only if it stopped in the last 30 minutes.
+  async function resumeRun() {
+    // An update after its last "still running" note means its page is gone for sure.
+    const upd = ((await api.storage.local.get('ppPickedUp').catch(() => ({}))).ppPickedUp || {}).at || 0;
+    const dead = x => x && !x.end && x.client && (Date.now() - (x.beat || 0) >= 90000 || upd > (x.beat || 0)) && Date.now() - (x.beat || 0) < 30 * 60000;
+    const r = await runInfo();
+    if (RUN || !dead(r)) {
+      // Maybe its page is still closing: look once more in 2 minutes.
+      if (!RUN && r && !r.end && Date.now() - (r.beat || 0) < 90000 && !resumeRun.again) { resumeRun.again = true; setTimeout(() => resumeRun().catch(() => {}), 120000); }
+      return false;
+    }
+    const go = async () => {
+      const now = await runInfo();
+      if (!dead(now)) return false;
+      stat('credit.resumed');
+      await creditRun(now.client, now);
+      return true;
+    };
+    if (typeof navigator !== 'undefined' && navigator.locks) return navigator.locks.request('pageproof-credit-run', { ifAvailable: true }, lock => lock ? go() : false);
+    return go();
   }
 
   // Older "next in line" form (kept for the Keep searching tab): that client's wordings are due straight away.
@@ -489,6 +530,6 @@ const PP_WATCH = (() => {
     } finally { busy = false; }
   }
 
-  return { DEFAULT_WORDS, ENGINES, ENG_NAME, creditRun, runInfo, runActive, live: () => RUN, creditCfg, setCreditCfg, creditState, wordsFor, creditStep, creditNow, readResultsInTab, readFeed, findFeed, watchList, watchAdd, watchOff, watchNow, watchDrop, watchStep, step, nearest, looks, dropLooks: () => { LOOKS = null; } };
+  return { DEFAULT_WORDS, ENGINES, ENG_NAME, creditRun, resumeRun, runInfo, runActive, live: () => RUN, creditCfg, setCreditCfg, creditState, wordsFor, creditStep, creditNow, readResultsInTab, readFeed, findFeed, watchList, watchAdd, watchOff, watchNow, watchDrop, watchStep, step, nearest, looks, dropLooks: () => { LOOKS = null; } };
 })();
 if (typeof module !== 'undefined') module.exports = PP_WATCH;

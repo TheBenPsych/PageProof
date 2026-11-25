@@ -60,6 +60,8 @@ async function status(state, text, extra = {}) {
   if (state !== S.statState) { if (PAUSES.includes(state)) PP_STATS.add('keep.pause.' + state); S.statState = state; }
   S.lastText = text; S.lastExtra = extra;
   if (state !== 'paused' && state !== 'off') text += acctLine();
+  // 4.61: for 10 minutes after an update, say that it carried on by itself.
+  if (S.picked && Date.now() - S.picked < 10 * 60000 && state !== 'off') text = (state === 'paused' ? 'PageProof was updated and stays paused, as you left it. ' : 'Picked up after the update. ') + text;
   const st = { state, text, beat: Date.now(), win: S.win, tabId: S.me, jobTab: S.jobs[0] ? S.jobs[0].tab : null, jobs: S.jobs.length, ver: MY_VER, ...extra };
   S.lastSt = st;
   await api.storage.local.set({ fcStatus: st });
@@ -146,8 +148,13 @@ async function chores() {
     // Setup has just read every folder, so the first weekly check is a week after the first run.
     if (!m.full) ch.full = now;
     else if (workTime && now - m.full > 6.5 * 86400000) {
-      await status('running', 'Reading every folder in Google Drive for new photos (weekly check)…');
-      const r = await FC.scan({ full: true, background: true }); if (!r.busy && !r.state) ch.full = now;
+      // 4.61: the weekly check notes when it started, so if it is cut off (an update, the browser
+      // closed) it carries on next time with the clients it had not read yet, instead of starting
+      // again from the first one. A start more than 3 days old begins again.
+      const since = m.fullStart && now - m.fullStart < 3 * 86400000 ? m.fullStart : now;
+      if (since !== m.fullStart) await FC.meta.set('chores', { ...m, fullStart: since });
+      await status('running', 'Reading every folder in Google Drive for new photos (weekly check' + (since < now ? ', carrying on where it stopped' : '') + ')…');
+      const r = await FC.scan({ full: true, background: true, since: since < now ? since : 0 }); if (!r.busy && !r.state) { ch.full = now; delete ch.fullStart; } else ch.fullStart = since;
       await FC.applyPendingFlags();
     } else if (now - (m.quick || 0) > 3600000) {
       const r = await FC.scan({ full: false, background: true }); if (!r.busy && !r.state) ch.quick = now;
@@ -397,7 +404,8 @@ async function fiftyWanted() {
     }
     return;
   }
-  await api.storage.local.remove('fcFiftyWant');
+  // 4.61: the ask stays until the search is in line, so an update while the photos are being got
+  // ready from Google Drive (it can take a few minutes) starts it again instead of losing it.
   const k = await FC.keep();
   const n = Math.min(k.perDay, 100);
   await status('running', 'Getting today\'s ' + n + ' photos ready from Google Drive…');
@@ -408,10 +416,12 @@ async function fiftyWanted() {
     const pic = await FC.readPhoto(p);
     if (!pic.error) pics.push(pic);
   }
-  if (!pics.length) { await api.storage.local.remove('fcHold').catch(() => {}); return; }
+  if ((await api.storage.local.get('fcFiftyWant')).fcFiftyWant !== w) return;   // asked again or stopped meanwhile
+  if (!pics.length) { await api.storage.local.remove(['fcHold', 'fcFiftyWant']).catch(() => {}); return; }
   const job = await RS_JOB.create(pics, { kind: 'fifty' });
   api.storage.local.remove('fcHold').catch(() => {});
   if (job) await RS_JOB.queue(job.id);
+  await api.storage.local.remove('fcFiftyWant');
 }
 
 api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -471,6 +481,7 @@ $('open').onclick = e => { e.preventDefault(); api.tabs.create({ url: api.runtim
   if (!(await api.storage.local.get('ppRunVer')).ppRunVer) await api.storage.local.set({ ppRunVer: MY_VER });
   await RS_LISTS.load().catch(() => {});
   S.acct = (await api.storage.local.get('fcAcctRead')).fcAcctRead || null;
+  try { const pu = (await api.storage.local.get('ppPickedUp')).ppPickedUp; if (pu && Date.now() - (pu.at || 0) < 10 * 60000) S.picked = pu.at; } catch (e) { /* no note */ }
   FC.movePics().catch(() => {});
   // 4.15: closing this tab asks first ("Leave site?"). The browser only shows that box after
   // someone has clicked in the tab. PageProof itself closing or reloading it never asks.

@@ -705,7 +705,7 @@ const FC = (() => {
   // background = the automatic checks of Keep searching. They wait (and stop part-way) while the
   // folder setup page is open, so Google Drive is free to list folders quickly.
   const setupOpen = async () => { try { return Date.now() - ((await api.storage.local.get('fcSetupAt')).fcSetupAt || 0) < 90000; } catch (e) { return false; } };
-  async function scan({ full = true, clients: onlyClients = null, progress, background = false } = {}) {
+  async function scan({ full = true, clients: onlyClients = null, progress, background = false, since = 0 } = {}) {
     if (SCAN.busy) return { busy: true };
     if (background && await setupOpen()) return { busy: true };
     SCAN.busy = true;
@@ -736,6 +736,9 @@ const FC = (() => {
         // The hourly look skips clients nobody searches. A ticked folder that holds several
         // clients (each named by its client_info.txt) is still read if any of those is searched.
         if (!full && client.searching !== true && ![...known.values()].some(c => c.from === cf.name && c.searching === true)) continue;
+        // 4.61: a weekly check that was cut off carries on: clients already read all the way
+        // through since it started are not read again.
+        if (full && since && old && old.scanned && Date.parse(old.scanned) >= since) { pres.push('d:' + (cf.extra ? '+' : '') + cf.rel + '/'); total += old.photos || 0; continue; }
         // 4.47.1: a client whose folders were never read all the way through (the first read was
         // cut short: page closed, Drive busy) gets a full read now, every year, not just the
         // hourly look at this and last quarter. Before, such a client only ever showed its two
