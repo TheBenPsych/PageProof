@@ -169,12 +169,17 @@ const FC_RULES = (() => {
     const all = await sweeps();
     const s = Object.values(all).find(x => x.state === 'running') || Object.values(all).find(x => x.state === 'queued');
     if (!s) return false;
+    const st0 = Date.now();
+    try { return await sweepStepOne(s, all); } finally { if (typeof PP_STATS !== 'undefined') PP_STATS.time('sweep.step', Date.now() - st0); }
+  }
+  async function sweepStepOne(s, all) {
     if (s.state === 'queued') { s.state = 'running'; s.started = new Date().toISOString(); s.maps = await firstMaps(s.base); s.mapsRead = 0; await putSweep(s.base, s); return true; }
     const t0 = Date.now();
     try {
       // 1. Sitemaps first (newest last in the file, so the list is read from the end).
       if (s.maps.length && s.mapsRead < MAX_MAPS) {
         const url = s.maps.shift(); s.mapsRead++;
+        if (typeof PP_STATS !== 'undefined') PP_STATS.add('sweep.map');
         try {
           const r = readMap(await get(url));
           s.maps.push(...r.maps.slice(-MAX_MAPS).reverse());
@@ -186,6 +191,7 @@ const FC_RULES = (() => {
       // 2. Pages without a picture list: read the page for its pictures.
       if (!s.pics.length && s.pages.length && (s.pagesRead || 0) < MAX_PAGES) {
         const page = s.pages.shift(); s.pagesRead = (s.pagesRead || 0) + 1;
+        if (typeof PP_STATS !== 'undefined') PP_STATS.add('sweep.page');
         try { s.pics.push(...pagePics(await get(page), page)); } catch (e) { s.failed++; }
         await putSweep(s.base, s); return true;
       }
@@ -201,6 +207,7 @@ const FC_RULES = (() => {
           let look;
           try { look = await FC.lookHash(blob); } catch (e) { continue; }
           s.checked++;
+          if (typeof PP_STATS !== 'undefined') PP_STATS.add('sweep.pic');
           const best = looks.list.map(p => [p, hamming(p.look, look)]).sort((a, b) => a[1] - b[1])[0];
           if (best && best[1] <= CLOSE && await addFound(best[0].id, page, img, s.base, best[1])) s.found++;
           await new Promise(r => setTimeout(r, 1500));

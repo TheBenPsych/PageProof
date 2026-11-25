@@ -76,6 +76,18 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const cp = await page.evaluate(() => document.body.innerText);
   ok(/Credit search/.test(cp) && /Harbor Times/.test(cp) && /show none of their photos/.test(cp) && /Another story/.test(cp), 'the Credit search page shows clients, wordings and pages with no match' + '');
 
+  // Search now runs on the Credit search page itself, with its own progress (Ben, 2026-11-25)
+  await page.evaluate(async () => { const s = await PP_WATCH.creditState(); s.seen = {}; s.done = {}; s.nomatch = []; await FC.meta.set('creditState', s); await chrome.storage.local.remove('fcCreditRun'); });
+  await page.evaluate(() => render(true)); await page.waitForTimeout(800);
+  await page.click('button[data-act="creditnow"][data-v="Harbor Times"]');
+  let mid = '';
+  for (let i = 0; i < 40 && !mid; i++) { await page.waitForTimeout(100); const t = await page.evaluate(() => (document.getElementById('creditrun') || {}).innerText || ''); if (/Searching Harbor Times/i.test(t)) mid = t; }
+  ok(/wordings searched/i.test(mid) && /%/.test(mid), 'Search now shows its progress at the top of the Credit search page: ' + mid.replace(/\s+/g, ' ').slice(0, 120));
+  let fin = '';
+  for (let i = 0; i < 60 && !fin; i++) { await page.waitForTimeout(500); const t = await page.evaluate(() => (document.getElementById('creditrun') || {}).innerText || ''); if (/finished/i.test(t)) fin = t; }
+  const ksTabs = await page.evaluate(async () => (await chrome.tabs.query({})).filter(t => /runner\.html/.test(t.url || '')).length);
+  ok(/finished/i.test(fin) && /3 of 3/.test(fin) && /2 of 2/.test(fin) && /already in Copies found/.test(fin) && ksTabs === 0, 'it finishes there with counts (3 wordings, 2 pages read, the known copy noted), no Keep searching tab needed: ' + fin.replace(/\s+/g, ' ').slice(0, 220));
+
   // ---- 2 Watching
   const wl = await page.evaluate(async () => (await PP_WATCH.watchList()).map(x => x.key + ':' + x.stolen));
   ok(wl.length === 1 && wl[0] === 's:watched-example.com:2', 'a site with 2 Stolen copies is watched by itself (1 Stolen copy is not): ' + wl.join(', '));
@@ -97,6 +109,19 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(wa.list.includes('s:another-example.com') && wa.list.includes('s:watched-example.com off'), 'a site can be added by hand, and a watched site switched off: ' + wa.list.join(', '));
   await page.goto(url('app.html#watching')); await page.waitForTimeout(1500);
   ok(/Watching/.test(await page.evaluate(() => document.body.innerText)) && /watched-example\.com/.test(await page.evaluate(() => document.body.innerText)), 'the Watching page lists them');
+
+  // ---- Progress and stats for the extra searches (Ben: "We need stats for almost everything")
+  const sx = await page.evaluate(async () => { await PP_STATS.flush(); const D = await ntStatsDays(1); return { c: D.c, t: Object.keys(D.t) }; });
+  ok(sx.c['credit.search'] >= 3 && sx.c['credit.page'] >= 2 && sx.c['credit.none'] >= 1 && sx.c['credit.known'] >= 1 && sx.c['credit.now'] === 1 && sx.t.includes('credit.step') && sx.c['watch.check'] >= 1 && sx.c['watch.post'] >= 1 && sx.c['watch.pic'] >= 1,
+    'Credit search and Watching count what they did and how long it took: ' + JSON.stringify(Object.fromEntries(Object.entries(sx.c).filter(([k]) => /^(credit|watch|sweep)\./.test(k)))));
+  await page.evaluate(() => { location.hash = '#keep'; }); await page.waitForTimeout(2000);
+  const kx = await page.evaluate(() => document.body.innerText);
+  ok(/Extra searches/.test(kx) && /Sweeps of stolen sites/.test(kx) && /Credit search/.test(kx) && /Watching/.test(kx) && /Google searches/.test(kx) && /Last search/.test(kx), 'Keep searching shows each extra search: what it is doing now and its last 7 days');
+  await page.evaluate(() => { location.hash = '#stats'; }); await page.waitForTimeout(2500);
+  const tx = await page.evaluate(() => document.body.innerText);
+  ok(/Extra searches: are they worth it\?/i.test(tx) && /Time per copy/i.test(tx), 'How PageProof is doing has an "are they worth it?" table');
+  const rep = await page.evaluate(async () => PP_REPORT.text(await PP_REPORT.model('today')));
+  ok(/Extra searches/.test(rep) && /Credit search: \d+ Google searches/.test(rep), 'the stats file for Claude has the extra searches too');
 
   // ---- 3 Registrations
   await page.goto(url('app.html#regs')); await page.waitForTimeout(2000);

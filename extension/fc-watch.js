@@ -23,6 +23,8 @@ const PP_WATCH = (() => {
   const get = async (url, kind = 'text', ms = 15000) => { const r = await late(fetch(url, { credentials: 'omit', redirect: 'follow' }), ms); if (!r.ok) throw new Error('answered ' + r.status); return kind === 'blob' ? r.blob() : r.text(); };
   const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; } };
   const stat = (k, n) => { if (typeof PP_STATS !== 'undefined') PP_STATS.add(k, n); };
+  // Time spent, so the stats can say whether each extra search is worth it.
+  const PP_STATS_T = (k, t0) => { if (typeof PP_STATS !== 'undefined') PP_STATS.time(k, Date.now() - t0); };
 
   // ---------------------------------------------------------------- looks of your photos
   // Kept as two 32-bit numbers each, so a whole library compares fast.
@@ -155,25 +157,33 @@ const PP_WATCH = (() => {
   // One page from the queue: its pictures compared with that client's photos.
   async function creditPage(q, s) {
     s.seen[q.url] = Date.now(); s.pages = (s.pages || 0) + 1;
+    stat('credit.page');
     let html;
-    try { html = await get(q.url, 'text', 15000); } catch (e) { stat('credit.pageFail'); return; }
+    try { html = await get(q.url, 'text', 15000); } catch (e) { stat('credit.pageFail'); return 'fail'; }
     const list = await looks();
     const pics = FC_RULES.pagePics(html, q.url).slice(0, 8);
-    let found = 0;
+    let found = 0, known = 0;
     for (const { img } of pics) {
       const r = await checkPic(img, list, q.client);
-      if (r.hit && await FC_RULES.addFound(r.hit.photo, q.url, img, hostOf(q.url), r.hit.dist, { by: 'a credit search for ' + q.words, tag: { via: 'credit' } })) { found++; break; }
+      stat('credit.pic');
+      if (!r.hit) continue;
+      if (await FC_RULES.addFound(r.hit.photo, q.url, img, hostOf(q.url), r.hit.dist, { by: 'a credit search for ' + q.words, tag: { via: 'credit' } })) { found++; break; }
+      known++;   // their photo is there, but this copy was already in Copies found
     }
-    if (found) { s.found = (s.found || 0) + 1; stat('credit.found'); }
-    else {
+    if (found) { s.found = (s.found || 0) + 1; stat('credit.found'); return 'found'; }
+    if (known) { stat('credit.known'); return 'known'; }
+    stat('credit.none');
+    {
       const t = /<title[^>]*>([^<]{1,200})/i.exec(html);
       s.nomatch.push({ url: q.url, title: (q.title || (t && t[1]) || '').trim(), client: q.client, words: q.words, at: new Date().toISOString(), pics: pics.length });
+      return 'none';
     }
   }
   // One small step: a page from the queue, else (every `every` minutes) one Google search.
   async function creditStep(opts = {}) {
     const cfg = await creditCfg();
     if (!cfg.on && !opts.force) return false;
+    if (!opts.force && await runActive()) return false;   // a "Search now" is running on the Credit search page
     const s = await creditState();
     if (s.queue.length) { const q = s.queue.shift(); await putCreditState(s); await creditPage(q, s); await putCreditState(s); return true; }
     if (!opts.force && Date.now() - (s.lastSearch || 0) < cfg.every * 60000) return false;
@@ -185,7 +195,62 @@ const PP_WATCH = (() => {
     await putCreditState(s);
     return !!r;
   }
-  // "Search now" on the Credit search page: that client's wordings are due straight away.
+  // "Search now" (Ben, 2026-11-25): runs right there on the Credit search page, with its own progress,
+  // not in the Keep searching tab. Every wording of that client is searched, then every page it listed
+  // is read. Keep searching's own credit steps wait while it runs (a shared note with a heartbeat).
+  const RUN_KEY = 'fcCreditRun';
+  async function runActive() {
+    const r = (await api.storage.local.get(RUN_KEY).catch(() => ({})))[RUN_KEY];
+    return !!(r && !r.end && Date.now() - (r.beat || 0) < 90000);
+  }
+  async function runInfo() { return (await api.storage.local.get(RUN_KEY).catch(() => ({})))[RUN_KEY] || null; }
+  let RUN = null;
+  async function creditRun(client) {
+    if (RUN && !RUN.end) return RUN;
+    if (await runActive()) return null;
+    const cfg = await creditCfg();
+    const words = wordsFor(cfg, client);
+    stat('credit.now');
+    const r = RUN = { client, start: Date.now(), beat: Date.now(), phase: 'search', words: words.length, wDone: 0, now: '', links: 0, pages: 0, read: 0, found: 0, known: 0, failed: 0, nomatch: 0, end: 0, why: '' };
+    const save = async () => { r.beat = Date.now(); await api.storage.local.set({ [RUN_KEY]: { ...r } }).catch(() => {}); };
+    await save();
+    const tick = setInterval(save, 20000);
+    try {
+      for (const w of words) {
+        if (typeof PP_SOCIAL !== 'undefined' && PP_SOCIAL.halt && PP_SOCIAL.halt.on && !(await api.storage.local.get('fcPause')).fcPause) PP_SOCIAL.halt.on = false;
+        if (await googleResting()) { r.why = 'robot'; break; }
+        r.now = w; await save();
+        const st = await creditState();
+        const res = await creditSearch({ client, words: w, key: client + '\n' + w }, st);
+        await putCreditState(st);
+        r.wDone++;
+        if (res && res.robot) { r.why = 'robot'; break; }
+        if (res && res.why) { r.why = res.why; }
+        r.links += (res && res.links) || 0;
+        r.pages += (res && res.added) || 0;
+        await save();
+      }
+      r.phase = 'read'; r.now = ''; await save();
+      for (;;) {
+        const st = await creditState();
+        const i = st.queue.findIndex(q => q.client === client);
+        if (i < 0) break;
+        const [q] = st.queue.splice(i, 1);
+        await putCreditState(st);
+        r.now = q.url; await save();
+        const how = await creditPage(q, st);
+        await putCreditState(st);
+        r.read++;
+        if (how === 'found') r.found++; else if (how === 'known') r.known = (r.known || 0) + 1; else if (how === 'none') r.nomatch++; else r.failed = (r.failed || 0) + 1;
+        if (r.read > r.pages) r.pages = r.read;
+        await save();
+      }
+    } catch (e) { r.why = r.why || String(e && e.message || e); }
+    finally { clearInterval(tick); PP_STATS_T('credit.step', r.start); r.phase = 'done'; r.now = ''; r.end = Date.now(); await save(); }
+    return r;
+  }
+
+  // Older "next in line" form (kept for the Keep searching tab): that client's wordings are due straight away.
   async function creditNow(client) {
     const s = await creditState(), cfg = await creditCfg();
     for (const w of wordsFor(cfg, client)) delete s.done[client + '\n' + w];
@@ -324,7 +389,7 @@ const PP_WATCH = (() => {
       if (it.kind === 'acct') {
         const r = await accountPosts(it);
         if (!r) return false;
-        if (r.wall) { it.err = 'asked to log in'; it.last = new Date().toISOString(); it.due = false; await saveItem(it); return true; }
+        if (r.wall) { stat('watch.wall'); it.err = 'asked to log in'; it.last = new Date().toISOString(); it.due = false; await saveItem(it); return true; }
         posts = r.posts;
       } else {
         const home = (globalThis.PP_WATCH_HOME || (b => 'https://' + b))(it.base);   // tests point it at a local server
@@ -346,10 +411,12 @@ const PP_WATCH = (() => {
     const list = await looks();
     while (it.pend.length && Date.now() - t0 < 15000) {
       const p = it.pend.shift();
+      stat('watch.post');
       let imgs = p.imgs || [];
       if (!imgs.length && p.page && it.kind === 'site') { try { imgs = FC_RULES.pagePics(await get(p.page, 'text', 12000), p.page).map(x => x.img); } catch (e) { imgs = []; } }
       for (const img of imgs.slice(0, 6)) {
         const r = await checkPic(img, list, '');
+        stat('watch.pic');
         if (r.hit && await FC_RULES.addFound(r.hit.photo, p.page || it.url, img, hostOf(p.page || it.url) || it.base, r.hit.dist, { by: 'the watch list (' + it.label + ')', tag: { via: 'watch' } })) { it.found = (it.found || 0) + 1; stat('watch.found'); break; }
         if (!opts.fast) await new Promise(r2 => setTimeout(r2, 800));
       }
@@ -365,12 +432,16 @@ const PP_WATCH = (() => {
     if (busy) return false;
     busy = true;
     try {
+      let t = Date.now();
       const a = await creditStep().catch(e => { console.warn('PageProof credit search:', e); return false; });
+      if (a) PP_STATS_T('credit.step', t);
+      t = Date.now();
       const b = await watchStep().catch(e => { console.warn('PageProof watch list:', e); return false; });
+      if (b) PP_STATS_T('watch.step', t);
       return a || b;
     } finally { busy = false; }
   }
 
-  return { DEFAULT_WORDS, creditCfg, setCreditCfg, creditState, wordsFor, creditStep, creditNow, readResultsInTab, readFeed, findFeed, watchList, watchAdd, watchOff, watchNow, watchDrop, watchStep, step, nearest, looks, dropLooks: () => { LOOKS = null; } };
+  return { DEFAULT_WORDS, creditRun, runInfo, runActive, live: () => RUN, creditCfg, setCreditCfg, creditState, wordsFor, creditStep, creditNow, readResultsInTab, readFeed, findFeed, watchList, watchAdd, watchOff, watchNow, watchDrop, watchStep, step, nearest, looks, dropLooks: () => { LOOKS = null; } };
 })();
 if (typeof module !== 'undefined') module.exports = PP_WATCH;

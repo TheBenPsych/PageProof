@@ -243,6 +243,10 @@ const PP_REPORT = (() => {
       L.push('', 'Storage');
       L.push('  Settings and lists ' + mb(u.local) + ' (no limit: ' + (api.runtime.getManifest().permissions || []).includes('unlimitedStorage') + ') · everything ' + mb(u.all) + ' · kept safe from clean-up: ' + (u.persisted == null ? 'not known' : u.persisted ? 'yes' : 'no') + ' · failed saves: ' + (m.saveFail ? m.saveFail.n + ', last ' + new Date(m.saveFail.at).toLocaleString() : '0'));
     }
+    if (typeof ntExtraRows === 'function') {
+      L.push('', 'Extra searches');
+      for (const r of ntExtraRows(D)) L.push('  ' + r.name + ': ' + r.work + ' · copies found ' + num(r.found) + ' · time ' + r.mins + ' min (' + r.worth + ')');
+    }
     L.push('', 'Computer strain');
     L.push('  Searches slowed down: busy ' + num(c(D, 'strain.eased.busy')) + ', memory ' + num(c(D, 'strain.eased.memory')) + ', battery ' + num(c(D, 'strain.eased.battery')) + ' · Keep searching waited for a busy computer ' + Math.round((km.by.busy || 0)) + ' min · search pages restarted ' + num(c(D, 'strain.resumed')) + ' · highest page memory ' + ((D.x || {})['mem.page'] ? num(D.x['mem.page']) + ' MB' : 'not known'));
     return L;
