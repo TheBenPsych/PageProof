@@ -379,17 +379,9 @@ The **Evidence report** PDF gets an **About this use** box with the same facts.
 
 **Who's behind this site** now has **Research steps**: 12 lookups with tick boxes, kept for each site.
 
-## 20. Save a Breaking News photo
+## 20. POOL photos
 
-On a newspaper's page, right-click the photo and choose **PageProof › Save as Breaking News photo…**. A page opens with:
-
-1. The **photographer** (guessed from the credit line), the **date** (from the article), the **last name**, and a **Subject** box.
-2. Tick **POOL photo** for pool photos.
-3. The file name, made the firm's way: `11.23.26_Subject_Lastname.jpg` (no leading zeros) or `11.23.26_POOL_Subject_Lastname.jpg`.
-4. **New or recycled?** PageProof compares the photo with every photo of that photographer on Drive. **Recycled** shows the earlier file name. The first check reads photos it has never opened, so it can take a while; later checks are fast. PageProof only reads Drive, it never writes to it.
-5. Press **Save as …** and pick the folder in the Save As window.
-
-Photos with `_POOL_` in their name are never searched by Keep searching.
+Photos with `_POOL_` in their name are shared with other papers, so Keep searching never searches them. They show a **POOL, not searched** tag.
 
 ## 21. The details panel and the Copies found list (4.7)
 
