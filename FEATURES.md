@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.49.0** (24 Nov 2026).
+Last updated: version **4.49.1** (24 Nov 2026).
 
 ---
 
@@ -100,6 +100,7 @@ Last updated: version **4.49.0** (24 Nov 2026).
 - **Quick looks.** Yandex and Bing give every never-searched photo a quick look in their own lane; Google follows, and a copy found in a quick look sends the photo to Google next. (4.49)
 - **Look-alike frames share a search.** Nearly identical frames from the same shoot come along with a photo's search and every find is checked against them; they get their own search after the first pass. (4.49)
 - **Speed meter.** Photos searched a day this week, plus a done-by date per client and overall, on Clients and photos and Keep searching. First searches mix in random older years (1 in 3). (4.49)
+- **Copies inside collages are found.** Side by side, stacked, three panels or a photo pasted over a corner: the other picture is left out of the score. (4.49.1)
 
 ## 5. Review the copies found
 
@@ -291,3 +292,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.47.5 | 24 Nov | Fix: Search a Skipped folder anyway |
 | 4.48 | 24 Nov | Search pages filled out |
 | 4.49 | 24 Nov | Speed ladder, Yandex + Bing quick looks, look-alike frames share a search, speed meter |
+| 4.49.1 | 24 Nov | Fix: Copies inside collages are found |
