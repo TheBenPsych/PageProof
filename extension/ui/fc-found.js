@@ -57,7 +57,8 @@ async function readFC() {
   const photos = new Map();
   const idList = [...ids];
   (await FC.DB.getMany('photos', idList)).forEach((p, i) => { if (p) photos.set(idList[i], p); });
-  const facts = new Map(sites.map(f => [f.site, f]));
+  const facts = new Map(sites.filter(f => !f.partial).map(f => [f.site, f]));   // partial = only the country was read (4.56.1)
+  const ccOf = new Map(sites.filter(f => f.cc).map(f => [f.site, f]));
   const regs = (await FC.meta.get('regs')) || {};
   for (const c of copies) {
     if (PEND.has(c.id)) c.status = PEND.get(c.id);   // answered a moment ago, still being saved
@@ -65,6 +66,7 @@ async function readFC() {
     c.risk = FC.riskOf(c, facts.get(c.site));
     c.use = FC.useOf(c);          // 4.9: worked out again each time (your social-site choices can change it)
     if (!c.country) c.country = FC.countryOf(c.site);   // copies brought back from found-copies.txt had none
+    if (!c.country && ccOf.has(c.site) && !isSoc(c)) { c.country = ccOf.get(c.site).cc; c.countryHow = ccOf.get(c.site).ccHow; }   // 4.56.1: read from the site's page
     const p = photos.get(c.photo);
     c.photoName = p ? p.name : c.photoName || 'Photo';
     c.clientName = (p && p.client) || c.client || '';
@@ -664,7 +666,7 @@ async function drawer(list) {
     <dl class="facts">
       ${o && o.real ? `<dt>Site owner</dt><dd><a href="#owners" data-act="gowner" data-v="${esc(o.key)}" style="font-weight:600">${esc(o.name)}</a><br><span class="muted" style="font-size:13px">${esc(o.kind)}${o.sites.length > 1 ? ' · ' + FCD.copies.filter(x => o.sites.includes(x.site) && x.status !== 'removed').length + ' copies on their sites' : ''}</span></dd>` : ''}
       <dt>Site check</dt><dd>${RISK[c.risk.level][0]}${c.risk.why.length ? `<br><span class="muted" style="font-size:13px">${esc(c.risk.why.join(' · '))}</span>` : ''}</dd>
-      ${c.country ? `<dt>Country</dt><dd>${esc(c.country)}${isSoc(c) ? '' : FCD.countries.includes(c.country) ? ` <button class="btn ghost sm" data-act="hidecountry" data-v="${esc(c.country)}">Stop showing this country</button>` : ` <button class="btn ghost sm" data-act="showcountry" data-v="${esc(c.country)}">Show this country</button>`}</dd>` : ''}
+      ${c.country ? `<dt>Country</dt><dd>${esc(c.country)}${c.countryHow ? `<br><span class="muted" style="font-size:13px">From ${esc(c.countryHow)}</span>` : ''}${isSoc(c) ? '' : FCD.countries.includes(c.country) ? ` <button class="btn ghost sm" data-act="hidecountry" data-v="${esc(c.country)}">Stop showing this country</button>` : ` <button class="btn ghost sm" data-act="showcountry" data-v="${esc(c.country)}">Show this country</button>`}</dd>` : ''}
     </dl>
     <details class="hidebox" id="okbox"><summary><b>Is this site allowed to use the photo?</b> <span class="muted" style="font-size:13px">Approve it</span></summary>
       <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
@@ -731,9 +733,25 @@ function copyRow(c) {
       : `<button class="btn sm stolen" data-act="rowans" data-v="stolen|${esc(c.id)}">Stolen</button><button class="btn sm licensed" data-act="rowans" data-v="licensed|${esc(c.id)}">Licensed</button><button class="btn sm" data-act="rowans" data-v="removed|${esc(c.id)}">Remove</button>`}
       <button class="btn sm icon" data-act="rowmenu" data-v="${esc(c.id)}" aria-label="More choices for ${esc(c.site)}">${ic('dots', 18)}</button></div></div>`;
 }
+// 4.56.1: Country for .com and other sites whose ending says nothing. A few sites at a time are read
+// in the background while Copies found is open; the list redraws when some got a country.
+let CC_BUSY = false;
+function fillCountriesSoon() {
+  if (CC_BUSY || !FCD || !FC.fillCountries) return;
+  CC_BUSY = true;
+  (async () => {
+    for (let round = 0; round < 50; round++) {
+      const r = await FC.fillCountries(FCD.copies, 12);
+      if (r.found && state.shown === 'found') { FCD_STALE = true; render(true); }
+      if (!r.left) break;
+      await new Promise(ok => setTimeout(ok, 1500));
+    }
+  })().catch(e => console.warn('PageProof country:', e)).finally(() => { CC_BUSY = false; });
+}
 V.found = async () => {
   const me = RENDER_N;      // a newer redraw started meanwhile: this one is thrown away, so it must not change LIST
   await loadFC();
+  fillCountriesSoon();
   if (!state.fCols || !state.dView) {
     const pr = await api.storage.local.get(['fcCols', 'fcDView']).catch(() => ({}));
     state.fCols = Object.assign({ pct: true, client: true, dmg: true, use: true, country: true, found: true }, pr.fcCols || {});
