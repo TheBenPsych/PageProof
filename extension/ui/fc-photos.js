@@ -31,6 +31,7 @@ V.connect = async () => {
     if (root && st === 'granted' && !state.csPick) {
       // Coming back to this step: show what was ticked before, with its folders opened.
       state.csPick = new Set((await FC.picked()) || []);
+      state.csUnpick = new Set(await FC.unpicked());
       state.csStar = new Set((await FC.DB.all('clients')).filter(c => c.priority && c.pick).map(c => c.pick));
       for (const r of state.csPick) { const parts = r.split('/'); for (let k = 1; k < parts.length; k++) state.csOpen.add(parts.slice(0, k).join('/')); }
     }
@@ -40,16 +41,19 @@ V.connect = async () => {
     if (root && st === 'granted') { csLoad(''); for (const r of state.csOpen) csLoad(r); }
     const pick = state.csPick || new Set();
     const under = r => [...pick].some(p => r.startsWith(p + '/'));
+    // 4.47.3: a folder inside a ticked folder can be unticked (left out). "out" = it or a folder above it was.
+    const unp = state.csUnpick || new Set();
+    const out = r => [...unp].some(u => r === u || r.startsWith(u + '/'));
     const rows = [];
     const walk = (rel, depth) => {
       const kids = state.csTree.get(rel);
       if (kids && kids.error) { rows.push(`<div style="padding:6px 0 6px ${20 + depth * 22}px;font-size:13px;color:var(--bad)">This folder could not be opened. Is Google Drive running? <button class="btn ghost sm" data-act="csretry" data-v="${esc(rel)}">Try again</button></div>`); return; }
       for (const f0 of Array.isArray(kids) ? kids : []) {
         const f = { ...f0, ...(state.csInfo.get(f0.rel) || {}) };
-        const on = pick.has(f.rel) && !f.ignore, inherited = under(f.rel), open = state.csOpen.has(f.rel) && !f.ignore;
+        const on = pick.has(f.rel) && !f.ignore, inherited = under(f.rel), left = inherited && out(f.rel), byAbove = left && !unp.has(f.rel), open = state.csOpen.has(f.rel) && !f.ignore;
         rows.push(`<div class="crow" style="padding-left:${10 + depth * 22}px">
           <button class="btn ghost sm" style="min-height:28px;width:28px;padding:0" data-act="csopen" data-v="${esc(f.rel)}" aria-label="${open ? 'Close' : 'Open'} ${esc(f.name)}" aria-expanded="${open}">${open ? '▾' : '▸'}</button>
-          <label style="display:flex;gap:10px;align-items:center;flex:1;min-width:0;cursor:pointer"><input type="checkbox" data-act="cspk" data-v="${esc(f.rel)}" ${(on || inherited) && !f.ignore ? 'checked' : ''} ${f.ignore ? 'disabled data-why="Skipped: this folder has client_info_ignore.txt, so it and everything inside it are never searched." title="Skipped: this folder has client_info_ignore.txt"' : inherited ? 'disabled data-why="Already included: the folder above it is ticked, and that takes in every folder inside it." title="Included: the folder above it is ticked"' : ''}><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${on ? ';font-weight:700' : ''}${f.ignore ? ';text-decoration:line-through;color:var(--faint)' : ''}">${esc(f.name)}</span>${f.ignore ? '<span class="tag grey" style="font-size:11px;flex-shrink:0" title="client_info_ignore.txt is in this folder, so it and everything inside it is never searched">Skipped</span>' : f.id ? `<span class="tag ok" style="font-size:11px;flex-shrink:0" title="client_info.txt names this client">ID: ${esc(f.id)}</span>` : ''}</label>
+          <label style="display:flex;gap:10px;align-items:center;flex:1;min-width:0;cursor:pointer"><input type="checkbox" data-act="cspk" data-v="${esc(f.rel)}" ${(on || inherited) && !left && !f.ignore ? 'checked' : ''} ${f.ignore ? 'disabled data-why="Skipped: this folder has client_info_ignore.txt, so it and everything inside it are never searched." title="Skipped: this folder has client_info_ignore.txt"' : byAbove ? 'disabled data-why="Left out: a folder above it is unticked." title="Left out: a folder above it is unticked"' : inherited ? `title="${left ? 'Left out. Tick to search it again.' : 'Included because the folder above it is ticked. Untick to leave it out.'}"` : ''}><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${on ? ';font-weight:700' : ''}${f.ignore || left ? ';text-decoration:line-through;color:var(--faint)' : ''}">${esc(f.name)}</span>${left && !byAbove ? '<span class="tag grey" style="font-size:11px;flex-shrink:0" title="You unticked this folder, so it and everything inside it are not searched">Left out</span>' : ''}${f.ignore ? '<span class="tag grey" style="font-size:11px;flex-shrink:0" title="client_info_ignore.txt is in this folder, so it and everything inside it is never searched">Skipped</span>' : f.id ? `<span class="tag ok" style="font-size:11px;flex-shrink:0" title="client_info.txt names this client">ID: ${esc(f.id)}</span>` : ''}</label>
           ${on ? `<button class="starbtn${state.csStar.has(f.rel) ? ' on' : ''}" data-act="csstar" data-v="${esc(f.rel)}" aria-label="Priority client" title="Priority: searched right after High priority photos">★</button>` : ''}</div>`);
         if (open) {
           if (!Array.isArray(state.csTree.get(f.rel)) && !(state.csTree.get(f.rel) || {}).error) rows.push(`<div class="faint" style="padding:6px 0 6px ${42 + depth * 22}px;font-size:13px">Opening…</div>`);
@@ -67,7 +71,7 @@ V.connect = async () => {
     <div class="row"><button class="btn${root ? '' : ' primary'}" data-act="cspick">${ic('files', 18)} ${root ? 'Choose a different top folder' : 'Choose the top folder'}</button>${root && st === 'granted' ? `<button class="btn primary" data-act="csaddone">＋ Add one folder</button>` : ''}${st === 'prompt' ? '<button class="btn primary" data-act="csallow">Allow PageProof to read it</button>' : ''}${state.csBusy ? `<span class="muted">${esc(state.csBusy)}</span>` : ''}</div>
     ${root ? `<span class="faint" style="font-size:12.5px;margin-top:-6px">Top folder: <b>${esc(root.name)}</b>. "Add one folder" opens the folder window so you can go straight to a big folder and pick it.</span>` : ''}
     <label class="field" for="csLabel">Where the top folder is, as File Explorer shows it<input id="csLabel" value="${esc(d.label)}" placeholder="G:\\Shared drives"><span class="faint" style="font-size:12.5px">Your browser can't see the full path, so it's typed here once. It goes in the evidence report next to the photo.</span></label>
-    ${rows.length ? `<div class="row"><b>${plural(pick.size + extras.length, 'folder')} ticked</b>${pick.size ? '<button class="btn ghost sm" data-act="csnone">Untick all</button>' : ''}<span class="faint" style="font-size:12.5px;margin-left:auto">Ticking a folder includes every folder inside it.</span></div>
+    ${rows.length ? `<div class="row"><b>${plural(pick.size + extras.length, 'folder')} ticked</b>${pick.size ? '<button class="btn ghost sm" data-act="csnone">Untick all</button>' : ''}<span class="faint" style="font-size:12.5px;margin-left:auto">Ticking a folder includes every folder inside it. Untick one inside to leave it out.</span></div>
       <div class="cpick" style="max-height:440px">${rows.join('')}</div>` : ''}
     ${[...pick].filter(r => state.csNew && state.csNew.has(r) && !(state.csOk && state.csOk.has(r))).map(r => [r, csWarnFor(r)]).filter(x => x[1]).slice(0, 3).map(([r, w]) => `<div class="banner warn" role="alert" style="margin:0"><div style="flex:1 1 260px;min-width:0;font-size:13.5px">${w}</div><button class="btn" data-act="cswarnun" data-v="${esc(r)}">Untick it</button><button class="btn primary" data-act="cswarnok" data-v="${esc(r)}">Yes, use it</button></div>`).join('')}
     ${pick.size ? `<div class="chips">${[...pick].sort().map(r => `<button class="chip" data-act="cspk" data-v="${esc(r)}" title="Untick">${state.csStar.has(r) ? '★ ' : ''}${esc(r.split('/').pop())} ✕</button>`).join('')}</div>` : ''}
@@ -176,7 +180,7 @@ function csWarnFor(rel) {
   if (Array.isArray(kids) && kids.length >= 8 && !rel.includes('/')) return `<b>“${esc(name)}” holds ${kids.length} folders.</b> Ticked as it is, everything inside counts as ONE client called “${esc(name)}”, except folders inside that have their own client_info.txt. If these are separate clients, open it with ▸ and tick each client instead.`;
   return '';
 }
-function csReset() { state.csTree = new Map(); state.csInfo = new Map(); state.csOpen = new Set(); state.csPick = null; state.csStar = new Set(); state.csBusy = ''; }
+function csReset() { state.csTree = new Map(); state.csInfo = new Map(); state.csOpen = new Set(); state.csPick = null; state.csUnpick = null; state.csStar = new Set(); state.csBusy = ''; }
 Object.assign(ACTS, {
   csgo: v => {
     const l = document.getElementById('csLabel');
@@ -201,13 +205,19 @@ Object.assign(ACTS, {
   csretry: v => { state.csTree.delete(v); csLoad(v); render(true); },
   cspk: v => {
     const p = state.csPick || (state.csPick = new Set());
-    if (p.has(v)) { p.delete(v); state.csStar.delete(v); }
+    const un = state.csUnpick || (state.csUnpick = new Set());
+    // A folder inside a ticked folder: untick = leave it out, tick again = search it again.
+    if (!p.has(v) && [...p].some(o => v.startsWith(o + '/'))) {
+      if (un.has(v)) un.delete(v); else { un.add(v); for (const o of [...un]) if (o.startsWith(v + '/')) un.delete(o); }
+      return render(true);
+    }
+    if (p.has(v)) { p.delete(v); state.csStar.delete(v); for (const o of [...un]) if (o.startsWith(v + '/')) un.delete(o); }
     else { p.add(v); for (const o of [...p]) if (o.startsWith(v + '/')) { p.delete(o); state.csStar.delete(o); } csInfoOne(v); csLoad(v); (state.csNew = state.csNew || new Set()).add(v); }
     render(true);
   },
   cswarnok: v => { (state.csOk = state.csOk || new Set()).add(v); render(true); },
   cswarnun: v => { ACTS.cspk(v); toast('Unticked. Open the folder above it with ▸ and tick the client\'s own folder.'); },
-  csnone: () => { state.csPick = new Set(); state.csStar = new Set(); render(true); },
+  csnone: () => { state.csPick = new Set(); state.csUnpick = new Set(); state.csStar = new Set(); render(true); },
   csstar: v => { if (state.csStar.has(v)) state.csStar.delete(v); else state.csStar.add(v); render(true); },
   csaddone: async () => {
     let r;
@@ -230,7 +240,7 @@ Object.assign(ACTS, {
     if (l) await FC.setDrive({ label: l.value.trim() || 'G:\\Shared drives' });
     state.csBusy = 'Reading the folders you ticked…'; render(true);
     try {
-      const picks = await FC.setPicked([...(state.csPick || [])]);
+      const picks = await FC.setPicked([...(state.csPick || [])], [...(state.csUnpick || [])]);
       const list = await FC.quickClients();
       state.csClients = list.map(c => ({ ...c, searching: c.extra || picks.includes(c.pick), priority: c.extra ? c.priority : state.csStar.has(c.pick) }));
       state.csBusy = ''; state.cs = 3;
