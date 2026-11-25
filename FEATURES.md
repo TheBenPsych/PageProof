@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.53.0** (25 Nov 2026).
+Last updated: version **4.53.1** (25 Nov 2026).
 
 ---
 
@@ -215,6 +215,7 @@ Last updated: version **4.53.0** (25 Nov 2026).
 - **Error diary.** Problems PageProof handles quietly are counted by where they happened (with names, links and folders taken out) and listed under What went wrong in Save stats for Claude. (4.41)
 - **Check-up after every update.** About a minute after a new version opens, PageProof checks the photo checker, opening a Drive photo, saving, the timestamp services and the search sites, and Home says "everything checked" or what broke. (4.41)
 - **Are the extra searches worth it?** How PageProof is doing (and the stats file for Claude) counts each extra search's work, copies found, time spent and time per copy. (4.52)
+- **Big searches stay in All searches.** Kept 90 days, apart from Keep searching's one-photo searches (2 days). (4.53.1)
 
 ---
 
@@ -319,3 +320,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.52.2 | 25 Nov | Fix: Fewer wasted slow looks on Google matches |
 | 4.52.3 | 25 Nov | Fix: Portal card shows the exact drop-down choices |
 | 4.53 | 25 Nov | Breaking News saver removed |
+| 4.53.1 | 25 Nov | Fix: Big searches kept 90 days, one-photo searches 2 days |

@@ -731,6 +731,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['All searches keeps your big searches', 'All searches used to keep only the last 40 searches, so an hour of Keep searching pushed every bigger search out of the list. Big searches (New search, Today\'s 50, photos you picked) are now kept for 90 days, and Keep searching\'s one-photo searches for 2 days, apart from each other. Copies found was never affected.'],
   ['Save as Breaking News photo is gone', 'The "Save as Breaking News photo…" right-click item and its page are removed. Checking for recycled photos by hand was faster, and your platform already checks the dates in file names. POOL photos are still skipped by Keep searching.'],
   ['Legal portal card says which drop-down choice to pick', 'The portal card now shows the portal\'s own drop-down choices: Discovery Method (Reverse Image Search), Infringement Type (Website, Social Media or Embed), Infringer Use (Commercial or Editorial, when PageProof can tell), Paid Ads and Sells Product (Yes or No) and Damages (Statutory, Actual or Cannot Determine Damages), each marked Pick with the reason underneath.'],
   ['Fewer wasted slow looks on Google matches', 'Google\'s "exact match" links that plainly show another picture no longer get a slow full-size second look, and reading their page is capped at 3 links a photo. Your stats showed these looks found almost nothing, so photos finish checking sooner.'],
