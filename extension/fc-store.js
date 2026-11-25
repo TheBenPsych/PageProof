@@ -622,6 +622,7 @@ const FC = (() => {
   }
   // Read one client's photos. "only" = a list of year/quarter keys to look in (the hourly check
   // looks at this quarter and last quarter only). onFile(photoFields) for each photo.
+  const SET_ASIDE = /\b(not to use|do not use|don'?t use|recycled?|recycle bin|should not have been)\b/i;
   async function walkClient(cf, onFile, only, onDir) {
     const regs = {};
     const walk = async (dir, rel, depth, ctx) => {
@@ -641,7 +642,13 @@ const FC = (() => {
           }
           break;
         } catch (e) {
-          if (tries >= 1) { cf.errors = (cf.errors || 0) + 1; console.warn('PageProof could not read folder', rel, e); return; }
+          if (tries >= 1) {
+            cf.errors = (cf.errors || 0) + 1;
+            // 4.51.1: say what Drive actually answered ("[object DOMException]" told nothing). A very
+            // long folder path (Windows stops at about 260 letters) is the usual cause.
+            console.warn('PageProof could not read a folder: ' + ((e && e.name) || 'Error') + (e && e.message ? ' (' + e.message + ')' : '') + '. Left out: ' + rel);
+            return;
+          }
           await new Promise(r => setTimeout(r, 1500));
         }
       }
@@ -660,6 +667,9 @@ const FC = (() => {
       for (const [name, h] of dirs) {
         // 4.47.3: a folder you unticked in setup is left out, with everything inside it.
         if (cf.skip && cf.skip.includes(rel + '/' + name)) { if (onDir) onDir(rel + '/' + name, 0, true); continue; }
+        // 4.51.1: folders a person set aside ("Image not to use", "recycled", "should not have been
+        // in this reg") hold photos that are not the client's to protect, so they are never searched.
+        if (SET_ASIDE.test(name) && !(cf.force || []).includes(rel + '/' + name)) { if (onDir) onDir(rel + '/' + name, 0, true); continue; }
         const c2 = { ...ctx };
         const y = yearOf(name), q = quarterOf(name), d = dayOf(name);
         // A folder that is clearly a year ("2024", "2024 Q1", "Year 2024"), at any depth. Right

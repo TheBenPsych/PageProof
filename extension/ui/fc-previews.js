@@ -36,7 +36,7 @@ const FC_PREV = (() => {
   }
   // The pictures on their page, most likely first (the page's share picture, then big pictures).
   function candidates(html, base) {
-    const doc = new DOMParser().parseFromString(html, 'text/html'), out = [];
+    const doc = new DOMParser().parseFromString(html.replace(/\son([a-z]+\s*=)/gi, ' data-pp-on$1'), 'text/html'), out = [];
     const add = u => { if (!u) return; try { const x = new URL(u.trim(), base).href; if (/^https?:/i.test(x) && !/\.svg(\?|$)/i.test(x) && !out.includes(x)) out.push(x); } catch (e) { /* bad link */ } };
     for (const s of ['meta[property="og:image"]', 'meta[property="og:image:url"]', 'meta[name="twitter:image"]', 'meta[name="twitter:image:src"]']) doc.querySelectorAll(s).forEach(m => add(m.getAttribute('content')));
     doc.querySelectorAll('link[rel="image_src"]').forEach(l => add(l.getAttribute('href')));

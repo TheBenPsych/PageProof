@@ -882,7 +882,7 @@ async function exactOnPage(p, l) {
     const html = r.ok && /html/i.test(r.headers.get('content-type') || 'html') ? (await r.text()).slice(0, 3e6) : '';
     clearTimeout(t);
     if (html) {
-      const doc = new DOMParser().parseFromString(html.replace(/<script[\s\S]*?<\/script>/gi, ''), 'text/html');
+      const doc = new DOMParser().parseFromString(html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\son([a-z]+\s*=)/gi, ' data-pp-on$1'), 'text/html');
       for (const u of pagePictures(doc, r.url || l.url, false)) {
         if (R.stop && !BG) break;
         const pic = await fetchPicture(u, DEEP);
@@ -907,7 +907,7 @@ async function ownPageCheck(l, p) {
     const html = r.ok && /html/i.test(r.headers.get('content-type') || 'html') ? (await r.text()).slice(0, 3e6) : '';
     clearTimeout(t);
     if (!html) { PP_STATS.add('job.own.n'); PP_STATS.add('job.own.fail'); return false; }
-    const doc = new DOMParser().parseFromString(html.replace(/<script[\s\S]*?<\/script>/gi, ''), 'text/html');
+    const doc = new DOMParser().parseFromString(html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\son([a-z]+\s*=)/gi, ' data-pp-on$1'), 'text/html');
     for (const u of pagePictures(doc, r.url || l.url, social).slice(0, 4)) {
       if (R.stop && !BG) break;
       const pic = await fetchPicture(u);
@@ -1003,7 +1003,7 @@ async function pageCheck(l) {
     const html = r.ok && /html/i.test(type) ? (await r.text()).slice(0, 3e6) : '';
     clearTimeout(t);
     if (html) {
-      const doc = new DOMParser().parseFromString(html.replace(/<script[\s\S]*?<\/script>/gi, ''), 'text/html');
+      const doc = new DOMParser().parseFromString(html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\son([a-z]+\s*=)/gi, ' data-pp-on$1'), 'text/html');
       const pics = pagePictures(doc, r.url || l.url, social);
       let tried = 0;
       for (const u of pics) {
