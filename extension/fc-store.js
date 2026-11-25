@@ -1622,6 +1622,9 @@ const FC = (() => {
   // put each copy on a random-looking address of their own (ass4c61.serecoun.blog). Only signs
   // PageProof can see in the links; nothing is answered by itself. Returns Map copy id -> reasons.
   const SPAM_END = /\.(blog|xyz|top|shop|online|site|buzz|click|icu|cyou|rest|monster|lol|cfd|sbs|bond|live|fun|space|store|vip|win|loan|work|info|biz|pw|tk|ml|ga|cf|gq|life|world|today|club|website|pics|homes|beauty|hair|quest|autos|boats|mom|skin|makeup|cam|bar|uno|press|digital|ink|wiki|link|asia|mobi|cc|ws|fit|forum|yoga|help|best|guru|lat|run|kim|men|party|review|stream|download|racing|date|faith|trade|science|accountant|cricket|gdn|fyi|email|ltd|baby|bet|casa|charity|cooking|dog|horse|lifestyle|motorcycles|rocks|sale|shopping|tattoo|wang|ren|beer|blue|pink|red|black|vin|wine)$/;
+  // Endings used almost only by spam and throwaway sites (dewwyt.run, fw65mw.fit): a copy there counts as
+  // spam on its own. Endings real sites also use (.blog, .xyz, .top, .live, .info ...) still need a second sign.
+  const JUNK_END = /\.(cfd|sbs|icu|cyou|bond|rest|monster|lol|autos|boats|mom|quest|hair|skin|makeup|beauty|yoga|motorcycles|pics|homes|run|fit|forum|click|buzz|lat|kim|men|party|review|stream|download|racing|date|faith|trade|science|accountant|cricket|gdn|wang|ren|bar|uno|cam|tk|ml|ga|cf|gq)$/;
   // Big blog and website hosts: everyone there gets their own sub-address, so these are never a farm.
   const BLOG_HOSTS = /(^|\.)(wordpress\.com|blogspot\.[a-z.]+|blogger\.com|tumblr\.com|medium\.com|substack\.com|wixsite\.com|weebly\.com|github\.io|netlify\.app|vercel\.app|pages\.dev|squarespace\.com|webflow\.io|jimdofree\.com|jimdosite\.com|over-blog\.com|livejournal\.com|ghost\.io|typepad\.com|home\.blog|art\.blog|travel\.blog|food\.blog|music\.blog|photo\.blog|business\.blog|news\.blog|fashion\.blog|data\.blog|video\.blog|car\.blog|game\.blog|design\.blog|family\.blog|school\.blog|health\.blog|film\.blog|sport\.blog|tech\.blog)$/;
   // A random-looking name part: letters and numbers mixed up (ass4c61, kl77lfl, vemv18u0g), or a long
@@ -1639,6 +1642,48 @@ const FC = (() => {
   // talkcorner.forum/amphtml/...). Real news sites use /amp/, not amphtml.
   const AMPHTML = /(^|[-.])amphtml([-.]|$)/;
   const ampPath = u => { try { return /(^|\/)amphtml(\/|$)/i.test(new URL(u).pathname); } catch (e) { return false; } };
+  // Keyword-stuffed search pages (radioalacalle.com/kay+proctor+onlyfans+nude): a made-up page per
+  // search, named by 3+ words joined with + right in the address. Real articles use - between words.
+  // 4+ words on their own, or 3+ words with adult words or a throwaway ending (a shop's red+wedding+dress search stays clear).
+  const PLUS_PAGE = /(^|\/)[^/?#.]+(\+[^/?#+.]+){2,}\/?$/, PLUS_LONG = /(^|\/)[^/?#.]+(\+[^/?#+.]+){3,}\/?$/;
+  const ADULT = /(^|[^a-z])(onlyfans|nudes?|naked|porn\w*|xxx|nsfw|sex|leaked?|topless|hentai|camgirl|escort)([^a-z]|$)/i;
+  const urlBits = u => { try { const x = new URL(u); return { path: decodeURIComponent(x.pathname), all: decodeURIComponent(x.pathname + ' ' + x.search) }; } catch (e) { return { path: '', all: '' }; } };
+  // Sites that no longer exist (mrtechmi.com: the address leads nowhere). Ben (2026-11-25): check
+  // each website once when its copy is found, never again. Asks a public name lookup (Google's DNS)
+  // whether the site's name still exists; "no such name" means gone. A failed lookup is tried next time.
+  let GONE = null, GONE_BUSY = false;
+  try { api.storage.onChanged.addListener(ch => { if (ch.ppGoneSites) GONE = ch.ppGoneSites.newValue || {}; }); } catch (e) { /* no storage events here */ }
+  async function goneLoad() {
+    if (!GONE) { try { GONE = (await api.storage.local.get('ppGoneSites')).ppGoneSites || {}; } catch (e) { GONE = {}; } }
+    return GONE;
+  }
+  const goneHost = c => String(c.site || '').toLowerCase().replace(/^www\./, '');
+  async function nameExists(host) {
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 8000);
+    try {
+      const r = await fetch('https://dns.google/resolve?type=A&name=' + encodeURIComponent(host), { credentials: 'omit', signal: ctl.signal });
+      if (!r.ok) return null;
+      const j = await r.json();
+      return j.Status === 3 ? false : j.Status === 0 ? true : null;     // 3 = no such name
+    } catch (e) { return null; } finally { clearTimeout(t); }
+  }
+  // Looks up up to 40 not-yet-checked websites of new copies, 4 at a time. Returns how many turned out gone.
+  async function checkGone(copies) {
+    if (GONE_BUSY) return 0;
+    GONE_BUSY = true;
+    try {
+      const m = { ...(await goneLoad()) };
+      const hosts = [...new Set(copies.filter(c => c.status === 'new' && c.use !== 'social' && /^https?:/i.test(c.url || '')).map(goneHost))]
+        .filter(h => h && h.includes('.') && !(h in m) && !BLOG_HOSTS.test(h) && !(typeof PP_SOCIAL !== 'undefined' ? PP_SOCIAL.isSocial(h) : SOCIAL.test(h))).slice(0, 40);
+      if (!hosts.length) return 0;
+      let gone = 0, i = 0, changed = false;
+      const one = async () => { while (i < hosts.length) { const h = hosts[i++], ok = await nameExists(h); if (ok === null) continue; m[h] = ok ? 1 : 0; changed = true; if (!ok) gone++; } };
+      await Promise.all([one(), one(), one(), one()]);
+      if (changed) { GONE = m; await api.storage.local.set({ ppGoneSites: m }); }
+      return gone;
+    } finally { GONE_BUSY = false; }
+  }
+  const GONE_WHY = 'Site no longer exists (its address leads nowhere)';
   const homeOnly = u => { try { const x = new URL(u); return /^\/?(index\.(html?|php))?$/i.test(x.pathname) && !x.search; } catch (e) { return false; } };
   function spamMarks(copies) {
     const out = new Map(), subs = new Map();
@@ -1664,12 +1709,19 @@ const FC = (() => {
       const baseName = p.base.split('.')[0];
       const rndBase = cheap && randomLabel(baseName) && (!/[aeiouy]/.test(baseName) || (baseName.match(/[a-z](?=\d)|\d(?=[a-z])/g) || []).length >= 3);
       const amp = AMPHTML.test(p.sub), ampP = ampPath(c.url);
-      if (!(rnd && (cheap || home || farm >= 3)) && !(randomFarm && (cheap || home)) && !rndBase && !(amp && (rnd || cheap)) && !(ampP && cheap)) continue;
+      const gone = !!GONE && GONE[goneHost(c)] === 0;
+      if (gone) { out.set(c.id, [GONE_WHY]); continue; }
+      const ub = urlBits(c.url), adult = ADULT.test(ub.path.replace(/[-_+/]/g, ' '));
+      const plus = PLUS_LONG.test(ub.path) || (PLUS_PAGE.test(ub.path) && (adult || cheap || rnd));
+      if (!(rnd && (cheap || home || farm >= 3)) && !(randomFarm && (cheap || home)) && !rndBase && !(amp && (rnd || cheap)) && !(ampP && cheap) && !plus && !(adult && (cheap || rnd)) && !JUNK_END.test(p.base)) continue;
       const why = [];
+      if (plus) why.push('Search-words page (' + ub.path.replace(/^\/+|\/+$/g, '').split('/').pop().slice(0, 50) + '), not an article');
+      if (adult) why.push('Adult words in the address');
       if (rnd) why.push('Random-looking address (' + first + ')');
       if (rndBase) why.push('Made-up site name (' + baseName + ')');
       if (amp || ampP) why.push('"amphtml" in the address, a spam network mark');
-      if (cheap) why.push('Throwaway ending .' + p.base.split('.').pop());
+      if (JUNK_END.test(p.base)) why.push('Ending .' + p.base.split('.').pop() + ' is used almost only by spam sites');
+      else if (cheap) why.push('Throwaway ending .' + p.base.split('.').pop());
       if (farm >= 3) why.push(p.base + ' shows up under ' + farm + ' different made-up addresses');
       if (home) why.push('Only the home page, no article');
       out.set(c.id, why);
@@ -1698,6 +1750,7 @@ const FC = (() => {
     const hidden = HID, shown = Array.isArray(st.fcShownCountries) ? st.fcShownCountries : SHOWN_START;
     const every = await allCopies(), fresh = every.filter(c => c.status === 'new');
     // 4.24: spam blog copies are hidden on Copies found until you show them, so they don't count here.
+    await goneLoad();
     const spam = spamMarks(every);
     let info = {}, mine = {}, links = new Map();
     const kinds = typeof PP_SOCIAL !== 'undefined' && PP_SOCIAL.kindOf;
@@ -2642,6 +2695,6 @@ const FC = (() => {
   return { claimed, claimReset, SET_ASIDE, DB, meta, open, touch, pics, dropDotMatches, checkerRemove, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, inHours, quietOK, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, unpicked, forced, setPicked, pickInside, SCAN, applyPendingFlags, missingPicks, movedNote, followMoves, watchFolders, newFolders, newFoldersSeen, goalPlan, workMinutes, exifDate, heatShoot, coolShoot, burstSibling, wakeBurst, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setStopped, setClients, logWeek, week, weekKey, firstNotes, searchedOnce, dayLog, speed, ladder, LADDER, alikeFrames, mixYears, mixLine,
-    isPool, shownCountries, setShownCountries, SHOWN_START, ownerFor, pathOf, logReport, USE, useOf, riskOf, spamMarks, randomLabel, countryOf, COUNTRY, countryFromDoc, siteCountry, fillCountries, baseOf, groupOf, facts, lookup, owners,
+    isPool, shownCountries, setShownCountries, SHOWN_START, ownerFor, pathOf, logReport, USE, useOf, riskOf, spamMarks, goneLoad, checkGone, GONE_WHY, randomLabel, countryOf, COUNTRY, countryFromDoc, siteCountry, fillCountries, baseOf, groupOf, facts, lookup, owners,
     backupSoon, backupCopiesSoon, writeSettings, writeCopies, readBackup, restore, restoreCopies, settingsSnapshot, monthsOld, newness, yearOf, quarterOf, dayOf };
 })();
