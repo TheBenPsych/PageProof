@@ -246,6 +246,8 @@ const PP_ALIGN = (() => {
   //   flip = mirrored left-right, x, y = top-left corner of the copy before turning.
   const place = (o = {}) => ({ s: 1, w: 1, h: 1, r: 0, k: 0, flip: false, x: 0, y: 0, ...o });
   const sizes = (T, B) => ({ bw: B.width * T.s * T.w, bh: B.height * T.s * T.h });
+  // Share of the copy that is left out as another picture of a collage (T.cut, see findCut).
+  const cutShare = (T, B) => { const c = T.cut; return c ? Math.max(0, Math.min(0.9, (Math.min(B.width, c.x1) - Math.max(0, c.x0)) * (Math.min(B.height, c.y1) - Math.max(0, c.y0)) / (B.width * B.height))) : 0; };
   // Draws the copy onto ctx. k = canvas pixels per original pixel, (ox, oy) = where the original's corner is.
   function drawCopy(ctx, B, T, k, ox = 0, oy = 0, outline = false) {
     const { bw, bh } = sizes(T, B);
@@ -386,6 +388,11 @@ const PP_ALIGN = (() => {
     const ctx = surface(w, h);
     ctx.imageSmoothingQuality = 'high';
     drawCopy(ctx, B, T, f);
+    if (T.cut) {   // a collage: the other picture in it is left out (see findCut)
+      const c = T.cut, q = [[c.x0, c.y0], [c.x1, c.y0], [c.x1, c.y1], [c.x0, c.y1]].map(([u, v]) => mapPoint(T, B, u, v));
+      ctx.save(); ctx.globalCompositeOperation = 'destination-out'; ctx.beginPath();
+      q.forEach((p, i) => (i ? ctx.lineTo(p.x * f, p.y * f) : ctx.moveTo(p.x * f, p.y * f))); ctx.closePath(); ctx.fill(); ctx.restore();
+    }
     const d = ctx.getImageData(0, 0, w, h).data, g = new Float32Array(w * h), m = new Uint8Array(w * h);
     for (let i = 0, j = 0; j < g.length; i += 4, j++) {
       g[j] = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
@@ -441,7 +448,94 @@ const PP_ALIGN = (() => {
     const t = tiles(a, b, 12);
     let inside = 0; for (let i = 0; i < b.m.length; i++) inside += b.m[i];
     const { bw, bh } = sizes(T, Bbm);
-    return { ...t, overlap: inside / Math.max(1, bw * bh * f * f), overlapA: inside / (a.w * a.h), lines: grade(t), strength: t.matched ? t.sumR / t.matched : 0 };
+    return { ...t, overlap: inside / Math.max(1, bw * bh * f * f * (1 - cutShare(T, Bbm))), overlapA: inside / (a.w * a.h), lines: grade(t), strength: t.matched ? t.sumR / t.matched : 0 };
+  }
+
+  // ---------- 5b. collages: the photo is only part of the copy ----------
+  // A copy can be a collage: another picture next to the photo, above or below it, or pasted
+  // over one corner (picture-in-picture, like a lawyer's face over a courtroom shot). That other
+  // picture never lines up, so it pulled the % down and looked like "only one spot matches".
+  // Looked for: one straight-edged box of the copy where (nearly) nothing lines up, while
+  // (nearly) everything else does, with a straight seam along each inner edge of the box. That
+  // box is left out of every check (T.cut, in the copy's own pixels). Two different photos never
+  // pass: what doesn't line up around a seal or a crest is all round it, not in one box.
+  function findCut(Abm, Bbm, T) {
+    if (Math.abs(T.r) > 0.5 || Math.abs(T.k) > 0.005) return null;      // collages are upright
+    const f = 480 / Math.max(Abm.width, Abm.height), S = 12;
+    const a = grayAt(Abm, f), b = render(Bbm, { ...T, cut: null }, a.w, a.h, f), w = a.w, h = a.h;
+    const gw = Math.floor(w / S), gh = Math.floor(h / S), st = new Int8Array(gw * gh);   // 1 lines up, -1 doesn't, 0 out / plain
+    let tex = 0, hit = 0;
+    for (let gy = 0; gy < gh; gy++) for (let gx = 0; gx < gw; gx++) {
+      let n = 0, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0, out = false;
+      for (let y = gy * S; y < gy * S + S && !out; y++) for (let x = gx * S; x < gx * S + S; x++) {
+        const i = y * w + x; if (!b.m[i]) { out = true; break; }
+        const p = a.g[i], q = b.g[i]; n++; sa += p; sb += q; saa += p * p; sbb += q * q; sab += p * q;
+      }
+      if (out) continue;
+      const ma = sa / n, mb = sb / n, va = saa / n - ma * ma, vb = sbb / n - mb * mb;
+      if (va < 25 && vb < 25) continue;
+      const r = va > 4 && vb > 4 ? (sab / n - ma * mb) / Math.sqrt(va * vb) : 0;
+      st[gy * gw + gx] = r > 0.6 ? 1 : -1; tex++; if (r > 0.6) hit++;
+    }
+    if (tex < 40 || hit < 20) return null;
+    // the box with the most squares that don't line up, and (nearly) none that do
+    const W1 = gw + 1, PM = new Int32Array(W1 * (gh + 1)), PH = new Int32Array(W1 * (gh + 1));
+    for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
+      const k = (y + 1) * W1 + x + 1, v = st[y * gw + x];
+      PM[k] = PM[k - 1] + PM[k - W1] - PM[k - W1 - 1] + (v < 0 ? 1 : 0);
+      PH[k] = PH[k - 1] + PH[k - W1] - PH[k - W1 - 1] + (v > 0 ? 1 : 0);
+    }
+    const sum = (P, x0, y0, x1, y1) => P[(y1 + 1) * W1 + x1 + 1] - P[y0 * W1 + x1 + 1] - P[(y1 + 1) * W1 + x0] + P[y0 * W1 + x0];
+    let best = null;
+    for (let y0 = 0; y0 < gh; y0++) for (let y1 = y0; y1 < gh; y1++) for (let x0 = 0; x0 < gw; x0++) for (let x1 = x0; x1 < gw; x1++) {
+      const m = sum(PM, x0, y0, x1, y1), g = m - 6 * sum(PH, x0, y0, x1, y1);
+      if (!best || g > best.g) best = { g, x0, y0, x1, y1 };
+    }
+    if (!best) return null;
+    const mIn = sum(PM, best.x0, best.y0, best.x1, best.y1), hIn = sum(PH, best.x0, best.y0, best.x1, best.y1);
+    const texOut = tex - mIn - hIn, hOut = hit - hIn;
+    if (mIn < 10 || mIn < 0.12 * tex || hIn > 0.08 * (mIn + hIn)) return null;
+    if (texOut < 30 || hOut < 0.7 * texOut) return null;                // everything else must line up
+    // Each inner edge of the box (one the copy goes on past) must be a straight seam in the copy:
+    // a sharp change running the whole length of a perfectly straight line.
+    const inCopy = (x, y) => x >= 0 && y >= 0 && x < w && y < h && b.m[y * w + x];
+    const seam = (vert, at, from, to, dir) => {
+      // best line within a square of the box edge; dir = which side the box is on (-1 / +1)
+      let top = null; const prof = [];
+      for (let p = at - S; p <= at + S; p++) {
+        let n = 0, big = 0, tot = 0;
+        for (let q = from; q < to; q++) {
+          const x = vert ? p : q, y = vert ? q : p, x2 = vert ? p - 2 : q, y2 = vert ? q : p - 2;
+          if (!inCopy(x, y) || !inCopy(x2, y2)) continue;
+          const d = Math.abs(b.g[y * w + x] - b.g[y2 * w + x2]); n++; tot += d; if (d > 10) big++;
+        }
+        if (n < 0.6 * (to - from)) { prof.push(0); continue; }
+        prof.push(tot / n);
+        if (!top || tot / n > top.v) top = { v: tot / n, p, share: big / n };
+      }
+      if (!top) return null;
+      const med = [...prof].sort((x, y) => x - y)[prof.length >> 1];
+      return top.v >= 1.6 * med + 2 && top.share >= 0.4 ? top.p : null;
+    };
+    const px = { x0: best.x0 * S, x1: (best.x1 + 1) * S, y0: best.y0 * S, y1: (best.y1 + 1) * S }, edge = {};
+    const goes = (x, y) => inCopy(Math.max(0, Math.min(w - 1, x)), Math.max(0, Math.min(h - 1, y)));
+    const midY = (px.y0 + px.y1) >> 1, midX = (px.x0 + px.x1) >> 1;
+    for (const [k, vert, at, outX, outY] of [['x0', true, px.x0, px.x0 - S - 3, midY], ['x1', true, px.x1, px.x1 + S + 3, midY], ['y0', false, px.y0, midX, px.y0 - S - 3], ['y1', false, px.y1, midX, px.y1 + S + 3]]) {
+      // the box reaches the edge of the original, or of the copy: nothing to check on that side
+      if (at <= S || at >= (vert ? w : h) - S || !goes(outX, outY)) { edge[k] = null; continue; }
+      const p = seam(vert, at, vert ? px.y0 : px.x0, vert ? px.y1 : px.x1);
+      if (p === null) return null;
+      edge[k] = p;
+    }
+    if (Object.values(edge).every(v => v === null)) return null;     // a box with no inner edge: not a collage
+    // to the copy's own pixels (upright, so a straight scale and shift), a little wider for borders
+    const { bw, bh } = sizes(T, Bbm), toU = x => { const u = (x / f - T.x) / bw * Bbm.width; return T.flip ? Bbm.width - u : u; }, toV = y => (y / f - T.y) / bh * Bbm.height;
+    const padU = 0.015 * Bbm.width, padV = 0.015 * Bbm.height;
+    let u0 = edge.x0 === null ? -1e6 : toU(edge.x0), u1 = edge.x1 === null ? 1e6 : toU(edge.x1);
+    if (T.flip) [u0, u1] = [u1, u0];
+    const v0 = edge.y0 === null ? -1e6 : toV(edge.y0), v1 = edge.y1 === null ? 1e6 : toV(edge.y1);
+    const c = { x0: Math.max(0, Math.min(u0, u1) - padU), x1: Math.min(Bbm.width, Math.max(u0, u1) + padU), y0: Math.max(0, v0 - padV), y1: Math.min(Bbm.height, v1 + padV) };
+    return c.x1 - c.x0 > 4 && c.y1 - c.y0 > 4 ? c : null;
   }
 
   // ---------- 6. which parts are the same photo, and which were added or redrawn ----------
@@ -647,7 +741,7 @@ const PP_ALIGN = (() => {
       }
     }
     let inside = 0; for (let i = 0; i < rb.m.length; i++) inside += rb.m[i];
-    return { list: L2, S, gw: Math.floor(w / S), gh: Math.floor(h / S), shareA: inside / (w * h), shareB: Math.min(1, inside / Math.max(1, bw * bh * f * f)), tex, mat, lines: tex ? mat / tex : 0, str: mat ? sumR / mat : 0, f, t2, m2, lines2: t2 ? m2 / t2 : 0, graphic: m2 ? g2 / m2 : 0 };
+    return { list: L2, S, gw: Math.floor(w / S), gh: Math.floor(h / S), shareA: inside / (w * h), shareB: Math.min(1, inside / Math.max(1, bw * bh * f * f * (1 - cutShare(T, Bbm)))), tex, mat, lines: tex ? mat / tex : 0, str: mat ? sumR / mat : 0, f, t2, m2, lines2: t2 ? m2 / t2 : 0, graphic: m2 ? g2 / m2 : 0 };
   }
   function moment(Abm, Bbm, T) {
     const { bw, bh } = sizes(T, Bbm), up = Math.max(bw / Bbm.width, bh / Bbm.height), L = Math.max(Abm.width, Abm.height);
@@ -1331,8 +1425,14 @@ fn cy(y: i32) -> u32 { return u32(clamp(y, 0, i32(p.h) - 1)); }
       const W = await wholeSearch(A, B);
       if (W) tries.push({ ...W, how: 'whole', sc: score(A, B, W) });
     }
-    return best();
+    const B0 = best();
+    // A collage (another picture beside the photo, or pasted over a corner): leave that part out.
+    if (B0 && B0.sc.lines >= 0.2 && B0.sc.lines < 0.92) {
+      const cut = findCut(A, B, B0);
+      if (cut) { const T2 = { ...B0, cut }, sc = score(A, B, T2); if (sc.lines > B0.sc.lines + 0.03) return { ...T2, sc }; }
+    }
+    return B0;
   }
 
-  return { align, score, changes, spot, repeats, shot, grayOf, place, drawCopy, bounds, reshape, sizes, mapPoint, ready, fast: () => !!W, gpu: gpuInUse, gpuWhy: () => GPU.why + (Object.keys(CAL).length ? ' [' + Object.entries(CAL).map(([k, c]) => k + ' ' + (c.off ? 'off' : 'on') + (c.tries ? ' ' + Math.round(c.g / c.tries) + '/' + Math.round(c.c / c.tries) + ' ms' : '')).join(', ') + ']' : ''), _t: { detail, moment, features, match, W: () => W, grayOf, refine, refineGPU, gpuReady, featuresGPU, matchGPU, CAL } };
+  return { align, findCut, score, changes, spot, repeats, shot, grayOf, place, drawCopy, bounds, reshape, sizes, mapPoint, ready, fast: () => !!W, gpu: gpuInUse, gpuWhy: () => GPU.why + (Object.keys(CAL).length ? ' [' + Object.entries(CAL).map(([k, c]) => k + ' ' + (c.off ? 'off' : 'on') + (c.tries ? ' ' + Math.round(c.g / c.tries) + '/' + Math.round(c.c / c.tries) + ' ms' : '')).join(', ') + ']' : ''), _t: { detail, moment, features, match, W: () => W, grayOf, refine, refineGPU, gpuReady, featuresGPU, matchGPU, CAL } };
 })();

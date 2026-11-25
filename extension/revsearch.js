@@ -859,7 +859,7 @@ async function ownPageCheck(l, p) {
 // the middle), same-backdrop different photos about 0.3.
 // Version 4: a copy shrunk to a dot no longer counts (it was compared over two tiny squares and
 // could show 100%); at least 40 squares must be compared and 12 must match for Same photo.
-const SCORE_VERSION = 7;   // 5: press-wall check (4.8.3); 6: only-logos + same-place check (4.31.0); 7: only a seal / slice / pattern
+const SCORE_VERSION = 8;   // 5: press-wall check (4.8.3); 6: only-logos + same-place check (4.31.0); 7: only a seal / slice / pattern; 8: collages (findCut)
 const userNo = l => !!(l.url && job && job.pics[l.pic] && RS_REJECT.notMatch(l.url, job.pics[l.pic].name));
 function baseVerdict(l) {
   if (l.rescued) return 'maybe';          // you said it is a copy
