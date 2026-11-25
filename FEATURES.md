@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.45.0** (24 Nov 2026).
+Last updated: version **4.46.0** (24 Nov 2026).
 
 ---
 
@@ -272,3 +272,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.43 | 24 Nov | Rule suggestions, own sites and partners, one row per page, same story groups, weak Maybes put away, sweep a Stolen site |
 | 4.44 | 24 Nov | New look part 4: clients, photos and site owners; New look part 2: Copies found and One at a time; New look part 5: evidence pages; New look part 3: searches and Keep searching |
 | 4.45 | 24 Nov | Home instant, strong claims line, since you were last here, clients falling behind, who's behind it in the same pack |
+| 4.46 | 24 Nov | New look part 8: pop-up, side panel, capture card; New look part 7: Settings, health, help; New look part 6: Tools |
