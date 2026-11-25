@@ -1,6 +1,6 @@
 // Find copies › Connect your photos (setup), Clients and photos, a client's photos, and
 // Keep searching with today's 50.
-Object.assign(state, { cs: 0, csClients: null, csBusy: '', csTree: new Map(), csInfo: new Map(), csOpen: new Set(), csPick: null, csStar: new Set(), cTab: 'All', cQ: '', cSort: 'name', cPicked: [], phClient: '', phQ: '', phMore: 50, phPicked: [], phOpen: [] });
+Object.assign(state, { cs: 0, csClients: null, csBusy: '', csTree: new Map(), csInfo: new Map(), csOpen: new Set(), csPick: null, csStar: new Set(), cTab: 'All', cQ: '', cSort: 'name', cPicked: [], phClient: '', phQ: '', phStop: false, phMore: 50, phPicked: [], phOpen: [] });
 
 // ---------------------------------------------------------------- Connect your photos
 const CS_STEPS = ['Install Drive for desktop', 'Stream your files', 'Pick your clients', 'Check and start'];
@@ -387,8 +387,9 @@ V.photos = async () => {
   const q = state.phQ.toLowerCase(), fy = state.phYear || '';
   // A folder on the left shows only that year (or that quarter).
   const inFolder = p => !fy || (fy.includes(' ') ? phFolder(p) === fy : String(p.year || 'No year') === fy);
-  const list = all.filter(p => inFolder(p) && (!q || p.name.toLowerCase().includes(q) || (p.rel || '').toLowerCase().includes(q))).sort((a, b) => (b.flag === 'hi') - (a.flag === 'hi') || (b.order || 0) - (a.order || 0) || a.name.localeCompare(b.name));
+  const list = all.filter(p => inFolder(p) && (!state.phStop || p.stopped) && (!q || p.name.toLowerCase().includes(q) || (p.rel || '').toLowerCase().includes(q))).sort((a, b) => (b.flag === 'hi') - (a.flag === 'hi') || (b.order || 0) - (a.order || 0) || a.name.localeCompare(b.name));
   const doubles = all.filter(p => p.doubleOf);
+  const stopped = all.filter(p => p.stopped).length;
   const show = list.slice(0, state.phMore);
   const regs = new Map();
   for (const p of show) if (!regs.has(p.folder)) regs.set(p.folder, await FC.regFor(p));
@@ -404,7 +405,7 @@ V.photos = async () => {
         <span class="cflags"><button class="flagbtn${p.flag === 'hi' ? ' on hi' : ''}" data-act="phflag" data-v="${esc(p.id)}|hi" aria-pressed="${p.flag === 'hi'}" aria-label="High priority" title="High priority: searched next, then every 3 days">⚑</button><button class="flagbtn${p.flag === 'pop' ? ' on pop' : ''}" data-act="phflag" data-v="${esc(p.id)}|pop" aria-pressed="${p.flag === 'pop'}" aria-label="Popular" title="Popular: searched every 7 days">★</button></span></div>
       <b style="font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.name)}">${esc(p.name)}</b>
       <span class="faint" style="font-size:12px">${p.year || ''}${p.quarter ? ' Q' + p.quarter : ''}${p.searches ? ' · searched ' + plural(p.searches, 'time') : ' · not searched yet'}${p.copies ? ' · ' + plural(p.copies, 'copy', 'copies') : ''}</span>
-      <div class="tdots">${r && r.va ? `<span class="td ok" title="Registered: ${esc(r.va)}">${esc(r.va)}</span>` : r && r.app ? `<span class="td warn" title="Registration applied for">Applied</span>` : '<span class="td grey" title="No registration number found">No number</span>'}${p.doubleOf ? '<span class="td grey" title="Looks the same as another photo of this client">Double</span>' : ''}${FC.isPool(p.name) ? '<span class="td warn" title="POOL: shared with other papers, so it is never searched. Rename it without POOL to search it.">POOL</span>' : ''}${p.empty >= 5 ? `<span class="td grey" title="${p.empty} searches found nothing: searched ${p.empty >= 10 ? 'every 3 months' : 'monthly'}">Quiet</span>` : ''}${due(p) ? `<span class="td copy" title="Due for a search">${due(p)}</span>` : ''}${p.doubleOf ? `<button class="td btnlike" data-act="phnotdouble" data-v="${esc(p.id)}" title="These are different photos">Not the same</button>` : ''}</div>
+      <div class="tdots">${r && r.va ? `<span class="td ok" title="Registered: ${esc(r.va)}">${esc(r.va)}</span>` : r && r.app ? `<span class="td warn" title="Registration applied for">Applied</span>` : '<span class="td grey" title="No registration number found">No number</span>'}${p.doubleOf ? '<span class="td grey" title="Looks the same as another photo of this client">Double</span>' : ''}${FC.isPool(p.name) ? '<span class="td warn" title="POOL: shared with other papers, so it is never searched. Rename it without POOL to search it.">POOL</span>' : ''}${p.empty >= 5 ? `<span class="td grey" title="${p.empty} searches found nothing: searched ${p.empty >= 10 ? 'every 3 months' : 'monthly'}">Quiet</span>` : ''}${due(p) ? `<span class="td copy" title="Due for a search">${due(p)}</span>` : ''}${p.stopped ? `<span class="td grey" title="You stopped searching this photo on ${esc(new Date(p.stopped).toLocaleDateString())}. Keep searching and Today's 50 skip it. Its copies found so far stay.">Not searched</span><button class="td btnlike" data-act="phstop" data-v="${esc(p.id)}|0" title="Keep searching and Today's 50 search this photo again">Search again</button>` : ''}${p.doubleOf ? `<button class="td btnlike" data-act="phnotdouble" data-v="${esc(p.id)}" title="These are different photos">Not the same</button>` : ''}</div>
     </div>`;
   };
   return `<div class="head clhead"><div class="l"><div class="eyebrow">Clients and photos</div><div class="row" style="gap:14px;flex-wrap:nowrap;min-width:0">${avatar(state.phClient || '?', 52)}<div style="min-width:0">
@@ -416,6 +417,7 @@ V.photos = async () => {
     <input type="search" id="phQ" class="chip" style="min-height:36px;padding:0 10px;font-size:14px;margin-left:auto" placeholder="Find a photo by name" value="${esc(state.phQ)}" aria-label="Find a photo by name">
   </div>
   ${doubles.length ? `<div class="banner info"><span style="flex:1"><b>${plural(doubles.length, 'photo looks', 'photos look')} the same as another of this client's photos</b><br><span class="muted" style="font-size:13.5px">Doubles are searched once, and every copy is checked against both. If two are really different photos, click "Not the same".</span></span></div>` : ''}
+  ${stopped || state.phStop ? `<div class="banner info"><span style="flex:1"><b>${plural(stopped, 'photo is', 'photos are')} not searched any more</b><br><span class="muted" style="font-size:13.5px">Someone chose "Stop searching this photo". Keep searching and Today's 50 skip ${stopped === 1 ? 'it' : 'them'}. Click "Search again" on a photo to turn it back on.</span></span><button class="btn" data-act="phstopshow">${state.phStop ? 'Show every photo' : 'Show ' + (stopped === 1 ? 'it' : 'them')}</button></div>` : ''}
   <div class="split">
     <aside class="card pad" style="flex:0 1 220px;display:flex;flex-direction:column;gap:6px;align-self:flex-start" aria-label="Folders">
       <b style="font-size:14px">Folders</b>
@@ -428,7 +430,7 @@ V.photos = async () => {
       ${list.length > show.length ? `<button class="btn" style="align-self:center" data-act="phmore">Show 50 more (${(list.length - show.length).toLocaleString()} not shown)</button>` : ''}
     </div>
   </div>
-  ${state.phPicked.length ? `<div class="bulk"><b>${state.phPicked.length} picked</b><button class="btn primary" style="margin-left:auto" data-act="phsearch">Search now</button><button class="btn" data-act="phbulkflag" data-v="hi">⚑ High priority</button><button class="btn" data-act="phbulkflag" data-v="pop">★ Popular</button><button class="btn" data-act="phbulkflag" data-v="">No flag</button><button class="btn" data-act="phclear">Clear</button></div>` : ''}`;
+  ${state.phPicked.length ? `<div class="bulk"><b>${state.phPicked.length} picked</b><button class="btn primary" style="margin-left:auto" data-act="phsearch">Search now</button><button class="btn" data-act="phbulkflag" data-v="hi">⚑ High priority</button><button class="btn" data-act="phbulkflag" data-v="pop">★ Popular</button><button class="btn" data-act="phbulkflag" data-v="">No flag</button><button class="btn" data-act="phstop" data-v="|1">Stop searching</button><button class="btn" data-act="phstop" data-v="|0">Search again</button><button class="btn" data-act="phclear">Clear</button></div>` : ''}`;
 };
 V.photos.guard = V.found.guard;
 // Rest the mouse on a photo for a moment: a bigger preview pops up beside it.
@@ -482,7 +484,7 @@ function lazyThumbs() {
   view.querySelectorAll('img[data-lazy]').forEach(i => THUMB_OBS.observe(i));
 }
 Object.assign(ACTS, {
-  phclient: (v, el) => { state.phClient = el.value; state.phMore = 50; state.phPicked = []; state.phYear = ''; render(); },
+  phclient: (v, el) => { state.phClient = el.value; state.phMore = 50; state.phPicked = []; state.phYear = ''; state.phStop = false; render(); },
   phmore: () => { state.phMore += 50; render(true); },
   phyear: v => { state.phYear = state.phYear === v ? '' : v; state.phMore = 50; render(true); },
   phpick: v => { const i = state.phPicked.indexOf(v); if (i >= 0) state.phPicked.splice(i, 1); else state.phPicked.push(v); render(true); },
@@ -503,6 +505,19 @@ Object.assign(ACTS, {
     HIST.push({ label: 'flags changed', undo: async () => { for (const [id, f] of was) { const p = await FC.DB.get('photos', id); p.flag = f; await FC.DB.put('photos', p); } PH = null; FC.queueDirty(); FC.backupSoon(true); } });
     toast(plural(ids.length, 'photo') + ' changed.', undoLast); render(true);
   },
+  // Stop searching / search again: one photo (id|0) or the picked photos (|1, |0). Undo puts them back.
+  phstop: async v => {
+    const i = v.lastIndexOf('|'), one = v.slice(0, i), on = v.slice(i + 1) === '1';
+    const ids = one ? [one] : state.phPicked.slice();
+    if (!ids.length) return;
+    if (on && !(await askStop(PH && PH.list ? ids.map(id => (PH.list.find(p => p.id === id) || {}).name || id) : ids))) return;
+    const undo = await FC.setStopped(ids, on);
+    PH = null; if (!one) state.phPicked = [];
+    HIST.push({ label: (on ? 'stopped searching ' : 'searching again ') + plural(ids.length, 'photo'), undo: async () => { await undo(); PH = null; } });
+    toast(on ? plural(ids.length, 'photo') + ' won\'t be searched any more. Copies found so far stay.' : plural(ids.length, 'photo') + (ids.length === 1 ? ' is' : ' are') + ' searched again from now on.', undoLast);
+    render(true);
+  },
+  phstopshow: () => { state.phStop = !state.phStop; state.phMore = 50; render(true); },
   phnotdouble: async v => { const p = await FC.DB.get('photos', v); p.notDouble = true; p.doubleOf = null; await FC.DB.put('photos', p); await FC.findDoubles(); PH = null; FC.queueDirty(); FC.backupSoon(true); toast('Kept as a separate photo. It gets its own searches.'); render(true); },
   phsearch: async () => {
     const ids = state.phPicked.slice(0, 50);

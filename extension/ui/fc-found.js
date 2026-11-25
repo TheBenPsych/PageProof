@@ -631,7 +631,7 @@ async function drawer(list) {
   <div class="dpane" data-tab="sum"${show('sum')}>
     <dl class="facts">
       <dt>Client</dt><dd>${c.clientName ? esc(c.clientName) : `<span style="color:var(--warn);font-weight:600">Client unknown</span> <select data-act="setclient" aria-label="Set the client" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:13px;padding:2px 4px"><option value="">Set…</option>${clients.map(n => `<option>${esc(n)}</option>`).join('')}</select>`}</dd>
-      <dt>Photo</dt><dd>${esc(c.photoName)}${p && p.w ? `<br><span class="muted" style="font-size:13px">${p.w} × ${p.h}</span>` : ''}</dd>
+      <dt>Photo</dt><dd>${esc(c.photoName)}${p && p.w ? `<br><span class="muted" style="font-size:13px">${p.w} × ${p.h}</span>` : ''}${stopRow(c)}</dd>
       ${picLinkRow(c)}
       <dt>How it's used</dt><dd>${esc(FC.USE[c.use][0])}<br><span class="muted" style="font-size:13px">${esc(FC.USE[c.use][1])}</span></dd>
       <dt>Seen</dt><dd>${shortDate(c.firstSeen)}${c.lastSeen && c.lastSeen !== c.firstSeen ? ' → ' + shortDate(c.lastSeen) : ''}, ${c.times > 1 ? c.times + ' times' : 'once'}${c.by ? `<br><span class="muted" style="font-size:13px">First found by ${esc(c.by)}${c.engines && c.engines.length ? ' on ' + c.engines.map(e => ({ google: 'Google Lens', yandex: 'Yandex', bing: 'Bing' }[e] || esc(e))).join(', ') : ''}</span>` : ''}</dd>
@@ -1167,6 +1167,77 @@ async function undoLast() {
 }
 function toastUndo(msg) { toast(msg, undoLast); }
 
+// "Stop searching this photo" (Ben 4.52): a client photo nobody wants searched any more. Keep
+// searching and Today's 50 skip it from now on; the copies already found stay. Undo (U) or
+// Clients and photos › the client's photos turn it back on.
+const isStopped = c => { const p = FCD && FCD.photos.get(c.photo); return !!(p && p.stopped); };
+const STOP_TIP = 'Keep searching and Today\'s 50 skip this photo from now on. The copies found so far stay. Turn it back on any time in Clients and photos.';
+function stopRow(c) {
+  if (!FCD || !FCD.photos.get(c.photo)) return '';
+  return isStopped(c)
+    ? `<br><span class="tag grey" style="margin-top:4px">${ic('pause', 13)} Not searched any more</span> <button class="btn ghost sm" data-act="stopphoto" data-v="${esc(c.id)}">Search it again</button>`
+    : `<br><button class="btn ghost sm" style="margin-top:4px" data-act="stopphoto" data-v="${esc(c.id)}" title="${esc(STOP_TIP)}">${ic('pause', 14)} Stop searching this photo</button>`;
+}
+function stopMenu(c) {
+  if (!FCD || !FCD.photos.get(c.photo)) return '';
+  return isStopped(c)
+    ? `<button data-act="stopphoto" data-v="${esc(c.id)}">${ic('refresh', 16)}<span>Search this photo again</span></button>`
+    : `<button data-act="stopphoto" data-v="${esc(c.id)}" title="${esc(STOP_TIP)}">${ic('pause', 16)}<span>Stop searching this photo</span></button>`;
+}
+function stopBtn(c) {
+  if (!FCD || !FCD.photos.get(c.photo)) return '';
+  return isStopped(c)
+    ? `<button class="btn" data-act="stopphoto" data-v="${esc(c.id)}">${ic('refresh', 16)} Search this photo again</button>`
+    : `<button class="btn" data-act="stopphoto" data-v="${esc(c.id)}" title="${esc(STOP_TIP)}">${ic('pause', 16)} Stop searching this photo</button>`;
+}
+// Before a photo stops being searched: a box that says what will happen, and a tick to say
+// you understand (Ben). Resolves true only when ticked and confirmed.
+function askStop(names, pic) {
+  return new Promise(res => {
+    const n = names.length, one = n === 1;
+    const d = document.createElement('dialog');
+    d.className = 'pp-ask stopask';
+    d.style.cssText = 'border:1px solid var(--line);border-radius:16px;padding:22px;background:var(--surface);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.35);width:min(500px,92vw)';
+    d.innerHTML = `<form method="dialog" style="display:flex;flex-direction:column;gap:12px">
+      <b style="font-size:18px">${one ? 'Stop searching this photo?' : 'Stop searching ' + n + ' photos?'}</b>
+      <div class="row" style="gap:12px;flex-wrap:nowrap;align-items:center">${pic ? `<img src="${pic}" alt="" style="width:84px;height:56px;object-fit:cover;border-radius:8px;flex-shrink:0">` : ''}<span style="min-width:0;overflow-wrap:anywhere;font-weight:600">${esc(one ? names[0] : names.slice(0, 3).join(', ') + (n > 3 ? ' and ' + (n - 3) + ' more' : ''))}</span></div>
+      <ul style="margin:0;padding-left:20px;font-size:14px;line-height:1.5">
+        <li>PageProof will <b>no longer look for new copies</b> of ${one ? 'this photo' : 'these photos'} (Keep searching and Today's 50 skip ${one ? 'it' : 'them'}).</li>
+        <li>Copies already found stay in Copies found.</li>
+        <li>You can turn it back on any time: Clients and photos › the client › <b>Search again</b>.</li>
+      </ul>
+      <label style="display:flex;gap:8px;align-items:flex-start;font-size:14px;cursor:pointer;background:var(--sunk);border-radius:10px;padding:10px 12px"><input type="checkbox" class="stopok" style="margin-top:3px"><span>I understand new copies of ${one ? 'this photo' : 'these photos'} won't be found while ${one ? 'it is' : 'they are'} stopped.</span></label>
+      <div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" value="no" type="submit">Cancel</button><button class="btn primary stopgo" value="yes" type="submit" disabled data-why="Tick the box first.">Stop searching</button></div></form>`;
+    document.body.appendChild(d);
+    const tick = d.querySelector('.stopok'), go = d.querySelector('.stopgo');
+    tick.addEventListener('change', () => { go.disabled = !tick.checked; });
+    // Answer straight from the buttons (the dialog's own close event can come late).
+    let done = false;
+    const finish = yes => { if (done) return; done = true; if (d.open) d.close(); d.remove(); res(yes); };
+    go.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); if (tick.checked) finish(true); });
+    d.querySelector('button[value="no"]').addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); finish(false); });
+    d.addEventListener('keydown', e => e.stopPropagation());
+    d.addEventListener('close', () => finish(false));
+    d.showModal(); tick.focus();
+  });
+}
+async function stopPhoto(copyId) {
+  const c = FCD && FCD.copies.find(x => x.id === copyId);
+  const p = c && FCD.photos.get(c.photo);
+  if (!p) return;
+  const on = !p.stopped;
+  if (on && !(await askStop([c.photoName || p.name], p.thumb ? safeImg(p.thumb) : safeImg(([...document.querySelectorAll('img[data-our]')].find(i => i.dataset.our === p.id) || {}).src || '')))) return;
+  // A double is searched as one photo, so every version of it stops (or starts) together.
+  const ids = (await FC.doublesOf(p)).map(d => d.id);
+  if (!ids.includes(p.id)) ids.push(p.id);
+  const undo = await FC.setStopped(ids, on);
+  const name = c.photoName || p.name;
+  HIST.push({ label: (on ? 'stopped searching ' : 'searching again ') + name, undo, open: state.open || '' });
+  dropFC();
+  toastUndo(on ? `${name} won't be searched any more. Its copies found so far stay.` : `${name} will be searched again.`);
+  render(true);
+}
+
 // In the details panel: answer, then open the next copy in the same list.
 let answering = false;    // One at a time: a second key press while the first answer is still being saved is ignored
 const DRAWER_BUSY = new Set();   // the open copy is being answered: a second key press for it is ignored
@@ -1372,7 +1443,8 @@ Object.assign(ACTS, {
       <button data-act="mdo" data-v="evidence|${id}">${ic('doc', 16)}<span>Make evidence report</span></button>
       <button data-act="mdo" data-v="capture|${id}">${ic('cam', 16)}<span>Capture their page</span></button>
       ${isSoc(c) ? (c.acct ? `<button data-act="openacct" data-v="${id}">${ic('owner', 16)}<span>Who's behind ${esc(c.acct.handle)}</span></button>` : '') : `<button data-act="mdo" data-v="who|${id}">${ic('owner', 16)}<span>Who's behind ${esc(base)}</span></button>`}
-      <button data-act="mdo" data-v="copy|${id}">${ic('link', 16)}<span>Copy the link</span></button>`);
+      <button data-act="mdo" data-v="copy|${id}">${ic('link', 16)}<span>Copy the link</span></button>
+      <hr>${stopMenu(c)}`);
   },
   stripok: (v, el) => {
     const c = FCD && FCD.copies.find(x => x.id === v);
@@ -1661,7 +1733,7 @@ V.review = async () => {
         <button data-act="rverdict" data-v="removed" title="Not wanted: hide it"><b>Remove</b><span class="kbd">N</span></button>
         <button data-act="rverdict" data-v="skip" title="Decide later"><b>Skip</b><span class="kbd">→</span></button>
       </div>
-      <div class="row rvmore"><button class="btn" data-act="rvcompare">${ic('layers', 16)} Compare</button><button class="btn" data-act="evidence" data-v="${esc(c.id)}">${ic('doc', 16)} Evidence report</button><button class="btn" data-act="rvcapture">${ic('capture', 16)} Capture</button>
+      <div class="row rvmore"><button class="btn" data-act="rvcompare">${ic('layers', 16)} Compare</button><button class="btn" data-act="evidence" data-v="${esc(c.id)}">${ic('doc', 16)} Evidence report</button><button class="btn" data-act="rvcapture">${ic('capture', 16)} Capture</button>${stopBtn(c)}
         ${isSoc(c) && !c.acct ? `<a class="btn" href="#found?open=${encodeURIComponent(c.id)}">${ic('who', 16)} Set the account</a>` : ''}
         <details class="rvok"${isSoc(c) && !c.acct ? ' hidden' : ''}><summary class="btn">${ic('check', 16)} Approve ${isSoc(c) ? 'account' : 'site'}</summary><div class="tmenu">${c.clientName ? `<button data-act="rvapprove" data-v="client"><b>For ${esc(c.clientName)} only</b><span>${esc(FC.baseOf(c.site))} may use this client's photos</span></button>` : ''}<button data-act="rvapprove" data-v="all"><b>For every client</b><span>${esc(FC.baseOf(c.site))} may use any photo</span></button></div></details>
         <details class="rvok"><summary class="btn">${ic('ban', 16)} Hide ${isSoc(c) ? 'account' : 'site'}</summary><div class="tmenu">${hideChoices(c).map(([v, l, d]) => `<button data-act="rvhide" data-v="${esc(v)}"><b>${esc(l)}</b><span>${esc(d)}</span></button>`).join('')}</div></details></div>
@@ -1708,6 +1780,7 @@ Object.assign(ACTS, {
     await answerCopies(ids, 'stolen', plural(ids.length, 'copy', 'copies') + ' marked stolen');
     toastUndo(plural(ids.length, 'copy', 'copies') + ' marked stolen.'); render(true);
   },
+  stopphoto: async v => { closeRowMenu(); await stopPhoto(v || state.open); },
   rvcompare: () => { state.open = state.rvCurrent; return ACTS.compare(); },
   // The same Capture and Approve site as the details panel, for the copy on screen here.
   rvcapture: async () => { state.open = state.rvCurrent; try { await ACTS.capturecopy(); } finally { state.open = ''; } },
