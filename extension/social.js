@@ -509,6 +509,22 @@ const PP_SOCIAL = (() => {
     if (/^company\//.test(key) && /linkedin\.com$/.test(acct.plat || 'linkedin.com')) return { type: 'Business', sure: 'sure', why: 'a LinkedIn company page' };
     return null;
   }
+  // 4.49.2: X's "professional category" is picked by the account itself (any personal account can
+  // turn it on), so only fan, news, organisation and creator words in it mean anything.
+  const isXPlat = p => /^(x|twitter)\.com$/i.test(String(p || ''));
+  const selfCat = (plat, cat) => isXPlat(plat) && !!cat && !CAT_FAN.test(cat) && !CAT_NEWS.test(cat) && !CAT_ORG.test(cat) && !CAT_CREATOR.test(cat);
+  // X accounts read before 4.49.2 were called Business from the category alone: work it out again
+  // from the details already read (no new read needed).
+  function xRecheck(acct, i) {
+    if (!i || i.type !== 'Business' || i.typeSure !== 'sure' || i.company || i.verified === 'gold' || i.verified === 'grey' || (i.v || 0) >= 6) return i;
+    if (!selfCat(acct && acct.plat || (/^(x|twitter)\.com\//i.test(acct && acct.key || '') ? 'x.com' : ''), i.category)) return i;
+    const signs = (i.signs || []).slice();
+    if (BIZ_WORDS.test(i.category)) signs.push('a business category ("' + i.category + '")');
+    const out = { ...i, signs, type: '', typeSure: '' };
+    if (signs.length >= 2) { out.type = 'Business'; out.typeSure = 'guess'; }
+    else if (!signs.length && (i.followers == null || i.followers < 1e5) && personName(i.name)) { out.type = 'Person'; out.typeSure = 'guess'; out.personWhy = 'only a person\'s name, with no company, website or contact details (the X category "' + i.category + '" can be picked by anyone)'; }
+    return out;
+  }
   // The account's type, all things known put together (4.35). Order: what you set by hand, then
   // government (from the link, name or profile; Ben never wants them), then what the profile
   // read found, then "just a person's name" worked out again from the details already read (so
@@ -517,7 +533,7 @@ const PP_SOCIAL = (() => {
     if (mine) return { type: mine, sure: 'you', why: 'set by you' };
     const q = quickType(acct, title);
     if (q && q.type === 'Government') return q;
-    const i = info && info.ok ? info : null;
+    const i = info && info.ok ? xRecheck(acct, info) : null;
     if (i) {
       const qi = i.name ? quickType({ ...acct, name: i.name }) : null;
       if (i.type === 'Government') return { type: 'Government', sure: 'sure', why: i.gov || 'the profile' };
@@ -650,7 +666,7 @@ const PP_SOCIAL = (() => {
     f.ok = f.followers != null || !!f.name || !!f.category || !!f.country;
     // What kind of account: the site says it, or the signs add up.
     const btn = (prof.buttons || []).join(' | ');
-    f.v = 5;   // 4.24: X fixes and government; 4 (4.30.1): viewer's own data left out; 5 (4.35): person and more government signs
+    f.v = 6;   // 6 (4.49.2): X category alone is not Business; 4.24: X fixes and government; 4 (4.30.1): viewer's own data left out; 5 (4.35): person and more government signs
     const name = f.name + ' ' + bareName(acct);
     if (/shop now|shop$|view shop|book now|book$|order (now|online)|call now|get directions|directions|send email|email$|contact$|contact us|visit website|buy tickets|start order/i.test(btn)) f.signs.push('a "' + ((btn.match(/shop now|view shop|book now|order now|order online|call now|get directions|send email|contact us|visit website|buy tickets|start order|shop|book|contact|email|directions/i) || ['Contact'])[0]) + '" button');
     if (BIZ_WORDS.test(name) || BIZ_WORDS.test(bio)) f.signs.push('a business word in the name or bio ("' + ((name.match(BIZ_WORDS) || bio.match(BIZ_WORDS))[0]) + '")');
@@ -686,7 +702,10 @@ const PP_SOCIAL = (() => {
     if (plat === 'facebook.com' && !/(?:^|\n)\s*Page\s*·/.test(text) && (/(?:^|\n)\s*[\d.,]+\s?[KkMm]?\s+(?:mutual\s+)?friends\b/.test(top) || /(?:^|\n)\s*Personal details\s*(?:\n|$)/.test(text))) { f.personWhy = /friends/.test(top) ? 'a friends count (only personal profiles have friends)' : '"Personal details" (only personal profiles have them)'; set('Person', 'sure'); }
     if (f.verified === 'gold' || f.verified === 'grey') set('Organisation', 'sure');
     if (f.company) set('Business', 'sure');
-    if (cat) {
+    // 4.49.2 (Ben): on X anyone can switch on a "professional" category ("Entertainment &
+    // Recreation") with one tap, personal accounts too, so it is a sign at most, never the answer.
+    if (cat && selfCat(plat, cat)) { if (BIZ_WORDS.test(cat)) f.signs.push('a business category ("' + cat + '")'); }
+    else if (cat) {
       if (CAT_FAN.test(cat)) set('Fan page', 'sure');
       else if (CAT_NEWS.test(cat)) set('News or media', 'sure');
       else if (CAT_ORG.test(cat)) set('Organisation', 'sure');
@@ -699,7 +718,7 @@ const PP_SOCIAL = (() => {
     if (dv('is_professional_account') === true) set('Creator', 'guess');
     // Just a person's name, nothing else: no category, company, website, email, phone, shop
     // button or business word, no organisation or government check, under 100k followers.
-    if (f.ok && !f.type && !cat && !f.company && !f.signs.length && f.verified !== 'gold' && f.verified !== 'grey' && (f.followers == null || f.followers < 1e5) && personName(f.name) && !FAN_WORDS.test(name)) { f.personWhy = 'only a person\'s name, with no company, website or contact details'; set('Person', 'guess'); }
+    if (f.ok && !f.type && (!cat || selfCat(plat, cat)) && !f.company && !f.signs.length && f.verified !== 'gold' && f.verified !== 'grey' && (f.followers == null || f.followers < 1e5) && personName(f.name) && !FAN_WORDS.test(name)) { f.personWhy = 'only a person\'s name, with no company, website or contact details'; set('Person', 'guess'); }
     if (f.ok && plat === 'instagram.com' && dv('is_business_account') === false && dv('is_professional_account') === false) set('Person', 'guess');
     if (f.ok && plat === 'facebook.com' && /profile\.php|\/id\.\d+/.test((acct.url || '') + (acct.key || '')) && !/(?:^|\n)\s*Page\s*·/.test(text)) set('Person', 'guess');
     return f;
