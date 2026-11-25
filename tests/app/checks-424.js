@@ -15,6 +15,15 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   // The name checks on their own.
   const lab = await page.evaluate(() => ['ass4c61', 'kl77lfl', 'vemv18u0g', 'news24', 'blog2', 'johnsmith'].map(FC.randomLabel));
   ok(lab.join() === 'true,true,true,false,false,false', 'Random-looking names are spotted, news24 / blog2 / plain words are not');
+  // the ones that got through before (a word joined to the random part, a made-up site name,
+  // "amphtml" in the address), while real news sites and Yandex's own utm_source=yasmartcamera tag stay clear.
+  const more = await page.evaluate(() => {
+    const u = ['https://uqumo2us-amphtml.beauty-glam.makeup/', 'https://fw65mw.fit/', 'https://talkcorner.forum/amphtml/post-123',
+      'https://www.standartnews.com/a/b?utm_source=yasmartcamera', 'https://nypost.com/2026/11/01/x/amp/', 'https://k9dog.fit/', 'https://www.bbc.co.uk/news/x'];
+    const m = FC.spamMarks(u.map((x, i) => ({ id: 'u' + i, url: x, site: new URL(x).hostname.replace(/^www\./, '') })));
+    return u.map((x, i) => m.has('u' + i));
+  });
+  ok(more.join() === 'true,true,true,false,false,false,false', 'amphtml and made-up site names are caught, real news sites are not (' + more.join() + ')');
   // Three new website copies move to a made-up farm: two on one throwaway site, one on another.
   const pick = await page.evaluate(async () => {
     FCD = null; await loadFC();
