@@ -1146,7 +1146,7 @@ const FC = (() => {
     // Photos a big search is still getting ready from Google Drive (its search isn't saved yet).
     try { const h = (await api.storage.local.get('fcHold')).fcHold; if (h && Date.now() - h.at < 15 * 60000) for (const id of h.ids || []) ids.add(id); } catch (e) { /* none */ }
     try {
-      if (typeof RS_DB !== 'undefined') for (const j of await RS_DB.all('jobs')) {
+      if (typeof RS_DB !== 'undefined') for (const j of await (RS_DB.since ? RS_DB.since('jobs', cut) : RS_DB.all('jobs'))) {
         if (!j || !Array.isArray(j.pics) || (Date.parse(j.created) || 0) < cut) continue;
         const live = !j.finished && !j.stoppedAt;
         for (const q of [...j.pics, ...(j.alike || [])]) {

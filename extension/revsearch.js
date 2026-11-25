@@ -1819,7 +1819,7 @@ async function renderPast() {
   const jobs = (await RS_DB.all('jobs')).sort((a, b) => b.created.localeCompare(a.created));
   await RS_LISTS.load();
   const KIND = { keep: 'Keep searching', fifty: 'Today\'s 50' };
-  const head = pgHead('All searches', 'The last 40 searches are kept. Every copy they found is also in Copies found.',
+  const head = pgHead('All searches', 'Big searches are kept for 90 days. Keep searching\'s one-photo searches are kept for 2 days. Every copy they found is also in Copies found.',
     h('a', { class: 'pg-btn primary', href: appUrl('search'), onclick: e => goApp('search', e), text: '🔎 New search' }));
   // What each search found, worked out once.
   const info = j => {
