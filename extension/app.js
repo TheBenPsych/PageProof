@@ -189,22 +189,62 @@ function jobRow(j) {
 }
 // Home's jobs (most urgent first) and the small cards under them: Keep searching, every photo
 // searched once, most copied photos.
+// 4.45 (Ben's pick): Home opens instantly, however big the lists get. What Home needs from every
+// copy found (counts by client, most copied photos, strong claims, stolen copies still to capture)
+// is kept as a small summary and only worked out again when copies, hidden sites or captures change.
+async function homeSum() {
+  const got = await api.storage.local.get(['fcChanged', 'ppHomeSum']), log = await getLog();
+  const key = [(got.fcChanged && got.fcChanged.at) || 0, RS_LISTS.hidden.length, log.length, log.reduce((n, e) => n + ((e.saves || []).length), 0), new Date().toDateString()].join('|');
+  const old = got.ppHomeSum;
+  if (old && old.key === key && Date.now() - old.at < 30 * 60000) { if (typeof PP_STATS !== 'undefined') PP_STATS.add('home.sumCached'); return old; }
+  const t0 = Date.now();
+  const copies = await FC.allCopies();
+  const saved = new Set();
+  for (const e of log) if (e.saves && e.saves.some(x => x.at)) saved.add(FC.pageKey(e.url));
+  const vis = copies.filter(c => !FC.hiddenCopy(c, RS_LISTS.hidden));
+  const stolenBases = new Set(vis.filter(c => c.status === 'stolen').map(c => FC.baseOf(c.site)));
+  const by = {}, per = new Map(), dayAgo = Date.now() - 86400000;
+  let nNew = 0, newToday = 0, strong = 0;
+  const strongBy = {};
+  for (const c of vis) {
+    if (c.status === 'new') {
+      nNew++; by[c.client || 'Client unknown'] = (by[c.client || 'Client unknown'] || 0) + 1;
+      if (Date.parse(c.firstSeen || '') > dayAgo) newToday++;
+      if (typeof FC_RULES !== 'undefined' && FC_RULES.isStrong(c, stolenBases)) { strong++; strongBy[c.client || 'Client unknown'] = (strongBy[c.client || 'Client unknown'] || 0) + 1; }
+    }
+    if (c.status !== 'removed' && c.status !== 'licensed') per.set(c.photo, (per.get(c.photo) || 0) + 1);
+  }
+  const up = copies.filter(c => c.status === 'stolen' && !c.packAt && !FC.hiddenCopy(c, RS_LISTS.hidden) && ![c.url, ...(c.alts || [])].some(u => saved.has(FC.pageKey(u))))
+    .sort((a, b) => String(a.answered || a.firstSeen).localeCompare(String(b.answered || b.firstSeen)));
+  const sum = { key, at: Date.now(), nNew, newToday, strong, strongBy, top: Object.entries(by).sort((a, b) => b[1] - a[1]),
+    most: [...per.entries()].filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 5),
+    caps: { n: up.length, oldest: up.length ? (up[0].answered || up[0].firstSeen) : '', sites: [...new Set(up.map(c => c.site))].slice(0, 3) } };
+  await api.storage.local.set({ ppHomeSum: sum }).catch(() => {});
+  if (typeof FC.perf === 'function') FC.perf('homeSummary', Date.now() - t0, copies.length);
+  return sum;
+}
+// The stats alerts for Home, worked out at most every 15 minutes (they read a week of stats).
+async function homeAlerts() {
+  const c = (await api.storage.local.get('ppHomeAlerts')).ppHomeAlerts;
+  if (c && Date.now() - c.at < 15 * 60000) return c.al;
+  const al = typeof PP_REPORT !== 'undefined' ? (await PP_REPORT.model('7', { light: true })).alerts : [];
+  await api.storage.local.set({ ppHomeAlerts: { at: Date.now(), al } }).catch(() => {});
+  return al;
+}
 async function homeFinds() {
   const jobs = [];
-  const caps = await needsCapture().catch(() => ({ up: [] }));
+  const sum = await homeSum().catch(e => { console.warn('PageProof Home summary:', e); return null; });
+  const caps = sum ? { up: { length: sum.caps.n, oldest: sum.caps.oldest, sites: sum.caps.sites } } : await needsCapture().catch(() => ({ up: [] }));
   const d = await FC.drive();
   if (!d.done) {
     jobs.push({ lvl: 'warn', icon: 'find', title: 'Connect your clients\' photos', sub: 'One-time setup so PageProof can search the shared Google Drive all day.', btn: { href: '#connect', label: 'Connect them', main: 1 } });
     if (caps.up.length) jobs.push(capJob(caps.up));
     return { jobs, more: '' };
   }
-  const [copies, st, k, store] = [await FC.allCopies(), (await api.storage.local.get('fcStatus')).fcStatus, await FC.keep(), await api.storage.local.get(['fcToday', 'fcDriveBack', 'fcDriveOffline', 'fcPause', 'fcFirst', 'fcFirstSeen'])];
+  const [st, k, store] = [(await api.storage.local.get('fcStatus')).fcStatus, await FC.keep(), await api.storage.local.get(['fcToday', 'fcDriveBack', 'fcDriveOffline', 'fcPause', 'fcFirst', 'fcFirstSeen'])];
   const hw = await ppHardware();
-  const vis = copies.filter(c => !FC.hiddenCopy(c, RS_LISTS.hidden));
-  const nNew = vis.filter(c => c.status === 'new').length;
-  const by = {};
-  for (const c of vis) if (c.status === 'new') by[c.client || 'Client unknown'] = (by[c.client || 'Client unknown'] || 0) + 1;
-  const top = Object.entries(by).sort((a, b) => b[1] - a[1]);
+  const S = sum || { nNew: 0, newToday: 0, strong: 0, strongBy: {}, top: [], most: [] };
+  const nNew = S.nNew, top = S.top;
   const today = store.fcToday && store.fcToday.day === new Date().toDateString() ? store.fcToday : { searched: 0, found: 0 };
   const alive = st && Date.now() - st.beat < 90000;
   const ds = await FC.driveState(false);
@@ -214,7 +254,7 @@ async function homeFinds() {
   if (k.on && !store.fcPause && st && st.state === 'closed') jobs.push({ lvl: 'bad', title: 'Keep searching is stopped', sub: 'Its pinned PageProof tab was closed, so no new photos are being searched.', btn: { act: 'keepshow', label: 'Start it again', main: 1 } });
   // How PageProof is doing: something changed a lot compared with this computer's usual numbers.
   try {
-    const al = typeof PP_REPORT !== 'undefined' ? (await PP_REPORT.model('7', { light: true })).alerts : [];
+    const al = await homeAlerts();
     if (al.length) jobs.push({ lvl: al.some(a => a[0] === 'bad') ? 'bad' : 'warn', title: al.length === 1 ? al[0][1] : al.length + ' things look off in PageProof\'s stats', sub: al.length === 1 ? al[0][2] : al.map(a => a[1]).slice(0, 3).join('. ') + '.', btn: { href: '#stats', label: 'See the stats' } });
   } catch (e) { /* stats are only a help */ }
   for (const [e, until] of Object.entries(await FC.brokenEngines())) jobs.push({ lvl: 'bad', title: `${FC.ENGINE_NAME[e]} may have stopped working`, sub: `It gave nothing for many photos in a row, so it rests until ${new Date(until).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}. The other search sites carry on.`, btn: { href: '#health', label: 'See details' } });
@@ -224,8 +264,14 @@ async function homeFinds() {
   const clk = (await api.storage.local.get('ppClockOff')).ppClockOff;
   if (clk && Math.abs(clk.off) > 120 && Date.now() - clk.at < 14 * 86400000) jobs.push({ lvl: 'bad', title: `This computer's clock is ${Math.round(Math.abs(clk.off) / 60)} minutes ${clk.off > 0 ? 'fast' : 'slow'}`, sub: 'Times written in your evidence won\'t match the trusted timestamp. Fix: Windows Settings › Time &amp; language › Date &amp; time › turn on "Set time automatically" and press "Sync now".', btn: { href: '#health', label: 'Details' } });
   // 2. copies that need you
+  // 4.45 (Ben's pick): the strongest claims first, one click from Home.
+  if (S.strong) {
+    const sb = Object.entries(S.strongBy).sort((a, b) => b[1] - a[1]);
+    jobs.push({ lvl: 'bad', icon: 'copies', id: 'jobStrong', title: `${S.strong.toLocaleString()} ${S.strong === 1 ? 'copy looks' : 'copies look'} like a strong claim`,
+      sub: 'Same photo, and a site that was stolen from before, sells something or took the credit off. ' + sb.slice(0, 3).map(([n, v]) => esc(n) + ' ' + v).join(' · '), btn: { href: '#found?strong=1', label: 'Look at these first', main: 1 } });
+  }
   if (caps.up.length) jobs.push(capJob(caps.up));
-  if (nNew) jobs.push({ lvl: 'warn', icon: 'copies', id: 'jobNew', title: `${nNew.toLocaleString()} new ${nNew === 1 ? 'copy' : 'copies'} to answer`,
+  if (nNew) jobs.push({ lvl: 'warn', icon: 'copies', id: 'jobNew', title: S.strong ? `${(nNew - S.strong).toLocaleString()} other new ${nNew - S.strong === 1 ? 'copy' : 'copies'} to answer` : `${nNew.toLocaleString()} new ${nNew === 1 ? 'copy' : 'copies'} to answer`,
     sub: top.slice(0, 4).map(([n, v]) => `<a href="#found?client=${encodeURIComponent(n)}">${esc(n)} ${v}</a>`).join(' · ') + (top.length > 4 ? ` · ${top.length - 4} more clients` : ''),
     btn: { href: '#review', label: 'Start', main: 1 } });
   // 3. good news and updates
@@ -236,9 +282,7 @@ async function homeFinds() {
   if (k.on && !store.fcPause && alive) jobs.push({ lvl: 'ok', title: 'Keep searching is running', sub: esc(st.text || '') + ` · today ${today.searched} ${today.searched === 1 ? 'photo' : 'photos'} searched, ${today.found} new`, btn: { href: '#keep', label: 'Open' } });
   else if (!k.on) jobs.push({ lvl: 'warn', title: 'Keep searching is off', sub: 'Turn it on to search your clients\' photos all day.', btn: { href: '#keep', label: 'Turn it on' } });
   // The small cards under the jobs.
-  const per = new Map();
-  for (const c of vis) if (c.status !== 'removed' && c.status !== 'licensed') per.set(c.photo, (per.get(c.photo) || 0) + 1);
-  const most = [...per.entries()].filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const most = S.most;
   let mostHtml = '';
   if (most.length) {
     const ps = await FC.DB.getMany('photos', most.map(m => m[0]));
@@ -255,12 +299,11 @@ async function homeFinds() {
     byHtml = `<section class="card pad" id="homeByClient" style="display:flex;flex-direction:column;gap:8px"><div class="row"><h2>New copies by client</h2><a class="faint" href="#found" style="margin-left:auto;font-size:13px">See all</a></div>
       ${top.slice(0, 5).map(([n, v]) => `<a class="byrow" href="#found?client=${encodeURIComponent(n)}"><span>${esc(n)}</span><span class="bar"><i style="width:${v / mx * 100}%"></i></span><b class="num">${v}</b></a>`).join('')}</section>`;
   }
-  const dayAgo = Date.now() - 86400000;
-  const stats = { nNew, newToday: vis.filter(c => c.status === 'new' && Date.parse(c.firstSeen || '') > dayAgo).length, caps: caps.up.length, oldest: caps.up.length ? ppDaysSince(caps.up[0].answered || caps.up[0].firstSeen) : 0, searched: today.searched || 0, found: today.found || 0, first: store.fcFirst };
+  const stats = { nNew, newToday: S.newToday, caps: caps.up.length, oldest: caps.up.length ? ppDaysSince(caps.up.oldest || (caps.up[0] && (caps.up[0].answered || caps.up[0].firstSeen))) : 0, searched: today.searched || 0, found: today.found || 0, first: store.fcFirst };
   return { jobs, stats, more: homeFirst(store.fcFirst, k, hw) + mostHtml + byHtml };
 }
 function capJob(up) {
-  return { lvl: 'warn', icon: 'capture', id: 'jobCapture', title: `${up.length} stolen ${up.length === 1 ? 'copy needs' : 'copies need'} a capture`, sub: 'Capture them before the site takes them down. Oldest first: ' + esc([...new Set(up.map(c => c.site))].slice(0, 3).join(', ')), btn: { href: '#tocapture', label: 'Capture them', main: 1 } };
+  return { lvl: 'warn', icon: 'capture', id: 'jobCapture', title: `${up.length} stolen ${up.length === 1 ? 'copy needs' : 'copies need'} a capture`, sub: 'Capture them before the site takes them down. Oldest first: ' + esc((up.sites || [...new Set(up.map(c => c.site))]).slice(0, 3).join(', ')), btn: { href: '#tocapture', label: 'Capture them', main: 1 } };
 }
 // Home card: every photo searched once. Uses the small copy saved by the last count, so Home
 // never reads every photo; a count older than an hour is redone after Home has drawn.
@@ -686,6 +729,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Home opens at once, strongest claims first, and who\'s behind it in the same pack', 'Home now opens straight away however many copies there are, puts the copies that look like strong claims in a line of their own ("Look at these first"), tells you what changed since you were last here, and warns when a ★ priority client is falling behind. When you capture a page, PageProof offers to add who\'s behind it (the About and Contact pages, or the account\'s profile) into the same evidence pack, with the same fingerprints and trusted timestamps.'],
   ['Clients, photos and site owners in the new look', 'Clients and photos shows a coloured initials badge per client, a plain ★ to make a priority client, and a "Searched once" bar; click anywhere on a row to open that client\'s photos. The photos page is headed by the client itself (switch client from its name), ⚑ and ★ sit on the corner of each picture, tags are small coloured dots, pictures not loaded yet show a striped tile, and resting the mouse on a photo shows a bigger preview. Site owners get coloured initials, green ticks for why they are one owner, and letter badges on their sites.'],
   ['Cleaner Copies found page', 'Copies found has one grey bar for New, Stolen, Licensed, Removed and All, a coloured "90% match" pill on each row, client headings with initials and a fold arrow, and a dark bar that floats at the bottom when you tick rows. The details panel has a tidy top, one joined answer strip, and Previous / Next by the answers. One at a time shows the pictures on a soft stage with a thicker progress bar, and an empty list now says "All caught up".'],
   ['Evidence pages in the new look', 'Needs a capture has a "Capture the oldest" button, a "Waiting 9 days" chip on every row (amber after 3 days, red after 7) and only one solid Capture button. Capture a page shows your last tab with a big green button, the four steps as picture cards, and your last captures as small pictures with "Pack saved" and "Timestamped" ticks. The Weekly summary has six tiles compared with last week and coloured bars per client, and Verify a pack shows a big green "Nothing has changed" banner.'],

@@ -98,6 +98,19 @@ const FC_RULES = (() => {
   async function weakNote() { return (await FC.meta.get('weakNote')) || null; }
   async function weakSeen() { const w = await weakNote(); if (w) await FC.meta.set('weakNote', { ...w, seen: true }); }
 
+  // ---------------------------------------------------------------- 4.45 strong claims (Home)
+  // A new copy that is the same photo (Same, or 80% or more lines up) on a site you marked Stolen
+  // before (or a page on your stolen before list), a shop, or with the client's credit taken off.
+  function isStrong(c, stolenBases) {
+    if (c.status !== 'new') return false;
+    const same = c.match === 'same' || (c.pct != null && c.pct >= 80);
+    if (!same || c.credit === 'kept') return false;
+    const rep = c.repeat > 0 || c.known || (stolenBases && stolenBases.has(FC.baseOf(c.site)));
+    let use = c.use;
+    try { use = FC.useOf(c); } catch (e) { /* the saved one */ }
+    return !!(rep || use === 'shop' || c.credit === 'removed');
+  }
+
   // ---------------------------------------------------------------- 8 sweep a Stolen site
   // One site at a time, in Keep searching's hours, about one picture every 2 seconds. At most
   // 20 sitemaps, 2,000 pictures and 300 pages read per site. Only that client's photos that have
@@ -221,5 +234,5 @@ const FC_RULES = (() => {
     return true;
   }
 
-  return { suggestions, accept, later, never, ownSites, isWeak, tidyWeak, weakNote, weakSeen, sweeps, sweepOf, queueSweep, dropSweep, pauseSweep, sweepStep, readMap, pagePics, addFound, siteName, WEAK_PCT, WEAK_DAYS };
+  return { isStrong, suggestions, accept, later, never, ownSites, isWeak, tidyWeak, weakNote, weakSeen, sweeps, sweepOf, queueSweep, dropSweep, pauseSweep, sweepStep, readMap, pagePics, addFound, siteName, WEAK_PCT, WEAK_DAYS };
 })();

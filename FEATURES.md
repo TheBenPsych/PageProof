@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.44.0** (24 Nov 2026).
+Last updated: version **4.45.0** (24 Nov 2026).
 
 ---
 
@@ -49,6 +49,7 @@ Last updated: version **4.44.0** (24 Nov 2026).
 - **Clock check:** warns if this computer's clock is off compared with the timestamp services. (4.15)
 - Guides: VERIFYING.md (how anyone checks a pack), TUTORIAL.md, and a Word install guide for the team.
 - **Never short on timestamps.** A timestamp service that doesn't answer is asked again twice, then GlobalSign or Entrust stand in, so every pack gets three trusted timestamps. (4.41)
+- **Who's behind it, in the same pack.** The capture page offers the site's About, Contact and Privacy pages (or the account's profile); each is captured, saved as who/<page>.pdf and covered by the pack's fingerprints and timestamps. (4.45)
 
 ## 3. Look closer at pictures
 
@@ -159,6 +160,10 @@ Last updated: version **4.44.0** (24 Nov 2026).
 - **Hover help** on terms, and buttons that say why they're greyed out. (4.0, 4.15)
 - Fills wide screens and works in narrow windows. (4.2.3, 4.5)
 - **One-click install and update on Windows:** Update-PageProof.cmd on the download page puts the newest version into Documents › PageProof › Install for whoever runs it. (4.32.1)
+- **Home opens at once.** Home keeps a small summary of the copies found and only works it out again when something changes. (4.45)
+- **Look at these first.** Copies that are the same photo on a site stolen from before, a shop, or with the credit removed get their own red line on Home. (4.45)
+- **Since you were last here.** After 4 hours away (or the first visit of the day) Home lists new copies, clients finished, search sites that rested and anything that stopped. (4.45)
+- **Clients falling behind.** A ★ priority client not searched for 10 days, switched off, or with its folder missing, and a goal date that can't be met, show on Home. (4.45)
 
 ## 9. Safety nets
 
@@ -266,3 +271,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.42 | 24 Nov | One search line, per-site lanes, new photo fast lane, goal date, hot shoots, bursts, camera dates, new client folders |
 | 4.43 | 24 Nov | Rule suggestions, own sites and partners, one row per page, same story groups, weak Maybes put away, sweep a Stolen site |
 | 4.44 | 24 Nov | New look part 4: clients, photos and site owners; New look part 2: Copies found and One at a time; New look part 5: evidence pages; New look part 3: searches and Keep searching |
+| 4.45 | 24 Nov | Home instant, strong claims line, since you were last here, clients falling behind, who's behind it in the same pack |
