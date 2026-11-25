@@ -43,10 +43,19 @@ const PP_REPORT = (() => {
   // ---------------------------------------------------------------- what's in the shop right now
   // Copies found, by what the checker said and what you answered (all time), and coverage.
   async function copiesNow() {
-    const out = { same: {}, maybe: {}, rescued: 0, spamNew: 0, repostNew: 0, total: 0 };
+    const out = { same: {}, maybe: {}, rescued: 0, spamNew: 0, repostNew: 0, total: 0, byKind: {} };
     try {
       const all = await FC.allCopies();
       out.total = all.length;
+      // 4.47: the checker's answers next to yours, by kind of site, for copies answered in the last 30 days.
+      const since = new Date(Date.now() - 30 * 864e5).toISOString();
+      if (typeof PP_CTESTS !== 'undefined') for (const x of all) {
+        if (!x.answered || x.answered < since || x.status === 'new' || x.removedBy) continue;
+        const k = PP_CTESTS.kindOf(x), b = out.byKind[k] || (out.byKind[k] = { sameN: 0, sameOk: 0, maybeN: 0, maybeOk: 0, missed: 0 });
+        if (/by hand/.test(x.by || '')) { b.missed++; continue; }
+        const ok = x.status === 'stolen' || x.status === 'licensed';
+        if (x.match === 'same') { b.sameN++; if (ok) b.sameOk++; } else if (x.match === 'maybe') { b.maybeN++; if (ok) b.maybeOk++; }
+      }
       for (const x of all) {
         if (/by hand/.test(x.by || '')) { out.rescued++; continue; }
         const m = x.match === 'same' ? out.same : x.match === 'maybe' ? out.maybe : null;
@@ -82,6 +91,8 @@ const PP_REPORT = (() => {
       firstDay: Object.keys(st.days).sort()[0] || null,
     };
     if (!opts.light) { m.copies = await copiesNow(); m.cover = await coverNow(); }
+    m.realtest = st.realtest || null;
+    try { m.realPairs = typeof PP_CTESTS !== 'undefined' ? await PP_CTESTS.count() : 0; } catch (e) { m.realPairs = 0; }
     // 4.39: the error diary, saves that failed and how much is stored (pp-guard.js).
     if (typeof PP_GUARD !== 'undefined') {
       m.saveFail = await PP_GUARD.lastFail().catch(() => null);
@@ -177,6 +188,8 @@ const PP_REPORT = (() => {
     L.push('  Waiting for a free checker: ' + ms(usual(D, 'chk.wait')) + ' usual, ' + ms((t(D, 'chk.wait') || {}).x) + ' slowest · could not check (over 30 s) ' + num(c(D, 'chk.stuck')));
     if (m.test) L.push('  Checker test: ' + m.test.right + ' of ' + m.test.n + ' right, ' + ms(m.test.ms) + ' each, ' + new Date(m.test.at).toLocaleString('en-US') + ' (' + Object.values(m.test.groups).map(g => g.label + ' ' + g.right + '/' + g.n).join(', ') + ')');
     else L.push('  Checker test: not run yet');
+    if (m.realtest) L.push('  Your real pairs: ' + m.realtest.right + ' of ' + m.realtest.n + ' right (kept but removed ' + m.realtest.wrongKept + ', missed ' + m.realtest.missed + '; ' + Object.entries(m.realtest.byKind || {}).map(([k, v]) => k + ' ' + v.right + '/' + v.n).join(', ') + ')');
+    if (m.copies && m.copies.byKind) L.push('  Checker vs your answers, last 30 days, by kind of site: ' + Object.entries(m.copies.byKind).map(([k, v]) => k + ' Same ' + v.sameOk + '/' + v.sameN + ', Maybe ' + v.maybeOk + '/' + v.maybeN + ', missed ' + v.missed).join(' | '));
     if (m.copies) {
       const row = (o, name) => { const n = Object.values(o).reduce((a, b) => a + b, 0); return '  Said ' + name + ' (' + num(n) + '): ' + ['stolen', 'licensed', 'removedByYou', 'removedByPageProof', 'new'].map(k => k.replace(/([A-Z])/g, ' $1').toLowerCase() + ' ' + num(o[k] || 0)).join(', '); };
       L.push('  All copies so far, by what the checker said and what you answered:', row(m.copies.same, 'Same photo'), row(m.copies.maybe, 'Maybe'), '  Added by hand ("It is a copy"): ' + num(m.copies.rescued));

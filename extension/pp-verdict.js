@@ -26,6 +26,28 @@ const PP_VERDICT = {
   },
   // The worker's answer (score-worker.js) as a line-up result for fields().
   fromWorker(w) { return w && !w.none ? { inliers: w.inliers, sc: w, backdrop: w.backdrop, logos: w.logos, place: w.place, spot: w.spot, photo: w.photo } : null; },
+  // 4.47 (Ben's pick): a Same photo with a thin margin (few matching details, under 85%, or the
+  // middle only just lining up) gets a second, slower look at full size before it reaches
+  // Copies found. About 1 in 4 Same answers were removed by hand, and they were mostly these.
+  close(l) {
+    if (PP_VERDICT.score(l) !== 'same') return false;
+    return l.pct < 85 || l.inl < 20 || (l.mid !== null && l.mid !== undefined && l.mid < 0.55);
+  },
+  // What the second look decides. fast = the first numbers, deep = the second look's numbers
+  // (null when it could not run). exact = Google listed it under "Exact matches".
+  // Returns the numbers to keep and what happened: 'kept' (the second look agrees), 'maybe' (it
+  // was only a Maybe), 'out' (thrown out after all), 'saved' (an exact match the fast check missed).
+  second(fast, deep, exact) {
+    const v0 = PP_VERDICT.score(fast);
+    if (!deep || PP_VERDICT.score(deep) === 'cant') return { keep: fast, how: '' };
+    const v1 = PP_VERDICT.score(deep);
+    if (v0 === 'same') {
+      if (v1 === 'same') return { keep: fast, how: 'kept' };
+      return { keep: deep, how: v1 === 'maybe' ? 'maybe' : 'out' };
+    }
+    if (exact && (v1 === 'same' || v1 === 'maybe')) return { keep: deep, how: 'saved' };
+    return { keep: fast, how: exact ? 'exactNo' : '' };
+  },
   // Same photo, Maybe or Different, from the numbers alone ('cant' = could not be checked).
   // See revsearch.js (baseVerdict) for how these limits were found.
   score(l) {

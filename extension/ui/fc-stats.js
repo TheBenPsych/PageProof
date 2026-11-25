@@ -49,7 +49,12 @@ function stTestCard(m) {
     body = stBars(G.map(g => [g.label + ' (' + g.n + ')', g.right, g.right === g.n ? 'var(--ok)' : 'var(--warn)', g.right < g.n ? 'Same ' + g.same + ', Maybe ' + g.maybe + ', Different ' + g.no + ', could not check ' + g.cant : '']), 'var(--ok)') +
       `<p class="faint" style="margin:0;font-size:12.5px">${last.right} of ${last.n} right · ${stMs(last.ms)} each · fast checker ${last.fast ? 'on' : 'off'} · graphics card ${last.gpu ? 'used' : 'not used'} · ${esc(new Date(last.at).toLocaleString())}. On the computer it was made on it gets all ${last.n} right.</p>`;
   } else body = `<p class="muted" style="margin:0;font-size:14px">Not run on this computer yet. It takes about a minute and you can keep working.</p>`;
-  const tag = last && !(T && T.running) ? `<span class="tag ${last.right === last.n ? 'ok' : last.right / last.n >= 0.9 ? 'warn' : 'bad'}">${last.right} of ${last.n} right</span>` : '';
+  // 4.47: your own real pairs (Documents\PageProof\checker-tests), kept from your answers.
+  const R = m.realtest;
+  if (!(T && T.running)) body += R && R.n ? `<div class="st-real"><h3 class="st-h3">Your real pairs</h3>${stBars([['Right', R.right, 'var(--ok)'], ['Kept, but you removed it', R.wrongKept, 'var(--bad)'], ['Missed, but you said it is a copy', R.missed, 'var(--warn)']], 'var(--ok)')}
+      ${Object.keys(R.byKind || {}).length ? `<p class="faint" style="margin:0;font-size:12.5px">${Object.entries(R.byKind).sort((a, b) => b[1].n - a[1].n).map(([k, v]) => esc(PP_CTESTS.KIND_NAME[k] || k) + ' ' + v.right + ' of ' + v.n).join(' · ')}</p>` : ''}</div>`
+    : `<p class="faint" style="margin:6px 0 0;font-size:12.5px">${m.realPairs ? stN(m.realPairs) + ' real pairs kept so far. They are checked the next time you run the test.' : 'Your real pairs: none yet. Each time you remove a copy the checker called Same photo, or press "It is a copy" on one it threw out, a small pair is kept in Documents\\PageProof\\checker-tests (this computer only) and checked here.'}</p>`;
+  const tag = last && !(T && T.running) ? `<span class="tag ${last.right === last.n ? 'ok' : last.right / last.n >= 0.9 ? 'warn' : 'bad'}">${last.right} of ${last.n} right</span>${R && R.n ? ` <span class="tag ${R.right / R.n >= 0.9 ? 'ok' : R.right / R.n >= 0.75 ? 'warn' : 'bad'}">Real pairs ${R.right} of ${R.n}</span>` : ''}` : '';
   return stCard('Checker test', 'PageProof draws made-up test pictures, makes copies of them (smaller, cropped, a headline over them, mirrored, tilted) and checks each one with the same photo checker a real search uses. Different pictures must come out Different.', body, `<div class="row" style="gap:8px">${tag}${runBtn}</div>`);
 }
 function stFound(m) {
@@ -86,7 +91,20 @@ function stChecker(m) {
     <div class="st-legend"><span><i style="background:var(--${m.fast === false ? 'warn' : 'ok'})"></i>Fast checker ${m.fast == null ? 'not used yet' : m.fast ? 'on' : 'off'}</span><span><i style="background:var(--${m.gpu ? 'ok' : 'faint'})"></i>Graphics card ${m.gpu == null ? 'not used yet' : m.gpu ? 'in use' : 'not available'}</span><span><i style="background:var(--faint)"></i>${m.checks || '?'} checks at once</span><span><i style="background:var(--${c('chk.stuck') ? 'warn' : 'faint'})"></i>${stN(c('chk.stuck'))} could not be checked (over 30 s)</span></div>
     <div><h3 class="st-h3">Said Same photo</h3>${stStack(parts(cp.same))}</div>
     <div><h3 class="st-h3">Said Maybe</h3>${stStack(parts(cp.maybe))}</div>
-    <p class="faint" style="margin:0;font-size:12.5px">Copies you added by hand with "It is a copy" (the checker missed them): ${stN(cp.rescued || 0)} so far, ${stN(c('ans.rescued'))} in this time.</p>`);
+    <p class="faint" style="margin:0;font-size:12.5px">Copies you added by hand with "It is a copy" (the checker missed them): ${stN(cp.rescued || 0)} so far, ${stN(c('ans.rescued'))} in this time.</p>
+    ${stByKind(cp.byKind)}
+    ${c('chk.second.kept') + c('chk.second.maybe') + c('chk.second.out') + c('chk.second.saved') ? `<p class="faint" style="margin:0;font-size:12.5px">Second look at full size: ${stN(c('chk.second.kept'))} close Same calls kept, ${stN(c('chk.second.maybe'))} made Maybe, ${stN(c('chk.second.out'))} thrown out · ${stN(c('chk.second.saved'))} of Google's exact matches saved, ${stN(c('chk.second.exactNo'))} still different.</p>` : ''}`);
+}
+// 4.47 (Ben's pick): where the checker goes wrong. The checker's answers next to yours for the
+// last 30 days, by kind of site (going by the site's address), so the fix that helps most shows.
+function stByKind(bk) {
+  if (!bk || !Object.keys(bk).length) return '';
+  const pc = (a, n) => n ? Math.round(a / n * 100) + '%' : '–';
+  const rows = Object.entries(bk).sort((a, b) => (b[1].sameN + b[1].maybeN) - (a[1].sameN + a[1].maybeN));
+  const worst = rows.filter(([, v]) => v.sameN >= 5).sort((a, b) => a[1].sameOk / a[1].sameN - b[1].sameOk / b[1].sameN)[0];
+  return `<div><h3 class="st-h3">Where the checker goes wrong (answered in the last 30 days)</h3>${stTable(['Kind of site', 'Same photo answered', 'Same right', 'Maybe answered', 'Maybe right', 'Missed (added by hand)'],
+    rows.map(([k, v]) => [esc((typeof PP_CTESTS !== 'undefined' && PP_CTESTS.KIND_NAME[k]) || k), stN(v.sameN), `<span${v.sameN >= 5 && v.sameOk / v.sameN < 0.75 ? ' style="color:var(--bad);font-weight:700"' : ''}>${pc(v.sameOk, v.sameN)}</span>`, stN(v.maybeN), pc(v.maybeOk, v.maybeN), stN(v.missed)]))}
+    ${worst && worst[1].sameOk / worst[1].sameN < 0.85 ? `<p class="faint" style="margin:6px 0 0;font-size:12.5px">Most room to improve: <b>${esc(PP_CTESTS.KIND_NAME[worst[0]] || worst[0])}</b>, where ${pc(worst[1].sameN - worst[1].sameOk, worst[1].sameN)} of the Same photo answers were removed.</p>` : ''}</div>`;
 }
 function stEngines(m) {
   const D = m.D, c = k => SR().c(D, k), rows = [], rows2 = [];
@@ -236,7 +254,16 @@ Object.assign(ACTS, {
       });
       await PP_STATS.setMeta('test', r);
       PP_STATS.add('test.runs');
-      toast('Checker test: ' + r.right + ' of ' + r.n + ' right.');
+      // 4.47: then your own real pairs, if there are any.
+      let rr = null;
+      if (typeof PP_CTESTS !== 'undefined' && await PP_CTESTS.count()) {
+        rr = await PP_CTESTS.run((done, total) => {
+          Object.assign(state.stTest, { done: r.n + done, total: r.n + total });
+          if (Date.now() - last > 400) { last = Date.now(); const b = document.getElementById('stTestBar'); if (b) b.innerHTML = `<span class="spin"></span>Checking your real pair ${done} of ${total}…`; }
+        });
+        if (rr.n) await PP_STATS.setMeta('realtest', rr);
+      }
+      toast('Checker test: ' + r.right + ' of ' + r.n + ' right' + (rr && rr.n ? '. Your real pairs: ' + rr.right + ' of ' + rr.n + ' right.' : '.'));
     } catch (e) { toast('The checker test could not run: ' + (e && e.message || e)); }
     state.stTest = null; state.stModel = null;
     if (state.shown === 'stats') render(true);

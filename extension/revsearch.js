@@ -590,7 +590,20 @@ async function origBitmap(p) {
   b.close && b.close();
   return (R.origBmp[p.i] = s);
 }
-async function fetchPicture(url) {
+// 4.47: your photo for the second, full-size look (close calls, Google's exact matches). Only
+// the photo being checked is kept, so memory stays small.
+const DEEP = 1200;
+async function bigBitmap(p) {
+  if (R.bigBmp && R.bigBmp.i === p.i) return R.bigBmp.bmp;
+  const b = await createImageBitmap(p.blob);
+  const f = Math.min(1, DEEP / Math.max(b.width, b.height));
+  const s = f < 1 ? await createImageBitmap(b, { resizeWidth: Math.max(1, Math.round(b.width * f)), resizeHeight: Math.max(1, Math.round(b.height * f)), resizeQuality: 'high' }) : b;
+  if (s !== b) b.close && b.close();
+  if (R.bigBmp) try { R.bigBmp.bmp.close && R.bigBmp.bmp.close(); } catch (e) { /* freed */ }
+  R.bigBmp = { i: p.i, bmp: s };
+  return s;
+}
+async function fetchPicture(url, max) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 7000);
   try {
@@ -601,7 +614,7 @@ async function fetchPicture(url) {
     const b = await r.blob();
     timeAdd('dl', Date.now() - t0); PP_STATS.time('dl', Date.now() - t0);
     if (b.size > 25e6) { PP_STATS.add('dl.tooBig'); return null; }
-    const out = await decodeTurn(() => shrinkPicture(b));
+    const out = await decodeTurn(() => shrinkPicture(b, max));
     if (!out) PP_STATS.add('dl.unreadable');
     return out;
   } catch (e) {
@@ -619,12 +632,12 @@ async function decodeTurn(fn) {
   DECODE.busy++;
   try { return await fn(); } finally { DECODE.busy--; const n = DECODE.wait.shift(); if (n) n(); }
 }
-async function shrinkPicture(b) {
+async function shrinkPicture(b, max = 640) {
   try {
     // Shrink straight away and free the full-size copy: a big photo takes 50-100 MB of memory
     // once opened, and the check only ever looks at it 640 pixels wide.
     const big = await createImageBitmap(b);
-    const f = Math.min(1, 640 / Math.max(big.width, big.height));
+    const f = Math.min(1, max / Math.max(big.width, big.height));
     if (f >= 1) return { bmp: big, w: big.width, h: big.height };
     const bmp = await createImageBitmap(big, { resizeWidth: Math.max(1, Math.round(big.width * f)), resizeHeight: Math.max(1, Math.round(big.height * f)), resizeQuality: 'high' });
     const out = { bmp, w: big.width, h: big.height };
@@ -700,7 +713,7 @@ async function idleWorker() {
     await new Promise(r => POOL_WAIT.push(r));
   }
 }
-async function checkInWorker(p, bmp) {
+async function checkInWorker(p, bmp, deep) {
   if (POOL.failed || typeof Worker === 'undefined' || typeof OffscreenCanvas === 'undefined') return null;
   let w;
   const tw = Date.now();
@@ -708,20 +721,21 @@ async function checkInWorker(p, bmp) {
   const waited = Date.now() - tw;
   timeAdd('wait', waited); PP_STATS.time('chk.wait', waited);
   w.busy++;                                            // taken before any waiting below
+  const key = deep ? 'big' + p.i : p.i;
   try {
-    if (!w.sent.has(p.i)) {
-      const o = await origBitmap(p);
+    if (!w.sent.has(key)) {
+      const o = deep ? await bigBitmap(p) : await origBitmap(p);
       const copy = await createImageBitmap(o);
-      w.worker.postMessage({ type: 'orig', key: p.i, bmp: copy }, [copy]);
-      w.sent.add(p.i);
+      w.worker.postMessage({ type: 'orig', key, bmp: copy }, [copy]);
+      w.sent.add(key);
       if (w.sent.size > 8) { const old = w.sent.values().next().value; w.sent.delete(old); w.worker.postMessage({ type: 'forget', key: old }); }   // keep memory small
-    } else { w.sent.delete(p.i); w.sent.add(p.i); }   // most recently used goes last
+    } else { w.sent.delete(key); w.sent.add(key); }   // most recently used goes last
   } catch (e) { w.busy--; freeWorker(); throw e; }
   const id = POOL.next++, tc = Date.now();
   const res = await new Promise(resolve => {
     w.waits.set(id, resolve);
-    w.worker.postMessage({ type: 'check', id, key: p.i, bmp }, [bmp]);
-    setTimeout(() => { if (w.waits.has(id)) killWorker(w); }, 30000);
+    w.worker.postMessage({ type: 'check', id, key, bmp, deep: !!deep }, [bmp]);
+    setTimeout(() => { if (w.waits.has(id)) killWorker(w); }, deep ? 60000 : 30000);
   });
   if (res.err) return { stuck: true };                // the picture was handed over, so no second try here
   timeAdd('check', Date.now() - tc);
@@ -731,21 +745,21 @@ async function checkInWorker(p, bmp) {
   return res.out;
 }
 
-async function measure(p, bmp) {
-  const f = Math.min(1, 640 / Math.max(bmp.width, bmp.height));
+async function measure(p, bmp, deep) {
+  const f = Math.min(1, (deep ? DEEP : 640) / Math.max(bmp.width, bmp.height));
   const small = f < 1 ? await createImageBitmap(bmp, { resizeWidth: Math.round(bmp.width * f), resizeHeight: Math.round(bmp.height * f), resizeQuality: 'high' }) : bmp;
   const t0 = Date.now();
   try {
-    const w = await checkInWorker(p, small);
+    const w = await checkInWorker(p, small, deep);
     if (w && w.stuck) { PP_STATS.add('chk.stuck'); return { pct: -1, sv: SCORE_VERSION }; }       // took too long: shown as "Can't check"
     let best = w ? PP_VERDICT.fromWorker(w)
-      : await PP_ALIGN.align(await origBitmap(p), small, undefined, { fast: true });
+      : await PP_ALIGN.align(deep ? await bigBitmap(p) : await origBitmap(p), small, undefined, { fast: !deep });
     if (best && !w && best.sc.lines >= 0.3) {
-      const A = await origBitmap(p), Sh = PP_ALIGN.shot(A, small, best);
+      const A = deep ? await bigBitmap(p) : await origBitmap(p), Sh = PP_ALIGN.shot(A, small, best);
       Object.assign(best, { backdrop: Sh.backdrop, logos: Sh.logos, place: Sh.place, spot: Sh.emblem || Sh.slice || Sh.pattern, photo: Sh.photo });
     }
     const out = PP_VERDICT.fields(best, SCORE_VERSION);
-    statCheck(out, Date.now() - t0 - (w && w._w || 0));
+    if (!deep) statCheck(out, Date.now() - t0 - (w && w._w || 0)); else PP_STATS.time('chk.deep', Date.now() - t0 - (w && w._w || 0));
     return out;
   } catch (e) { PP_STATS.add('chk.error'); return { pct: 0, inl: 0, tiles: 0, str: 0, mid: null, sv: SCORE_VERSION }; }
 }
@@ -760,26 +774,50 @@ async function scoreLink(l) {
     const tb = await fetchPicture(l.thumb);
     if (tb && Math.min(tb.w, tb.h) >= 80) quick = await measure(p, tb.bmp);
     freePic(tb);
-    if (quick && verdict(quick) === 'no') { Object.assign(l, quick); return; }
+    // 4.47: Google's exact matches are never thrown out on the small preview alone.
+    if (quick && verdict(quick) === 'no' && !l.exact) { Object.assign(l, quick); return; }
   }
   const full = l.img ? await fetchPicture(l.img) : null;
   if (full) {
     if (!l.w) { l.w = full.w; l.h = full.h; }
     const m = await measure(p, full.bmp);
     freePic(full);
-    Object.assign(l, m, { from: 'image' });
+    Object.assign(l, await secondLook(p, l, m), { from: 'image' });
     return;
   }
   // 4.35: only the search site's small preview was checked (Google never gives the picture's
   // own address). pageCheck() then looks for the photo on their page itself.
-  if (quick) { Object.assign(l, quick, { from: 'preview' }); return; }
+  if (quick) { Object.assign(l, await secondLook(p, l, quick), { from: 'preview' }); return; }
   const tb = l.thumb ? await fetchPicture(l.thumb) : null;
-  if (tb) { const m = await measure(p, tb.bmp); freePic(tb); Object.assign(l, m, { from: 'preview' }); return; }
+  if (tb) { const m = await measure(p, tb.bmp); freePic(tb); Object.assign(l, await secondLook(p, l, m), { from: 'preview' }); return; }
   // 4.37.2: the search site gave no picture that could be downloaded. Before giving up
   // ("Picture blocked"), read their page once (signed out, like anyone visiting) and check its
   // own pictures: the share picture first, then the pictures in the article.
   if (await ownPageCheck(l, p)) return;
   l.pct = -1; l.sv = SCORE_VERSION;
+}
+// 4.47 (Ben's picks): the second look. A Same photo with a thin margin, or a link Google listed
+// under "Exact matches" that the fast check threw out, is checked again more slowly with both
+// pictures at full size (up to 1200 pixels) before it is kept or thrown out. l.second says what
+// happened: kept / maybe / out (a close Same that was not), saved (an exact match the fast check
+// missed), exactNo (still thrown out: "Google said exact" in the thrown-out list).
+async function secondLook(p, l, m) {
+  const v0 = PP_VERDICT.score(m);
+  const want = PP_VERDICT.close(m) || (l.exact && (v0 === 'no' || v0 === 'cant') && !cardOf(l) && !userNo(l));
+  if (!want || !p.blob) return m;
+  let deep = null;
+  for (const u of [l.img, l.thumb]) {
+    if (!u) continue;
+    const pic = await fetchPicture(u, DEEP);
+    if (!pic) continue;
+    if (Math.min(pic.w, pic.h) < 60) { freePic(pic); continue; }
+    deep = await measure(p, pic.bmp, true);
+    freePic(pic);
+    if (PP_VERDICT.score(deep) !== 'cant') break;
+  }
+  const r = PP_VERDICT.second(m, deep, !!l.exact);
+  if (r.how) PP_STATS.add('chk.second.' + r.how);
+  return { ...r.keep, second: r.how || undefined, fastPct: r.keep === m ? undefined : m.pct };
 }
 async function ownPageCheck(l, p) {
   let social = false;
@@ -1186,7 +1224,7 @@ function statusLine(p) {
 // found; "It is a copy" rescues one that really is your photo.
 function rowFor(p, l) {
   const v = verdict(l);
-  const why = userNo(l) ? 'You: not a match' : cardOf(l) ? 'Only in a link preview' : v === 'cant' ? (l.pct === null ? 'Not checked' : !l.thumb && !l.img ? 'No picture' : 'Picture blocked') : 'Different photo';
+  const why = userNo(l) ? 'You: not a match' : cardOf(l) ? 'Only in a link preview' : v === 'cant' ? (l.pct === null ? 'Not checked' : !l.thumb && !l.img ? 'No picture' : 'Picture blocked') : l.second === 'out' ? 'Different on a closer look' : 'Different photo';
   return h('div', { class: 'row' },
     (l.thumb || l.img) ? h('img', { class: 'th', src: l.thumb || l.img, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer', onerror: e => e.target.replaceWith(h('div', { class: 'th' })) }) : h('div', { class: 'th' }),
     h('div', { class: 't' }, h('a', { href: l.url, target: '_blank', rel: 'noreferrer', text: l.title || l.url, title: l.title || l.url }),
@@ -1196,6 +1234,8 @@ function rowFor(p, l) {
       text: why }), h('small', {}, l.w ? l.w + ' × ' + l.h : 'size unknown')),
     h('div', { class: 'tags' },
       l.engines.map(e => h('span', { class: 'tag ' + e, text: ENGINES[e].short })),
+      // 4.47: Google listed it under "Exact matches" and it was checked twice, both pictures at full size.
+      l.exact ? h('span', { class: 'tag exact', text: 'Google said exact', title: l.second === 'exactNo' ? 'Google listed this under "Exact matches". PageProof checked it a second time at full size and still found a different photo.' : 'Google listed this under "Exact matches".' }) : null,
       h('span', { class: 'act' }, h('button', { text: 'Open', onclick: () => openTab(l.url) }),
         v !== 'cant' ? h('button', { text: '🔀 Compare', title: 'Lay this picture over yours on the Compare page', onclick: () => compareLink(p, l) }) : null,
         h('button', { class: 'evid', text: '＋ It is a copy', title: 'The checker got it wrong: add this link to All copies found for this photo',

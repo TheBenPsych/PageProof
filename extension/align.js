@@ -1309,7 +1309,9 @@ fn cy(y: i32) -> u32 { return u32(clamp(y, 0, i32(p.h) - 1)); }
         const plain = T.w === 1 && T.r === 0 && !T.k;
         if (!pick || sc.lines > pick.sc.lines + (plain ? -0.02 : 0.02)) pick = { ...T, sc };
       }
-      if (pick) tries.push({ ...pick, how: 'details', inliers: R1.inliers, matches: R1.matches });
+      // 4.47: the matching details themselves (where they are on your photo), for the match
+      // picture in the Evidence report. Only kept when asked (opts.pts), to keep searches lean.
+      if (pick) tries.push({ ...pick, how: 'details', inliers: R1.inliers, matches: R1.matches, pts: opts.pts ? R1.inl.slice(0, 400).map(m => [m.ax, m.ay]) : undefined });
     };
     const best = () => tries.reduce((p, q) => (!p || q.sc.lines > p.sc.lines ? q : p), null);
     // Many matching details that line up closely = no doubt; no need to try the slower ways.

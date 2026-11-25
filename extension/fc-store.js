@@ -1570,6 +1570,8 @@ const FC = (() => {
     const np = splitPic(n);
     if (np) await pics.putMany([np]);
     await DB.put('copies', n);
+    // 4.47: a link the checker threw out that you say is a copy goes into your own checker test set.
+    if (typeof PP_CTESTS !== 'undefined') PP_CTESTS.keep({ ...n, match: 'no' }, 'copy', pic && pic.blob);
     p.copies = (await copiesOf(p.id)).filter(c => c.status !== 'removed').length;
     if (pic.thumb && !p.thumb && !p.th) { p.thumb = pic.thumb; const pr = splitPic(p); if (pr) await pics.putMany([pr]); }
     await DB.put('photos', p);
@@ -1741,6 +1743,9 @@ const FC = (() => {
         try { if (!RS_REJECT.find(c.url, names.get(c.photo), '')) { RS_REJECT.items.push({ url: c.url, pic: names.get(c.photo) || '', why: '' }); RS_REJECT.noteKey(c.url, names.get(c.photo) || '', ''); rejects++; } } catch (e) { /* lists not loaded */ }
       }
       if (status === 'stolen' || status === 'licensed' || status === 'removed') tally[c.client || ''] = (tally[c.client || ''] || 0) + 1;
+      // 4.47: a Same photo you removed goes into your own checker test set (on this computer only).
+      // Not for big bulk removes (a whole site at once), which say little about the checker.
+      if (status === 'removed' && got.length <= 5 && !extra.removedBy && before[before.length - 1].status !== 'removed' && c.match === 'same' && typeof PP_CTESTS !== 'undefined') PP_CTESTS.keep(c, 'different');
     }
     await DB.putMany('copies', got);
     if (rejects) { try { await RS_REJECT.save(); } catch (e) { /* lists not loaded */ } }
