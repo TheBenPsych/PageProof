@@ -11,7 +11,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.goto(url('app.html#help')); await page.waitForTimeout(800);
   await seed(page); await page.reload(); await page.waitForTimeout(1500);
   const pin = () => ctx.pages().filter(p => /runner\.html/.test(p.url())).length;
-  const others = () => ctx.pages().filter(p => !/runner\.html/.test(p.url())).length;
+  const others = () => ctx.pages().filter(p => !/runner\.html|searchwin\.html/.test(p.url())).length;   // 4.57: the minimized searching window's own page doesn't count
   const before = others();
 
   // 1. A search that is waiting: the results page only watches it (it must not start it).

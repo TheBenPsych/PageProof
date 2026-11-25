@@ -388,8 +388,7 @@ async function runOne(p, engine) {
   if (!p.t0) p.t0 = Date.now();                     // for "Whole photo, start to done"
   if (!R.statPhoto) R.statPhoto = Date.now();
   let tab;
-  const opts = { windowId: R.winId, url: ENGINES[engine].start, active: false };
-  try { try { tab = await api.tabs.create({ ...opts, pinned: true }); } catch (e) { tab = await api.tabs.create(opts); } }
+  try { tab = await ppOpenSearchTab(ENGINES[engine].start, R.winId); }   // searching window, or pinned (4.57)
   catch (e) { run.state = 'fail'; run.why = 'Could not open a tab'; renderSoon(); return; }
   run.tabId = tab.id;
   tagTab(tab.id);
@@ -475,8 +474,7 @@ async function onCaptcha(t) {
   const name = ENGINES[t.engine].short;
   const show = async () => {
     try {
-      await api.tabs.update(t.tabId, { active: true });
-      await api.windows.update(R.winId, { focused: true });
+      await ppShowTab(t.tabId);   // opens the minimized searching window too
       if (R.groups[t.p.i] != null && api.tabGroups) await api.tabGroups.update(R.groups[t.p.i], { collapsed: false });
     } catch (e) { /* tab gone */ }
   };
@@ -1734,7 +1732,7 @@ function watch() {
     if (capt.length) {
       const [e, tabId] = capt[0];
       banner([h('span', {}, h('b', { text: ENGINES[e].short + ' wants a quick check. ' }), 'Tick the box in the ' + ENGINES[e].short + ' tab and the search carries on by itself. The other sites keep searching meanwhile.'),
-        h('span', { class: 'sp' }), h('button', { text: 'Show me the tab', onclick: async () => { try { const t = await api.tabs.update(tabId, { active: true }); await api.windows.update(t.windowId, { focused: true }); } catch (err) { /* gone */ } } })]);
+        h('span', { class: 'sp' }), h('button', { text: 'Show me the tab', onclick: async () => { try { await ppShowTab(tabId); } catch (err) { /* gone */ } } })]);
     } else if (R.capt) banner(null);
     R.capt = capt.length > 0;
     if (job.finished && !(await bgQueued(job.id))) {
