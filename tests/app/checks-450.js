@@ -90,9 +90,10 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const cw = await app.evaluate(() => {
     const c = { id: 'x', url: 'https://www.instagram.com/p/ABC123/', site: 'instagram.com', use: 'social', cover: 1, img: '', status: 'new', match: 'maybe', risk: { level: '', why: [] } };
     const done = { ...c, postChk: { v: POSTCHK_V, state: 'unsure' } };
-    return { wait: coverWait(c), after: coverWait(done), sig: signals(c).map(x => x[3]).join(',') };
+    return { wait: coverWait(c), after: coverWait(done), sig: signals(c).map(x => x[3]).join(','), pic: theirImg({ ...c, coverImg: 'https://pics.example/cover.jpg' }) };
   });
   ok(cw.wait && !cw.after && /Checking the post/.test(cw.sig), 'Copies found shows "Checking the post" until the post check has looked (' + cw.sig + ')');
+  ok(/cover\.jpg/.test(cw.pic), 'while it checks, the row shows the post\'s cover picture instead of a blank (' + cw.pic + ')');
 
   // ---- 7. the stats file has the checker's numbers for answered copies, with no sites or addresses
   const st = await app.evaluate(async () => {

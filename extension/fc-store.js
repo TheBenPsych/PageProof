@@ -1746,7 +1746,7 @@ const FC = (() => {
       // A small picture that is too big to keep is left out (cutting it short would break it).
       const th = String(l.thumb || '');
       const base = { url: other ? c.url : l.url, key: other ? c.key : l.key, pk: pageKey(other ? c.url : l.url), site: other ? c.site : l.site, title: l.title || '', thumb: th.length <= 60000 ? th : '', img: l.img || '', engines: l.engines || [], exact: !!l.exact,
-        pct: l.pct, inl: l.inl, tiles: l.tiles, str: l.str, mid: l.mid, match: l.verdict, w: l.w, h: l.h, from: l.from || '', onPage: l.onPage || '', cover: l.cover ? 1 : 0 };
+        pct: l.pct, inl: l.inl, tiles: l.tiles, str: l.str, mid: l.mid, match: l.verdict, w: l.w, h: l.h, from: l.from || '', onPage: l.onPage || '', cover: l.cover ? 1 : 0, coverImg: l.cover ? l.coverImg || '' : '' };
       if (c) {
         if (!base.thumb && c.thumb) base.thumb = c.thumb;
         if (!base.thumb && !c.thumb && c.th) delete base.thumb;      // its preview is already kept

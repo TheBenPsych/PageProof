@@ -124,7 +124,7 @@ function flagsFor(c) {
 // drawn straight away; otherwise the <img> gets data-th and ppLoadPics() fills it in a moment later.
 const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 const lazyPic = (rec, fallback) => `${BLANK}" data-th="${esc(rec.id)}${fallback ? `" data-fb="${fallback}` : ''}`;   // goes inside src="…"; fallback is already made safe
-const theirImg = c => c.thumb ? safeImg(c.thumb) : c.th ? (FC.pics.seen(c.id) || lazyPic(c, safeImg(c.img))) : safeImg(c.img);
+const theirImg = c => !c.img && !c.thumb && c.coverImg ? safeImg(c.coverImg) : c.thumb ? safeImg(c.thumb) : c.th ? (FC.pics.seen(c.id) || lazyPic(c, safeImg(c.img))) : safeImg(c.img);
 async function ppLoadPics(root = document) {
   const imgs = [...root.querySelectorAll('img[data-th]')];
   if (!imgs.length) return;
@@ -402,7 +402,9 @@ async function postCheckNow(c, opts = {}) {
     // Ben (4.30): only the post's own pictures count, never a picture in its comments or links.
     // Removed by itself only when every picture of the post was looked at and none is the photo.
     if (res.state === 'card' && c.status === 'new' && !c.cardV && !/by hand/.test(c.by || '')) await cardRemove(c);
-    else if (res.state === 'notSeen' && res.browser === 'notSeen' && notInPost(c) && c.status === 'new' && !/by hand/.test(c.by || '')) {
+    else if (c.status === 'new' && !/by hand/.test(c.by || '') && ((res.state === 'notSeen' && res.browser === 'notSeen' && notInPost(c))
+      // 4.52 (Ben): a post whose cover is another picture stays only if the post check finds the photo.
+      || (c.cover && res.state !== 'seen' && !/^https?:/i.test(c.img || '')))) {
       await FC.answer([c.id], 'removed', { removedBy: 'postcheck' });
       c.status = 'removed'; c.removedBy = 'postcheck';
     }
@@ -724,7 +726,7 @@ function copyRow(c) {
       <a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink" title="Open this page in a new tab"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>${c.alts && c.alts.length ? `<span class="tag grey altn" title="${esc(c.alts.join('\n'))}" data-gloss="Same page">+${c.alts.length} ${c.alts.length === 1 ? 'address' : 'addresses'}</span>` : ''}
       <div class="l3">${esc(c.photoName)}<span class="l3x">${isSoc(c) && c.acct ? ' · ' + esc(c.site) : ''}${c.pct >= 0 && c.pct != null ? ` · <b class="num" data-gloss="Lines up">${c.pct}%</b> lines up` : ''} · ${esc(FC.USE[c.use][0])}${c.country ? ' · ' + esc(c.country) : ''} · found ${shortDate(c.firstSeen).toLowerCase()}</span></div>
     </div>
-    <div class="ccols">${cell('pct', 'Match', luBar(c.pct))}${cell('client', 'Client', c.clientName ? `<span title="${esc(c.clientName)}">${esc(c.clientName)}</span>` : '<span style="color:var(--warn);font-weight:600">Unknown</span>')}${K.dmg ? (dmgCell(c) ? `<span class="cc-dmg"><i>Damages</i>${dmgCell(c)}</span>` : '<span class="cc-dmg" aria-hidden="true"></span>') : ''}${cell('use', 'Use', `<span title="${esc(FC.USE[c.use][0])}">${esc(FC.USE[c.use][0])}</span>`)}${cell('country', 'Country', `<span>${esc(c.country || 'Not known')}</span>`)}${cell('found', 'Found', `<span>${esc(shortDate(c.firstSeen))}</span>`)}</div>
+    <div class="ccols">${cell('pct', 'Match', coverWait(c) ? '<span class="faint" title="The post\'s cover is another picture. PageProof is opening the post to look at all its pictures.">Checking…</span>' : luBar(c.pct))}${cell('client', 'Client', c.clientName ? `<span title="${esc(c.clientName)}">${esc(c.clientName)}</span>` : '<span style="color:var(--warn);font-weight:600">Unknown</span>')}${K.dmg ? (dmgCell(c) ? `<span class="cc-dmg"><i>Damages</i>${dmgCell(c)}</span>` : '<span class="cc-dmg" aria-hidden="true"></span>') : ''}${cell('use', 'Use', `<span title="${esc(FC.USE[c.use][0])}">${esc(FC.USE[c.use][0])}</span>`)}${cell('country', 'Country', `<span>${esc(c.country || 'Not known')}</span>`)}${cell('found', 'Found', `<span>${esc(shortDate(c.firstSeen))}</span>`)}</div>
     <div class="acts">${c.status === 'removed' ? `<button class="btn sm" data-act="rowans" data-v="new|${esc(c.id)}">Put back</button>` : done ? `<button class="btn sm" data-act="rowans" data-v="new|${esc(c.id)}">Change answer</button>`
       : `<button class="btn sm stolen" data-act="rowans" data-v="stolen|${esc(c.id)}">Stolen</button><button class="btn sm licensed" data-act="rowans" data-v="licensed|${esc(c.id)}">Licensed</button><button class="btn sm" data-act="rowans" data-v="removed|${esc(c.id)}">Remove</button>`}
       <button class="btn sm icon" data-act="rowmenu" data-v="${esc(c.id)}" aria-label="More choices for ${esc(c.site)}">${ic('dots', 18)}</button></div></div>`;
