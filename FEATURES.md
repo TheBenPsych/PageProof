@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.46.0** (24 Nov 2026).
+Last updated: version **4.47.0** (24 Nov 2026).
 
 ---
 
@@ -94,6 +94,7 @@ Last updated: version **4.46.0** (24 Nov 2026).
 - **Bursts.** A frame that looks almost the same as one already searched with nothing found waits until every other photo had its first search, and goes at once if its twin finds copies. (4.42)
 - **Camera dates.** A photo whose folders give no year gets its date from the camera (EXIF). (4.42)
 - **New client folders.** Once a week PageProof lists the folder names in Google Drive (names only) and Home shows new folders that aren't ticked. (4.42)
+- **The match in the Evidence report.** Page 2 shows your client's photo with their copy laid over it where it fits, the matching details marked and the shared area outlined, with one plain sentence: "N details line up across P% of the shared area." (4.47)
 
 ## 5. Review the copies found
 
@@ -140,6 +141,10 @@ Last updated: version **4.46.0** (24 Nov 2026).
 - **Personal accounts hidden.** Copies from someone's own account (just a person's name, no company, website or contact details; a Facebook profile with friends, a LinkedIn /in/ profile, an X name-only account under 100k followers) are hidden until you tick Show personal accounts. Stolen copies always stay. "Type is wrong?" sets an account's type by hand. (4.36)
 - **Politicians caught more often.** Also "serving … District", "(R-Ohio)", committee badges, @Rep… / @Sen… handles and "Rep." in the post title, even before the profile is read. (4.36)
 - **Link previews are not copies.** A match that is only the picture in a link preview card (a LinkedIn, X or Facebook post sharing an article) is thrown out during the search, or moved to Removed ("Only in a link preview", Put back works). (4.36)
+- **Second look for close calls.** A Same photo with a thin margin is checked again more slowly with both pictures at full size; if that disagrees it becomes Maybe or is thrown out ("Different on a closer look"). (4.47)
+- **Second chance for exact matches.** A link Google lists under "Exact matches" that the fast check throws out is checked again at full size first. If it is still different it shows "Google said exact" in the thrown-out list. (4.47)
+- **Your own real test set.** Removing a Same photo or pressing "It is a copy" keeps a small pair (both pictures, at most 800 pixels) in Documents\PageProof\checker-tests, on this computer only. The Checker test runs these real pairs as well as the made-up ones. (4.47)
+- **Where the checker goes wrong.** How PageProof is doing shows the checker's answers next to yours for the last 30 days, by kind of site (news, social media, shops, stock photo sites, blogs). (4.47)
 
 ## 7. Everyday tools
 
@@ -273,3 +278,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.44 | 24 Nov | New look part 4: clients, photos and site owners; New look part 2: Copies found and One at a time; New look part 5: evidence pages; New look part 3: searches and Keep searching |
 | 4.45 | 24 Nov | Home instant, strong claims line, since you were last here, clients falling behind, who's behind it in the same pack |
 | 4.46 | 24 Nov | New look part 8: pop-up, side panel, capture card; New look part 7: Settings, health, help; New look part 6: Tools |
+| 4.47 | 24 Nov | Second look for close calls, second chance for exact matches, your own real checker test set, checker vs your answers by kind of site, match picture in the Evidence report |
