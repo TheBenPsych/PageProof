@@ -74,6 +74,9 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(/Where searches run/.test(txt) && /Separate minimized window/.test(txt) && /Pinned tabs/.test(txt), 'Keep searching shows the Where searches run setting');
   const f = await page.evaluate(async () => { const b = [...document.querySelectorAll('[data-act="searchplace"]')].find(x => /Pinned/.test(x.textContent)); if (!b) return 'none'; b.click(); await new Promise(r => setTimeout(r, 500)); return (await chrome.storage.local.get('ppSearchPlace')).ppSearchPlace; });
   ok(f === 'pinned', 'clicking Pinned tabs saves the choice (' + f + ')');
+  await page.goto(url('app.html#settings')); await page.waitForTimeout(2000);
+  const sset = await page.evaluate(async () => { const b = [...document.querySelectorAll('#ss-search [data-act="searchplace"]')]; const w = b.find(x => /Separate/.test(x.textContent)); if (!w) return 'none'; w.click(); await new Promise(r => setTimeout(r, 500)); return (await chrome.storage.local.get('ppSearchPlace')).ppSearchPlace; });
+  ok(sset === 'window', 'Settings › Searching has Where searches run too, and it saves (' + sset + ')');
   // Your last own window closes: the searching window closes too.
   await page.evaluate(() => chrome.storage.local.set({ ppSearchPlace: 'window' })); await page.waitForTimeout(1500);
   const g = await sw.evaluate(async () => {
