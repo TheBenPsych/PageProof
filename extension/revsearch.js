@@ -1301,7 +1301,14 @@ function renderResults() {
       h('summary', {}, h('span', { text: 'Thrown out' }), h('span', { class: 'pg-chip', text: out.length }), out.length ? h('span', { class: 'pg-faint', text: 'Different photo ' + nNo + ' · Can\'t check ' + (out.length - nNo) }) : null),
       h('div', { class: 'in' }, h('p', { class: 'pg-faint', style: 'margin:0', text: 'These were not added to Copies found. If one really is your photo, press "＋ It is a copy" and it goes there.' }),
         out.length ? h('div', { class: 'list' }, h('div', { class: 'site' }, out.map(l => rowFor(p, l)))) : h('div', { class: 'none', text: searching || nPend ? 'Nothing thrown out yet.' : 'Nothing was thrown out for this photo.' }))));
+  // The page redraws every few seconds while a search runs: keep where the photo list (and the
+  // thrown-out list) were scrolled to, so scrolling isn't thrown back to the top.
+  const oldList = document.querySelector('.res-list'), oldIn = document.querySelector('#thrown .list');
+  const keepTop = oldList ? oldList.scrollTop : 0, keepIn = oldIn ? oldIn.scrollTop : 0, pageY = window.scrollY;
   $('main').replaceChildren(...[head, bgNote, tiles, sum, h('div', { class: 'res-grid' }, list, sel)].filter(Boolean));
+  if (keepTop) list.scrollTop = keepTop;
+  const newIn = document.querySelector('#thrown .list'); if (newIn && keepIn) newIn.scrollTop = keepIn;
+  if (window.scrollY !== pageY) window.scrollTo(0, pageY);
 }
 
 // ---------- the Evidence report (one PDF for one use) ----------
