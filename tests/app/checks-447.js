@@ -43,16 +43,20 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     const tiny = new OffscreenCanvas(150, Math.round(150 * crop.height / crop.width)); tiny.getContext('2d').drawImage(crop, 0, 0, tiny.width, tiny.height);
     const p = { i: 0, blob: await jpeg(A), links: [], runs: {} };
     const fakeNo = { pct: 0, inl: 0, tiles: 0, str: 0, mid: null, n: 0, sv: SCORE_VERSION };
+    // 4.52: the slow look only when the fast check saw a few matching details.
+    const fewNo = { pct: 0, inl: 8, tiles: 8, str: 0.5, mid: null, n: 100, sv: SCORE_VERSION };
     const thin = { pct: 78, inl: 16, tiles: 25, str: 0.9, mid: 0.8, n: 100, sv: SCORE_VERSION };
     const cropUrl = await dataUrl(await jpeg(crop)), otherUrl = await dataUrl(await jpeg(other)), tinyUrl = await dataUrl(await jpeg(tiny));
-    const a = await secondLook(p, { url: 'https://news-example.com/a', img: '', thumb: tinyUrl, exact: true, gx: true, engines: ['google'] }, fakeNo);
+    const a = await secondLook(p, { url: 'https://news-example.com/a', img: '', thumb: tinyUrl, exact: true, gx: true, engines: ['google'] }, fewNo);
+    const a0 = await secondLook(p, { url: 'https://news-example.com/a0', img: '', thumb: tinyUrl, exact: true, gx: true, engines: ['google'] }, fakeNo);
     const b = await secondLook(p, { url: 'https://blog-example.com/b', img: otherUrl, engines: ['bing'] }, thin);
     const c = await secondLook(p, { url: 'https://blog-example.com/c', img: cropUrl, engines: ['bing'] }, thin);
-    const d = await secondLook(p, { url: 'https://blog-example.com/d', img: otherUrl, exact: true, gx: true, engines: ['google'] }, fakeNo);
+    const d = await secondLook(p, { url: 'https://blog-example.com/d', img: otherUrl, exact: true, gx: true, engines: ['google'] }, fewNo);
     const e = await secondLook(p, { url: 'https://blog-example.com/e', img: otherUrl, engines: ['bing'] }, fakeNo);
-    return { a: [a.second, PP_VERDICT.score(a), a.pct], b: [b.second, PP_VERDICT.score(b), b.pct], c: [c.second, PP_VERDICT.score(c), c.pct], d: [d.second, PP_VERDICT.score(d)], e: [e.second || '', e === fakeNo] };
+    return { a0: a0 === fakeNo, a: [a.second, PP_VERDICT.score(a), a.pct], b: [b.second, PP_VERDICT.score(b), b.pct], c: [c.second, PP_VERDICT.score(c), c.pct], d: [d.second, PP_VERDICT.score(d)], e: [e.second || '', e === fakeNo] };
   });
   ok(sl.a[0] === 'saved' && ['same', 'maybe'].includes(sl.a[1]), 'Google said exact, the fast check said Different: the full-size look saves it: ' + sl.a.join(' '));
+  ok(sl.a0, 'Google said exact but nothing at all lined up: no slow second look (4.52)');
   ok(sl.b[0] === 'out' && sl.b[1] === 'no', 'a close Same that is another picture is thrown out on the second look: ' + sl.b.join(' '));
   ok(sl.c[0] === 'kept' && sl.c[1] === 'same', 'a close Same that is a real copy is kept: ' + sl.c.join(' '));
   ok(sl.d[0] === 'exactNo' && sl.d[1] === 'no', 'an exact match that really is another picture stays thrown out, marked: ' + sl.d.join(' '));
