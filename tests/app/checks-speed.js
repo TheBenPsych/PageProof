@@ -119,6 +119,19 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   });
   ok(mx.r.join() === 'n1,n2,o1,n3,n4,o2,n5,p1' && mx.one.join() === 'n1,n2,n3', 'first searches: 2 newest, then 1 from a random older year, and so on: ' + mx.r.join(', '));
 
+  // Ben: a batch of 10 from 10 clients taking turns was all this year. The whole line mixes now.
+  const ml = await page.evaluate(() => {
+    const L = [];
+    for (let c = 0; c < 10; c++) for (const y of [2026, 2026, 2026, 2021, 2018]) L.push({ id: 'c' + c + '-' + y + '-' + L.length, client: 'Client ' + c, year: y, order: y });
+    // clients take turns, newest first (as firstLine does)
+    const by = c => L.filter(p => p.client === 'Client ' + c).sort((a, b) => b.order - a.order), lists = [...Array(10).keys()].map(by), turns = [];
+    for (let i = 0; i < 5; i++) for (const l of lists) turns.push(l[i]);
+    const out = FC.mixLine(turns);
+    return { first10: out.slice(0, 10).map(p => p.year), all: out.length, uniq: new Set(out.map(p => p.id)).size };
+  });
+  ok(ml.first10.filter(y => y < 2026).length >= 3 && ml.all === 50 && ml.uniq === 50, 'with many clients taking turns, a batch of 10 still has older years: ' + ml.first10.join(', '));
+  ok(/mixLine\(ps\)/.test(fs.readFileSync(path.join(__dirname, '../../extension/fc-store.js'), 'utf8')), 'the never-searched line uses the line-wide year mix');
+
   // ---- 8. the pages: ladder, quick-look bar, lanes, speed meter and done-by dates
   await page.evaluate(async () => {
     await FC.setKeep({ on: true, pace: 'Faster', ladder: true, ladderTop: 40 });

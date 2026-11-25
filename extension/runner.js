@@ -349,8 +349,12 @@ async function bgShow(job) {
   $('bigText').textContent = (job.kind === 'fifty' ? 'Today\'s ' + job.pics.length : 'A search of ' + job.pics.length + (job.pics.length === 1 ? ' photo' : ' photos')) + ': ' + BG.text + (check ? '. A search site wants a quick check (see the notice, or All searches).' : '.');
   $('bigBar').style.width = Math.round(done / Math.max(1, job.pics.length) * 100) + '%';
   // A search that finished but never said so (for example its last photo could not be added):
-  // after 10 minutes it is let go, so the line never gets stuck.
-  if (job.finished && Date.now() - Date.parse(job.finished) > 10 * 60000) bgDone();
+  // after 10 minutes it is let go, so the line never gets stuck. A search you stopped is let go
+  // after 3 minutes (Ben: his next search sat "waiting for the pinned tab" behind a stopped one
+  // that was still checking links). Links not checked by then are checked when you open it.
+  // Another search waiting in line is let through after 3 minutes too.
+  const hold = job.stoppedAt || (job.finished && (await bgList()).some(x => x !== job.id)) ? 3 : 10;
+  if (job.finished && Date.now() - Date.parse(job.finished) > hold * 60000) bgDone();
 }
 // Keep searching switched off and no big search left: this tab is not needed.
 async function closeIfIdle() {

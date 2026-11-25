@@ -1064,12 +1064,53 @@ const FC = (() => {
     }
     return out;
   }
+  // Ben (4.49 follow-up): with many clients taking turns, each client's own 1-in-3 older pick
+  // came too late, so a batch of 10 was all this year. Now the whole line mixes: after every 2
+  // newest photos comes 1 random photo (any spot, not just the newest) from a random older year
+  // of a random client. Only the first part of the line is mixed (that is what gets searched).
+  function mixLine(list, rnd = Math.random, upto = 6000) {
+    const head = list.slice(0, upto), rest = list.slice(upto);
+    const buckets = new Map(); // client -> Map(year -> [photos])
+    for (const p of head) {
+      if (!buckets.has(p.client)) buckets.set(p.client, new Map());
+      const ys = buckets.get(p.client), y = yearOfP(p);
+      if (!ys.has(y)) ys.set(y, []);
+      ys.get(y).push(p);
+    }
+    const used = new Set(), out = [];
+    let ni = 0;
+    const nextNew = () => { while (ni < head.length && used.has(head[ni].id)) ni++; return head[ni]; };
+    const live = l => { while (l.length && used.has(l[l.length - 1].id)) l.pop(); return l.length > 0; };
+    while (out.length < head.length) {
+      let p = null;
+      if (out.length % 3 === 2) {
+        const nw = nextNew(), cands = [];
+        for (const [c, ys] of buckets) {
+          // A client's "newest" year is the year of its next newest photo; the other years are older.
+          let top = null;
+          for (const [y, l] of ys) if (live(l) && (top === null || y > top)) top = y;
+          for (const [y, l] of ys) if (y !== top && l.length) cands.push(l);
+        }
+        for (let t = 0; !p && cands.length && t < 40; t++) {
+          const l = cands[Math.floor(rnd() * cands.length)];
+          if (!l.length) continue;
+          const i = Math.floor(rnd() * l.length), q = l[i];
+          l[i] = l[l.length - 1]; l.pop();
+          if (!used.has(q.id)) p = q;
+        }
+      }
+      p = p || nextNew();
+      if (!p) break;
+      used.add(p.id); out.push(p);
+    }
+    return out.concat(rest);
+  }
   function firstLine(fresh, clients) {
     const turns = names => {
-      const lists = names.map(n => mixYears(fresh.get(n).sort((a, b) => (b.order || 0) - (a.order || 0))));
-      const ids = [];
-      for (let i = 0, any = true; any; i++) { any = false; for (const l of lists) if (i < l.length) { ids.push(l[i].id); any = true; } }
-      return ids;
+      const lists = names.map(n => fresh.get(n).sort((a, b) => (b.order || 0) - (a.order || 0)));
+      const ps = [];
+      for (let i = 0, any = true; any; i++) { any = false; for (const l of lists) if (i < l.length) { ps.push(l[i]); any = true; } }
+      return mixLine(ps).map(p => p.id);
     };
     const names = [...fresh.keys()].sort();
     const pri = names.filter(n => clients.get(n) && clients.get(n).priority);
@@ -2399,7 +2440,7 @@ const FC = (() => {
 
   return { DB, meta, open, touch, pics, dropDotMatches, checkerRemove, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, inHours, quietOK, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, unpicked, forced, setPicked, pickInside, SCAN, applyPendingFlags, missingPicks, movedNote, followMoves, watchFolders, newFolders, newFoldersSeen, goalPlan, workMinutes, exifDate, heatShoot, coolShoot, burstSibling, wakeBurst, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
-    photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setClients, logWeek, week, weekKey, firstNotes, searchedOnce, dayLog, speed, ladder, LADDER, alikeFrames, mixYears,
+    photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setClients, logWeek, week, weekKey, firstNotes, searchedOnce, dayLog, speed, ladder, LADDER, alikeFrames, mixYears, mixLine,
     isPool, shownCountries, setShownCountries, SHOWN_START, ownerFor, pathOf, logReport, USE, useOf, riskOf, spamMarks, randomLabel, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
     backupSoon, backupCopiesSoon, writeSettings, writeCopies, readBackup, restore, restoreCopies, settingsSnapshot, monthsOld, newness, yearOf, quarterOf, dayOf };
 })();
