@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.57.0** (25 Nov 2026).
+Last updated: version **4.57.1** (25 Nov 2026).
 
 ---
 
@@ -334,3 +334,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.56.1 | 25 Nov | Fix: Country filled in for .com sites from the page's address and language |
 | 4.56.1 | 25 Nov | Small fixes |
 | 4.57 | 25 Nov | One first-time setup with folder guide, folder check and computer limits |
+| 4.57.1 | 25 Nov | Fix: Spam blogs filter catches amphtml and made-up site names |
