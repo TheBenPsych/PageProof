@@ -729,6 +729,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Photo counts update while folders are read', 'While PageProof reads your photo folders, Clients and photos now updates after each client, so you no longer need to refresh the page to see what it found.'],
   ['Untick folders inside a client', '"No longer monitoring" folders are searched again like any other folder. In folder setup you can now untick any folder inside a ticked client to leave it out (it shows Left out), and tick it again to put it back.'],
   ['Every year of a client\'s photos is read', 'A client whose first folder read was cut short (page closed, Drive busy) only showed its two newest quarters. Now any client not yet read all the way through gets a full read of every year at the next hourly look. Folders called "No longer monitoring" are skipped, and one folder Drive can\'t open no longer stops the whole read.'],
   ['Search pages: full speed, rows light up, list keeps its scroll', 'Big searches no longer slow themselves down: the busy check counted PageProof\'s own photo checks as a busy processor. Now only nearly-full memory or a laptop on low battery slows searching. In All searches and on a search\'s results page, the row under the mouse turns light blue with a blue edge, and while a search runs the photo list and the Thrown out list stay where you scrolled them.'],
