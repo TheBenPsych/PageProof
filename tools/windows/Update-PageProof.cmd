@@ -47,9 +47,36 @@ try {
   New-Item -ItemType Directory -Path $tmp | Out-Null
   $zip = Join-Path $tmp 'PageProof.zip'
   Write-Host '  Downloading the newest version...'
-  Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
   $new = Join-Path $tmp 'new'
-  Expand-Archive -LiteralPath $zip -DestinationPath $new
+  $got = $false
+  # 1) The "Latest build" page. Tried 3 times, because GitHub sometimes hiccups for a moment.
+  foreach ($try in 1..3) {
+    try {
+      Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+      Expand-Archive -LiteralPath $zip -DestinationPath $new -Force
+      $got = $true; break
+    } catch {
+      $why = $_.Exception.Message
+      if ($try -lt 3) { Start-Sleep -Seconds (3 * $try) }
+    }
+  }
+  # 2) If that page is missing (for example while a new version is being published, or a
+  #    publish failed), take the newest numbered version (v4.55.0 ...) straight from the code.
+  if (-not $got) {
+    Write-Host ('  The Latest build page did not answer (' + $why + ').') -ForegroundColor Yellow
+    Write-Host '  Getting the newest numbered version instead...'
+    $tags = Invoke-RestMethod -Uri 'https://api.github.com/repos/TheBenPsych/PageProof/tags?per_page=100' -UseBasicParsing
+    $best = $tags | Where-Object { $_.name -match '^v\d+\.\d+\.\d+$' } |
+      Sort-Object { [version]$_.name.Substring(1) } -Descending | Select-Object -First 1
+    if (-not $best) { throw "No download found ($why)." }
+    $src = Join-Path $tmp 'src'
+    Invoke-WebRequest -Uri ('https://github.com/TheBenPsych/PageProof/archive/refs/tags/' + $best.name + '.zip') -OutFile $zip -UseBasicParsing
+    Expand-Archive -LiteralPath $zip -DestinationPath $src -Force
+    $ext = Get-ChildItem -LiteralPath $src -Directory | ForEach-Object { Join-Path $_.FullName 'extension' } |
+      Where-Object { Test-Path -LiteralPath (Join-Path $_ 'manifest.json') } | Select-Object -First 1
+    if (-not $ext) { throw 'The download does not look like PageProof, so nothing was changed.' }
+    Move-Item -LiteralPath $ext -Destination $new
+  }
   $nv = Version-Of $new
   if (-not $nv -or $nv.name -ne 'PageProof') { throw 'The download does not look like PageProof, so nothing was changed.' }
   Write-Host ('  Newest version: ' + $nv.version)
