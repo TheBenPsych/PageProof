@@ -485,19 +485,19 @@ function dmgCell(c) {
 // Small warning icons for a row (4.7): the words show when you hover.
 function signals(c) {
   const s = [];
-  if (linkCardOf(c)) s.push(['bad', 'warn', 'Only in a link preview: ' + LINK_CARD(c)]);
-  else if (notInPost(c)) s.push(['bad', 'warn', 'Not seen in the post: ' + NOT_IN_POST(c)]);
-  if (c.match === 'maybe') s.push(['warn', 'maybe', 'Maybe the same photo. Look closely.']);
-  if (c.risk.level === 'sus') s.push(['bad', 'warn', 'Suspicious site' + (c.risk.why.length ? ': ' + c.risk.why.join(', ') : '')]);
-  else if (c.risk.level === 'watch') s.push(['warn', 'warn', 'Worth a look' + (c.risk.why.length ? ': ' + c.risk.why.join(', ') : '')]);
-  if (c.credit === 'removed') s.push(['copy', 'nocredit', 'Credit removed: your client\'s photo has a copyright line in its hidden data and their copy does not']);
-  if (c.repeat && c.status === 'new' && !isSoc(c)) s.push(['bad', 'repeat', `Repeat offender: you already marked ${c.repeat} ${c.repeat === 1 ? 'copy' : 'copies'} on ${c.repeatWho} as Stolen`]);
-  if (c.use === 'shop') s.push(['ok', 'shop', 'Selling something: a shop page, product listing or ad']);
+  if (linkCardOf(c)) s.push(['bad', 'warn', 'Only in a link preview: ' + LINK_CARD(c), 'Link preview only']);
+  else if (notInPost(c)) s.push(['bad', 'warn', 'Not seen in the post: ' + NOT_IN_POST(c), 'Not in the post']);
+  if (c.match === 'maybe') s.push(['warn', 'maybe', 'Maybe the same photo. Look closely.', 'Maybe the same']);
+  if (c.risk.level === 'sus') s.push(['bad', 'warn', 'Suspicious site' + (c.risk.why.length ? ': ' + c.risk.why.join(', ') : ''), 'Suspicious site']);
+  else if (c.risk.level === 'watch') s.push(['warn', 'warn', 'Worth a look' + (c.risk.why.length ? ': ' + c.risk.why.join(', ') : ''), 'Worth a look']);
+  if (c.credit === 'removed') s.push(['copy', 'nocredit', 'Credit removed: your client\'s photo has a copyright line in its hidden data and their copy does not', 'Credit removed']);
+  if (c.repeat && c.status === 'new' && !isSoc(c)) s.push(['bad', 'repeat', `Repeat offender: you already marked ${c.repeat} ${c.repeat === 1 ? 'copy' : 'copies'} on ${c.repeatWho} as Stolen`, 'Stolen before']);
+  if (c.use === 'shop') s.push(['ok', 'shop', 'Selling something: a shop page, product listing or ad', 'Selling it']);
   return s;
 }
 const knownTag = c => c.known ? '<span class="tag bad" style="font-size:11.5px" title="This exact page is on your list of links stolen before (Settings › Hidden and approved sites › Stolen before links)">Stolen before</span>' : '';
 const spamTag = c => c.spam ? `<span class="tag grey" style="font-size:11.5px" title="${esc('Looks like a spam blog: ' + c.spam.join(', '))}">Spam blog</span>` : '';
-const sigIcons = c => { const s = signals(c); return knownTag(c) + spamTag(c) + (s.length ? `<span class="sig">${s.map(([col, i, t]) => `<span class="tag ${col}" title="${esc(t)}" aria-label="${esc(t)}">${ic(i, 13)}</span>`).join('')}</span>` : ''); };
+const sigIcons = c => { const s = signals(c); return knownTag(c) + spamTag(c) + (s.length ? `<span class="sig">${s.map(([col, i, t, w]) => `<span class="tag ${col}" title="${esc(t)}">${ic(i, 13)}<span>${esc(w || t)}</span></span>`).join('')}</span>` : ''); };
 // Before a copy is marked Stolen: the kind of site (once per site) and the rules that apply.
 // Resolves 'stolen', 'removed' (Remove instead) or null (cancelled).
 async function ruleGate(c) {
