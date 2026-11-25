@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.48.0** (24 Nov 2026).
+Last updated: version **4.49.0** (24 Nov 2026).
 
 ---
 
@@ -96,6 +96,10 @@ Last updated: version **4.48.0** (24 Nov 2026).
 - **New client folders.** Once a week PageProof lists the folder names in Google Drive (names only) and Home shows new folders that aren't ticked. (4.42)
 - **The match in the Evidence report.** Page 2 shows your client's photo with their copy laid over it where it fits, the matching details marked and the shared area outlined, with one plain sentence: "N details line up across P% of the shared area." (4.47)
 - **Search pages filled out.** A square per photo, time left, per-site cards, copies as pictures, What's happening; All searches by day with weekly numbers. (4.48)
+- **Speed ladder.** On Faster, Keep searching speeds up one step after every calm hour (2 min, 90 s, 60 s, 40 s; 30 s if picked) and drops two steps for the day after a robot check. (4.49)
+- **Quick looks.** Yandex and Bing give every never-searched photo a quick look in their own lane; Google follows, and a copy found in a quick look sends the photo to Google next. (4.49)
+- **Look-alike frames share a search.** Nearly identical frames from the same shoot come along with a photo's search and every find is checked against them; they get their own search after the first pass. (4.49)
+- **Speed meter.** Photos searched a day this week, plus a done-by date per client and overall, on Clients and photos and Keep searching. First searches mix in random older years (1 in 3). (4.49)
 
 ## 5. Review the copies found
 
@@ -286,3 +290,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.47.4 | 24 Nov | Fix: Photo counts update while folders are read |
 | 4.47.5 | 24 Nov | Fix: Search a Skipped folder anyway |
 | 4.48 | 24 Nov | Search pages filled out |
+| 4.49 | 24 Nov | Speed ladder, Yandex + Bing quick looks, look-alike frames share a search, speed meter |
