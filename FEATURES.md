@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.61.0** (25 Nov 2026).
+Last updated: version **4.62.0** (25 Nov 2026).
 
 ---
 
@@ -148,6 +148,7 @@ Last updated: version **4.61.0** (25 Nov 2026).
 - **Check later.** A copy you're not sure about goes to its own Check later tab (button or C key), out of the New list, until you answer it. Undo works. (4.58)
 - **How popular the site is.** Website copies get Top 1K / 10K / 100K / 1M tags from the free Tranco list (downloaded weekly, looked up offline). Gold tag and edge for the top 10K, "Big sites" quick filter, Site popularity filter, "Most popular site" sort, World rank in the Download file and a card on the stats page. Social sites, free blog hosts and marketplaces get no rank. (4.60)
 - **Known bad sites.** Free lists of piracy, scam, phishing and malware sites (The Block List Project, URLhaus, OpenPhish), downloaded by themselves and looked up offline. Red tag, counts as Suspicious, "Known bad sites" quick filter. A top 10K site is only flagged by the piracy list. (4.60)
+- **Stopping a photo clears its matches.** Unanswered matches of a stopped photo move to Removed (tagged "Photo stopped"); Stolen and Licensed stay; Undo or Search again brings them back. (4.62)
 
 ## 6. Social media accounts
 
@@ -346,3 +347,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.60.1 | 25 Nov | Fix: "Who's behind it" box removed from the capture page |
 | 4.60.2 | 25 Nov | Fix: Copies found and One at a time stay put while you look |
 | 4.61 | 25 Nov | Search tabs move to a separate minimized window (setting to keep pinned tabs) |
+| 4.62 | 25 Nov | Stop searching a photo also removes its unanswered matches |
