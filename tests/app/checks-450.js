@@ -39,9 +39,14 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     job = { id: 't', pics: [{ i: 0, name: 'ours.jpg', blob: __ours, links: [], runs: {} }], engines: ['google', 'yandex'] };
     const p = job.pics[0];
     const mk = (u, extra) => ({ url: u, key: u, site: new URL(u).hostname, pic: 0, title: '', thumb: '', img: '', engines: ['google'], ...extra });
-    // 2. Google said exact; its only picture is a preview of another photo, but the article has ours.
+    // 2. Google said exact; its preview showed a few matching details but does not line up, and the
+    // article has ours. (4.52: only when the fast check saw some details.)
     const a = mk('https://news.example/story', { exact: true, gx: true, thumb: 'https://pics.example/other.jpg' });
-    await scoreLink(a);
+    const fastFew = { pct: 0, inl: 8, tiles: 8, str: 0.5, mid: null, n: 100, sv: SCORE_VERSION };
+    Object.assign(a, { from: 'preview' }, await secondLook(p, a, fastFew, null));
+    // 2b. Google said exact, but nothing at all lines up: no slow look, their page is not read.
+    const a2 = mk('https://news.example/story2', { exact: true, gx: true, thumb: 'https://pics.example/other.jpg?a2' });
+    await scoreLink(a2);
     // 3. An Instagram post that a search site listed, whose cover is another photo.
     const b = mk('https://www.instagram.com/p/ABC123/', { exact: true, engines: ['yandex'], img: 'https://pics.example/other.jpg?ig' });
     await scoreLink(b);
@@ -58,6 +63,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     const dd = await secondLook(p, d, fast, { url: d.img, pic });
     return {
       a: [a.second, verdict(a), a.from, a.img, a.onPage],
+      a2: [verdict(a2), a2.second || ''],
       b: [verdict(b), b.cover, b.img, b.coverImg, b.onPage],
       b2: [verdict(b2), !!b2.cover],
       c: [verdict(c), c.second || ''],
@@ -65,6 +71,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     };
   });
   ok(r.a[0] === 'page' && ['same', 'maybe'].includes(r.a[1]) && r.a[2] === 'page' && /crop\.jpg$/.test(r.a[3]) && r.a[4] === 'seen', 'Google said exact but its preview is another photo: their page is read and the article picture is the copy (' + r.a.join(' ') + ')');
+  ok(r.a2[0] === 'no' && r.a2[1] === '' && !fetched['https://news.example/story2'], 'Google said exact but nothing lines up: no slow look and their page is not read (' + r.a2.join(' ') + ')');
   ok(r.b[0] === 'maybe' && r.b[1] === 1 && r.b[2] === '' && /other\.jpg/.test(r.b[3]) && r.b[4] === 'postOnly', 'a post listed by a search site whose cover is another photo is kept as Maybe for the post check (' + r.b.join(' ') + ')');
   ok(r.b2[0] === 'no' && !r.b2[1], 'an account page with another photo is still thrown out (' + r.b2.join(' ') + ')');
   ok(r.c[0] === 'no' && r.c[1] === '', 'a Yandex "exact" link that is plainly another photo gets no slow second look (' + r.c.join(' ') + ')');
