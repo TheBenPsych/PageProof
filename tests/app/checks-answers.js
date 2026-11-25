@@ -70,18 +70,18 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   // restore from the text file into an empty db
   const rest = await page.evaluate(async () => { const all = await FC.DB.all('copies'); await FC.DB.delMany('copies', all.map(c => c.id)); const n = await FC.restoreCopies(); return { n, cnt: await FC.DB.count('copies') }; });
   ok(rest.n === 400 && rest.cnt === 400, 'copies come back from found-copies.txt');
-  // side panel on a site with finds
+  // toolbar pop-up on a site with finds
   const site = b.one[0];
   const web = await ctx.newPage(); await web.route('**/*', r => r.fulfill({ contentType: 'text/html', body: '<h1>x</h1>' })); await web.goto('https://' + site + '/');
-  const sp = await ctx.newPage(); await sp.goto(url('sidepanel.html')); await sp.waitForTimeout(600);
-  await web.bringToFront(); await sp.waitForTimeout(1200);
+  const sp = await ctx.newPage(); await sp.goto(url('popup.html')); await sp.waitForTimeout(600);
+  await web.bringToFront(); await sp.waitForTimeout(300); await sp.evaluate(() => draw()); await sp.waitForTimeout(1200);
   const spTxt = await sp.evaluate(() => document.getElementById('mini').innerText.slice(0, 160));
   console.log(JSON.stringify(spTxt));
-  ok(/in your finds/.test(spTxt), 'Side panel says the site is in your finds');
-  // A real side panel is narrow: its contents must be on screen, not slid away by the main page's menu styles.
+  ok(/in your finds/.test(spTxt), 'Pop-up says the site is in your finds');
+  // The pop-up is narrow: its contents must be on screen, not slid away by the main page's menu styles.
   await sp.setViewportSize({ width: 380, height: 700 }); await sp.waitForTimeout(300);
   const spBox = await sp.evaluate(() => { const r = document.getElementById('mini').getBoundingClientRect(); return { x: r.x, w: r.width }; });
-  ok(spBox.x >= 0 && spBox.w > 300, 'Side panel is on screen at side-panel width ' + JSON.stringify(spBox));
+  ok(spBox.x >= 0 && spBox.w > 300, 'Pop-up is on screen at pop-up width ' + JSON.stringify(spBox));
   await ctx.close();
   process.exit(fails ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });
