@@ -2,7 +2,7 @@
 // / jumps to the search box, the up and down arrows move between copies, Enter opens one.
 (() => {
   const KEYS = [
-    ['Answer a copy', [['Y', 'Stolen'], ['L', 'Licensed'], ['N', 'Remove (Delete works too)'], ['→', 'Skip for now'], ['U', 'Undo your last answer (Ctrl+Z works too)']]],
+    ['Answer a copy', [['Y', 'Stolen'], ['L', 'Licensed'], ['N', 'Remove (Delete works too)'], ['C', 'Check later (not sure yet)'], ['→', 'Skip for now'], ['U', 'Undo your last answer (Ctrl+Z works too)']]],
     ['Move around', [['↑ ↓', 'Go to the copy above or below'], ['Enter', 'Open the copy’s details'], ['Esc', 'Close the details or this help'], ['/', 'Jump to the search box']]],
     ['Anywhere', [['Alt+Shift+P', 'Capture the page you are on'], ['S', 'One at a time: switch Side by side and Swipe'], ['?', 'Show or hide this help']]],
   ];

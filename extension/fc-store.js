@@ -1496,7 +1496,7 @@ const FC = (() => {
   }
 
   // ---------------------------------------------------------------- copies found
-  // A copy is one link for one photo. status: new · stolen · licensed · removed
+  // A copy is one link for one photo. status: new · later (Check later) · stolen · licensed · removed
   // (skip keeps it new, but puts it at the back of the review line).
   // online: up · gone · back
   const SOCIAL = /(^|\.)(facebook|fb|instagram|twitter|x|threads|tiktok|pinterest|reddit|tumblr|linkedin|vk|weibo|youtube|flickr|snapchat|telegram|t)\.(com|net|me|org|ru)$/;
@@ -1868,7 +1868,7 @@ const FC = (() => {
   }
   // One time (4.14): fold copies already saved that are the same page. The answered one is kept
   // (or the oldest one if none is answered); a group with two different answers is left alone.
-  const RANK = { stolen: 4, licensed: 3, removed: 2, new: 1 };
+  const RANK = { stolen: 4, licensed: 3, removed: 2, later: 1, new: 1 };
   async function mergeSamePages() {
     if (await meta.get('pageMerge')) return 0;
     return navigator.locks.request('pp-page-merge', async () => {
@@ -1995,7 +1995,7 @@ const FC = (() => {
       if (typeof PP_STATS !== 'undefined' && status !== 'skip' && c.status !== status && extra.removedBy !== 'weakmaybe') {
         PP_STATS.add('ans.' + status);
         if (c.status === 'removed' && status === 'new') PP_STATS.add('ans.putBack' + (c.removedBy ? '.' + c.removedBy : ''));
-        else if (c.status !== 'new') PP_STATS.add('ans.changed');
+        else if (c.status !== 'new' && c.status !== 'later') PP_STATS.add('ans.changed');
       }
       if (status === 'skip') { c.skipped = now; }
       else { c.status = status; c.answered = now; delete c.skipped; }
@@ -2013,7 +2013,7 @@ const FC = (() => {
       const was = before[before.length - 1].status;
       if (got.length <= 5 && !extra.removedBy && was !== status && ['same', 'maybe'].includes(c.match) && typeof PP_CTESTS !== 'undefined') {
         if (status === 'removed') PP_CTESTS.keep(c, 'different');
-        else if ((status === 'stolen' || status === 'licensed') && was === 'new') PP_CTESTS.keep(c, 'copy');
+        else if ((status === 'stolen' || status === 'licensed') && (was === 'new' || was === 'later')) PP_CTESTS.keep(c, 'copy');
       }
     }
     await DB.putMany('copies', got);
