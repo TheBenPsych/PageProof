@@ -19,12 +19,12 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   // "amphtml" in the address), while real news sites and Yandex's own utm_source=yasmartcamera tag stay clear.
   const more = await page.evaluate(() => {
     const u = ['https://uqumo2us-amphtml.beauty-glam.makeup/', 'https://fw65mw.fit/', 'https://talkcorner.forum/amphtml/post-123',
-      'https://www.standartnews.com/a/b?utm_source=yasmartcamera', 'https://nypost.com/2026/11/01/x/amp/', 'https://k9dog.fit/', 'https://www.bbc.co.uk/news/x',
-      'https://radioalacalle.com/kay+proctor+onlyfans+nude?utm_source=yasmartcamera', 'https://nypost.com/2026/11/01/us-news/onlyfans-model-sues-x/', 'https://www.etsy.com/market/red+wedding+dress'];
+      'https://www.standartnews.com/a/b?utm_source=yasmartcamera', 'https://nypost.com/2026/11/01/x/amp/', 'https://k9dog.blog/x', 'https://www.bbc.co.uk/news/x',
+      'https://radioalacalle.com/kay+proctor+onlyfans+nude?utm_source=yasmartcamera', 'https://nypost.com/2026/11/01/us-news/onlyfans-model-sues-x/', 'https://www.etsy.com/market/red+wedding+dress', 'https://dewwyt.run/live/cyber/riya-president-forest-dodolo-food.html'];
     const m = FC.spamMarks(u.map((x, i) => ({ id: 'u' + i, url: x, site: new URL(x).hostname.replace(/^www\./, '') })));
     return u.map((x, i) => m.has('u' + i));
   });
-  ok(more.join() === 'true,true,true,false,false,false,false,true,false,false', 'amphtml, made-up site names and search-words pages are caught, real news sites and shop searches are not (' + more.join() + ')');
+  ok(more.join() === 'true,true,true,false,false,false,false,true,false,false,true', 'amphtml, made-up site names and search-words pages are caught, real news sites and shop searches are not (' + more.join() + ')');
   // Three new website copies move to a made-up farm: two on one throwaway site, one on another.
   const pick = await page.evaluate(async () => {
     FCD = null; await loadFC();

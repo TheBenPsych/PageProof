@@ -1622,6 +1622,9 @@ const FC = (() => {
   // put each copy on a random-looking address of their own (ass4c61.serecoun.blog). Only signs
   // PageProof can see in the links; nothing is answered by itself. Returns Map copy id -> reasons.
   const SPAM_END = /\.(blog|xyz|top|shop|online|site|buzz|click|icu|cyou|rest|monster|lol|cfd|sbs|bond|live|fun|space|store|vip|win|loan|work|info|biz|pw|tk|ml|ga|cf|gq|life|world|today|club|website|pics|homes|beauty|hair|quest|autos|boats|mom|skin|makeup|cam|bar|uno|press|digital|ink|wiki|link|asia|mobi|cc|ws|fit|forum|yoga|help|best|guru|lat|run|kim|men|party|review|stream|download|racing|date|faith|trade|science|accountant|cricket|gdn|fyi|email|ltd|baby|bet|casa|charity|cooking|dog|horse|lifestyle|motorcycles|rocks|sale|shopping|tattoo|wang|ren|beer|blue|pink|red|black|vin|wine)$/;
+  // Endings used almost only by spam and throwaway sites (dewwyt.run, fw65mw.fit): a copy there counts as
+  // spam on its own. Endings real sites also use (.blog, .xyz, .top, .live, .info ...) still need a second sign.
+  const JUNK_END = /\.(cfd|sbs|icu|cyou|bond|rest|monster|lol|autos|boats|mom|quest|hair|skin|makeup|beauty|yoga|motorcycles|pics|homes|run|fit|forum|click|buzz|lat|kim|men|party|review|stream|download|racing|date|faith|trade|science|accountant|cricket|gdn|wang|ren|bar|uno|cam|tk|ml|ga|cf|gq)$/;
   // Big blog and website hosts: everyone there gets their own sub-address, so these are never a farm.
   const BLOG_HOSTS = /(^|\.)(wordpress\.com|blogspot\.[a-z.]+|blogger\.com|tumblr\.com|medium\.com|substack\.com|wixsite\.com|weebly\.com|github\.io|netlify\.app|vercel\.app|pages\.dev|squarespace\.com|webflow\.io|jimdofree\.com|jimdosite\.com|over-blog\.com|livejournal\.com|ghost\.io|typepad\.com|home\.blog|art\.blog|travel\.blog|food\.blog|music\.blog|photo\.blog|business\.blog|news\.blog|fashion\.blog|data\.blog|video\.blog|car\.blog|game\.blog|design\.blog|family\.blog|school\.blog|health\.blog|film\.blog|sport\.blog|tech\.blog)$/;
   // A random-looking name part: letters and numbers mixed up (ass4c61, kl77lfl, vemv18u0g), or a long
@@ -1672,14 +1675,15 @@ const FC = (() => {
       const amp = AMPHTML.test(p.sub), ampP = ampPath(c.url);
       const ub = urlBits(c.url), adult = ADULT.test(ub.path.replace(/[-_+/]/g, ' '));
       const plus = PLUS_LONG.test(ub.path) || (PLUS_PAGE.test(ub.path) && (adult || cheap || rnd));
-      if (!(rnd && (cheap || home || farm >= 3)) && !(randomFarm && (cheap || home)) && !rndBase && !(amp && (rnd || cheap)) && !(ampP && cheap) && !plus && !(adult && (cheap || rnd))) continue;
+      if (!(rnd && (cheap || home || farm >= 3)) && !(randomFarm && (cheap || home)) && !rndBase && !(amp && (rnd || cheap)) && !(ampP && cheap) && !plus && !(adult && (cheap || rnd)) && !JUNK_END.test(p.base)) continue;
       const why = [];
       if (plus) why.push('Search-words page (' + ub.path.replace(/^\/+|\/+$/g, '').split('/').pop().slice(0, 50) + '), not an article');
       if (adult) why.push('Adult words in the address');
       if (rnd) why.push('Random-looking address (' + first + ')');
       if (rndBase) why.push('Made-up site name (' + baseName + ')');
       if (amp || ampP) why.push('"amphtml" in the address, a spam network mark');
-      if (cheap) why.push('Throwaway ending .' + p.base.split('.').pop());
+      if (JUNK_END.test(p.base)) why.push('Ending .' + p.base.split('.').pop() + ' is used almost only by spam sites');
+      else if (cheap) why.push('Throwaway ending .' + p.base.split('.').pop());
       if (farm >= 3) why.push(p.base + ' shows up under ' + farm + ' different made-up addresses');
       if (home) why.push('Only the home page, no article');
       out.set(c.id, why);
