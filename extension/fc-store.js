@@ -1571,9 +1571,9 @@ const FC = (() => {
       if (!url || !/^https?:/.test(url) || res) continue;
       try {
         const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 12000);
-        const r = await fetch(url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal });
+        const r = globalThis.PP_PACE ? await PP_PACE.fetch(url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal }, 0) : await fetch(url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal });
         clearTimeout(t);
-        if (!r.ok || !/html/i.test(r.headers.get('content-type') || 'html')) continue;
+        if (!r || !r.ok || !/html/i.test(r.headers.get('content-type') || 'html')) continue;
         const html = (await r.text()).slice(0, 2e6);
         res = countryFromDoc(new DOMParser().parseFromString(html.replace(/\son([a-z]+\s*=)/gi, ' data-pp-on$1').replace(/<script(?![^>]*ld\+json)[\s\S]*?<\/script>/gi, ''), 'text/html'));
       } catch (e) { /* not reachable */ }
@@ -2250,20 +2250,37 @@ const FC = (() => {
   }
   // Stop searching these photos (on = true) or search them again (on = false). Gives back an
   // undo that puts every photo back the way it was.
+  // 4.56 (Ben): stopping also moves the photo's unanswered copies (New and Check later) to
+  // Removed, marked removedBy 'stopped' so "Search again" (or Undo) brings them back. Stolen and
+  // Licensed copies stay. These are not your answers: not counted, not learned from, and not
+  // put on the rejected-links list.
   async function setStopped(ids, on) {
-    const was = [];
+    const was = [], copiesWas = [], touched = new Set();
     for (const id of new Set(ids)) {
       const p = await DB.get('photos', id);
       if (!p) continue;
       was.push([id, p.stopped || '']);
       if (on) p.stopped = p.stopped || new Date().toISOString(); else delete p.stopped;
       await DB.put('photos', p);
+      const changed = [];
+      for (const c of await copiesOf(id)) {
+        if (on ? !['new', 'later'].includes(c.status) : !(c.status === 'removed' && c.removedBy === 'stopped')) continue;
+        copiesWas.push(JSON.parse(JSON.stringify(c)));
+        if (on) { c.stopWas = c.status; c.status = 'removed'; c.removedBy = 'stopped'; c.answered = new Date().toISOString(); }
+        else { c.status = c.stopWas === 'later' ? 'later' : 'new'; delete c.removedBy; delete c.stopWas; delete c.answered; }
+        changed.push(c);
+      }
+      if (changed.length) { await DB.putMany('copies', changed); touched.add(id); }
     }
+    if (touched.size) { await recount(touched); backupCopiesSoon(); touch('copies'); }
     COVER = null; queueDirty(); backupSoon(true);
-    return async () => {
+    const undo = async () => {
       for (const [id, st] of was) { const p = await DB.get('photos', id); if (!p) continue; if (st) p.stopped = st; else delete p.stopped; await DB.put('photos', p); }
+      if (copiesWas.length) { await DB.putMany('copies', copiesWas); await recount(touched); backupCopiesSoon(); touch('copies'); }
       COVER = null; queueDirty(); backupSoon(true);
     };
+    undo.moved = copiesWas.length;
+    return undo;
   }
   async function setClients(names, ch) {
     for (const n of names) {
@@ -2358,9 +2375,9 @@ const FC = (() => {
       seen.add(url);
       try {
         const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 15000);
-        const r = await fetch(url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal });
+        const r = globalThis.PP_PACE ? await PP_PACE.fetch(url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal }, 0) : await fetch(url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal });
         clearTimeout(t);
-        if (!r.ok || !/html/i.test(r.headers.get('content-type') || 'html')) return null;
+        if (!r || !r.ok || !/html/i.test(r.headers.get('content-type') || 'html')) return null;
         const html = (await r.text()).slice(0, 3e6);
         f.pages.push({ url: r.url || url, label });
         // Nothing in it ever runs, but the browser still logs a red "inline event handler" error for every
@@ -2613,7 +2630,7 @@ const FC = (() => {
       clients: clients.map(c => ({ name: c.name, searching: c.searching, priority: !!c.priority, licensed: c.licensed || [], licensedAcc: c.licensedAcc || [] })), flags, regs, picked: await picked(), unpicked: await unpicked(), forced: await forced(), hist: await histList(), alias: (await meta.get('photoAlias')) || {},
       socialSites: st.ppSocialSites || {}, accounts: (await meta.get('acctKept')) || {}, acctLinks: (await meta.get('acctLinks')) || [], acctType: (await meta.get('acctType')) || {},
       // New tools (Ben's picks): the company cards, credit search wordings and the watch list you set.
-      entities: (await meta.get('entities')) || {}, creditCfg: (await meta.get('creditCfg')) || null,
+      entities: (await meta.get('entities')) || {}, claims: (await meta.get('claims')) || {}, creditCfg: (await meta.get('creditCfg')) || null,
       watch: Object.values(((await meta.get('watch')) || {}).items || {}).filter(i => i.by === 'hand' || i.off).map(i => ({ key: i.key, kind: i.kind, base: i.base || '', url: i.url || '', label: i.label || '', plat: i.plat || '', by: i.by, off: !!i.off })) };
   }
   async function writeSettings() {
@@ -2647,6 +2664,8 @@ const FC = (() => {
     if (Array.isArray(j.clients)) await DB.putMany('clients', j.clients.filter(c => c && typeof c.name === 'string').map(c => ({ name: tidyClient(c.name), searching: c.searching === true ? true : c.searching === false ? false : null, priority: !!c.priority, licensed: Array.isArray(c.licensed) ? c.licensed.map(str) : [], licensedAcc: Array.isArray(c.licensedAcc) ? c.licensedAcc.map(str) : [], photos: 0 })));
     if (j.accounts && typeof j.accounts === 'object') { const a = {}; for (const [k, v] of Object.entries(j.accounts)) if (v && typeof v.key === 'string') a[str(k)] = { key: str(v.key), handle: str(v.handle), url: /^https?:\/\//.test(v.url || '') ? str(v.url) : '', plat: str(v.plat), from: v.from === 'browser' ? 'browser' : 'you' }; await meta.set('acctKept', a); }
     if (j.acctType && typeof j.acctType === 'object') { const TY = ['Business', 'Creator', 'Organisation', 'Government', 'News or media', 'Fan page', 'Group', 'Person']; await meta.set('acctType', Object.fromEntries(Object.entries(j.acctType).filter(([k, v]) => typeof k === 'string' && TY.includes(v)).map(([k, v]) => [str(k), v]))); }
+    // 4.63: claim steps (sent to legal, closed, checked, skipped) per copy.
+    if (j.claims && typeof j.claims === 'object') { const C = {}; for (const [k, v] of Object.entries(j.claims)) if (v && typeof v === 'object') C[str(k)] = Object.fromEntries(Object.entries(v).filter(([, x]) => typeof x === 'string').map(([f, x]) => [str(f), str(x)])); await meta.set('claims', C); }
     if (j.entities && typeof j.entities === 'object') { const E = {}; for (const [k, v] of Object.entries(j.entities)) if (v && typeof v === 'object') E[str(k)] = Object.fromEntries(Object.entries(v).filter(([, x]) => typeof x === 'string').map(([f, x]) => [str(f), str(x)])); await meta.set('entities', E); }
     if (j.creditCfg && typeof j.creditCfg === 'object') { const cl = {}; for (const [k, v] of Object.entries(j.creditCfg.clients || {})) if (v && typeof v === 'object') cl[str(k)] = { on: v.on !== false, words: Array.isArray(v.words) ? v.words.filter(w => typeof w === 'string').map(str).slice(0, 8) : [] }; await meta.set('creditCfg', { on: j.creditCfg.on !== false, every: Number.isInteger(j.creditCfg.every) && j.creditCfg.every >= 5 ? j.creditCfg.every : 15, clients: cl }); }
     if (Array.isArray(j.watch)) { const items = {}; for (const i of j.watch) if (i && typeof i.key === 'string' && /^[as]:/.test(i.key)) items[str(i.key)] = { key: str(i.key), kind: i.kind === 'acct' ? 'acct' : 'site', base: str(i.base), url: /^https?:\/\//.test(i.url || '') ? str(i.url) : '', label: str(i.label), plat: str(i.plat), by: i.by === 'hand' ? 'hand' : 'auto', off: !!i.off }; await meta.set('watch', { items }); }

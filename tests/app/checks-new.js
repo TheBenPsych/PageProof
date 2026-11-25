@@ -197,7 +197,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   {
     const sw = ctx.serviceWorkers()[0];
     const kv = await page.evaluate(async () => (await chrome.storage.local.get('fcKeep')).fcKeep);
-    await page.evaluate(() => chrome.storage.local.set({ fcKeep: { ...(window.__k = {}), on: true } }));
+    await page.evaluate(() => chrome.storage.local.set({ ppSearchPlace: 'pinned', fcKeep: { ...(window.__k = {}), on: true } }));   // 4.57: the pinned-tabs choice (window is checked in checks-searchwin.js)
+    await page.waitForTimeout(2000);
     await sw.evaluate(() => keepAlive(false, true)); await page.waitForTimeout(4000);
     const info = await sw.evaluate(async () => ({ pinned: (await chrome.tabs.query({ pinned: true })).length, popups: (await chrome.windows.getAll({ windowTypes: ['popup'] })).length }));
     ok(info.pinned >= 1 && info.popups === 0, 'Keep searching opens as a pinned tab, not a separate window');

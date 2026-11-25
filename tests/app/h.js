@@ -7,5 +7,7 @@ exports.start = async (opts = {}) => {
   const id = sw.url().split('/')[2];
   // Site gone check: the pretend sites all "exist" unless a check says otherwise (never asks the real DNS).
   await ctx.route('https://dns.google/**', r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ Status: (exports.goneHosts || []).some(h => r.request().url().includes('name=' + encodeURIComponent(h))) ? 3 : 0 }) }));
+  // Instagram's pace (one page every 30 seconds, 4.64) is off in the checks; checks-pace.js turns it on.
+  await ctx.addInitScript(() => { globalThis.PP_PACE_GAP = 0; });
   return { ctx, sw, id, url: p => `chrome-extension://${id}/${p}` };
 };

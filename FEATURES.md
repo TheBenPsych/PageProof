@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.60.2** (25 Nov 2026).
+Last updated: version **4.63.1** (25 Nov 2026).
 
 ---
 
@@ -111,6 +111,7 @@ Last updated: version **4.60.2** (25 Nov 2026).
 - **Credit search on Google and Bing.** Each wording is searched on both; a page both list (even spelled a little differently) is read once. A robot check rests only that site for an hour and the other carries on. (4.52)
 - **Photos you stopped.** The client's photos page counts photos nobody searches any more, can show only those, and has Stop searching / Search again for picked photos. (4.55)
 - **One at a time: Websites, Social media or All.** A switch at the top picks which copies to go through; the choice is remembered. (4.56)
+- **Searches run in their own minimized window.** All search tabs open in one minimized "PageProof searching" window instead of pinned tabs in yours; Keep searching › Where searches run switches back to pinned tabs. (4.61)
 
 ## 5. Review the copies found
 
@@ -147,6 +148,8 @@ Last updated: version **4.60.2** (25 Nov 2026).
 - **Check later.** A copy you're not sure about goes to its own Check later tab (button or C key), out of the New list, until you answer it. Undo works. (4.58)
 - **How popular the site is.** Website copies get Top 1K / 10K / 100K / 1M tags from the free Tranco list (downloaded weekly, looked up offline). Gold tag and edge for the top 10K, "Big sites" quick filter, Site popularity filter, "Most popular site" sort, World rank in the Download file and a card on the stats page. Social sites, free blog hosts and marketplaces get no rank. (4.60)
 - **Known bad sites.** Free lists of piracy, scam, phishing and malware sites (The Block List Project, URLhaus, OpenPhish), downloaded by themselves and looked up offline. Red tag, counts as Suspicious, "Known bad sites" quick filter. A top 10K site is only flagged by the piracy list. (4.60)
+- **Stopping a photo clears its matches.** Unanswered matches of a stopped photo move to Removed (tagged "Photo stopped"); Stolen and Licensed stay; Undo or Search again brings them back. (4.62)
+- **Finish this claim.** Pressing Stolen opens the claim steps in the copy panel: good case first (right photo, on their page, viable owner), then capture, evidence report and legal portal boxes, then Sent to legal. "Not a viable entity" closes the claim with nothing captured. Unfinished claims wait in the Not finished tab. (4.63)
 
 ## 6. Social media accounts
 
@@ -225,6 +228,7 @@ Last updated: version **4.60.2** (25 Nov 2026).
 - **Big searches stay in All searches.** Kept 90 days, apart from Keep searching's one-photo searches (2 days). (4.53.1)
 - **Updater never stuck on a missing download.** Update-PageProof.cmd retries and falls back to the newest numbered version; the release build retries and puts a lost download page back. (4.55.1)
 - **Copies found stays put.** New copies wait behind a "N new copies came in" button, rows never move under you, and One at a time keeps the copy on screen. (4.60.2)
+- **Social sites paced.** Each social site has a safe pace for all of PageProof (Instagram one page every 30 seconds); a "too many requests" answer makes that site rest 1 hour (up to 12). Searches never wait for it. (4.63.1)
 
 ---
 
@@ -344,3 +348,7 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.60 | 25 Nov | Site popularity tags and known bad site lists |
 | 4.60.1 | 25 Nov | Fix: "Who's behind it" box removed from the capture page |
 | 4.60.2 | 25 Nov | Fix: Copies found and One at a time stay put while you look |
+| 4.61 | 25 Nov | Search tabs move to a separate minimized window (setting to keep pinned tabs) |
+| 4.62 | 25 Nov | Stop searching a photo also removes its unanswered matches |
+| 4.63 | 25 Nov | Finish this claim steps after Stolen, Not finished tab, Sent to legal |
+| 4.63.1 | 25 Nov | Fix: Social sites paced, rest after "too many requests" |

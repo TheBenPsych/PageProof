@@ -213,6 +213,7 @@ function passStatus(c, f = state.fFilter) {
   if (f === 'Removed') return c.status === 'removed';
   if (c.status === 'removed') return false;
   if (f === 'All') return true;
+  if (f === 'Not finished') return typeof clOpen === 'function' && clOpen(c);   // claim steps not done (pp-claim.js)
   return STATUS[c.status][0] === f;
 }
 // Sister sites: after you mark a copy stolen, other new copies of the same photo (or the same
@@ -276,6 +277,7 @@ async function readTheirPage(c, again) {
   PF_BUSY.add(c.id);
   try {
     const pf = await PP_CHECKS.readPage(c);
+    if (pf && pf.paced) return c.pf && c.pf.ok ? c.pf : pf;     // 4.64: Instagram has to wait: read again later
     const cc = await FC.DB.get('copies', c.id);
     if (cc) { cc.pf = pf; await FC.DB.put('copies', cc); }
     c.pf = pf; FCD_STALE = true;      // 4.9: never cleared outright (it is also read in the background now)
@@ -387,7 +389,7 @@ async function postInBrowser(c, ours) {
       if (m.state === 'unsure') unsure = true;
     }
     return n ? { state: unsure ? 'unsure' : 'notSeen', n } : null;
-  } catch (e) { return null; } finally { if (tab) PP_SOCIAL.closeQuiet(tab); }
+  } catch (e) { if (e && e.paced) { c._paced = true; return { held: true }; } return null; } finally { if (tab) PP_SOCIAL.closeQuiet(tab); }
 }
 // How PageProof is doing: how many post checks ran, how long, and how many could not read the post.
 async function postCheck(c, opts = {}) {
@@ -397,10 +399,13 @@ async function postCheck(c, opts = {}) {
 }
 async function postCheckNow(c, opts = {}) {
   if (POST_BUSY.has(c.id) || typeof PP_ALIGN === 'undefined') return null;
+  // 4.64 (Ben): the site is resting after "too many requests": checked again after the rest.
+  if (globalThis.PP_PACE && PP_PACE.resting(c.url)) { c._paced = true; return null; }
   POST_BUSY.add(c.id);
   let ours = null;
   try {
     const pf = c.pf && c.pf.ok && 'pic' in c.pf ? c.pf : await readTheirPage(c, true).catch(() => null);
+    if (pf && pf.paced) { c._paced = true; return null; }
     const res = { v: POSTCHK_V, at: new Date().toISOString(), pic: '', state: 'unknown' };
     res.video = !!pf && (/^video/i.test(pf.type || '') || /\/(reel|videos?|watch)\b/i.test(pf.url || c.url || ''));
     try { ours = await bitmapOf(await ourBlob(FCD && FCD.photos.get(c.photo))); } catch (e) { res.err = String(e && e.message || e).slice(0, 120); }
@@ -598,7 +603,7 @@ async function drawer(list) {
   const o = FCD.ownerOf.get(c.site);
   const f = FCD.facts.get(c.site);
   const clients = [...FCD.clients.keys()].sort();
-  const [kinds, logR] = await Promise.all([siteKinds(), api.storage.local.get('log').catch(() => ({}))]);
+  const [kinds, logR] = await Promise.all([siteKinds(), api.storage.local.get(['log', 'fcReports']).catch(() => ({}))]);
   const kind = kinds[FC.baseOf(c.site)] || '';
   const pub = PP_CHECKS.pubDate(p);
   const hits = PP_CHECKS.rules(c, kind, c.pf);
@@ -607,6 +612,10 @@ async function drawer(list) {
   if (needsPostCheck(c) && !POST_BUSY.has(c.id)) postCheck(c).then(() => { if (state.open === c.id) renderAuto(); }).catch(() => {});
   else if (!c.pf && !PF_BUSY.has(c.id)) readTheirPage(c).then(() => { if (state.open === c.id) renderAuto(); }).catch(() => {});
   const ck = checksParts(c, reg, kind, hits, pub, capturedAt);
+  // Stolen: the claim steps (pp-claim.js) sit right under the pictures.
+  const clx = { p, reg, kind, hits, capturedAt, f, reports: logR.fcReports || [] };
+  const clHtml = c.status === 'stolen' && typeof clCard === 'function' ? await clCard(c, clx) : '';
+  const clOn = c.status === 'stolen' && typeof clOpen === 'function' && clOpen(c);
   const sz = c.w && p && p.w ? (Math.abs(c.w / c.h - p.w / p.h) / (p.w / p.h) > 0.06 ? 'cropped' : (c.w * c.h) / (p.w * p.h) > 1.15 ? 'bigger than your client\'s' : (c.w * c.h) / (p.w * p.h) < 0.85 ? 'smaller' : 'same size') : '';
   const idx = list.indexOf(c.id);
   const last = HIST[HIST.length - 1];
@@ -633,9 +642,8 @@ async function drawer(list) {
   else if (ck.dmg && ck.dmg.lvl === 'bad') look.push(['bad', 'clock', ck.dmg.title, ck.dmg.text, 'dtab', 'Claim', 'claim']);
   else if (ck.dmg && ck.dmg.lvl === 'ok') fine.push('Statutory damages');
   if (!c.clientName) look.push(['warn', 'who', 'Client unknown', 'Set the client in the Summary tab.', 'dtab', 'Summary', 'sum']);
-  if (ck.legal && ck.ready < ck.legal.length) look.push(['warn', 'doc', `Ready for legal: ${ck.ready} of ${ck.legal.length}`, ck.legal.filter(x => x[0] !== true).map(x => x[1]).join(' · '), 'dtab', 'Claim', 'claim']);
   const lookN = look.filter(x => x[0] !== 'grey').length;
-  const dot = { page: c.credit === 'removed', claim: hits.some(h => h.lvl !== 'info') || (ck.dmg && ck.dmg.lvl !== 'ok') || (ck.legal && ck.ready < ck.legal.length), site: c.risk.level !== 'ok' || (c.repeat && c.status === 'new'), acct: !c.acct || (c.repeat && c.status === 'new') };
+  const dot = { page: c.credit === 'removed', claim: hits.some(h => h.lvl !== 'info') || (ck.dmg && ck.dmg.lvl !== 'ok'), site: c.risk.level !== 'ok' || (c.repeat && c.status === 'new'), acct: !c.acct || (c.repeat && c.status === 'new') };
   const tabs = soc ? [['sum', 'Summary'], ['page', 'The post'], ['acct', 'Account'], ['claim', 'Claim']] : DTABS;
   const tab = state.dTab, show = k => tab === k ? '' : ' hidden';
   const view = state.dView || 'side';
@@ -654,6 +662,7 @@ async function drawer(list) {
   <div class="dview">${viewer}</div>
   <div class="dvbar"><div class="seg sm" role="radiogroup" aria-label="Picture view">${[['side', 'Side by side'], ['slide', 'Slider'], ['page', soc ? 'The post' : 'Their page']].map(([k, l]) => `<button role="radio" aria-checked="${view === k}" class="${view === k ? 'on' : ''}" data-act="dview" data-v="${k}">${l}</button>`).join('')}</div><button class="btn ghost sm" data-act="compare">${ic('layers', 15)} Compare closely</button></div>
   <div class="dchips">${c.pct >= 0 && c.pct != null ? `<span class="fchip" data-gloss="Lines up"><b style="color:${c.pct >= 80 ? 'var(--bad)' : 'var(--warn)'}">${c.pct}%</b> lines up</span>` : ''}<span class="fchip">${esc(FC.USE[c.use][0])}</span>${c.country ? `<span class="fchip">${esc(c.country)}</span>` : ''}${c.w ? `<span class="fchip">${c.w} × ${c.h}${sz ? ' · ' + sz : ''}</span>` : ''}</div>
+  ${clHtml}
   <section class="attn" id="lookbox"><h3>${lookN ? `${ic('warn', 15)} Look at these (${lookN})` : `${ic('check', 15)} Nothing needs a look`}</h3>
     ${look.map(([col, i, t, s, act, b, v]) => `<div class="it"><span class="ico tag ${col}">${ic(i, 15)}</span><div><b>${esc(t)}</b>${s ? `<span>${esc(s)}</span>` : ''}</div>${act ? `<button class="btn sm" data-act="${act}"${v ? ` data-v="${v}"` : ''}>${b}</button>` : ''}</div>`).join('')}
     ${fine.length ? `<div class="okline">${ic('check', 14)} ${fine.map(esc).join(' · ')}</div>` : ''}</section>
@@ -682,8 +691,7 @@ async function drawer(list) {
   </div>
   ${soc ? `<div class="dpane" data-tab="acct"${show('acct')}>${acctPane(c)}</div>` : ''}
   <div class="dpane" data-tab="claim"${show('claim')}>
-    ${ck.legalBox}
-    ${typeof ppPortalCard === 'function' ? await ppPortalCard(c, p, reg) : ''}
+    ${c.status === 'stolen' ? '' : ck.legalBox}
     ${p && p.rel && reg ? `<section class="dsec"><div class="dsh">Copyright registration</div>${regBox(p, reg)}</section>` : ''}
     ${ck.damages}
     ${ck.rules}
@@ -713,13 +721,13 @@ async function drawer(list) {
   ${c.status === 'removed' ? `<div class="banner info" style="padding:10px 12px"><span style="flex:1;font-size:14px"><b>Removed</b><br><span class="muted">Hidden from your results. It won't come back for this photo.</span></span><button class="btn" data-act="putback">Put back</button></div>` : `
     ${['stolen', 'licensed'].includes(c.status) ? `<div class="row" style="gap:8px;font-size:13.5px"><span>Your answer: ${tagFor(c)}</span><button class="btn ghost sm" style="margin-left:auto" data-act="changeans">Change answer</button></div>` : ''}
     ${c.status === 'later' ? `<div class="row" style="gap:8px;font-size:13.5px"><span>${tagFor(c)} Answer it when you're ready.</span><button class="btn ghost sm" style="margin-left:auto" data-act="rowans" data-v="new|${esc(c.id)}">Back to New</button></div>` : ''}
-    <div class="dans ansstrip" title="Choose one and the next copy opens here">
+    ${clOn ? clFoot(c, clx) : `<div class="dans ansstrip" title="Choose one and the next copy opens here">
       <button class="btn stolen" data-act="dverdict" data-v="stolen"><b>Stolen</b><span class="kbd">Y</span></button>
       <button class="btn licensed" data-act="dverdict" data-v="licensed"><b>Licensed</b><span class="kbd">L</span></button>
       <button class="btn" data-act="dverdict" data-v="removed"><b>Remove</b><span class="kbd">N</span></button>
       ${c.status === 'later' ? '' : `<button class="btn later" data-act="dverdict" data-v="later" title="Not sure yet: move it to Check later"><b>Check later</b><span class="kbd">C</span></button>`}
       <button class="btn" data-act="dverdict" data-v="skip"><b>Skip</b><span class="kbd">→</span></button>
-    </div>`}
+    </div>`}`}
     <div class="dfoot2"><span class="dnav"><button class="btn sm icon" data-act="dstep" data-v="-1" aria-label="Previous copy"${idx > 0 ? '' : ' disabled data-why="This is the first copy in the list."'}>‹</button><span class="muted num">${idx >= 0 ? `${idx + 1} of ${list.length}` : ''}</span><button class="btn sm icon" data-act="dstep" data-v="1" aria-label="Next copy"${idx >= 0 && idx < list.length - 1 ? '' : ' disabled data-why="This is the last copy in the list."'}>›</button></span><span style="flex:1"></span><button class="btn sm primary" data-act="evidence">${ic('doc', 15)} Evidence report</button><button class="btn sm" data-act="capturecopy">${ic('capture', 15)} Capture</button><button class="btn sm" data-act="dmore" data-v="${esc(c.id)}" aria-label="More choices" title="More choices">${ic('dots', 15)}</button></div>
   </div></aside>`;
 }
@@ -756,7 +764,7 @@ function copyRow(c) {
     <input type="checkbox" class="cpick" aria-label="Pick ${esc(isSoc(c) && c.acct ? c.acct.handle : c.site)}" data-act="pick" data-v="${esc(c.id)}" ${state.picked.includes(c.id) ? 'checked' : ''}>
     <div class="cpair" data-hover="${esc(c.id)}"><img class="ours" src="${oursImg(p)}" alt="" loading="lazy"><img class="thumb" src="${theirImg(c)}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>
     <div class="cinfo">
-      ${isSoc(c) ? socLine(c) : `<div class="l1"><b>${esc(c.site)}</b>${popTag(c)}${done || c.status === 'later' ? tagFor(c) : ''}${embedTag(c)}${sigIcons(c)}${c.sweep ? '<span class="tag blue" title="Found by reading this site\'s own list of pictures (a sweep), not by a search site">Found by sweep</span>' : ''}${typeof ppRowTags === 'function' ? ppRowTags(c) : ''}${c.status === 'removed' && c.removedBy === 'weakmaybe' ? '<span class="tag grey" title="A Maybe under 50% that nobody answered for 30 days. Put back if it is a copy.">Weak Maybe, never answered</span>' : ''}</div>`}
+      ${isSoc(c) ? socLine(c) : `<div class="l1"><b>${esc(c.site)}</b>${popTag(c)}${done || c.status === 'later' ? tagFor(c) : ''}${embedTag(c)}${sigIcons(c)}${c.sweep ? '<span class="tag blue" title="Found by reading this site\'s own list of pictures (a sweep), not by a search site">Found by sweep</span>' : ''}${typeof ppRowTags === 'function' ? ppRowTags(c) : ''}${typeof clRowTag === 'function' ? clRowTag(c) : ''}${c.status === 'removed' && c.removedBy === 'stopped' ? '<span class="tag grey" title="Removed when you stopped searching this photo. Search again on the client\'s photos page brings it back.">Photo stopped</span>' : ''}${c.status === 'removed' && c.removedBy === 'weakmaybe' ? '<span class="tag grey" title="A Maybe under 50% that nobody answered for 30 days. Put back if it is a copy.">Weak Maybe, never answered</span>' : ''}</div>`}
       <a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink" title="Open this page in a new tab"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>${c.alts && c.alts.length ? `<span class="tag grey altn" title="${esc(c.alts.join('\n'))}" data-gloss="Same page">+${c.alts.length} ${c.alts.length === 1 ? 'address' : 'addresses'}</span>` : ''}
       <div class="l3">${esc(c.photoName)}<span class="l3x">${isSoc(c) && c.acct ? ' · ' + esc(c.site) : ''}${c.pct >= 0 && c.pct != null ? ` · <b class="num" data-gloss="Lines up">${c.pct}%</b> lines up` : ''} · ${esc(FC.USE[c.use][0])}${c.country ? ' · ' + esc(c.country) : ''} · found ${shortDate(c.firstSeen).toLowerCase()}</span></div>
     </div>
@@ -1012,7 +1020,7 @@ V.found = async () => {
   ${FCD.unhid && FCD.unhid.length ? `<div class="banner info" role="status"><div style="flex:1 1 260px;min-width:0"><b>${esc(FCD.unhid.join(', '))} ${FCD.unhid.length === 1 ? 'shows' : 'show'} again</b><div style="font-size:13px">A whole social site can no longer be hidden, only its accounts. Its posts are back on the Social media tab. Hide the accounts you don't want from there.</div></div><button class="btn sm" data-act="unhidok">Got it</button></div>` : ''}
   <section class="card found-card">
     <div class="toolbar tidy">
-      <div class="tabs ansbar" role="tablist" aria-label="Status">${['New', 'Check later', 'Stolen', 'Licensed', 'Removed', 'All'].map(f => `<button role="tab" aria-selected="${state.fFilter === f}" class="${state.fFilter === f ? 'on' : ''}" data-act="ffilter" data-v="${f}"${f === 'All' ? ' title="Every copy except the removed ones"' : ''}>${state.fFilter === f ? '<i class="tick" aria-hidden="true">✓</i>' : ''}${f} <span>${cnt(f)}</span></button>`).join('')}${['Still online', 'Back online', 'Gone'].includes(state.fFilter) ? `<button role="tab" aria-selected="true" class="on" data-act="ffilter" data-v="${state.fFilter}"><i class="tick" aria-hidden="true">✓</i>${state.fFilter} <span>${cnt(state.fFilter)}</span></button>` : ''}</div>
+      <div class="tabs ansbar" role="tablist" aria-label="Status">${['New', 'Check later', 'Not finished', 'Stolen', 'Licensed', 'Removed', 'All'].map(f => `<button role="tab" aria-selected="${state.fFilter === f}" class="${state.fFilter === f ? 'on' : ''}" data-act="ffilter" data-v="${f}"${f === 'All' ? ' title="Every copy except the removed ones"' : f === 'Not finished' ? ' title="Stolen copies whose claim steps are not done yet"' : ''}>${state.fFilter === f ? '<i class="tick" aria-hidden="true">✓</i>' : ''}${f} <span>${cnt(f)}</span></button>`).join('')}${['Still online', 'Back online', 'Gone'].includes(state.fFilter) ? `<button role="tab" aria-selected="true" class="on" data-act="ffilter" data-v="${state.fFilter}"><i class="tick" aria-hidden="true">✓</i>${state.fFilter} <span>${cnt(state.fFilter)}</span></button>` : ''}</div>
       ${social ? `<div class="seg sm" role="radiogroup" aria-label="Show">${[['copies', 'Copies'], ['accounts', 'Accounts']].map(([k, l]) => `<button role="radio" aria-checked="${state.sView === k}" class="${state.sView === k ? 'on' : ''}" data-act="sview" data-v="${k}">${l}</button>`).join('')}</div>` : ''}
       ${dd('fView', 'Group', social ? [['account', 'Account'], ['client', 'Client'], ['photo', 'Photo'], ['site', 'Platform'], ['list', 'None']] : [['client', 'Client'], ['photo', 'Photo'], ['site', 'Site'], ['owner', 'Site owner'], ['list', 'None']], state.fView)}
       ${dd('fWhen', 'Found', Object.entries(WHEN).map(([k, v]) => [k, v[0]]), state.fWhen, false, 'any')}
@@ -1068,11 +1076,11 @@ V.found = async () => {
     ${shownOn.length ? `<div class="showing" role="status"><span>Showing <b class="num">${rows.length}</b> of <b class="num">${all.filter(c => passStatus(c)).length}</b> ${esc(state.fFilter === 'All' ? '' : state.fFilter.toLowerCase())} copies</span>${shownOn.map(([k, v]) => `<button class="stag" data-act="unfilter" data-v="${k}" title="Turn this filter off">${esc(v)} <span aria-hidden="true">✕</span></button>`).join('')}<button class="sclear" data-act="unfilter" data-v="all">Clear filters</button></div>` : ''}
     ${recent.length ? `<div class="row activebar">
       <details class="justhid" style="margin-left:auto;max-width:100%"${state.justHidOpen ? ' open' : ''}><summary class="faint" style="cursor:pointer;text-align:right">Just hidden (${recent.length})</summary><div class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-top:6px">${recent.map(h => `<button class="chip" style="cursor:pointer;text-decoration:line-through;text-decoration-color:var(--faint)" data-act="showsite" data-v="${esc(h)}" title="Show ${esc(h)} again">${esc(h)} <span style="text-decoration:none">↺</span></button>`).join('')}</div></details></div>` : ''}
-    <div class="cbody">${social && state.sView === 'accounts' ? accountsView(all.filter(c => passMain(c) && passStatus(c))) : body || (state.fFilter === 'New' && !active.length && state.fWhen === 'any' && state.fMatch === 'any' ? caughtUp(cnt('Stolen'), cnt('Check later')) : state.fFilter === 'Check later' && !rows.length ? `<div class="cempty"><b>Nothing saved to check later</b>Not sure about a copy? Press Check later (or the C key) and it waits here, out of the New list, until you answer it.</div>` : `<div class="cempty"><b>Nothing matches</b>Try another tab, or clear a filter.</div>`)}</div>
+    <div class="cbody">${social && state.sView === 'accounts' ? accountsView(all.filter(c => passMain(c) && passStatus(c))) : body || (state.fFilter === 'New' && !active.length && state.fWhen === 'any' && state.fMatch === 'any' ? caughtUp(cnt('Stolen'), cnt('Check later')) : state.fFilter === 'Not finished' && !rows.length ? `<div class="cempty"><b>Every claim is finished</b>When you mark a copy Stolen, its claim steps open right away. A claim you put aside with Finish later waits here.</div>` : state.fFilter === 'Check later' && !rows.length ? `<div class="cempty"><b>Nothing saved to check later</b>Not sure about a copy? Press Check later (or the C key) and it waits here, out of the New list, until you answer it.</div>` : `<div class="cempty"><b>Nothing matches</b>Try another tab, or clear a filter.</div>`)}</div>
     <div class="row faint cfoot"><span>Keys with a copy open: <span class="kbd">Y</span> stolen <span class="kbd">L</span> licensed <span class="kbd">N</span> remove <span class="kbd">C</span> check later <span class="kbd">→</span> skip <span class="kbd">U</span> undo <span class="kbd">↑</span><span class="kbd">↓</span> move <span class="kbd">?</span> all keys. Also kept in Documents › PageProof › found-copies.txt.</span></div>
   </section>
   ${state.sis ? `<div class="bulk sis"><div style="flex:1 1 300px;min-width:0"><b>Same ${state.sis.same ? 'photo' : 'article'} on ${plural(state.sis.sites.length, 'sister site')} of ${esc(state.sis.owner)}</b><div style="font-size:13px;opacity:.85;overflow-wrap:anywhere">${esc(state.sis.sites.slice(0, 5).join(', '))}${state.sis.sites.length > 5 ? '…' : ''}</div></div><button class="btn" data-act="sisall">Mark ${state.sis.ids.length === 1 ? 'it' : 'all ' + state.sis.ids.length} stolen too</button><button class="btn" data-act="sisno">Not now</button></div>` : ''}
-  ${state.picked.length ? `<div class="bulk float" role="toolbar" aria-label="Answer the picked copies"><b class="num">${state.picked.length} picked</b><i class="bsep" aria-hidden="true"></i><button class="bb stolen" data-act="bulk" data-v="stolen">Stolen</button><button class="bb licensed" data-act="bulk" data-v="licensed">Licensed</button><button class="bb" data-act="bulk" data-v="removed">Remove</button><button class="bb" data-act="bulk" data-v="later">Check later</button><button class="bb" data-act="bulkhide">${state.fTab === 'social' ? 'Hide accounts' : 'Hide sites'}</button><button class="bb x" data-act="clearpick" aria-label="Clear the picks" title="Clear">✕</button></div>` : ''}
+  ${state.picked.length ? `<div class="bulk float" role="toolbar" aria-label="Answer the picked copies"><b class="num">${state.picked.length} picked</b><i class="bsep" aria-hidden="true"></i><button class="bb stolen" data-act="bulk" data-v="stolen">Stolen</button><button class="bb licensed" data-act="bulk" data-v="licensed">Licensed</button><button class="bb" data-act="bulk" data-v="removed">Remove</button><button class="bb" data-act="bulk" data-v="later">Check later</button>${['Stolen', 'Not finished'].includes(state.fFilter) ? '<button class="bb" data-act="bulksent" title="Mark the picked Stolen copies as already sent to legal">Sent to legal</button>' : ''}<button class="bb" data-act="bulkhide">${state.fTab === 'social' ? 'Hide accounts' : 'Hide sites'}</button><button class="bb x" data-act="clearpick" aria-label="Clear the picks" title="Clear">✕</button></div>` : ''}
   ${await drawer(me === RENDER_N ? (LIST = list) : list)}`;
 };
 // 4.24: one quiet line about spam blog copies: how many are hidden, and buttons to show them or
@@ -1282,7 +1290,7 @@ function toastUndo(msg) { toast(msg, undoLast); }
 // searching and Today's 50 skip it from now on; the copies already found stay. Undo (U) or
 // Clients and photos › the client's photos turn it back on.
 const isStopped = c => { const p = FCD && FCD.photos.get(c.photo); return !!(p && p.stopped); };
-const STOP_TIP = 'Keep searching and Today\'s 50 skip this photo from now on. The copies found so far stay. Turn it back on any time in Clients and photos.';
+const STOP_TIP = 'Keep searching and Today\'s 50 skip this photo from now on, and its unanswered matches move to Removed. Stolen and Licensed stay. Turn it back on any time in Clients and photos.';
 function stopRow(c) {
   if (!FCD || !FCD.photos.get(c.photo)) return '';
   return isStopped(c)
@@ -1303,7 +1311,7 @@ function stopBtn(c) {
 }
 // Before a photo stops being searched: a box that says what will happen, and a tick to say
 // you understand (Ben). Resolves true only when ticked and confirmed.
-function askStop(names, pic) {
+function askStop(names, pic, cnt = {}) {
   return new Promise(res => {
     const n = names.length, one = n === 1;
     const d = document.createElement('dialog');
@@ -1314,10 +1322,11 @@ function askStop(names, pic) {
       <div class="row" style="gap:12px;flex-wrap:nowrap;align-items:center">${pic ? `<img src="${pic}" alt="" style="width:84px;height:56px;object-fit:cover;border-radius:8px;flex-shrink:0">` : ''}<span style="min-width:0;overflow-wrap:anywhere;font-weight:600">${esc(one ? names[0] : names.slice(0, 3).join(', ') + (n > 3 ? ' and ' + (n - 3) + ' more' : ''))}</span></div>
       <ul style="margin:0;padding-left:20px;font-size:14px;line-height:1.5">
         <li>PageProof will <b>no longer look for new copies</b> of ${one ? 'this photo' : 'these photos'} (Keep searching and Today's 50 skip ${one ? 'it' : 'them'}).</li>
-        <li>Copies already found stay in Copies found.</li>
-        <li>You can turn it back on any time: Clients and photos › the client › <b>Search again</b>.</li>
+        ${cnt.open == null ? `<li>Matches not answered yet (New and Check later) move to <b>Removed</b>. Stolen and Licensed stay.</li>` : cnt.open ? `<li><b>${plural(cnt.open, 'match', 'matches')} not answered yet</b> (New and Check later) move${cnt.open === 1 ? 's' : ''} to Removed.</li>` : '<li>No unanswered matches to remove.</li>'}
+        ${cnt.kept ? `<li>${plural(cnt.kept, 'match', 'matches')} you marked Stolen or Licensed stay${cnt.kept === 1 ? 's' : ''}.</li>` : ''}
+        <li>Undo, or <b>Search again</b> later (Clients and photos › the client), brings the removed matches back.</li>
       </ul>
-      <label style="display:flex;gap:8px;align-items:flex-start;font-size:14px;cursor:pointer;background:var(--sunk);border-radius:10px;padding:10px 12px"><input type="checkbox" class="stopok" style="margin-top:3px"><span>I understand new copies of ${one ? 'this photo' : 'these photos'} won't be found while ${one ? 'it is' : 'they are'} stopped.</span></label>
+      <label style="display:flex;gap:8px;align-items:flex-start;font-size:14px;cursor:pointer;background:var(--sunk);border-radius:10px;padding:10px 12px"><input type="checkbox" class="stopok" style="margin-top:3px"><span>I understand new copies of ${one ? 'this photo' : 'these photos'} won't be found while ${one ? 'it is' : 'they are'} stopped, and unanswered matches are removed.</span></label>
       <div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" value="no" type="submit">Cancel</button><button class="btn primary stopgo" value="yes" type="submit" disabled data-why="Tick the box first.">Stop searching</button></div></form>`;
     document.body.appendChild(d);
     const tick = d.querySelector('.stopok'), go = d.querySelector('.stopgo');
@@ -1337,15 +1346,26 @@ async function stopPhoto(copyId) {
   const p = c && FCD.photos.get(c.photo);
   if (!p) return;
   const on = !p.stopped;
-  if (on && !(await askStop([c.photoName || p.name], p.thumb ? safeImg(p.thumb) : safeImg(([...document.querySelectorAll('img[data-our]')].find(i => i.dataset.our === p.id) || {}).src || '')))) return;
   // A double is searched as one photo, so every version of it stops (or starts) together.
   const ids = (await FC.doublesOf(p)).map(d => d.id);
   if (!ids.includes(p.id)) ids.push(p.id);
+  const mine = x => ids.includes(x.photo);
+  const open = FCD.copies.filter(x => mine(x) && ['new', 'later'].includes(x.status)).length;
+  const kept = FCD.copies.filter(x => mine(x) && ['stolen', 'licensed'].includes(x.status)).length;
+  if (on && !(await askStop([c.photoName || p.name], p.thumb ? safeImg(p.thumb) : safeImg(([...document.querySelectorAll('img[data-our]')].find(i => i.dataset.our === p.id) || {}).src || ''), { open, kept }))) return;
+  // The open copy goes to Removed with the others: open the next copy of another photo instead.
+  const wasOpen = state.open;
+  let nextId = state.open;
+  if (on && state.open && mine(FCD.copies.find(x => x.id === state.open) || {})) {
+    const i = LIST.indexOf(state.open), other = x => { const o = FCD.copies.find(y => y.id === x); return o && !mine(o); };
+    nextId = LIST.slice(i + 1).find(other) || LIST.slice(0, Math.max(0, i)).reverse().find(other) || '';
+  }
   const undo = await FC.setStopped(ids, on);
-  const name = c.photoName || p.name;
-  HIST.push({ label: (on ? 'stopped searching ' : 'searching again ') + name, undo, open: state.open || '' });
+  const name = c.photoName || p.name, moved = undo.moved || 0;
+  HIST.push({ label: (on ? 'stopped searching ' : 'searching again ') + name, undo, open: wasOpen || '' });
   dropFC();
-  toastUndo(on ? `${name} won't be searched any more. Its copies found so far stay.` : `${name} will be searched again.`);
+  state.open = nextId;
+  toastUndo(on ? `${name} won't be searched any more.${moved ? ' ' + plural(moved, 'match', 'matches') + ' moved to Removed.' : ''}${kept ? ' Stolen and Licensed stay.' : ''}` : `${name} will be searched again.${moved ? ' ' + plural(moved, 'match', 'matches') + ' back in New.' : ''}`);
   render(true);
 }
 
@@ -1369,8 +1389,11 @@ async function drawerVerdict2(status, id, c) {
   await inTurn(async () => {
     await answerCopies([id], status, who + ' ' + VERB[status]);
     state.sis = sis;
-    if (state.open === id) state.open = nextId;
-    toastUndo(who + ' ' + VERB[status] + (status === 'stolen' ? (isSoc(c) && c.acct ? '. ' + c.acct.handle + ' is now a known account.' : '. Save its Evidence report when you\'re ready.') : '.') + (nextId ? ' Next copy opened.' : ''));
+    // 4.63 (Ben): Stolen keeps this copy open and its claim steps start right here. The next copy
+    // opens after Sent to legal or Finish later.
+    if (status === 'stolen') { state.clNext = nextId; state.clOpenStep = ''; state.dTab = 'sum'; }
+    else if (state.open === id) state.open = nextId;
+    toastUndo(who + ' ' + VERB[status] + (status === 'stolen' ? (isSoc(c) && c.acct ? '. ' + c.acct.handle + ' is now a known account.' : '') + ' Finish the claim steps here.' : '.') + (nextId && status !== 'stolen' ? ' Next copy opened.' : ''));
   });
   await render(true);
 }
@@ -1909,6 +1932,8 @@ Object.assign(ACTS, {
       if (v === 'stolen') { v = await ruleGate(c); if (!v) return; }
       await answerCopies([c.id], v, c.site + ' ' + VERB[v]);
       if (state.rvHold === c.id) state.rvHold = '';
+      // 4.63 (Ben, 2a): Stolen opens the same claim steps; Sent to legal or Finish later comes back here.
+      if (v === 'stolen') { state.open = c.id; state.clBack = 'review'; state.clNext = ''; state.clOpenStep = ''; state.dTab = 'sum'; toastUndo(c.site + ' marked stolen. Finish the claim steps here.'); location.hash = 'found'; return; }
       toastUndo(c.site + ' ' + VERB[v] + '.');
       await render(true);
     } finally { answering = false; }
@@ -1942,7 +1967,7 @@ document.addEventListener('keydown', e => {
   if (r === 'found' && state.open) {
     if (k === 'Escape') { state.open = ''; render(true); return; }
     const c = FCD && FCD.copies.find(x => x.id === state.open);
-    if (map[k] && c && c.status !== 'removed' && !(map[k] === 'later' && c.status === 'later')) { e.preventDefault(); drawerVerdict(map[k]); }
+    if (map[k] && c && c.status !== 'removed' && !(map[k] === 'later' && c.status === 'later') && !(typeof clOpen === 'function' && clOpen(c))) { e.preventDefault(); drawerVerdict(map[k]); }
   } else if (r === 'review' && state.rvTab === 'review') {
     if (map[k]) { e.preventDefault(); ACTS.rverdict(map[k]); }
     else if (k === 's') { state.cmpMode = state.cmpMode === 'side' ? 'swipe' : 'side'; render(true); }

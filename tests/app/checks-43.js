@@ -31,7 +31,10 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(/^1 of \d/.test(rv.prog) && rv.link && rv.page, 'One at a time shows progress, the page link and Their page (' + rv.prog + ')');
   ok(/Compare/.test(rv.more) && /Evidence report/.test(rv.more) && /Capture/.test(rv.more) && /Approve site/.test(rv.more), 'One at a time has Compare, Evidence report, Capture and Approve site');
   await shot('review');
-  await page.keyboard.press('y'); await page.waitForTimeout(1200);
+  await page.keyboard.press('y'); await page.waitForTimeout(1500);
+  // 4.63: Stolen opens the claim steps; Finish later comes back to One at a time.
+  ok(await page.evaluate(() => location.hash.startsWith('#found') && !!document.getElementById('claimsteps')), 'Y in One at a time opens the claim steps');
+  await page.click('.dfoot [data-act="cllater"]'); await page.waitForTimeout(1500);
   const rv2 = await page.evaluate(() => ({ prog: document.querySelector('.rvprog b').textContent, site: document.querySelector('.rvsite h2').textContent, undo: !document.querySelector('.rvtop [data-act="undo"]').disabled }));
   ok(/^2 of /.test(rv2.prog) && rv2.undo, 'Answering with Y moves the progress on to ' + rv2.prog + ' and switches Undo on');
   await page.keyboard.press('u'); await page.waitForTimeout(1200);

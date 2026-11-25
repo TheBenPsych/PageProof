@@ -311,9 +311,7 @@ async function step() {
   if (typeof PP_STATS !== 'undefined') PP_STATS.add('keep.lane.' + (lane === 'fast' ? (firstTime ? 'quick' : 'fast') : job.engines.length > 1 ? 'all' : 'google'));
   // Pinned: a small icon at the left of the tab bar instead of a full tab.
   try { S.win = (await api.tabs.getCurrent()).windowId; } catch (e) { /* not in a tab */ }   // the tab may have been dragged to another window
-  const opts = { windowId: S.win, url: api.runtime.getURL('revsearch.html?job=' + job.id), active: false };
-  let t;
-  try { t = await api.tabs.create({ ...opts, pinned: true }); } catch (e) { t = await api.tabs.create(opts); }
+  const t = await ppOpenSearchTab(api.runtime.getURL('revsearch.html?job=' + job.id), S.win);   // searching window (4.57)
   j.tab = t.id;
   if ((await api.storage.local.get('fcPause')).fcPause) { await stopJob('paused'); return; }
   await status('running', runningText(tally), { current: firstCurrent(), ...ladExtra });
