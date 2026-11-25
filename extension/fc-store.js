@@ -581,13 +581,24 @@ const FC = (() => {
     const regs = {};
     const walk = async (dir, rel, depth, ctx) => {
       if (cf.check) await cf.check();
-      const files = [], dirs = [], txt = [];
-      for await (const [name, h] of dir.entries()) {
-        if (/^[.$~]/.test(name)) continue;
-        if (h.kind === 'directory') dirs.push([name, h]);
-        else if (IMAGE.test(name)) files.push(name);
-        else if (/^client_info(_ignore)?\.txt$/i.test(name)) txt.push(name);
-        else if (SHEET.test(name)) { const r = regIn(name); if (r) regs[rel] = { ...(regs[rel] || {}), ...r, from: 'File name in this folder: ' + name }; }
+      let files = [], dirs = [], txt = [];
+      // 4.47.1: one folder Google Drive can't list (a hiccup) no longer stops the whole read.
+      // It is tried twice, then left out and counted, so the photos already in the list stay.
+      for (let tries = 0; ; tries++) {
+        files = []; dirs = []; txt = [];
+        try {
+          for await (const [name, h] of dir.entries()) {
+            if (/^[.$~]/.test(name)) continue;
+            if (h.kind === 'directory') dirs.push([name, h]);
+            else if (IMAGE.test(name)) files.push(name);
+            else if (/^client_info(_ignore)?\.txt$/i.test(name)) txt.push(name);
+            else if (SHEET.test(name)) { const r = regIn(name); if (r) regs[rel] = { ...(regs[rel] || {}), ...r, from: 'File name in this folder: ' + name }; }
+          }
+          break;
+        } catch (e) {
+          if (tries >= 1) { cf.errors = (cf.errors || 0) + 1; console.warn('PageProof could not read folder', rel, e); return; }
+          await new Promise(r => setTimeout(r, 1500));
+        }
       }
       if (txt.length) {
         const info = await readInfo(dir, txt);
@@ -602,6 +613,8 @@ const FC = (() => {
       }
       if (depth >= 8) return;
       for (const [name, h] of dirs) {
+        // 4.47.1: "No longer monitoring" folders hold photos the client stopped watching.
+        if (SKIP_DIR.test(name)) { if (onDir) onDir(rel + '/' + name, 0, true); continue; }
         const c2 = { ...ctx };
         const y = yearOf(name), q = quarterOf(name), d = dayOf(name);
         // A folder that is clearly a year ("2024", "2024 Q1", "Year 2024"), at any depth. Right
@@ -622,6 +635,7 @@ const FC = (() => {
     await walk(cf.base, cf.rel, 0, { year: 0, quarter: 0, day: 0 });
     return regs;
   }
+  const SKIP_DIR = /^\s*(?:no\s+longer|not|stop(?:ped)?|do\s+not|don'?t)\s+(?:monitor|search|watch)/i;
   const YEAR_DIR = /^\s*(?:year|fy)?[\s._-]*(?:19|20)\d{2}(?!\d)/i;
   const newness = p => p.year ? p.year * 1000 + (p.quarter || 0) * 200 + (p.day || 0) : (p.exifY || 0) * 1000 + (p.exifQ || 0) * 200;
   // This quarter and last quarter (for the hourly look for new photos).
@@ -666,18 +680,24 @@ const FC = (() => {
         // The hourly look skips clients nobody searches. A ticked folder that holds several
         // clients (each named by its client_info.txt) is still read if any of those is searched.
         if (!full && client.searching !== true && ![...known.values()].some(c => c.from === cf.name && c.searching === true)) continue;
+        // 4.47.1: a client whose folders were never read all the way through (the first read was
+        // cut short: page closed, Drive busy) gets a full read now, every year, not just the
+        // hourly look at this and last quarter. Before, such a client only ever showed its two
+        // newest quarters until the weekly check, which itself waits a week after setup.
+        const fullC = full || !(old && old.scanned);
+        cf.errors = 0;
         const pre = 'd:' + (cf.extra ? '+' : '') + cf.rel + '/';
         pres.push(pre);
         const seen = new Set(), batch = [], subs = {}, subsNew = {}, found = [], newOnes = [];
         let n = 0, skipped = 0, mineNew = 0;
         if (progress) progress('Reading ' + cf.name + '…');
-        const r = await walkClient(cf, f => { found.push(f); }, only, (rel, k, ignored) => { if (ignored) skipped++; });
+        const r = await walkClient(cf, f => { found.push(f); }, fullC ? null : only, (rel, k, ignored) => { if (ignored) skipped++; });
         // What's already known about these photos, so flags and search history stay. The weekly
         // check reads all of this client's photos (to spot the ones that are gone); the hourly
         // look only reads the few it found, not the whole library.
         // 4.39: photos that moved (folder renamed or moved) keep their first address as their id.
         for (const f of found) { const id0 = 'd:' + (cf.extra ? '+' : '') + f.rel; f.id = alias[id0] || id0; }
-        const have = full ? new Map((await DB.prefix('photos', pre)).map(p => [p.id, p]))
+        const have = fullC ? new Map((await DB.prefix('photos', pre)).map(p => [p.id, p]))
           : new Map((await DB.getMany('photos', found.map(f => f.id))).filter(Boolean).map(p => [p.id, p]));
         const away = found.filter(f => f.id !== 'd:' + (cf.extra ? '+' : '') + f.rel && !have.has(f.id));
         if (away.length) for (const p of (await DB.getMany('photos', away.map(f => f.id))).filter(Boolean)) have.set(p.id, p);
@@ -699,7 +719,7 @@ const FC = (() => {
         // Clients named by a client_info.txt inside this folder: searched like the folder they're in.
         for (const [name, cnt] of Object.entries(subs)) {
           const o = known.get(name) || (await DB.get('clients', name));
-          await DB.put('clients', { ...(o || {}), name, searching: o ? o.searching : client.searching, priority: o ? !!o.priority : client.priority, photos: full ? cnt : ((o && o.photos) || 0) + (subsNew[name] || 0), licensed: o ? o.licensed || [] : [], from: cf.name, scanned: full || !o ? new Date().toISOString() : o.scanned });
+          await DB.put('clients', { ...(o || {}), name, searching: o ? o.searching : client.searching, priority: o ? !!o.priority : client.priority, photos: fullC ? cnt : ((o && o.photos) || 0) + (subsNew[name] || 0), licensed: o ? o.licensed || [] : [], from: cf.name, scanned: fullC ? new Date().toISOString() : o && o.scanned });
         }
         // 4.42 new photo fast lane: photos that arrive in a client PageProof already knows (not
         // the first big read, not a whole new shoot library of hundreds) are searched first.
@@ -707,15 +727,17 @@ const FC = (() => {
         client.ignored = skipped;
         for (const [k, v] of Object.entries(r)) regs[k] = { ...v, ...(regs[k] && regs[k].manual ? regs[k] : {}) };
         await DB.putMany('photos', batch);
-        if (full) {
+        if (fullC) {
           // Photos no longer in the folder are kept (their copies matter) but marked gone.
+          // (Not when a folder couldn't be read: its photos are still there, just unread.)
           const gone = [];
-          for (const [id, p] of have) if (!seen.has(id) && !p.gone) { p.gone = true; gone.push(p); }
+          if (!cf.errors) for (const [id, p] of have) if (!seen.has(id) && !p.gone) { p.gone = true; gone.push(p); }
           removed += gone.length;
           await DB.putMany('photos', gone);
-          client.photos = n;
+          client.photos = n + (cf.errors ? [...have.values()].filter(p => !seen.has(p.id) && !p.gone && p.client === cf.name).length : 0);
         } else client.photos = (old ? old.photos : 0) + mineNew;
-        if (full) client.scanned = new Date().toISOString();
+        if (fullC) client.scanned = new Date().toISOString();
+        client.readErrors = cf.errors || 0;
         total += client.photos;
         await DB.put('clients', client);
       }
