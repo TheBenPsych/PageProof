@@ -86,6 +86,9 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     // 3. A Remove that is undone later: its pair is left out of the test.
     await FC.DB.put('copies', C('undone-example.com', await dataUrl(await jpeg(other))));
     const undo = await FC.answer([pid + '|undone-example.com/p'], 'removed');
+    // 4. (4.52) Stolen on a Same photo: kept too, as a real copy.
+    await FC.DB.put('copies', C('thief-example.com', await dataUrl(await jpeg(copy))));
+    await FC.answer([pid + '|thief-example.com/p'], 'stolen');
     await PP_CTESTS._drain();
     await undo();
     const dir = await PP_CTESTS.folder(false);
@@ -94,10 +97,10 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     const run = await PP_CTESTS.run();
     return { n: names.length, files: list.length ? (await (async () => { const f = []; for await (const [n] of list[0].dir.entries()) f.push(n); return f.sort().join(','); })()) : '', truths: list.map(x => x.info.truth).sort().join(','), kinds: list.map(x => x.info.kind).join(','), run, count: await PP_CTESTS.count() };
   });
-  ok(ct.n === 3 && ct.files === 'ours.jpg,pair.json,theirs.jpg', 'each answer keeps a small pair in Documents\\PageProof\\checker-tests: ' + ct.n + ' pairs (' + ct.files + ')');
-  ok(ct.truths === 'copy,different,different', 'what you said is kept with each pair: ' + ct.truths);
-  ok(ct.run.n === 2 && ct.run.skipped === 1, 'the test runs the pairs you still agree with (the undone Remove is left out): ' + JSON.stringify(ct.run));
-  ok(ct.run.right === 2, 'the checker gets both real pairs right: ' + ct.run.right + ' of ' + ct.run.n);
+  ok(ct.n === 4 && ct.files === 'ours.jpg,pair.json,theirs.jpg', 'each answer keeps a small pair in Documents\\PageProof\\checker-tests: ' + ct.n + ' pairs (' + ct.files + ')');
+  ok(ct.truths === 'copy,copy,different,different', 'what you said is kept with each pair: ' + ct.truths);
+  ok(ct.run.n === 3 && ct.run.skipped === 1, 'the test runs the pairs you still agree with (the undone Remove is left out): ' + JSON.stringify(ct.run));
+  ok(ct.run.right === 3, 'the checker gets all real pairs right: ' + ct.run.right + ' of ' + ct.run.n);
 
   // ---- How PageProof is doing: real pairs in the checker test, and where the checker goes wrong
   await page.evaluate(async () => {

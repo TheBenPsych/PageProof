@@ -91,7 +91,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     const has = await page.evaluate(g => !!document.querySelector(`[data-act="fset"][data-v="fView|${g}"]`), g);
     if (!has) continue;
     await page.click('[data-dd="fView"] > summary'); await page.click(`[data-act="fset"][data-v="fView|${g}"]`); await page.waitForTimeout(600);
-    const r = await page.evaluate(() => ({ heads: document.querySelectorAll('.ghead').length, rows: document.querySelectorAll('.crow').length }));
+    const r = await page.evaluate(() => ({ heads: document.querySelectorAll('.ghead:not(.weakhead)').length, rows: document.querySelectorAll('.crow').length }));
     ok(r.rows > 0 && (g === 'list' ? r.heads === 0 : r.heads > 0), 'Group by ' + g + ': ' + r.heads + ' groups, ' + r.rows + ' rows');
     if (g === 'photo') await shot('found-by-photo');
   }
@@ -107,7 +107,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   // ---- many copies on one site fold up, and can be answered together
   const fold = await page.evaluate(async () => {
     const news = FCD.copies.filter(c => c.status === 'new').slice(0, 6);
-    for (const [i, n] of news.entries()) { const r = await FC.DB.get('copies', n.id); r.site = 'bigblog.example'; r.country = ''; r.url = 'https://bigblog.example/post/' + i; r.key = 'bigblog.example/post/' + i; await FC.DB.put('copies', r); }
+    for (const [i, n] of news.entries()) { const r = await FC.DB.get('copies', n.id); r.site = 'bigblog.example'; r.country = ''; r.match = 'same'; r.pct = 92; r.url = 'https://bigblog.example/post/' + i; r.key = 'bigblog.example/post/' + i; await FC.DB.put('copies', r); }
     FCD = null; await loadFC(); state.open = ''; state.exp = []; state.fView = 'list'; state.fq = 'bigblog.example'; state.fFilter = 'New'; render(true);
     await new Promise(r => setTimeout(r, 700));
     return { ids: news.map(n => n.id), rows: document.querySelectorAll('.crow').length, more: (document.querySelector('.morerow') || {}).textContent || '' };

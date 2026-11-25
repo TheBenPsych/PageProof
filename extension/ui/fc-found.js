@@ -432,6 +432,9 @@ async function cardSweep() {
   return xs.length;
 }
 // 4.50: a post the search site listed whose cover is another picture (a carousel, an album, slides).
+// 4.52: a website Maybe under 60% nobody has a reason to look at first (see the list below).
+const WEAK_MAYBE = 60;
+const weakMaybe = c => c.status === 'new' && c.match === 'maybe' && c.pct != null && c.pct >= 0 && c.pct < WEAK_MAYBE && !isSoc(c) && !c.repeat && !c.known && !c.rescued && !c.cover;
 const coverWait = c => !!c.cover && isSoc(c) && (!c.postChk || c.postChk.v !== POSTCHK_V);
 const COVER_WAIT = 'The search site listed this post for your photo, but its first picture is a different one. PageProof looks at every picture of the post in your browser, and keeps it only if your photo is one of them.';
 const notInPost = c => isSoc(c) && !acctPageLink(c) && c.postChk && c.postChk.state === 'notSeen' && !/^https?:/i.test(c.img || '');
@@ -791,6 +794,17 @@ V.found = async () => {
         : `<span class="oav grey">?</span><div style="min-width:0"><b class="gname">Other sites</b><div class="faint">${plural(sites.size, 'site')} with no shared owner found</div></div>`, xs, true]);
     }
   } else groups.push(['', '', rows, false]);
+  // 4.52 (Ben's pick): website Maybes under 60% were all removed by hand (none of about 85 kept),
+  // so they fold into one "Weak Maybes" heading at the bottom, closed until clicked.
+  if (!social) {
+    const weak = [];
+    for (const g of groups) { const keep = []; for (const c of g[2]) (weakMaybe(c) ? weak : keep).push(c); g[2] = keep; }
+    for (let i = groups.length - 1; i >= 0; i--) if (!groups[i][2].length && groups.length > 1) groups.splice(i, 1);
+    if (weak.length) {
+      if (groups.length === 1 && !groups[0][2].length) groups.length = 0;
+      groups.push(['weak', `<b class="gname">Weak Maybes</b><span class="faint">Under ${WEAK_MAYBE}% lines up. You have removed nearly all of these before.</span>`, weak, true]);
+    }
+  }
   const list = [];
   let shown = 0, body = '';
   const foldSites = state.fView !== 'site' && state.fView !== 'owner' && state.fView !== 'account';
@@ -803,9 +817,9 @@ V.found = async () => {
         open = !state.exp.includes(k);
         body += `<div class="ghead fold chead" data-act="gtoggle" data-v="${esc(k)}" aria-expanded="${open}" title="${open ? 'Click to fold' : 'Click to open'}">${html}<span class="gfold${open ? ' on' : ''}" aria-hidden="true">▾</span></div>`;
       } else {
-      const canFold = fold && xs.length > 3;
+      const canFold = fold && (xs.length > 3 || k === 'weak');
       open = !canFold || state.exp.includes(k);
-      body += `<div class="ghead${canFold ? ' fold' : ''}" ${canFold ? `data-act="gtoggle" data-v="${esc(k)}"` : ''}>${canFold ? `<span class="caret${open ? ' on' : ''}">▸</span>` : ''}${html}<span class="faint gcount">${plural(xs.length, 'copy', 'copies')}${canFold ? (open ? ' · click to fold' : ' · click to open') : ''}</span></div>`;
+      body += `<div class="ghead${canFold ? ' fold' : ''}${k === 'weak' ? ' weakhead' : ''}" ${canFold ? `data-act="gtoggle" data-v="${esc(k)}"` : ''}>${canFold ? `<span class="caret${open ? ' on' : ''}">▸</span>` : ''}${html}<span class="faint gcount">${plural(xs.length, 'copy', 'copies')}${canFold ? (open ? ' · click to fold' : ' · click to open') : ''}</span></div>`;
       }
       if (!open && !xs.some(x => x.id === state.open)) continue;
     }
