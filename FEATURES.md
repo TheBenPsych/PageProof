@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.51.3** (25 Nov 2026).
+Last updated: version **4.52.0** (25 Nov 2026).
 
 ---
 
@@ -107,6 +107,9 @@ Last updated: version **4.51.3** (25 Nov 2026).
 - **Credit search.** Once a week per wording, in your hours, PageProof asks Google for pages that print a client's photo credit ("Photo: Harbor Times", made-up example) and compares their pictures with that client's photos. Matches go to New as "Found by credit search"; pages that credit the client but show none of their photos are listed to look at by hand. A robot check rests Google for an hour and is never got around. (4.51)
 - **Watching.** A site or social account with 2 or more Stolen copies is watched: once a week only its new posts (its news feed or sitemap, or the account's newest posts) are compared with every client's photos. Old Stolen pages are never opened again. Add or stop watching any site or account by hand. (4.51)
 - **Seal close-ups aren't copies.** A close-up showing only a seal or emblem that also appears in your photo is thrown out. (4.51.3)
+- **Search now on Credit search runs on that page**, with a progress bar (wordings searched, pages read, copies found, credit but no photo) and a summary when it finishes. A page showing a copy already in Copies found is no longer listed as "credit but none of their photos". (4.52)
+- **Extra searches card on Keep searching.** Sweeps, Credit search and Watching each show what they are doing now and their last 7 days: work done, copies found and time spent. (4.52)
+- **Credit search on Google and Bing.** Each wording is searched on both; a page both list (even spelled a little differently) is read once. A robot check rests only that site for an hour and the other carries on. (4.52)
 
 ## 5. Review the copies found
 
@@ -137,6 +140,7 @@ Last updated: version **4.51.3** (25 Nov 2026).
 - **Registrations.** Clients › Registrations lists photos that have copies found but only an application number or no number, Stolen ones first, with a list to copy for the registrar. A VA number added later moves the photo to Registered lately. (4.51)
 - **Find the company, the firm's way.** Who's behind this site lists every name the site goes by (footer, Terms of service, Privacy, About, the site's data, the domain record and the site's Facebook Page transparency), marks each as a brand or a company, and gives a 3-step checklist: names, brand to company (Justia, USPTO, OpenCorporates, SEC), is it active (state search, past lawsuits, DMCA agent directory, Delaware last). (4.51)
 - **Company card and status.** Each site gets a company card with the firm's fields (entity name type, entity name, other names, state, entity number, what the registry says, registered agent, addresses, DMCA agent) and status: Seemingly viable, Not a viable entity or Not checked yet. The status shows on every copy from that site, Ready for legal needs an active company, and copies on a site that is not a viable entity go to the bottom. (4.51)
+- **Legal portal card.** A Stolen copy's Claim tab shows the portal's Add Infringement boxes in the portal's order (Artwork, Discovery Date and Method, Infringing Domain, Page URL, Infringer Use, Paid Ads, Sells Product, Agency Case #, Damages, Infringing Image Url, Note), filled from the copy. Click a line to copy it, or Copy all. It also shows the Certificate and Application numbers to check and the screengrab file to upload. (4.52)
 
 ## 6. Social media accounts
 
@@ -210,6 +214,7 @@ Last updated: version **4.51.3** (25 Nov 2026).
 - **Backups keep the search history.** Restoring, or moving to a new computer, carries on where you were instead of searching every photo again. (4.41)
 - **Error diary.** Problems PageProof handles quietly are counted by where they happened (with names, links and folders taken out) and listed under What went wrong in Save stats for Claude. (4.41)
 - **Check-up after every update.** About a minute after a new version opens, PageProof checks the photo checker, opening a Drive photo, saving, the timestamp services and the search sites, and Home says "everything checked" or what broke. (4.41)
+- **Are the extra searches worth it?** How PageProof is doing (and the stats file for Claude) counts each extra search's work, copies found, time spent and time per copy. (4.52)
 
 ---
 
@@ -309,3 +314,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.51.1 | 25 Nov | Fix: Set-aside folders skipped, fewer extension page errors |
 | 4.51.2 | 25 Nov | Fix: Two searches never pick the same photos |
 | 4.51.3 | 25 Nov | Fix: Close-ups of a podium seal no longer count as copies |
+| 4.52 | 25 Nov | Credit search on Google and Bing, progress on its own page, Extra searches card and stats |
