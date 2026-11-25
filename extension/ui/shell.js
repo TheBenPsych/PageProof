@@ -9,8 +9,8 @@ const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&a
 const PP_MENU = [
   { id: 'home', label: 'Home', href: 'home' },
   { id: 'find', label: 'Copies found', href: 'found', badgeKey: 'newCopies', icon: 'copies',
-    subs: [['All copies', 'found'], ['One at a time', 'review'], ['Keep searching', 'keep'], ['New search', 'search'], ['All searches', 'searches']] },
-  { id: 'clients', label: 'Clients', href: 'clients', icon: 'people', subs: [['Clients and photos', 'clients'], ['Skipped photos', 'skipped'], ['Site owners', 'owners']] },
+    subs: [['All copies', 'found'], ['One at a time', 'review'], ['Keep searching', 'keep'], ['New search', 'search'], ['All searches', 'searches'], ['Credit search', 'credit'], ['Watching', 'watching']] },
+  { id: 'clients', label: 'Clients', href: 'clients', icon: 'people', subs: [['Clients and photos', 'clients'], ['Registrations', 'regs'], ['Skipped photos', 'skipped'], ['Site owners', 'owners']] },
   { id: 'library', label: 'Evidence', href: 'library', badgeKey: 'toCapture',
     subs: [['All evidence', 'library'], ['Needs a capture', 'tocapture'], ['Capture a page', 'capture'], ['Verify a pack', 'verify'], ['Weekly summary', 'weekly']] },
   { id: 'tools', label: 'Tools', href: 'tools', icon: 'tools',
@@ -21,15 +21,15 @@ const PP_MENU = [
 // 4.14: the menu went from 9 items to 5. Every older page still has its address and lights up the
 // item it now lives under.
 const PP_ROUTES = {
-  home: ['home'], search: ['find', 'search'], searches: ['find', 'searches'], results: ['find', 'searches'], found: ['find', 'found'], review: ['find', 'review'], keep: ['find', 'keep'], connect: ['find', 'found'],
-  clients: ['clients', 'clients'], photos: ['clients', 'clients'], owners: ['clients', 'owners'], who: ['clients', 'owners'], skipped: ['clients', 'skipped'],
+  home: ['home'], search: ['find', 'search'], searches: ['find', 'searches'], results: ['find', 'searches'], found: ['find', 'found'], review: ['find', 'review'], keep: ['find', 'keep'], connect: ['find', 'found'], credit: ['find', 'credit'], watching: ['find', 'watching'],
+  clients: ['clients', 'clients'], photos: ['clients', 'clients'], owners: ['clients', 'owners'], who: ['clients', 'owners'], skipped: ['clients', 'skipped'], regs: ['clients', 'regs'],
   library: ['library', 'library'], tocapture: ['library', 'tocapture'], capture: ['library', 'capture'], verify: ['library', 'verify'], weekly: ['library', 'weekly'],
   tools: ['tools', 'tools'], inspect: ['tools', 'inspect'], compare: ['tools', 'compare'], markup: ['tools', 'markup'], files: ['tools', 'files'], openfiles: ['tools', 'files'], bnsave: ['tools', 'tools'],
   settings: ['settings', 'settings'], health: ['settings', 'health'], stats: ['settings', 'stats'], hidden: ['settings', 'hidden'], browser: ['settings', 'browser'], setup: ['settings', 'browser'], help: ['settings', 'help'],
   computer: ['settings', 'settings'], whatsnew: ['settings', 'settings'], reconnect: ['settings', 'settings']
 };
 const PP_CRUMBS = {
-  results: 'Search results',
+  results: 'Search results', credit: 'Credit search', watching: 'Watching', regs: 'Registrations',
   home: 'Home', tools: 'All tools', capture: 'Capture a page', search: 'New search', searches: 'All searches', found: 'All copies found',
   review: 'One at a time', clients: 'Clients and photos', photos: 'Clients and photos', owners: 'Site owners',
   who: 'Who\'s behind this site', keep: 'Keep searching', connect: 'Connect your photos', weekly: 'Evidence › Weekly summary', tocapture: 'Evidence › Needs a capture',

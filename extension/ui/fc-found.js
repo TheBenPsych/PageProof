@@ -3,7 +3,7 @@
 // (Stolen, Licensed, Remove, Skip), undo for every answer, hiding sites and countries, and
 // grouping by client, photo, site or site owner.
 Object.assign(state, {
-  open: '', picked: [], fFilter: 'New', fq: '', fWhen: 'any', fMatch: 'any', fYear: 'Any', fQuarter: 'Any', fPhoto: '', sis: null, fView: 'client', fSort: 'act', fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fStrong: false, fKnown: '', fSpam: 'hide', fOwner: '',
+  open: '', picked: [], fFilter: 'New', fq: '', fWhen: 'any', fMatch: 'any', fYear: 'Any', fQuarter: 'Any', fPhoto: '', sis: null, fView: 'client', fSort: 'act', fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fStrong: false, fVia: '', fKnown: '', fSpam: 'hide', fOwner: '',
   showFilters: false, fFresh: false, dTab: 'sum', dTabFor: '', dView: '', slide: 50, fCols: null, exp: [], more: 250, qi: 0, cmpMode: 'side', cut: 50, rvTab: 'review', recentHides: [],
 });
 const HIST = [];         // every answer and hide, newest last, so each one can be undone in turn
@@ -163,6 +163,7 @@ function passMain(c) {
 // The newer filters: the search box, found when, how strong the match is, photo year and quarter.
 function passMore(c) {
   if (state.fPhoto && c.photo !== state.fPhoto) return false;
+  if (state.fVia && c.via !== state.fVia) return false;          // Credit search / Watching: what they found
   // 4.45: "Look at these first" on Home (strong claims).
   if (state.fStrong && !(typeof FC_RULES !== 'undefined' && FC_RULES.isStrong(c))) return false;
   if (state.fq && !(c.site + ' ' + c.url + ' ' + (c.acct ? c.acct.handle + ' ' + acctName(c.acct) : '') + ' ' + c.photoName + ' ' + (c.clientName || '') + ' ' + (c.title || '')).toLowerCase().includes(state.fq)) return false;
@@ -448,8 +449,9 @@ function checksParts(c, reg, kind, hits, pub, capturedAt) {
   const dmg = pub ? PP_CHECKS.damages(pub, reg) : null;
   const tagFor2 = { ok: 'ok', warn: 'warn', bad: 'bad', '': 'grey' };
   const legal = c.status === 'stolen' ? PP_CHECKS.legal({ c, reg, pub, kind, hits, pf, capturedAt }) : null;
+  if (legal && typeof ppEntLegal === 'function') { const e = ppEntLegal(c); if (e) legal.push(e); }    // 5d: an active company found
   const ready = legal ? legal.filter(x => x[0] === true).length : 0;
-  const fix = { capture: 'Capture', kind: 'Pick', readpage: 'Read it' };
+  const fix = { capture: 'Capture', kind: 'Pick', readpage: 'Read it', who: 'Find it' };
   return {
     purpose, dmg, legal, ready,
     rules: `<section class="dsec" id="rulesbox"><div class="dsh">Firm rules</div>
@@ -714,7 +716,7 @@ function copyRow(c) {
     <input type="checkbox" class="cpick" aria-label="Pick ${esc(isSoc(c) && c.acct ? c.acct.handle : c.site)}" data-act="pick" data-v="${esc(c.id)}" ${state.picked.includes(c.id) ? 'checked' : ''}>
     <div class="cpair" data-hover="${esc(c.id)}"><img class="ours" src="${oursImg(p)}" alt="" loading="lazy"><img class="thumb" src="${theirImg(c)}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>
     <div class="cinfo">
-      ${isSoc(c) ? socLine(c) : `<div class="l1"><b>${esc(c.site)}</b>${done ? tagFor(c) : ''}${embedTag(c)}${sigIcons(c)}${c.sweep ? '<span class="tag blue" title="Found by reading this site\'s own list of pictures (a sweep), not by a search site">Found by sweep</span>' : ''}${c.status === 'removed' && c.removedBy === 'weakmaybe' ? '<span class="tag grey" title="A Maybe under 50% that nobody answered for 30 days. Put back if it is a copy.">Weak Maybe, never answered</span>' : ''}</div>`}
+      ${isSoc(c) ? socLine(c) : `<div class="l1"><b>${esc(c.site)}</b>${done ? tagFor(c) : ''}${embedTag(c)}${sigIcons(c)}${c.sweep ? '<span class="tag blue" title="Found by reading this site\'s own list of pictures (a sweep), not by a search site">Found by sweep</span>' : ''}${typeof ppRowTags === 'function' ? ppRowTags(c) : ''}${c.status === 'removed' && c.removedBy === 'weakmaybe' ? '<span class="tag grey" title="A Maybe under 50% that nobody answered for 30 days. Put back if it is a copy.">Weak Maybe, never answered</span>' : ''}</div>`}
       <a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink" title="Open this page in a new tab"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>${c.alts && c.alts.length ? `<span class="tag grey altn" title="${esc(c.alts.join('\n'))}" data-gloss="Same page">+${c.alts.length} ${c.alts.length === 1 ? 'address' : 'addresses'}</span>` : ''}
       <div class="l3">${esc(c.photoName)}<span class="l3x">${isSoc(c) && c.acct ? ' · ' + esc(c.site) : ''}${c.pct >= 0 && c.pct != null ? ` · <b class="num" data-gloss="Lines up">${c.pct}%</b> lines up` : ''} · ${esc(FC.USE[c.use][0])}${c.country ? ' · ' + esc(c.country) : ''} · found ${shortDate(c.firstSeen).toLowerCase()}</span></div>
     </div>
@@ -734,6 +736,7 @@ V.found = async () => {
   if (routeArg('open')) { const id = routeArg('open'), oc = FCD.copies.find(x => x.id === id); if (oc) switchTab(isSoc(oc) ? 'social' : 'web'); state.open = id; state.fFilter = 'All'; history.replaceState(null, '', '#found'); }
   if (routeArg('client')) { state.fClient = routeArg('client'); state.fFilter = 'All'; history.replaceState(null, '', '#found'); }
   if (routeArg('filter')) { state.fFilter = routeArg('filter'); history.replaceState(null, '', '#found'); }
+  if (routeArg('via')) { state.fVia = routeArg('via'); state.fFilter = 'All'; switchTab(state.fVia === 'credit' ? 'web' : state.fTab); history.replaceState(null, '', '#found'); }
   if (routeArg('strong')) { state.fStrong = true; state.fFilter = 'New'; switchTab('web'); history.replaceState(null, '', '#found'); }
   if (routeArg('photo')) { state.fPhoto = routeArg('photo'); state.fFilter = 'All'; state.fView = 'list'; history.replaceState(null, '', '#found'); }
   const everyTab = FCD.copies;
@@ -748,7 +751,9 @@ V.found = async () => {
   if (!social && (state.fView === 'account' || state.sView === 'accounts')) { state.fView = 'client'; state.sView = 'copies'; }
   if (social && state.fView === 'owner') state.fView = 'account';
   const sorters = { act: (a, b) => actScore(b) - actScore(a), pct: (a, b) => (b.pct || 0) - (a.pct || 0), risk: (a, b) => ({ sus: 2, watch: 1, ok: 0 }[b.risk.level] - { sus: 2, watch: 1, ok: 0 }[a.risk.level]), newest: (a, b) => (b.firstSeen || '').localeCompare(a.firstSeen || ''), fol: (a, b) => (folOf(b) ?? -1) - (folOf(a) ?? -1) || actScore(b) - actScore(a) };
-  const rows = all.filter(c => passMain(c) && passStatus(c)).sort(sorters[state.fSort] || sorters.act);
+  // 5d (Ben): copies on a site whose company is "Not a viable entity" go to the bottom.
+  const low = c => (typeof ppEntLow === 'function' && ppEntLow(c) ? 1 : 0), srt = sorters[state.fSort] || sorters.act;
+  const rows = all.filter(c => passMain(c) && passStatus(c)).sort((a, b) => low(a) - low(b) || srt(a, b));
   const main = all.filter(passMain);
   const cnt = f => main.filter(c => passStatus(c, f)).length;
   const groups = [];
@@ -837,6 +842,7 @@ V.found = async () => {
   if (state.fShop) active.push(['fShop', 'Selling something']);
   if (state.fRepeat) active.push(['fRepeat', 'Repeat offenders']);
   if (state.fStrong) active.push(['fStrong', 'Strong claims']);
+  if (state.fVia) active.push(['fVia', state.fVia === 'credit' ? 'Found by credit search' : 'Found by the watch list']);
   if (state.fSpam === 'only') active.push(['fSpam', 'Spam blogs only']);
   if (state.fKnown) active.push(['fKnown', state.fKnown === 'only' ? 'Stolen before links only' : 'Without stolen before links']);
   if (state.fOwner) { const o = FCD.owners.find(z => z.key === state.fOwner); active.push(['fOwner', 'Owner: ' + (o ? o.name : '?')]); }
@@ -1270,10 +1276,10 @@ Object.assign(ACTS, {
   qcredit: v => { state.fCredit = v; state.fFilter = 'All'; render(true); },
   togglefilters: () => { state.showFilters = !state.showFilters; render(true); },
   unfilter: v => {
-    if (v === 'all') Object.assign(state, { fWhen: 'any', fMatch: 'any', fVer: 'Any', fFol: 'Any', fType: 'Any', fCountry: 'Any', fAcct: '', fPlat: 'Any', fFresh: false, fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fStrong: false, fKnown: '', fSpam: 'hide', fOwner: '', fYear: 'Any', fQuarter: 'Any', fPhoto: '', fq: '' });
+    if (v === 'all') Object.assign(state, { fWhen: 'any', fMatch: 'any', fVer: 'Any', fFol: 'Any', fType: 'Any', fCountry: 'Any', fAcct: '', fPlat: 'Any', fFresh: false, fClient: 'Any', fUse: 'Any', fRisk: 'Any', fCredit: 'Any', fShop: false, fRepeat: false, fStrong: false, fVia: '', fKnown: '', fSpam: 'hide', fOwner: '', fYear: 'Any', fQuarter: 'Any', fPhoto: '', fq: '' });
     else if (v === 'fWhen' || v === 'fMatch') state[v] = 'any';
     else if (v === 'fSpam') state.fSpam = 'hide';
-    else state[v] = v === 'fShop' || v === 'fRepeat' || v === 'fFresh' || v === 'fStrong' ? false : ['fOwner', 'fPhoto', 'fq', 'fAcct', 'fKnown'].includes(v) ? '' : 'Any';
+    else state[v] = v === 'fShop' || v === 'fRepeat' || v === 'fFresh' || v === 'fStrong' ? false : ['fOwner', 'fPhoto', 'fq', 'fAcct', 'fKnown', 'fVia'].includes(v) ? '' : 'Any';
     render(true);
   },
   // Group by, Found, Match: the little switches above the list.
@@ -1477,6 +1483,7 @@ Object.assign(ACTS, {
   legalfix: async v => {
     if (v === 'capture') return ACTS.capturecopy();
     if (v === 'readpage') return ACTS.readpage();
+    if (v === 'who') return ACTS.gowho(state.open);
     ACTS.dtab('claim');
     const s = document.querySelector('#rulesbox .kindsel');
     if (s) { s.scrollIntoView({ block: 'center', behavior: 'smooth' }); s.focus(); }

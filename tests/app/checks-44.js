@@ -78,12 +78,14 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.evaluate(async i => { const c = await FC.DB.get('copies', i); c.status = 'stolen'; await FC.DB.put('copies', c); FCD = null; state.open = i; await render(true); }, id);
   await page.waitForTimeout(1500);
   const lg = await page.evaluate(() => { const b = document.querySelector('#legalbox'); return b && { rows: b.querySelectorAll('.lrow').length, t: b.innerText }; });
-  ok(lg && lg.rows === 5 && /captured/i.test(lg.t), 'Ready for legal shows 5 ticks (' + (lg ? lg.rows : 0) + ')');
+  // 6 since the company checklist: 'Company found and actively registered' joined the list.
+  ok(lg && lg.rows === 6 && /captured/i.test(lg.t) && /company/i.test(lg.t), 'Ready for legal shows 6 ticks, one for the company (' + (lg ? lg.rows : 0) + ')');
 
   // ---- Research steps on Who's behind this site
   await go('who?site=site0.com'); await page.waitForTimeout(1500);
   const n1 = await page.evaluate(() => document.querySelectorAll('.rstep').length);
-  ok(n1 === 12, 'Who\'s behind this site has 12 research steps (' + n1 + ')');
+  // 17 since the company checklist (brand name, company name, actively registered).
+  ok(n1 === 17, 'Who\'s behind this site has 17 research steps (' + n1 + ')');
   await page.click('.rstep input'); await page.waitForTimeout(800);
   const kept = await page.evaluate(async () => ((await FC.meta.get('research')) || {})['site0.com'] || []);
   ok(kept.length === 1, 'A ticked research step is kept for the site');

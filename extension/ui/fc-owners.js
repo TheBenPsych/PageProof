@@ -71,30 +71,12 @@ V.who = async () => {
   const name = (g && g.name) || (f.names || [])[0] || '';
   const enc = encodeURIComponent;
   const base = FC.baseOf(w.site), q = name || f.siteName || base;
-  // The firm's research steps, in order, as tick boxes. Ticks are kept per site on this computer.
-  const steps = [
-    ['pages', 'Footer, Terms, Privacy and About pages', 'Look for a company name or address you can then search for', 'https://' + base],
-    ['owners', 'Already in Site owners?', 'Check if this company is already known', '#owners'],
-    ['justia', 'Trademark search (Justia)', 'Sometimes shows the address and state of the company', 'https://trademarks.justia.com/search?q=' + enc(q)],
-    ['uspto', 'USPTO trademarks', 'Who owns the brand name', 'https://tmsearch.uspto.gov/search/search-results?query=' + enc(f.siteName || name || base.split('.')[0])],
-    ['opencorp', 'OpenCorporates', 'Companies registered with this name', 'https://opencorporates.com/companies?q=' + enc(q)],
-    ['state', 'State business search', 'Look the company up on its state\'s business website', 'https://www.google.com/search?q=' + enc('"' + q + '" secretary of state business entity search')],
-    ['delaware', 'Delaware business search (do this last)', 'Many companies are formed in Delaware', 'https://icis.corp.delaware.gov/ecorp/entitysearch/namesearch.aspx'],
-    ['whois', 'Who registered the domain', 'whois.com and the official ICANN record', 'https://www.whois.com/whois/' + enc(base)],
-    ['archive', 'Old contact pages on archive.org', 'Addresses and names the site has since removed', 'https://web.archive.org/web/*/' + enc(base) + '/*contact*'],
-    ['courts', 'Past lawsuits', 'Court records that name the company', 'https://www.courtlistener.com/?q=' + enc('"' + q + '"')],
-    ['google', 'Google', 'Search for the owner', 'https://www.google.com/search?q=' + enc('"' + base + '" owner OR "owned by" OR "operated by"')],
-    ['linkedin', 'LinkedIn', 'People who work there', 'https://www.linkedin.com/search/results/companies/?keywords=' + enc(q)],
-  ];
-  const ticks = ((await FC.meta.get('research')) || {})[base] || [];
-  const done = steps.filter(x => ticks.includes(x[0])).length;
-  const research = `    <section class="card pad" style="display:flex;flex-direction:column;gap:8px"><div class="row"><h2>Research steps</h2><span class="tag ${done === steps.length ? 'ok' : 'blue'}" style="margin-left:auto">${done} of ${steps.length} done</span></div>
-      <p class="muted" style="margin:0;font-size:13.5px">Go through them in order. Tick each one when it's done. Ticks are saved for ${esc(base)}.</p>
-      ${steps.map(([k, t, d, u]) => `<div class="rstep${ticks.includes(k) ? ' done' : ''}"><input type="checkbox" id="rs-${k}" data-act="rstep" data-v="${esc(base)}|${k}" ${ticks.includes(k) ? 'checked' : ''} aria-label="${esc(t)} done"><label for="rs-${k}"><b>${esc(t)}</b><span class="muted">${esc(d)}</span></label><a class="btn ghost sm" href="${safeUrl(u)}"${u.startsWith('#') ? '' : ' target="_blank" rel="noreferrer"'}>Open${u.startsWith('#') ? '' : ' ↗'}</a></div>`).join('')}
-    </section>`;
+  // 5b (Ben's way, in the firm's order): names it goes by, then brand to company, then is it active.
+  // Ticks are kept per site on this computer.
+  const research = await ntResearch(w, f, base, name, q);
   if (!f0) return `${hd}${form}<div class="grid g2"><section class="card pad" style="display:flex;flex-direction:column;gap:10px;align-items:flex-start"><h2>${esc(w.site)}</h2><p class="muted" style="margin:0">Not read yet. PageProof opens the home page, the page with the copy, and the About, Contact and Privacy pages, and reads the domain record.</p><button class="btn primary" data-act="whoread"${state.whoBusy ? ' disabled data-why="PageProof is already reading a site. Wait a moment."' : ''}>${state.whoBusy ? 'Reading the site…' : 'Read the site now'}</button></section>
-    ${research}</div>`;
-  const pages = [['about', 'About page'], ['contact', 'Contact page'], ['privacy', 'Privacy policy']].filter(([k]) => f[k]);
+    ${research}</div>${await ntEntityCard(base, f)}`;
+  const pages = [['about', 'About page'], ['contact', 'Contact page'], ['privacy', 'Privacy policy'], ['terms', 'Terms of service']].filter(([k]) => f[k]);
   return `${hd}${form}
   <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
     <div class="row"><h2 style="overflow-wrap:anywhere">${esc(w.site)}</h2>${name ? `<span class="tag ok">Probably ${esc(name)}</span>` : '<span class="tag grey">No owner named</span>'}<button class="btn ghost sm" style="margin-left:auto" data-act="whoread"${state.whoBusy ? ' disabled data-why="PageProof is already reading a site. Wait a moment."' : ''}>${state.whoBusy ? 'Reading…' : 'Read again'}</button></div>
@@ -103,6 +85,8 @@ V.who = async () => {
     <div class="grid g2">${(f.clues || []).map(c => `<div class="clue"><b>${esc(c.title)}</b><span style="overflow-wrap:anywhere">${esc(c.value)}</span><span class="faint" style="font-size:12px">From: ${esc(c.src || '')}</span></div>`).join('') || '<p class="muted">The site doesn\'t name its owner anywhere PageProof looked.</p>'}</div>
     ${(f.ids || []).length ? `<div><div class="dsh">Tracking and ad IDs</div><p class="muted" style="margin:4px 0 0;font-size:13.5px">Sites with the same ID are usually run by the same people. <span class="mono">${(f.ids || []).map(esc).join(' · ')}</span></p></div>` : ''}
   </section>
+  ${ntNames(f, base)}
+  ${await ntEntityCard(base, f)}
   <div class="grid g2">
     ${research}
     <section class="card pad" style="display:flex;flex-direction:column;gap:10px"><h2>Capture their pages</h2><p class="muted" style="margin:0;font-size:14px">Save the pages that name the owner as evidence too. Each one opens and is captured like any other page.</p>
