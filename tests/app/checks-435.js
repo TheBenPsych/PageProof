@@ -30,6 +30,9 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
       p1: xf('pqe31', { name: 'Pat Q. Example', check: 'blue', followers: '19K Followers', bio: 'Ex-newspaper editor and columnist. Longtime radio host.' }),
       p2: xf('robin1974', { name: 'Robin Sample ⚜️♛', check: 'blue', followers: '4,724 Followers', bio: 'Vous savez qui je suis.' }),
       notP1: xf('examplepaper', { name: 'Brooklyn Example', check: '', followers: '40K Followers', bio: 'Local news', url: 'https://example-paper.example/' }),
+      xcat: xf('exjamie', { name: 'Jamie Example', check: 'blue', followers: '82K Followers', category: 'Entertainment & Recreation', bio: 'Mom x 2. Dog lover/owner.' }),
+      xcatBiz: xf('exshop', { name: 'Harbor Example', check: 'blue', followers: '5K Followers', category: 'Clothing Store', bio: 'Shop our new line', url: 'https://harbor.example/' }),
+      xcatOld: S.kindOf({ plat: 'x.com', key: 'exjamie', handle: '@exjamie' }, { ok: true, v: 5, type: 'Business', typeSure: 'sure', category: 'Entertainment & Recreation', signs: [], verified: 'blue', followers: 82000, name: 'Jamie Example' }),
       notP2: xf('bigname', { name: 'Famous Example', check: 'blue', followers: '2.1M Followers', bio: 'Actor' }),
       fb: S.profileFacts({ plat: 'facebook.com', key: 'lee.example', handle: 'lee.example', url: 'https://www.facebook.com/lee.example' }, [{ kind: 'profile', h1: 'Lee Example (Smith)', text: 'Lee Example (Smith)\n162 friends\nGarfield, AR\nMessage\nAll\nAbout\nPersonal details\nLives in Garfield, Arkansas\n', data: [], buttons: ['Message'] }]),
       fbPage: S.profileFacts({ plat: 'facebook.com', key: 'examplebakery', handle: 'examplebakery', url: 'https://www.facebook.com/examplebakery' }, [{ kind: 'profile', h1: 'Example Bakery', text: 'Example Bakery\n2K likes • 2.2K followers\nPage · Bakery\n', data: [] }]),
@@ -45,6 +48,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(u.gov1.type === 'Government' && u.gov2.type === 'Government' && /Fourth District/.test(u.gov2.gov), 'Politician: grey check, and "serving … Fourth District" with no check, are Government (' + u.gov2.gov + ')');
   ok(u.gov3 && u.gov3.type === 'Government' && u.gov4 && u.gov4.type === 'Government' && u.gov5.type === 'Government', 'Politician known before the profile is read: @Rep… handle, "Rep." in the post title, "(R-Ohio)" in the bio');
   ok(u.p1.type === 'Person' && u.p1.typeSure === 'guess' && u.p2.type === 'Person', 'X: just a name, no website or contact, under 100k followers = Person, even with a paid check (' + u.p1.personWhy + ')');
+  ok(u.xcat.type === 'Person' && u.xcatOld && u.xcatOld.type === 'Person' && u.xcatBiz.type === 'Business', 'X: a professional category alone ("Entertainment & Recreation") is not Business, also for accounts read before 4.49.2; a shop category plus a website still is (' + u.xcat.type + ', ' + (u.xcatOld || {}).type + ', ' + u.xcatBiz.type + ')');
   ok(u.notP1.type !== 'Person' && u.notP2.type !== 'Person', 'Not Person: an outlet with its own website, or a famous account with over 100k followers');
   ok(u.fb.type === 'Person' && u.fb.typeSure === 'sure' && u.fbPage.type !== 'Person', 'Facebook: a friends count / Personal details = Person; a Page is not (' + u.fb.personWhy + ')');
   ok(u.li && u.li.type === 'Person' && u.liIn.type === 'Person' && u.liCo.type === 'Business', 'LinkedIn: a person\'s post or /in/ profile = Person, /company/ = Business');
