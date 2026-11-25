@@ -510,6 +510,7 @@ Object.assign(ACTS, {
     const i = v.lastIndexOf('|'), one = v.slice(0, i), on = v.slice(i + 1) === '1';
     const ids = one ? [one] : state.phPicked.slice();
     if (!ids.length) return;
+    if (on && !(await askStop(PH && PH.list ? ids.map(id => (PH.list.find(p => p.id === id) || {}).name || id) : ids))) return;
     const undo = await FC.setStopped(ids, on);
     PH = null; if (!one) state.phPicked = [];
     HIST.push({ label: (on ? 'stopped searching ' : 'searching again ') + plural(ids.length, 'photo'), undo: async () => { await undo(); PH = null; } });

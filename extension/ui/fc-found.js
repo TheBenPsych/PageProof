@@ -1190,11 +1190,43 @@ function stopBtn(c) {
     ? `<button class="btn" data-act="stopphoto" data-v="${esc(c.id)}">${ic('refresh', 16)} Search this photo again</button>`
     : `<button class="btn" data-act="stopphoto" data-v="${esc(c.id)}" title="${esc(STOP_TIP)}">${ic('pause', 16)} Stop searching this photo</button>`;
 }
+// Before a photo stops being searched: a box that says what will happen, and a tick to say
+// you understand (Ben). Resolves true only when ticked and confirmed.
+function askStop(names, pic) {
+  return new Promise(res => {
+    const n = names.length, one = n === 1;
+    const d = document.createElement('dialog');
+    d.className = 'pp-ask stopask';
+    d.style.cssText = 'border:1px solid var(--line);border-radius:16px;padding:22px;background:var(--surface);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.35);width:min(500px,92vw)';
+    d.innerHTML = `<form method="dialog" style="display:flex;flex-direction:column;gap:12px">
+      <b style="font-size:18px">${one ? 'Stop searching this photo?' : 'Stop searching ' + n + ' photos?'}</b>
+      <div class="row" style="gap:12px;flex-wrap:nowrap;align-items:center">${pic ? `<img src="${pic}" alt="" style="width:84px;height:56px;object-fit:cover;border-radius:8px;flex-shrink:0">` : ''}<span style="min-width:0;overflow-wrap:anywhere;font-weight:600">${esc(one ? names[0] : names.slice(0, 3).join(', ') + (n > 3 ? ' and ' + (n - 3) + ' more' : ''))}</span></div>
+      <ul style="margin:0;padding-left:20px;font-size:14px;line-height:1.5">
+        <li>PageProof will <b>no longer look for new copies</b> of ${one ? 'this photo' : 'these photos'} (Keep searching and Today's 50 skip ${one ? 'it' : 'them'}).</li>
+        <li>Copies already found stay in Copies found.</li>
+        <li>You can turn it back on any time: Clients and photos › the client › <b>Search again</b>.</li>
+      </ul>
+      <label style="display:flex;gap:8px;align-items:flex-start;font-size:14px;cursor:pointer;background:var(--sunk);border-radius:10px;padding:10px 12px"><input type="checkbox" class="stopok" style="margin-top:3px"><span>I understand new copies of ${one ? 'this photo' : 'these photos'} won't be found while ${one ? 'it is' : 'they are'} stopped.</span></label>
+      <div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" value="no" type="submit">Cancel</button><button class="btn primary stopgo" value="yes" type="submit" disabled data-why="Tick the box first.">Stop searching</button></div></form>`;
+    document.body.appendChild(d);
+    const tick = d.querySelector('.stopok'), go = d.querySelector('.stopgo');
+    tick.addEventListener('change', () => { go.disabled = !tick.checked; });
+    // Answer straight from the buttons (the dialog's own close event can come late).
+    let done = false;
+    const finish = yes => { if (done) return; done = true; if (d.open) d.close(); d.remove(); res(yes); };
+    go.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); if (tick.checked) finish(true); });
+    d.querySelector('button[value="no"]').addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); finish(false); });
+    d.addEventListener('keydown', e => e.stopPropagation());
+    d.addEventListener('close', () => finish(false));
+    d.showModal(); tick.focus();
+  });
+}
 async function stopPhoto(copyId) {
   const c = FCD && FCD.copies.find(x => x.id === copyId);
   const p = c && FCD.photos.get(c.photo);
   if (!p) return;
   const on = !p.stopped;
+  if (on && !(await askStop([c.photoName || p.name], p.thumb ? safeImg(p.thumb) : safeImg(([...document.querySelectorAll('img[data-our]')].find(i => i.dataset.our === p.id) || {}).src || '')))) return;
   // A double is searched as one photo, so every version of it stops (or starts) together.
   const ids = (await FC.doublesOf(p)).map(d => d.id);
   if (!ids.includes(p.id)) ids.push(p.id);
@@ -1748,7 +1780,7 @@ Object.assign(ACTS, {
     await answerCopies(ids, 'stolen', plural(ids.length, 'copy', 'copies') + ' marked stolen');
     toastUndo(plural(ids.length, 'copy', 'copies') + ' marked stolen.'); render(true);
   },
-  stopphoto: async v => { closeRowMenu(); await inTurn(() => stopPhoto(v || state.open)); },
+  stopphoto: async v => { closeRowMenu(); await stopPhoto(v || state.open); },
   rvcompare: () => { state.open = state.rvCurrent; return ACTS.compare(); },
   // The same Capture and Approve site as the details panel, for the copy on screen here.
   rvcapture: async () => { state.open = state.rvCurrent; try { await ACTS.capturecopy(); } finally { state.open = ''; } },

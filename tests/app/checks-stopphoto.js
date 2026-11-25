@@ -25,7 +25,13 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.goto(url('app.html#found?open=' + encodeURIComponent(c.id))); await page.waitForTimeout(1500);
   const btn = page.locator('.drawer [data-act="stopphoto"]');
   ok(await btn.count() === 1 && /Stop searching this photo/.test(await btn.textContent()), 'Details panel shows "Stop searching this photo"');
-  await btn.click(); await page.waitForTimeout(1200);
+  await btn.click(); await page.waitForTimeout(500);
+  // The "are you sure" box: Stop is greyed out until the box is ticked; Cancel changes nothing.
+  ok(await page.locator('dialog.stopask .stopgo').isDisabled(), 'Are-you-sure box: Stop searching is greyed out until ticked');
+  await page.locator('dialog.stopask button[value="no"]').click(); await page.waitForTimeout(500);
+  ok(await page.evaluate(async c => !(await FC.DB.get('photos', c.photo)).stopped, c), 'Cancel leaves the photo searched');
+  await btn.click(); await page.waitForTimeout(500);
+  await page.locator('dialog.stopask .stopok').check(); await page.locator('dialog.stopask .stopgo').click(); await page.waitForTimeout(1200);
   const s1 = await page.evaluate(async c => { FC.resetQueue(); const p = await FC.DB.get('photos', c.photo); return { stopped: !!p.stopped, inLine: (await FC.next(400)).some(x => x.id === c.photo), first: (await FC.next(400, new Set(), { first: true })).some(x => x.id === c.photo), plan: FC.plan(p, { priority: true }), copy: !!(await FC.DB.get('copies', c.id)), panel: document.querySelector('.drawer') ? document.querySelector('.drawer').textContent : '' }; }, c);
   ok(s1.stopped && !s1.inLine && !s1.first && !s1.plan.due, 'Stopped: not in Keep searching or Today\'s 50 lines');
   ok(s1.copy, 'Its copy is still there');
@@ -39,7 +45,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const mi = page.locator('#rowMenu [data-act="stopphoto"]');
   ok(await mi.count() === 1, 'More menu has Stop searching this photo');
   // The panel can redraw while it reads their page, so click it straight away (as other checks do).
-  await page.evaluate(() => document.querySelector('#rowMenu [data-act="stopphoto"]').click()); await page.waitForTimeout(1000);
+  await page.evaluate(() => document.querySelector('#rowMenu [data-act="stopphoto"]').click()); await page.waitForTimeout(500);
+  await page.locator('dialog.stopask .stopok').check(); await page.locator('dialog.stopask .stopgo').click(); await page.waitForTimeout(1000);
   ok(await page.evaluate(async c => !!(await FC.DB.get('photos', c.photo)).stopped, c), 'More menu stops it');
   // Backup carries it
   ok(await page.evaluate(async c => { FC.backupSoon(true); const s = await FC.settingsSnapshot(); return JSON.stringify(s.flags || []).includes(c.photo); }, c).catch(() => false), 'Settings backup lists the stopped photo');
@@ -56,7 +63,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   // Bulk on the photos page
   await page.evaluate(() => { state.phStop = false; return render(); }); await page.waitForTimeout(600);
   await page.locator('.pcard [data-act="phpick"]').first().check(); await page.waitForTimeout(400);
-  await page.locator('.bulk [data-act="phstop"][data-v="|1"]').click(); await page.waitForTimeout(900);
+  await page.locator('.bulk [data-act="phstop"][data-v="|1"]').click(); await page.waitForTimeout(500);
+  await page.locator('dialog.stopask .stopok').check(); await page.locator('dialog.stopask .stopgo').click(); await page.waitForTimeout(900);
   ok(await page.evaluate(async n => (await FC.DB.by('photos', 'client', n)).filter(p => p.stopped).length === 1, c.client), 'Bulk Stop searching stops the picked photo');
   // One at a time
   await page.goto(url('app.html#review')); await page.waitForTimeout(1500);
