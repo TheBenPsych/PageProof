@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PageProof",
-  "version": "4.62.0",
+  "version": "4.63.0",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq3802yTQwCs+jR9NX4b9ernVrwh12gr4gmoz+RWPQJ1Dh46c+MVOaqG+f0ctIz1xheXPyWd8tjWTjO3xWGQ5Ks+LGRUzs+r/FzLMycQTnuM6NHbkcWfYJYG4Y/QFMpQrVZjkmQwM0yA8YUrYPJhqTkdgIE5o3IKwxQUKqicpxYk/I9zq/ibwkHGiFQqmjZqkPys40xlzVluD0FXdW/e29z2cX8srl5KHt6iuEUdo/5KjSWZR9gQr9fNrGB9xsdTUn0wtX75Rh3uWMF+dRw05qGdg+/IcVaSkfZNCBXPVnMGUCtjJFjrGI7U8rRuwuXo9kpuFXYE9s/PsNu3reOvV4QIDAQAB",
   "description": "Capture web pages as evidence, and find copies of your clients' photos all day from Google Drive with Google Lens, Yandex and Bing. Evidence packs and reports with fingerprints and timestamps.",
   "icons": {
