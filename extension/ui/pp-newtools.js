@@ -159,6 +159,86 @@ async function ntKeepExtras() {
   </section>`;
 }
 
+// ================================================================ 4. Legal portal card (Ben, 2026-11-25)
+// The firm's "Add Infringement" form, field for field and in its order, filled from the copy, so
+// each value can be copied straight into the portal. Nothing is sent anywhere: it only copies.
+const ntBare = u => String(u || '').replace(/^https?:\/\/(www\.)?/i, '').replace(/[#?].*$/, '').replace(/\/+$/, '').toLowerCase();
+function ntCaptureOf(c, log) {
+  const urls = [c.url, ...(c.alts || []), c.rp && c.rp.post].filter(Boolean).map(ntBare);
+  const caps = (log || []).filter(e => urls.includes(ntBare(e.url)));
+  const lastSave = e => (e.saves && e.saves.length ? e.saves[e.saves.length - 1] : null);
+  const saved = caps.filter(lastSave).sort((a, b) => String(lastSave(b).at).localeCompare(String(lastSave(a).at)))[0];
+  const cap = saved || caps.sort((a, b) => String(b.time).localeCompare(String(a.time)))[0] || null;
+  return { cap, save: saved ? lastSave(saved) : null };
+}
+const NT_METHOD = c => c.via === 'credit' ? 'Credit search (Google and Bing text search)' : c.via === 'watch' ? 'Watch list (new posts on a repeat site)' : c.sweep ? 'Site sweep (other pictures on a stolen site)'
+  : 'Reverse image search' + (c.engines && c.engines.length ? ' (' + c.engines.map(e => ({ google: 'Google Lens', yandex: 'Yandex', bing: 'Bing' }[e] || e)).join(', ') + ')' : '');
+async function ntPortalValues(c, p, reg) {
+  const log = (await api.storage.local.get('log').catch(() => ({}))).log || [];
+  const { cap, save } = ntCaptureOf(c, log);
+  const pf = c.pf && c.pf.ok ? c.pf : null;
+  const kinds = (await FC.meta.get('siteKinds')) || {};
+  const kind = kinds[FC.baseOf(c.site)] || '';
+  const USE = { copied: 'Copied onto their site', embedded: 'Shown from another site', social: 'Social media post', shop: 'Shop or ad (commercial)', unknown: '' };
+  const pub = p ? PP_CHECKS.pubDate(p) : null;
+  const dmg = PP_CHECKS.damages(pub, reg);
+  const imgs = [...new Set([c.img, ...(c.alts || []).filter(u => /\.(jpe?g|png|webp|gif)(\?|$)/i.test(u))].filter(u => /^https?:/.test(u || '')))];
+  const page = (c.rp && c.rp.post) || c.url || '';
+  const e = typeof entOf === 'function' ? entOf(c.site) || {} : {};
+  const note = [
+    'Found ' + ntDate(c.firstSeen) + ' by ' + NT_METHOD(c) + '.',
+    c.pct != null ? 'Match ' + c.pct + '%' + (c.match === 'same' ? ' (same photo)' : '') + '.' : '',
+    e.entity ? 'Company: ' + e.entity + (e.state ? ', ' + e.state : '') + (e.status ? ' (' + e.status + ')' : '') + '.' : '',
+    cap && cap.captureId ? 'PageProof capture ' + cap.captureId + (save && save.at ? ', saved ' + ntDate(save.at) : '') + '.' : '',
+  ].filter(Boolean).join(' ');
+  return {
+    artwork: (p && p.name) || c.photoName || '', cert: (reg && reg.va) || '', app: (reg && reg.app) || '',
+    discDate: ntDate(c.firstSeen), discMethod: NT_METHOD(c), infDate: '',
+    infType: kind ? PP_CHECKS.KIND_NAME[kind] || '' : '', domain: FC.baseOf(c.site || ''), page,
+    use: USE[c.use || FC.useOf(c)] || '', ads: pf ? (pf.ads && pf.ads.length ? 'Yes (' + pf.ads.join(', ') + ')' : 'No') : '',
+    sells: pf ? (pf.sells && (pf.sells.product || pf.sells.cart || pf.sells.price) ? 'Yes' + (pf.sells.price ? ' (' + pf.sells.price + ')' : '') : 'No') : '',
+    archive: '', caseNo: (save && save.caseRef) || '', damages: dmg && dmg.title && pub ? dmg.title : '',
+    images: imgs, note, screengrab: (save && save.file) || '',
+  };
+}
+// [key, the portal's label, what to show when PageProof doesn't know it]
+const NT_PORTAL = [
+  ['artwork', 'Artwork', 'Pick the photo in the portal'],
+  ['discDate', 'Discovery Date', ''], ['discMethod', 'Discovery Method', ''],
+  ['infDate', 'Date of Infringement', 'Check the date on their page'], ['infType', 'Infringement Type', 'Pick the kind of site on the Claim tab first'],
+  ['domain', 'Infringing Domain', ''], ['page', 'Infringement Page URL', ''],
+  ['use', 'Infringer Use', 'Not known'], ['ads', 'Paid Ads', 'Their page not read yet'], ['sells', 'Sells Product', 'Their page not read yet'],
+  ['archive', 'Archive URL', 'None made'], ['caseNo', 'Agency Case #', 'Not on a saved capture yet'], ['damages', 'Damages', 'Publish date not known'],
+  ['images', 'Infringing Image Url', 'No picture link'], ['note', 'Note', ''],
+];
+async function ppPortalCard(c, p, reg) {
+  if (!c || c.status !== 'stolen') return '';
+  const v = await ntPortalValues(c, p, reg);
+  NT.portal = { id: c.id, v };
+  const row = (k, label, empty, val, i) => `<button class="prow${val ? '' : ' empty'}" data-act="pcopy" data-v="${k}${i != null ? '|' + i : ''}" title="${val ? 'Copy ' + esc(label) : esc(empty)}"${val ? '' : ' disabled'}><span class="pk">${esc(label)}${i != null ? ' ' + (i + 1) : ''}</span><span class="pv">${esc(val || empty || 'Not known')}</span><span class="pc" aria-hidden="true">⧉</span></button>`;
+  const rows = NT_PORTAL.map(([k, label, empty]) => k === 'images' ? (v.images.length ? v.images.map((u, i) => row(k, label, empty, u, i)).join('') : row(k, label + ' 1', empty, '')) : row(k, label, empty, v[k])).join('');
+  return `<section class="dsec" id="portalcard"><div class="dsh">Add Infringement (legal portal)</div>
+    <p class="faint" style="margin:0;font-size:12.5px">The portal's form, in its order. Click a line to copy it, then paste it into the same box in the portal. Drop-downs: pick the closest choice.</p>
+    <div class="ptl">${rows}</div>
+    <div class="pchk"><span class="faint">After you pick the artwork, the portal should show</span> <b>Certificate # ${esc(v.cert || '—')}</b> · <b>Application # ${esc(v.app || '—')}</b>${!v.cert && !v.app ? ' <span class="tag warn">No number found in Drive</span>' : ''}</div>
+    <div class="row" style="gap:8px;flex-wrap:wrap"><span class="faint" style="font-size:12.5px">Infringement Files › Upload Screengrab:</span>${v.screengrab ? `<button class="btn ghost sm" data-act="pcopy" data-v="screengrab">${esc(v.screengrab)} ⧉</button><span class="faint" style="font-size:12px">in Downloads › PageProof</span>` : '<span class="tag warn">Capture the page first</span>'}</div>
+    <div class="row" style="gap:6px"><button class="btn primary sm" data-act="pcopyall">Copy all</button></div></section>`;
+}
+Object.assign(ACTS, {
+  pcopy: v => {
+    if (!NT.portal) return;
+    const [k, i] = String(v).split('|');
+    const val = k === 'images' ? NT.portal.v.images[+i || 0] : NT.portal.v[k];
+    const label = k === 'screengrab' ? 'File name' : ((NT_PORTAL.find(f => f[0] === k) || [])[1] || 'It');
+    if (val) ntCopy(val, label + ' copied');
+  },
+  pcopyall: () => {
+    if (!NT.portal) return;
+    const v = NT.portal.v;
+    ntCopy(NT_PORTAL.map(([k, label]) => k === 'images' ? v.images.map((u, i) => label + ' ' + (i + 1) + ': ' + u).join('\n') || label + ' 1:' : label + ': ' + (v[k] || '')).join('\n'), 'The whole form copied');
+  },
+});
+
 // ================================================================ 2. Watching
 V.watching = async () => {
   const list = await PP_WATCH.watchList();

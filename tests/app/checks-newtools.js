@@ -161,6 +161,25 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const order = await page.evaluate(() => [...document.querySelectorAll('.crow .l1 b')].map(b => b.textContent));
   ok(order.length && order[order.length - 1] === 'watched-example.com', 'copies on a "Not a viable entity" site go to the bottom: ' + order.join(', '));
 
+  // ---- 4 Legal portal card: the firm's Add Infringement form, in its order (Ben's screenshot, 2026-11-25)
+  const pc = await page.evaluate(async () => {
+    const c = (await FC.allCopies()).find(x => x.site === 'onestolen-example.com');
+    c.img = 'https://onestolen-example.com/wp-content/uploads/b.jpg'; c.engines = ['google', 'bing']; c.pf = { ok: true, ads: ['Google ads'], sells: { product: false, cart: false, price: '' } };
+    await FC.DB.put('copies', c);
+    await chrome.storage.local.set({ log: [{ url: c.url, time: new Date().toISOString(), captureId: 'PP-TEST1234', saves: [{ at: new Date().toISOString(), file: 'CASE-77_onestolen-example.com_2026-11-25_PP-TEST1234.zip', caseRef: 'CASE-77' }] }] });
+    FCD = null; state.open = c.id; await render(true); ACTS.dtab('claim'); await new Promise(r => setTimeout(r, 1200));
+    const box = document.getElementById('portalcard');
+    return box ? { labels: [...box.querySelectorAll('.prow .pk')].map(x => x.textContent), text: box.innerText } : null;
+  });
+  const want = ['Artwork', 'Discovery Date', 'Discovery Method', 'Date of Infringement', 'Infringement Type', 'Infringing Domain', 'Infringement Page URL', 'Infringer Use', 'Paid Ads', 'Sells Product', 'Archive URL', 'Agency Case #', 'Damages', 'Infringing Image Url 1', 'Note'];
+  ok(pc && pc.labels.join('|') === want.join('|'), 'the portal card has the portal\'s boxes in its order: ' + (pc ? pc.labels.join(' · ') : 'no card'));
+  ok(pc && /b\.jpg/.test(pc.text) && /Reverse image search \(Google Lens, Bing\)/.test(pc.text) && /onestolen-example\.com\/story-/.test(pc.text) && /Yes \(Google ads\)/.test(pc.text) && /CASE-77/.test(pc.text) && /uploads\/b\.jpg/.test(pc.text) && /PP-TEST1234/.test(pc.text) && /Application # 1-14100259930/.test(pc.text) && /CASE-77_onestolen/.test(pc.text),
+    'it fills artwork, method, page, paid ads, case #, picture link, note, the numbers to check and the screengrab file');
+  if (process.env.SHOT) await page.locator('#portalcard').screenshot({ path: process.env.SHOT });
+  await page.click('#portalcard [data-act="pcopy"][data-v="page"]'); await page.waitForTimeout(400);
+  const tst = await page.evaluate(() => document.body.innerText);
+  ok(/Infringement Page URL copied|Copy did not work here/.test(tst), 'clicking a line copies it');
+
   // backup carries the new settings
   const bk = await page.evaluate(async () => { const s = await FC.settingsSnapshot(); return { e: Object.keys(s.entities || {}).length, w: (s.watch || []).length }; });
   ok(bk.e === 2 && bk.w >= 2, 'the settings backup keeps company cards and the watch list you set: ' + JSON.stringify(bk));
