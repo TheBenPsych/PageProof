@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.49.2** (24 Nov 2026).
+Last updated: version **4.49.3** (24 Nov 2026).
 
 ---
 
@@ -294,3 +294,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.49 | 24 Nov | Speed ladder, Yandex + Bing quick looks, look-alike frames share a search, speed meter |
 | 4.49.1 | 24 Nov | Fix: Copies inside collages are found |
 | 4.49.2 | 24 Nov | Fix: Personal X accounts are no longer called Business |
+| 4.49.3 | 24 Nov | Fix: Stopped searches say so, and years mix better |
