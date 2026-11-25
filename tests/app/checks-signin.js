@@ -16,7 +16,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(/Signed in: Instagram\s*Not signed in\. Instagram shows a sign-in wall/.test(txt), 'Instagram shows as not signed in, with why');
   ok(/Signed in: X \(Twitter\)\s*Not signed in/.test(txt), 'X shows as not signed in');
   ok(/Signed in: Bing[\s\S]*Optional/.test(txt), 'Bing is optional');
-  ok(await page.locator('a[href="https://www.instagram.com/"]').count() === 1, 'A Sign in button opens Instagram');
+  ok(await page.locator('.htile a[href="https://www.instagram.com/"]').count() === 1, 'A Sign in button opens Instagram');
   console.log(fails ? fails + ' FAILED' : 'ALL PASSED');
   await ctx.close(); process.exit(fails ? 1 : 0);
 })();
