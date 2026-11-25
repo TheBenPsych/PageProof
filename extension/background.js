@@ -3,6 +3,8 @@ if (typeof PP_GUARD === 'undefined' && typeof importScripts === 'function') { tr
 if (typeof PP_DB === 'undefined' && typeof importScripts === 'function') importScripts('db.js');
 // 4.8.2: the copy store, so the toolbar dot counts new copies the same way Copies found does.
 if (typeof FC === 'undefined' && typeof importScripts === 'function') { try { importScripts('rs-store.js', 'social.js', 'fc-store.js'); } catch (e) { /* old count below */ } }
+if (typeof PP_PACE === 'undefined' && typeof importScripts === 'function') { try { importScripts('pp-pace.js'); } catch (e) { /* no site pace */ } }
+if (typeof PP_PACE !== 'undefined') PP_PACE.watch();   // a 429 from Instagram (even in your own tabs) = PageProof rests it
 if (typeof PP_TIKTOK === 'undefined' && typeof importScripts === 'function') { try { importScripts('tiktok.js'); } catch (e) { /* TikTok slide numbers left out */ } }
 
 const api = globalThis.browser || globalThis.chrome;

@@ -104,10 +104,13 @@ const PP_CHECKS = (() => {
     if (!/^https?:/i.test(c.url || '')) return { at, ok: false, why: 'No web address' };
     let html = '', final = c.url;
     try {
+      // 4.64 (Ben): Instagram pages at most one every 30 seconds, none while a site rests after a 429.
+      if (globalThis.PP_PACE && !(await PP_PACE.turn(c.url))) return { at, ok: false, paced: true, why: PP_PACE.nameOf(PP_PACE.siteOf(c.url)) + ' asked PageProof to slow down. It is read again later.' };
       const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 15000);
       const r = await fetch(c.url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal });
       clearTimeout(t);
-      if (!r.ok) return { at, ok: false, why: 'The page answered ' + r.status };
+      if (globalThis.PP_PACE) PP_PACE.note(r.url || c.url, r.status);
+      if (!r.ok) return { at, ok: false, why: 'The page answered ' + r.status, paced: r.status === 429 || r.status === 999 };
       if (!/html/i.test(r.headers.get('content-type') || 'html')) return { at, ok: false, why: 'Not a web page' };
       html = (await r.text()).slice(0, 3e6); final = r.url || c.url;
     } catch (e) { return { at, ok: false, why: 'The page did not answer' }; }

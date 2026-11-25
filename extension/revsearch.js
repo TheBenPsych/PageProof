@@ -997,8 +997,13 @@ async function pageCheck(l) {
   let state = 'unknown';
   const t0 = Date.now();
   try {
+    // 4.64 (Ben): social sites are read at their own safe pace (Instagram one page every 30 seconds...)
+    // and not at all while one rests after "too many requests". The search never waits for that: a
+    // link whose site isn't free right now stays a Maybe, and Copies found checks the post later.
+    if (globalThis.PP_PACE && !(await PP_PACE.turn(l.url, 0))) throw new Error('paced');
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 12000);
     const r = await fetch(l.url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal });
+    if (globalThis.PP_PACE) PP_PACE.note(r.url || l.url, r.status);
     const type = r.headers.get('content-type') || 'html';
     const html = r.ok && /html/i.test(type) ? (await r.text()).slice(0, 3e6) : '';
     clearTimeout(t);
@@ -1023,7 +1028,7 @@ async function pageCheck(l) {
       if (state !== 'seen' && state !== 'card' && tried) state = social ? 'postOnly' : 'notSeen';
       TIMES.pages = (TIMES.pages || 0) + 1;
     }
-  } catch (e) { /* their page did not answer: unknown */ PP_STATS.site(l.url, 'f'); }
+  } catch (e) { /* their page did not answer (or Instagram has to wait): unknown */ if (!e || e.message !== 'paced') PP_STATS.site(l.url, 'f'); }
   l.onPage = state; l.pv = PV;
   PP_STATS.add('job.page.n'); PP_STATS.add('job.page.' + (state === 'unknown' ? 'fail' : 'ok')); PP_STATS.time('job.page', Date.now() - t0);
 }
