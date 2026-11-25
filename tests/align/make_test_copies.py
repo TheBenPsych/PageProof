@@ -192,5 +192,7 @@ from make_same_place import add_cases
 add_cases(OUT, D, manifest, wall, make, S, T, jpeg)
 from make_emblems import add_cases as add_emblems
 add_emblems(OUT, D, manifest, make, S, T, jpeg)
+from make_collages import add_cases as add_collages
+add_collages(OUT, D, manifest, make, S, T, jpeg)
 json.dump(manifest, open(f'{OUT}/manifest.json', 'w'))
 print(len(manifest))

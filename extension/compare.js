@@ -158,6 +158,12 @@ function paint(ctx, W, H, k, o, m, opts = {}) {
     ctx.setLineDash([10 * Math.max(1, k * 2), 6 * Math.max(1, k * 2)]);
     ctx.strokeStyle = ORANGE; PP_ALIGN.drawCopy(ctx, B, T, k, ox, oy, true);
     ctx.setLineDash([]);
+    if (T.cut) {   // a collage: the other picture in the copy, left out of the score
+      const c = T.cut, q = [[c.x0, c.y0], [c.x1, c.y0], [c.x1, c.y1], [c.x0, c.y1]].map(([u, v]) => PP_ALIGN.mapPoint(T, B, u, v));
+      ctx.beginPath(); q.forEach((p, i) => (i ? ctx.lineTo((ox + p.x) * k, (oy + p.y) * k) : ctx.moveTo((ox + p.x) * k, (oy + p.y) * k))); ctx.closePath();
+      ctx.fillStyle = 'rgba(100,116,139,0.55)'; ctx.fill(); ctx.strokeStyle = '#475569'; ctx.stroke();
+      if (opts.labels !== false) { const tl = q.reduce((a, b) => (a.x + a.y < b.x + b.y ? a : b)); label(ctx, 'ADDED PART, LEFT OUT', (ox + Math.max(0, tl.x)) * k + 6, (oy + Math.max(0, tl.y)) * k + 6, '#475569', k); }
+    }
   }
   if (opts.labels !== false) {
     label(ctx, 'ORIGINAL', ox * k + 6, oy * k + 6, BLUE, k);
@@ -441,12 +447,13 @@ $('auto').onclick = async () => {
       T = PP_ALIGN.place({ s: mix('s'), w: mix('w'), h: mix('h'), r: mix('r'), k: mix('k'), x: mix('x'), y: mix('y'), flip: best.flip });
       draw(); await sleep(16);
     }
-    T = PP_ALIGN.place({ s: best.s, w: best.w, h: best.h, r: best.r, k: best.k, flip: best.flip, x: best.x, y: best.y }); draw();
+    // best.cut: the copy is a collage; the other picture in it is left out of the score (align.js findCut)
+    T = PP_ALIGN.place({ s: best.s, w: best.w, h: best.h, r: best.r, k: best.k, flip: best.flip, x: best.x, y: best.y, cut: best.cut || null }); draw();
     await rescore();
     const secs = ((performance.now() - t0) / 1000).toFixed(1);
     if (scoreInfo.logos || scoreInfo.place || scoreInfo.only) setStatus('Lined up in ' + secs + ' s, but this is a different photo: ' + (scoreInfo.logos ? 'only the logos and lettering match.' : scoreInfo.only === 'emblem' ? 'only a seal or emblem matches.' : scoreInfo.only === 'slice' ? 'only a small part of each picture matches.' : scoreInfo.only === 'pattern' ? 'only a repeating pattern (a fence, a floor) matches.' : 'the same place, taken from another spot or at another time.') + ' Fade between them with the slider to see it.', true);
     else if (scoreInfo.verdict[0] === 'bad') setStatus('Could not find this photo inside the copy (' + secs + ' s). If you are sure it is there, drag the copy into place and use + Bigger / − Smaller.', true);
-    else setStatus('Lined up in ' + secs + ' s' + (best.how === 'details' ? ', using ' + best.inliers + ' matching details' : '') + '. The copy was ' + describeShape() + '. Move the slider to fade between them, or try "Slide aside and back". You can still drag the copy to fine-tune it.');
+    else setStatus('Lined up in ' + secs + ' s' + (best.how === 'details' ? ', using ' + best.inliers + ' matching details' : '') + '. The copy was ' + describeShape() + '.' + (T.cut ? ' Part of the copy is another picture or something added in a box (shown grey); that part is left out of the score.' : '') + ' Move the slider to fade between them, or try "Slide aside and back". You can still drag the copy to fine-tune it.');
   } catch (e) { setStatus('Could not line them up automatically (' + e.message + '). Drag the copy into place instead.', true); }
   $('auto').disabled = false;
   $('auto').textContent = '✨ Line them up automatically';
