@@ -299,9 +299,15 @@ V.clients = async () => {
   const sc = await FC.meta.get('scan');
   const nSkipped = (await FC.skipped()).length;
   const F1 = ((await FC.coverage().catch(() => null)) || {}).first || {}, once = (F1.clients || {});
+  // Speed meter (Ben's pick): this week's speed and when each client is searched once.
+  const spC = await FC.speed();
+  const rateC = firstPerDay(await FC.keep(), await ppHardware(), F1.week || 0, spC, (await api.storage.local.get('fcLadder')).fcLadder || null);
+  const doneBy = Object.fromEntries(firstClientRows(F1).map(r => [r.name, r.left <= 0 ? '' : firstDoneBy(r.need, rateC)]));
+  const allBy = F1.never ? firstDoneBy(F1.never, rateC) : '';
   return `${head('Find copies', 'Clients and photos', 'Every client folder in your shared Google Drive. Pick which clients you search for, and star the ones that matter most.', `${nSkipped ? `<a class="btn" href="#skipped">Skipped photos <span class="pill-n" style="background:var(--warn);margin:0">${nSkipped > 999 ? '999+' : nSkipped}</span></a>` : ''}<button class="btn" data-act="cscan"${FC.SCAN.busy ? ' disabled data-why="PageProof is already looking for new photos. Wait for it to finish."' : ''}>${ic('refresh', 16)} ${FC.SCAN.busy ? 'Looking…' : 'Look for new photos'}</button><a class="btn" href="#connect" data-act="csreset">Change folder</a>`)}
   ${await driveBanner()}
   ${state.scanText ? `<div class="scanbar"><span class="spin"></span>${esc(state.scanText)}</div>` : sc ? `<p class="faint" style="margin:0;font-size:13px">Last looked ${fmtDate(sc.at)}${sc.added ? ' · ' + sc.added + ' new photos' : ''}. PageProof looks in this and last quarter's folders every hour, and every folder once a week on a weekday (8 AM to 6 PM).</p>` : ''}
+  ${F1.total ? `<div class="row" id="clientSpeed" style="gap:10px;font-size:14px"><span class="tag ${spC.days ? 'ok' : 'grey'}">${spC.days ? Math.round(spC.full).toLocaleString() + ' photos a day this week' : 'Speed shows after a day of searching'}</span>${spC.days && spC.quick ? `<span class="faint">+ ${Math.round(spC.quick).toLocaleString()} quick looks a day</span>` : ''}${allBy ? `<span style="margin-left:auto">Every photo searched once <b>${esc(allBy.replace('~ ', 'by about '))}</b></span>` : ''}</div>` : ''}
   <section class="card" style="overflow:hidden">
     <div class="toolbar">
       <div class="tabs" role="tablist">${Object.keys(tabs).map(t => `<button role="tab" aria-selected="${state.cTab === t}" class="${state.cTab === t ? 'on' : ''}" data-act="ctab" data-v="${t}">${t} <span>${clients.filter(tabs[t]).length}</span></button>`).join('')}</div>
@@ -312,7 +318,7 @@ V.clients = async () => {
     ${list.map(c => { const [d, t] = once[c.name] || [0, 0], pct = t ? Math.floor(d / t * 100) : 0; return `<tr class="rowlink" data-act="cphotos" data-v="${esc(c.name)}" title="Open ${esc(c.name)}'s photos"><td><input type="checkbox" data-act="cpick" data-v="${esc(c.name)}" ${state.cPicked.includes(c.name) ? 'checked' : ''} aria-label="Pick ${esc(c.name)}"></td>
       <td><div class="clname">${avatar(c.name)}<button class="starplain${c.priority ? ' on' : ''}" data-act="cstar" data-v="${esc(c.name)}" aria-pressed="${!!c.priority}" aria-label="Priority client" title="${c.priority ? 'Priority client: searched right after High priority photos' : 'Make a priority client'}">★</button><a class="cname" href="#photos" data-act="cphotos" data-v="${esc(c.name)}">${esc(c.name)}</a>${c.extra ? ' <span class="tag grey" style="font-size:11.5px">Own folder</span>' : ''}</div></td>
       <td class="num r">${(c.photos || 0).toLocaleString()}</td>
-      <td>${t ? `<div class="oncebar" title="${d.toLocaleString()} of ${t.toLocaleString()} photos searched at least once"><span class="bar"><i style="width:${pct}%"${pct >= 100 ? ' class="done"' : ''}></i></span><b class="num">${pct}%</b></div>` : '<span class="faint">—</span>'}</td>
+      <td>${t ? `<div class="oncebar" title="${d.toLocaleString()} of ${t.toLocaleString()} photos searched at least once"><span class="bar"><i style="width:${pct}%"${pct >= 100 ? ' class="done"' : ''}></i></span><b class="num">${pct}%</b></div>${doneBy[c.name] ? `<span class="cdone">done by ${esc(doneBy[c.name].replace('~ ', ''))}</span>` : ''}` : '<span class="faint">—</span>'}</td>
       <td class="num r">${nAll[c.name] || 0}</td>
       <td>${nNew[c.name] ? `<a class="tag copy" href="#found" data-act="cfound" data-v="${esc(c.name)}">${nNew[c.name]} new</a>` : '<span class="faint">—</span>'}</td>
       <td><button class="swt${c.searching === true ? ' on' : ''}" data-act="csearch" data-v="${esc(c.name)}" role="switch" aria-checked="${c.searching === true}" aria-label="Search for ${esc(c.name)}"><i></i><span>${c.searching === true ? 'On' : 'Off'}</span></button></td>
@@ -525,16 +531,38 @@ function goalRow(k, F, hw) {
     <div class="row" style="gap:8px"><label class="mini">Goal: every photo searched once by<input type="date" min="${min}" value="${esc(k.goal || '')}" data-act="keepgoal" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);padding:2px 6px"></label>${k.goal ? '<button class="btn sm" data-act="keepgoaloff">No goal</button>' : ''}</div>
     <div>${line}</div></div>`;
 }
-function firstPerDay(k, hw, week) {
+// Speed-ups: sp = FC.speed() (what really happened this week), lad = the speed ladder's steps
+// (storage fcLadder). Google's lane sets the full searches, Yandex and Bing's the quick looks.
+function firstPerDay(k, hw, week, sp = {}, lad = null) {
   const ORDER = ['Gentle', 'Steady', 'Faster'];
   const pace = ORDER[Math.min(ORDER.indexOf(k.pace), ORDER.indexOf(hw.limits.pace))] || 'Steady';
   const hrs = k.hours === 'all' ? 24 : Math.max(1, k.to - k.from);
   const share = [2, 3, 4].includes(k.firstShare) ? k.firstShare : 3;
-  let n = k.on ? (60 / FC.PACE[pace]) * hrs / share : 0;
+  const ladOn = k.ladder !== false && pace === 'Faster';
+  const gSec = ladOn && lad && lad.g ? FC.LADDER[lad.g.step] || 120 : FC.PACE[pace] * 60;
+  const fSec = ladOn && lad && lad.f ? (FC.LADDER[lad.f.step] || 120) / 2 : FC.PACE[pace] * 30;
+  const googlePerDay = k.on ? hrs * 3600 / gSec : 0;
+  let n = googlePerDay / share;
   if (k.fiftyAuto) n += k.fiftyWhich === 'first' ? k.perDay : k.perDay / share;
   // What really happened this week counts too (Today's 50 started by hand, other searches).
   const days = k.weekdays ? 5 : 7;
-  return { perDay: Math.max(n, (week || 0) / days), weekdays: !!k.weekdays };
+  return { perDay: Math.max(n, sp.first || 0, (week || 0) / days), weekdays: !!k.weekdays, quickPerDay: Math.max(k.on ? hrs * 3600 / fSec : 0, sp.quick || 0),
+    googlePerDay, gSec, fSec, ladOn, sp };
+}
+const secWords = sec => sec >= 120 ? Math.round(sec / 60) + ' min' : sec + ' s';
+// The speed ladder on Keep searching (Ben's pick): where it is now and how high it may climb.
+function ladderRow(k, lad, rate) {
+  const top = [60, 40, 30].includes(+k.ladderTop) ? +k.ladderTop : 40, n = FC.LADDER.indexOf(top) + 1;
+  const g = lad && lad.g ? lad.g : { step: 0, cap: n - 1 }, f = lad && lad.f ? lad.f : { step: 0 };
+  const today = new Date().toDateString();
+  const dropped = lad && lad.g && lad.g.day === today && lad.g.drops;
+  return `<div id="ladderBox" style="display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:10px">
+    <div class="row" style="gap:8px"><label class="switch"><input type="checkbox" data-act="keepladder" aria-label="Speed ladder" ${k.ladder !== false ? 'checked' : ''}><span></span></label><b>Speed ladder</b>${kInfo('On Faster, Keep searching speeds up one step after every hour without an "are you a robot" check: 1 photo every 2 min, then 90, 60 and 40 seconds. If a site asks, it rests for an hour as always, and comes back two steps slower for the rest of the day. Google and the Yandex + Bing lane each have their own ladder.')}
+      ${k.ladder !== false ? `<span class="tag ${dropped ? 'warn' : 'ok'}" style="margin-left:auto">Step ${g.step + 1} of ${n}</span>` : '<span class="faint" style="margin-left:auto;font-size:13px">Off: 1 photo every 2 min</span>'}</div>
+    ${k.ladder !== false ? `<div class="ladder" role="img" aria-label="Speed step ${g.step + 1} of ${n}">${FC.LADDER.slice(0, n).map((sec, i) => `<span class="${i <= g.step ? 'on' : ''}" style="height:${30 + i * 70 / Math.max(1, n - 1)}%"><small>${secWords(sec)}</small></span>`).join('')}</div>
+    <span class="faint" style="font-size:13px">Now: Google 1 photo every ${secWords(FC.LADDER[g.step])}, Yandex and Bing every ${secWords(FC.LADDER[f.step] / 2)}. About ${Math.round(rate.googlePerDay).toLocaleString()} Google searches a day.${dropped ? ' A site asked "are you a robot" today, so it stays at this step until tomorrow.' : g.step < n - 1 ? ' Next step after an hour with no robot check.' : ''}</span>
+    <div class="row" style="gap:8px"><span class="faint" style="font-size:13px">Fastest step</span><div class="seg" role="radiogroup" aria-label="Fastest step">${[60, 40, 30].map(t => `<button role="radio" aria-checked="${top === t}" class="${top === t ? 'on' : ''}" data-act="laddertop" data-v="${t}">${t} s</button>`).join('')}</div></div>` : ''}
+  </div>`;
 }
 // The day "left" first searches are done, at "perDay" a day (weekends skipped if weekdays only).
 function firstDoneBy(left, rate) {
@@ -569,13 +597,20 @@ function firstClientTable(F, rate, all) {
 function firstBlock(F, rate) {
   const pct = F.total ? Math.floor(F.done / F.total * 100) : 100;
   const by = firstDoneBy(F.never, rate);
+  const q = Math.max(F.quick || 0, F.done), qpct = F.total ? Math.floor(q / F.total * 100) : 100;
+  const qby = firstDoneBy(F.total - q, { perDay: rate.quickPerDay, weekdays: rate.weekdays });
+  const sp = rate.sp || {};
   return `<div class="firstbox" id="firstBox">
     <div class="row"><h3 style="margin:0">First search for every photo</h3><span class="tag ${F.never ? 'warn' : 'ok'}" style="margin-left:auto">${F.never ? 'In progress' : 'Every photo searched once'}</span></div>
     <div class="row" style="align-items:baseline;gap:8px"><span class="firstbig num">${F.done.toLocaleString()}</span><span class="muted num">of ${F.total.toLocaleString()} photos searched at least once · ${pct}%</span></div>
     <span class="bar big"><i style="width:${F.total ? F.done / F.total * 100 : 100}%"></i></span>
+    <div id="quickRow" style="display:flex;flex-direction:column;gap:4px">
+      <div class="row" style="font-size:14px"><b>Quick look (Yandex + Bing)</b>${kInfo('Yandex and Bing give every photo a quick look first, in their own lane, so nothing waits months for a first check. A photo counts as searched once when Google has searched it too. A copy found in a quick look sends the photo to Google next.')}<span class="faint num" style="margin-left:auto">${q.toLocaleString()} of ${F.total.toLocaleString()} · ${qpct}%${qby && qby !== 'Done' ? ' · all by ' + esc(qby.replace('~ ', '')) : ''}</span></div>
+      <span class="bar quickbar"><i style="width:${F.total ? q / F.total * 100 : 100}%"></i></span>
+    </div>
     <div class="grid g4f">
       <div class="stat"><b>${F.never.toLocaleString()}</b><span>never searched yet</span></div>
-      <div class="stat"><b>${F.week ? '+' : ''}${F.week.toLocaleString()}</b><span>first searches in the last 7 days</span></div>
+      <div class="stat" id="speedStat"><b>${sp.days ? Math.round(sp.full).toLocaleString() : '—'}</b><span>${sp.days ? 'photos searched a day this week (+' + Math.round(sp.quick).toLocaleString() + ' quick looks) · ' + F.week.toLocaleString() + ' first searches in 7 days' : 'photos a day: shown after the first day of searching'}</span></div>
       <div class="stat"><b>${esc(by || '—')}</b><span>${by === 'Done' ? 'new photos join by themselves' : by ? 'all done at this pace' : 'turn on Keep searching for a date'}</span></div>
       <div class="stat"><b>${F.cant.toLocaleString()}</b><span>can't be searched (POOL, TIFF, HEIC, broken)${F.cant ? ' · <a href="#skipped">See them</a>' : ''}</span></div>
     </div>
@@ -616,7 +651,8 @@ V.keep = async () => {
   const perHour = 60 / FC.PACE[pace];
   const hrs = k.hours === 'all' ? 24 : Math.max(1, k.to - k.from);
   const G = cov.groups, F = cov.first;
-  const rate = firstPerDay(k, hw, F.week);
+  const lad = (await api.storage.local.get('fcLadder')).fcLadder || null;
+  const rate = firstPerDay(k, hw, F.week, await FC.speed(), lad);
   const share = [2, 3, 4].includes(k.firstShare) ? k.firstShare : 3;
   const bar = (label, [a, b], note) => `<div style="display:flex;flex-direction:column;gap:4px"><div class="row" style="font-size:14px"><b>${label}</b><span class="faint" style="margin-left:auto">${b ? Math.round(a / b * 100) : 100}% up to date · ${a.toLocaleString()} of ${b.toLocaleString()}</span></div><span class="bar"><i style="width:${b ? a / b * 100 : 100}%"></i></span><span class="faint" style="font-size:12.5px">${note}</span></div>`;
   const fifty = !!(store.fcFifty && store.fcFifty.beat && store.fcFifty.running !== false && Date.now() - store.fcFifty.beat < 5 * 60000);
@@ -643,7 +679,7 @@ V.keep = async () => {
     <div class="ktiles">
       <div class="ktile"><b class="num">${today.searched}</b><span>photos searched today</span></div>
       <div class="ktile"><b class="num">${today.found}</b><span>new copies today</span></div>
-      <div class="ktile"><b class="num">~${Math.round(perHour * hrs)}</b><span>photos a day at this pace</span></div>
+      <div class="ktile"><b class="num">~${Math.round(rate.ladOn ? rate.googlePerDay : perHour * hrs).toLocaleString()}</b><span>photos a day at this ${rate.ladOn ? 'speed step' : 'pace'}${today.quick ? ' · ' + today.quick + ' quick looks today' : ''}</span></div>
     </div>
   </section>
   <div class="grid g2">
@@ -652,6 +688,7 @@ V.keep = async () => {
       <div class="kline"><span class="kl">Pace ${kInfo('Gentle: 1 photo every ' + FC.PACE.Gentle + ' minutes. Steady: every ' + FC.PACE.Steady + '. Faster: every ' + FC.PACE.Faster + '. If a search site asks "are you a robot?", PageProof never tries to get past it: that site rests for an hour and the others carry on.')}</span>
         <div class="seg" role="radiogroup" aria-label="Pace">${Object.entries(FC.PACE).map(([p, m]) => `<button role="radio" aria-checked="${k.pace === p}" class="${k.pace === p ? 'on' : ''}" data-act="keepset" data-v="pace|${p}" title="1 photo every ${m} minutes">${p}</button>`).join('')}</div></div>
       ${pace !== k.pace ? `<p class="faint" style="margin:0;font-size:13px">Your computer is ${esc(hw.level)}, so it goes ${pace} (1 photo every ${FC.PACE[pace]} min). <a href="#computer">Computer check</a></p>` : ''}
+      ${pace === 'Faster' ? ladderRow(k, lad, rate) : ''}
       ${goalRow(k, F, hw)}
       <div class="kline"><span class="kl">Hours</span>
         <div class="seg" role="radiogroup" aria-label="Hours">${[['work', 'Work hours'], ['all', 'All day and night']].map(([h, l]) => `<button role="radio" aria-checked="${k.hours === h}" class="${k.hours === h ? 'on' : ''}" data-act="keepset" data-v="hours|${h}">${l}</button>`).join('')}</div></div>
@@ -673,7 +710,9 @@ V.keep = async () => {
     ${firstBlock(F, rate)}
     <div style="display:flex;flex-direction:column;gap:8px">
       <h3 style="margin:0;font-size:15px">How the searches are shared</h3>
-      ${F.never ? `<div class="sharebar" role="img" aria-label="High priority first, then 1 in ${share} searches for never-searched photos, the rest keep photos up to date"><span class="s1">⚑ High first</span><span class="s2" style="flex:1">1 in ${share}: never searched</span><span class="s3" style="flex:${share - 1}">The rest: keeping photos up to date</span></div>` : '<p class="muted" style="margin:0;font-size:14px">Every photo has had its first search, so all searches go to keeping photos up to date. When new photos arrive, they get their share again.</p>'}
+      ${F.never ? `<div class="lanes"><span class="lanel">Google</span><div class="sharebar" role="img" aria-label="Google: High priority first, then 1 in ${share} searches for never-searched photos, the rest keep photos up to date"><span class="s1">⚑ High first</span><span class="s2" style="flex:1">1 in ${share}: never searched</span><span class="s3" style="flex:${share - 1}">The rest: keeping photos up to date</span></div>
+        <span class="lanel">Yandex + Bing</span><div class="sharebar" id="quickLane" role="img" aria-label="Yandex and Bing: a quick look at every never-searched photo first, then re-searches"><span class="s4" style="flex:${Math.max(1, F.total - Math.max(F.quick || 0, F.done))}">Quick look at never-searched photos</span><span class="s3" style="flex:${Math.max(1, Math.round(F.total / 6))}">then re-searches</span></div></div>
+        <span class="faint" style="font-size:12.5px">The two lanes run side by side. Inside each client, 2 of every 3 first searches are its newest photos and 1 comes from a random older year.</span>` : '<p class="muted" style="margin:0;font-size:14px">Every photo has had its first search, so all searches go to keeping photos up to date. When new photos arrive, they get their share again.</p>'}
       <div class="row" style="gap:10px"><span class="faint" style="font-size:13px">Share for never-searched photos</span>
         <div class="seg" role="radiogroup" aria-label="Share for never-searched photos">${[4, 3, 2].map(n => `<button role="radio" aria-checked="${share === n}" class="${share === n ? 'on' : ''}" data-act="firstshare" data-v="${n}">1 in ${n}</button>`).join('')}</div>
         <span class="faint" style="font-size:12.5px">⚑ High priority photos always go first.</span></div>
@@ -706,6 +745,8 @@ Object.assign(ACTS, {
   keepset: async v => { const [f, x] = v.split('|'); await FC.setKeep({ [f]: x }); render(true); },
   keepgoal: async (v, el) => { const d = el.value; if (/^\d{4}-\d{2}-\d{2}$/.test(d)) { await FC.setKeep({ goal: d }); toast('Goal set. PageProof works out the pace from now on.'); render(true); } },
   keepgoaloff: async () => { await FC.setKeep({ goal: '' }); toast('No goal: the pace you picked is used.'); render(true); },
+  keepladder: async (v, el) => { await FC.setKeep({ ladder: el.checked }); toast(el.checked ? 'Speed ladder on: Keep searching speeds up while the sites stay calm.' : 'Speed ladder off: 1 photo every 2 minutes on Faster.'); render(true); },
+  laddertop: async v => { await FC.setKeep({ ladderTop: +v }); toast('Fastest step: 1 photo every ' + v + ' seconds.'); render(true); },
   keepnum: async (v, el) => { await FC.setKeep({ [v]: +el.value }); render(true); },
   firstshare: async v => { await FC.setKeep({ firstShare: +v }); toast('1 in ' + v + ' searches now go to photos never searched.'); render(true); },
   keepset2: async (v, el) => { await FC.setKeep({ [v]: el.value }); render(true); },

@@ -135,8 +135,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
 
   // ---- 7. Keep searching keeps going while a big search runs, and uses the lanes
   const src = fs.readFileSync(path.join(__dirname, '../../extension/runner.js'), 'utf8');
-  ok(!/a big search starts'\)/.test(src) && /const big = !!BG\.id \|\| fiftyRunning/.test(src) && /gapMin \*= 2/.test(src), 'a big search no longer stops Keep searching; it goes at half speed');
-  ok(/lane = 'fast'/.test(src) && /repeat: true/.test(src) && /S\.bgSkip/.test(src), 'Yandex and Bing take a re-search while Google is busy; the big search\'s photos are skipped');
+  ok(!/a big search starts'\)/.test(src) && /const big = !!BG\.id \|\| fiftyRunning/.test(src) && /gapG \*= 2; gapF \*= 2/.test(src), 'a big search no longer stops Keep searching; it goes at half speed');
+  ok(/lane = 'fast'/.test(src) && /quick: true/.test(src) && /S\.bgSkip/.test(src), 'Yandex and Bing take a quick look (then re-searches) while Google is busy; the big search\'s photos are skipped');
   const rp = await page.evaluate(async () => {
     await FC.DB.put('clients', { name: 'Client B', searching: true, priority: false, licensed: [], photos: 3 });
     const b1 = await FC.DB.get('photos', 'd:Client B/2026/Q4/b1.jpg'); b1.lastSearched = new Date(Date.now() - 60 * 864e5).toISOString(); await FC.DB.put('photos', b1);

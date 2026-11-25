@@ -455,6 +455,8 @@ function updatePause(engine) {
 async function onCaptcha(t) {
   if (t.captcha) return;
   PP_STATS.add('eng.' + t.engine + '.robot');
+  // The speed ladder (Keep searching) steps down after any robot check on this site.
+  try { const ra = (await api.storage.local.get('fcRobotAt')).fcRobotAt || {}; ra[t.engine] = Date.now(); await api.storage.local.set({ fcRobotAt: ra }); } catch (e) { /* only for the ladder */ }
   if (job.auto) {
     // Nobody is watching: that site rests for an hour and the others carry on.
     const rest = (await api.storage.local.get('fcRest')).fcRest || {};
@@ -1104,8 +1106,10 @@ function maybeIngest(p) {
   p.ingested = true;
   const links = p.links.filter(l => ['same', 'maybe'].includes(verdict(l)) && !RS_LISTS.isHidden(l.site, l.url) && !isRejected(p, l))
     .map(l => ({ ...l, verdict: verdict(l) }));
-  FC.ingest(p, links, BY[job.kind] || 'a search').then(r => { statPhoto(p, r && r.fresh || 0); if (!p.healthNoted) { p.healthNoted = true; return FC.engineResults(health, r.photo.id, !links.length); } })
+  const done = job.engines.filter(e => p.runs[e].state === 'done');
+  FC.ingest(p, links, BY[job.kind] || 'a search', { engines: done }).then(r => { statPhoto(p, r && r.fresh || 0); if (!p.healthNoted) { p.healthNoted = true; return FC.engineResults(health, r.photo.id, !links.length); } })
     .catch(err => { p.ingested = false; console.warn('PageProof: could not add the copies', err); })
+    .then(() => alikeCheck(p))
     .finally(() => { saveJob(); autoDone(); });
 }
 // From search to copy, and why each link was thrown out (How PageProof is doing). Counts only.
@@ -1140,10 +1144,49 @@ function statPhoto(p, fresh) {
   S.add('copies.new', fresh); if (fresh) S.add('photos.withNew');
   if (p.t0 && Date.now() - p.t0 < 4 * 3600000) S.time('photo.' + (job.kind === 'fifty' || job.kind === 'new' ? 'big' : 'one'), Date.now() - p.t0);
 }
+// Speed-ups (Ben's pick): look-alike frames share one search. The links this photo's search threw
+// out as a different photo are checked against the look-alike frames from the same shoot
+// (job.alike, at most 3). A frame that matches gets the copy (FC.ingest with shared), and its
+// own search moves to the front of the line. Most similar links first, at most 60 links.
+async function alikeCheck(p) {
+  const A = job && job.alike;
+  if (!A || !A.length || p.alikeDone || p.i !== 0) { if (p) p.alikeDone = true; return; }
+  const cand = p.links.filter(l => l.sv === SCORE_VERSION && baseVerdict(l) === 'no' && !userNo(l) && !cardOf(l) && (l.img || l.thumb) && (l.pct || 0) >= 0
+    && !RS_LISTS.isHidden(l.site, l.url) && !(typeof RS_FORUM !== 'undefined' && RS_FORUM.is(l.site, l.url)))
+    .sort((a, b) => (b.pct || 0) - (a.pct || 0)).slice(0, 60);
+  const found = A.map(() => []);
+  for (const l of cand) {
+    if (R.stop && !BG) break;
+    const pic = await fetchPicture(l.img || l.thumb);
+    if (!pic) continue;
+    for (let k = 0; k < A.length; k++) {
+      let bmp;
+      try { bmp = await createImageBitmap(pic.bmp); } catch (e) { break; }
+      const m = await measure(A[k], bmp);
+      try { bmp.close && bmp.close(); } catch (e) { /* handed to the checker */ }
+      const v = PP_VERDICT.score(m);
+      if (v === 'same' || v === 'maybe') {
+        // Matched on the search site's small preview only: kept as Maybe (nobody read their page).
+        const verdict = l.img ? v : 'maybe';
+        found[k].push({ ...l, ...m, pic: A[k].i, verdict, from: l.img ? 'image' : 'preview', alikeOf: p.name });
+        break;
+      }
+    }
+    freePic(pic);
+    await breathe();
+  }
+  for (let k = 0; k < A.length; k++) {
+    PP_STATS.add('keep.alike.checked');
+    if (found[k].length) PP_STATS.add('keep.alike.found');
+    try { await FC.ingest(A[k], found[k], (BY[job.kind] || 'a search') + ' (look-alike frame)', { shared: true }); } catch (e) { console.warn('PageProof look-alike frame:', e); }
+  }
+  p.alikeDone = true;
+}
 // Keep searching runs a search in a background window: when it's finished, tell that window and close.
 let autoClosing = false;
 function autoDone() {
   if (!job || !(job.auto || BG) || autoClosing || R.running) return;
+  if (job.alike && job.alike.length && job.pics.some(p => p.ingested && !p.alikeDone)) return;
   if (!job.pics.every(p => p.ingested || picDone(p) && !job.engines.some(e => p.runs[e].state === 'done'))) return;
   if (job.pics.some(p => !p.ingested && job.engines.some(e => p.runs[e].state === 'done'))) return;
   autoClosing = true;

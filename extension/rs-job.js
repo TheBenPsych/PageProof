@@ -58,6 +58,10 @@ const RS_JOB = (() => {
       bg: opts.kind !== 'keep',
       limits: { tabs: hw.limits.tabs, checks: hw.limits.checks },
       pics: pics.map((p, i) => ({ ...p, i, links: [], runs: Object.fromEntries(engines.map(e => [e, { state: 'wait' }])) })),
+      // Look-alike frames (Speed-ups): not searched themselves, but every link this search finds is
+      // also checked against them (revsearch.js alikeCheck). Numbered from 100 so they never share
+      // a number with a searched photo.
+      alike: (opts.alike || []).slice(0, 3).map((p, k) => ({ ...p, i: 100 + k })),
     };
     await RS_DB.put('jobs', job.id, job);
     try {

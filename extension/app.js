@@ -300,18 +300,20 @@ async function homeFinds() {
       ${top.slice(0, 5).map(([n, v]) => `<a class="byrow" href="#found?client=${encodeURIComponent(n)}"><span>${esc(n)}</span><span class="bar"><i style="width:${v / mx * 100}%"></i></span><b class="num">${v}</b></a>`).join('')}</section>`;
   }
   const stats = { nNew, newToday: S.newToday, caps: caps.up.length, oldest: caps.up.length ? ppDaysSince(caps.up.oldest || (caps.up[0] && (caps.up[0].answered || caps.up[0].firstSeen))) : 0, searched: today.searched || 0, found: today.found || 0, first: store.fcFirst };
-  return { jobs, stats, more: homeFirst(store.fcFirst, k, hw) + mostHtml + byHtml };
+  return { jobs, stats, more: homeFirst(store.fcFirst, k, hw, await homeSpeed()) + mostHtml + byHtml };
 }
 function capJob(up) {
   return { lvl: 'warn', icon: 'capture', id: 'jobCapture', title: `${up.length} stolen ${up.length === 1 ? 'copy needs' : 'copies need'} a capture`, sub: 'Capture them before the site takes them down. Oldest first: ' + esc((up.sites || [...new Set(up.map(c => c.site))]).slice(0, 3).join(', ')), btn: { href: '#tocapture', label: 'Capture them', main: 1 } };
 }
 // Home card: every photo searched once. Uses the small copy saved by the last count, so Home
 // never reads every photo; a count older than an hour is redone after Home has drawn.
-function homeFirst(F, k, hw) {
+// This week's speed and the speed ladder's steps, for the done-by date (Speed-ups).
+async function homeSpeed() { try { return { sp: await FC.speed(), lad: (await api.storage.local.get('fcLadder')).fcLadder || null }; } catch (e) { return {}; } }
+function homeFirst(F, k, hw, x = {}) {
   if (!F || !F.total) return `<section class="card pad firsthome" id="homeFirst" style="display:flex;flex-direction:column;gap:8px"><h2>Every photo searched once</h2><span class="muted" style="font-size:14px">Counting your photos…</span></section>`;
   const pct = Math.floor(F.done / F.total * 100);
   let by = '';
-  try { by = firstDoneBy(F.never, firstPerDay(k, hw, F.week)) || ''; } catch (e) { /* no date */ }
+  try { by = firstDoneBy(F.never, firstPerDay(k, hw, F.week, x.sp, x.lad)) || ''; } catch (e) { /* no date */ }
   return `<section class="card pad firsthome" id="homeFirst" style="display:flex;flex-direction:column;gap:8px">
     <div class="row"><h2>Every photo searched once</h2><span class="faint num" style="margin-left:auto;font-size:13px">${pct}%</span></div>
     <span class="bar${F.never ? '' : ' okbar'}"><i style="width:${F.done / F.total * 100}%"></i></span>
@@ -324,7 +326,7 @@ V.home.after = async () => {
     if ((await FC.drive()).done && (!F || Date.now() - F.at > 3600000)) {
       await FC.coverage();
       const n = (await api.storage.local.get('fcFirst')).fcFirst, el = document.getElementById('homeFirst');
-      if (el && n && state.shown === 'home') el.outerHTML = homeFirst(n, await FC.keep(), await ppHardware());
+      if (el && n && state.shown === 'home') el.outerHTML = homeFirst(n, await FC.keep(), await ppHardware(), await homeSpeed());
       const tl = document.getElementById('homeFirstTile');
       if (tl && n && n.total && state.shown === 'home') { const p = Math.floor(n.done / n.total * 100); tl.querySelector('.hn').textContent = p + '%'; tl.querySelector('.hs').textContent = n.done.toLocaleString() + ' of ' + n.total.toLocaleString(); const c = tl.querySelectorAll('circle')[1]; if (c) c.setAttribute('stroke-dasharray', (138.2 * p / 100).toFixed(1) + ' 138.2'); }
     }
