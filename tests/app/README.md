@@ -37,6 +37,7 @@ pretend Google Drive folder, pretend copies found). No real photos, clients or w
 | `checks-435.js` | Personal accounts (a name only, Facebook friends, LinkedIn /in/) and politicians ("serving … District", @Rep… handles, "Rep." titles) are hidden on the Social media tab and in the new-copies number until you tick Show; Stolen copies stay; Type is wrong? sets it by hand; link preview card matches (LinkedIn, X, Facebook) are thrown out in the search and go to Removed in Copies found, and Put back stays put back |
 | `checks-stats.js` | How PageProof is doing: a search records links thrown out by reason, each search site's links (Same / Maybe / Different / could not check) and problems by website (site name only); the page and its sections; the red alert when most of one site's links can't be checked; Save stats for Claude has no client names, photo names, links or paths; the weekly file; answers counted; the Checker test gets 72 of 72 right |
 | `checks-4512.js` | Two searches never pick the same photos: a search started while another runs, is still checking matches, or was just searched in another page gets other photos; a stopped search lets go of photos it never searched; photos being read from Drive for a big search are held |
+| `checks-rvkind.js` | One at a time: the All / Websites / Social media switch shows only that kind (also after an answer), is remembered, and the button on the Social media tab starts on Social media |
 | `speed.js` | Every main page draws quickly with 50,000 photos and 5,000 copies |
 
 To run them yourself (needs Node.js):

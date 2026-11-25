@@ -898,7 +898,7 @@ V.found = async () => {
   // 4.11: the old big number cards are now small Quick filter buttons. Solid blue with a tick = on.
   const qf = (label, n, on, act, v, col) => `<button class="qf${on ? ' on' : ''}" data-act="${act}" data-v="${v}" aria-pressed="${on}">${on ? '<span class="tick" aria-hidden="true">✓</span>' : col ? `<i style="background:var(--${col})"></i>` : ''}${label} <span class="num">${n}</span></button>`;
   const fresh = c => c.dmg && c.dmg.end && Date.now() <= c.dmg.end.getTime();
-  return `${head('', 'Copies found', 'Answer right on the row, or click a row to see more.', `<button class="btn" data-act="fcsv">${ic('down', 16)} Download</button>${nNew ? `<a class="btn primary" href="#review">One at a time (${nNew})</a>` : ''}`)}
+  return `${head('', 'Copies found', 'Answer right on the row, or click a row to see more.', `<button class="btn" data-act="fcsv">${ic('down', 16)} Download</button>${nNew ? `<a class="btn primary" href="#review?kind=${state.fTab}">One at a time (${nNew})</a>` : ''}`)}
   ${await driveBanner()}
   ${bigTabs}
   ${socAskBanner(everyTab.filter(visible))}
@@ -1684,15 +1684,27 @@ async function ownerSummary(site) {
 }
 
 // ---------------------------------------------------------------- Review new copies
-function reviewQueue() {
-  return FCD.copies.filter(c => c.status === 'new' && visible(c))
+// 4.56 (Ben): One at a time can show Websites only, Social media only, or All. The choice is remembered.
+const RV_KINDS = [['all', 'All'], ['web', 'Websites'], ['social', 'Social media']];
+const rvKindOk = (c, k = state.rvKind) => k === 'web' ? !isSoc(c) : k === 'social' ? isSoc(c) : true;
+function setRvKind(k) {
+  if (!RV_KINDS.some(([v]) => v === k) || k === state.rvKind) return;
+  state.rvKind = k; state.rvStart = 0;
+  api.storage.local.set({ fcRvKind: k }).catch(() => {});
+}
+function reviewQueue(k) {
+  return FCD.copies.filter(c => c.status === 'new' && visible(c) && rvKindOk(c, k))
     .sort((a, b) => (!!a.skipped - !!b.skipped) || (a.skipped || '').localeCompare(b.skipped || '') || (b.repeat > 0) - (a.repeat > 0) || (b.match === 'same') - (a.match === 'same') || (b.pct || 0) - (a.pct || 0));
 }
 V.review = async () => {
   await loadFC();
+  if (!state.rvKind) { const pr = await api.storage.local.get('fcRvKind').catch(() => ({})); state.rvKind = RV_KINDS.some(([v]) => v === pr.fcRvKind) ? pr.fcRvKind : 'all'; }
+  if (routeArg('kind')) { setRvKind(routeArg('kind')); history.replaceState(null, '', '#review'); }
   const Q = reviewQueue();
+  const kindN = Object.fromEntries(RV_KINDS.map(([v]) => [v, v === state.rvKind ? Q.length : reviewQueue(v).length]));
+  const kinds = `<div class="seg rvkind" role="radiogroup" aria-label="Which copies to go through">${RV_KINDS.map(([k, l]) => `<button role="radio" aria-checked="${state.rvKind === k}" class="${state.rvKind === k ? 'on' : ''}" data-act="rvkind" data-v="${k}">${l} <span class="num">${kindN[k].toLocaleString()}</span></button>`).join('')}</div>`;
   const hd = head('Copies found', 'One at a time', 'PageProof found these and checked each one against your client\'s photo. Decide what each one is. Anything marked stolen is watched every week.', `<a class="btn" href="#found">All copies found</a>`);
-  const tabs = `<div class="seg" role="tablist" aria-label="Show">${[['review', `To review (${Q.length})`], ['sites', 'By site and company']].map(([k, l]) => `<button role="tab" aria-selected="${state.rvTab === k}" class="${state.rvTab === k ? 'on' : ''}" data-act="rvtab" data-v="${k}">${l}</button>`).join('')}</div>`;
+  const tabs = `<div class="seg" role="tablist" aria-label="Show">${[['review', `To review (${Q.length})`], ['sites', 'By site and company']].map(([k, l]) => `<button role="tab" aria-selected="${state.rvTab === k}" class="${state.rvTab === k ? 'on' : ''}" data-act="rvtab" data-v="${k}">${l}</button>`).join('')}</div>${kinds}`;
   if (state.rvTab === 'sites') {
     const by = new Map();
     for (const c of Q) { const o = FCD.ownerOf.get(c.site); const k = o && o.real ? o.key : FC.baseOf(c.site); if (!by.has(k)) by.set(k, { o: o && o.real ? o : null, name: o && o.real ? o.name : FC.baseOf(c.site), xs: [] }); by.get(k).xs.push(c); }
@@ -1701,7 +1713,7 @@ V.review = async () => {
       <div class="row"><span class="tag copy">${plural(g.xs.length, 'new copy', 'new copies')}</span><button class="btn sm" style="margin-left:auto" data-act="rvall" data-v="${esc(g.xs.map(x => x.id).join('\n'))}">Mark all stolen</button></div></section>`).join('');
     return `${hd}${tabs}<div class="grid g2">${cards || '<p class="muted">Nothing waiting for you.</p>'}</div>`;
   }
-  if (!Q.length) return `${hd}${tabs}<section class="card pad" style="text-align:center;padding:48px 22px;display:flex;flex-direction:column;align-items:center;gap:12px"><span class="tag ok" style="font-size:14px;padding:6px 14px">${ic('check', 16, 3)} All new copies reviewed</span><h2>Nothing left to review</h2><p class="muted" style="margin:0;max-width:52ch">The ones you marked as stolen are checked every week to see they are still online. Save their evidence reports from All copies found.</p><div class="row" style="justify-content:center">${HIST.length ? `<button class="btn" data-act="undo">↶ Undo: ${esc(HIST[HIST.length - 1].label)}</button>` : ''}<a class="btn primary" href="#found">All copies found</a></div></section>`;
+  if (!Q.length) return `${hd}${tabs}<section class="card pad" style="text-align:center;padding:48px 22px;display:flex;flex-direction:column;align-items:center;gap:12px"><span class="tag ok" style="font-size:14px;padding:6px 14px">${ic('check', 16, 3)} All new copies reviewed</span><h2>Nothing left to review${state.rvKind === 'all' ? '' : ' in ' + (state.rvKind === 'web' ? 'Websites' : 'Social media')}</h2>${state.rvKind !== 'all' && kindN.all ? `<p class="muted" style="margin:0">${plural(kindN.all, 'new copy', 'new copies')} still waiting in ${state.rvKind === 'web' ? 'Social media' : 'Websites'}. <button class="btn sm" data-act="rvkind" data-v="all">Show all</button></p>` : ''}<p class="muted" style="margin:0;max-width:52ch">The ones you marked as stolen are checked every week to see they are still online. Save their evidence reports from All copies found.</p><div class="row" style="justify-content:center">${HIST.length ? `<button class="btn" data-act="undo">↶ Undo: ${esc(HIST[HIST.length - 1].label)}</button>` : ''}<a class="btn primary" href="#found">All copies found</a></div></section>`;
   state.qi = Math.min(state.qi, Q.length - 1);
   const c = Q[0];
   const p = FCD.photos.get(c.photo);
@@ -1763,6 +1775,7 @@ V.review.after = () => {
 };
 Object.assign(ACTS, {
   rvtab: v => { state.rvTab = v; render(true); },
+  rvkind: v => { setRvKind(v); render(true); },
   cmode: v => { state.cmpMode = v; render(true); },
   rverdict: async v => {
     const c = FCD && FCD.copies.find(x => x.id === state.rvCurrent);
