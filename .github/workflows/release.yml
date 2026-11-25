@@ -38,14 +38,25 @@ jobs:
         id: v
         env:
           MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           LAST=$(git tag -l 'v*' --sort=-v:refname | head -1)
           NOTES=$(ls changes/*.md 2>/dev/null | grep -vi '/readme.md$' | wc -l)
-          if [ -n "$LAST" ] && [ "$MANUAL" != true ] && [ "$NOTES" = 0 ] && git diff --quiet "$LAST" HEAD -- extension tools/windows; then
-            echo "Nothing in PageProof changed since $LAST (docs or tests only), so no new download."
-            echo "skip=true" >> $GITHUB_OUTPUT; exit 0
+          if [ -n "$LAST" ] && [ "$NOTES" = 0 ] && git diff --quiet "$LAST" HEAD -- extension tools/windows; then
+            # Nothing new. But if the last publish failed half way (GitHub hiccup), the "latest"
+            # page is missing or still shows an older version: put $LAST back on it, no new version.
+            SHOWN=$(gh release view latest --json name --jq .name 2>/dev/null || true)
+            if [ "$SHOWN" != "Latest build: ${LAST#v}" ]; then
+              echo "The download page shows '${SHOWN:-nothing}', so publishing ${LAST#v} again."
+              git checkout -q "$LAST"
+              echo "version=${LAST#v}" >> $GITHUB_OUTPUT; exit 0
+            fi
+            if [ "$MANUAL" != true ]; then
+              echo "Nothing in PageProof changed since $LAST (docs or tests only), so no new download."
+              echo "skip=true" >> $GITHUB_OUTPUT; exit 0
+            fi
           fi
           VERSION=$(python3 tools/release.py ${LAST:+--last ${LAST#v}} | tail -1)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -77,5 +88,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.v.outputs.version }}
         run: |
-          gh release delete latest --yes --cleanup-tag || true
-          gh release create latest PageProof.zip PageProof-Firefox.zip tools/windows/Update-PageProof.cmd --target main --title "Latest build: $VERSION" --notes "Version $VERSION. Chrome and Edge: download PageProof.zip below. Firefox: download PageProof-Firefox.zip. Then unzip it into Documents › PageProof › Install and press Reload on PageProof's card in chrome://extensions (see the README). Windows, quicker: download Update-PageProof.cmd once, keep it in Documents › PageProof, and double-click it to install or update."
+          # GitHub sometimes answers "HTTP 500" for a moment, which once left no download at all.
+          # So: try up to 5 times, waiting a little longer each time.
+          for i in 1 2 3 4 5; do
+            gh release delete latest --yes --cleanup-tag || true
+            if gh release create latest PageProof.zip PageProof-Firefox.zip tools/windows/Update-PageProof.cmd --target main --title "Latest build: $VERSION" --notes "Version $VERSION. Chrome and Edge: download PageProof.zip below. Firefox: download PageProof-Firefox.zip. Then unzip it into Documents › PageProof › Install and press Reload on PageProof's card in chrome://extensions (see the README). Windows, quicker: download Update-PageProof.cmd once, keep it in Documents › PageProof, and double-click it to install or update."; then
+              echo "Published $VERSION."; exit 0
+            fi
+            echo "Publishing failed (try $i of 5), trying again in $((i * 15)) seconds."
+            sleep $((i * 15))
+          done
+          echo "::error::Could not publish the download page after 5 tries. Run 'Build download' again by hand (Actions tab)."
+          exit 1
