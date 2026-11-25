@@ -731,6 +731,9 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['Just hidden list folded away', 'The row of sites you just hid on Copies found is now folded into a small "Just hidden (N)". Click it to see the sites and bring one back.'],
+  ['Sites that no longer exist are hidden', 'When a copy is found, PageProof checks once whether its website still exists. If the address leads nowhere (like a site that was shut down), the copy gets a grey Site gone tag and is hidden along with the spam blogs. Show them brings them back. Copies you already have are checked a few dozen at a time while you use Copies found.'],
+  ['More spam pages caught', 'The Spam blogs filter now also catches made-up search pages named by words joined with + (like site.com/name+onlyfans+nude), and any copy on an ending used almost only by spam sites (.run, .fit, .forum, .makeup, .cfd, .sbs and similar). Real news articles, even about adult topics, are left alone.'],
   ['Resume shows at once on the Keep searching tab', 'Pressing Resume on the Keep searching tab now changes it from Paused straight away. Before, it could still say Paused for a few seconds (or until the next half-minute check) while it started again.'],
   ['Check later', 'Not sure about a copy yet? Press Check later (or the C key) in One at a time, the copy details panel, a row\'s clock button or the ⋯ menu. The copy leaves New and waits in the new Check later tab in Copies found until you answer it. Undo (U) puts it back.'],
   ['More spam blog sites caught', 'The Spam blogs filter now also catches made-up addresses joined to a word (uqumo2us-amphtml.beauty-glam.makeup), made-up site names on throwaway endings (fw65mw.fit) and "amphtml" spam pages (talkcorner.forum/amphtml/...). Copies you already have are checked again by themselves.'],
