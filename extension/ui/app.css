@@ -1450,3 +1450,5 @@ tr.rowlink td.chev{color:var(--faint);font-size:18px;text-align:center} tr.rowli
 .ckic.ok{background:var(--ok)}.ckic.warn{background:var(--warn)}.ckic.bad{background:var(--bad)}.ckic.wait{background:var(--faint)}
 /* 4.56: Websites / Social media / All switch on One at a time */
 .seg.rvkind button .num{font-size:12px;opacity:.75;margin-left:4px}
+/* 4.60: new copies wait behind this button instead of pushing the list around. It floats, so it never moves a row. */
+.holdbar{position:fixed;left:50%;top:84px;transform:translateX(-50%);z-index:30;display:flex;align-items:center;gap:12px;background:var(--surface);color:var(--ink);border:1px solid var(--line);box-shadow:0 6px 24px rgba(0,0,0,.18);border-radius:999px;padding:6px 6px 6px 16px;font-size:14px;font-weight:600;max-width:calc(100% - 32px)}

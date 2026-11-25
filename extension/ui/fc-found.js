@@ -107,7 +107,7 @@ async function readFC() {
   const spam = FC.spamMarks(copies);
   for (const c of copies) c.spam = spam.get(c.id) || null;
   // Websites of new copies not checked yet: does the site still exist? Checked once each, in the background.
-  FC.checkGone(copies).then(n => { if (n) { FCD_STALE = true; if (state.shown === 'found') render(true); } }).catch(() => {});
+  FC.checkGone(copies).then(n => { if (n) { FCD_STALE = true; if (state.shown === 'found') renderAuto(); } }).catch(() => {});
   let unhid = [];
   try { unhid = (await (globalThis.browser || chrome).storage.local.get('ppSocialUnhid')).ppSocialUnhid || []; } catch (e) { /* none */ }
   return { unhid, copies, photos, clients: new Map(clients.map(c => [c.name, c])), countries, facts, owners: ownerList, ownerOf, ...soc };
@@ -525,7 +525,7 @@ async function ruleGate(c) {
   // in the details panel, so everyday copies and embeds go straight through.
   const saved = kinds[FC.baseOf(c.site)] || PP_CHECKS.guessKind(c, c.pf) || '';
   if (!PP_CHECKS.rules(c, saved, c.pf).some(h => h.lvl === 'stop')) return 'stolen';
-  if (!c.pf && !PF_BUSY.has(c.id)) readTheirPage(c).then(() => { if (state.open === c.id) render(true); }).catch(() => {});
+  if (!c.pf && !PF_BUSY.has(c.id)) readTheirPage(c).then(() => { if (state.open === c.id) renderAuto(); }).catch(() => {});
   return new Promise(resolve => {
     const d = document.createElement('dialog');
     d.className = 'pp-ask rulegate';
@@ -578,9 +578,9 @@ async function drawer(list) {
   const pub = PP_CHECKS.pubDate(p);
   const hits = PP_CHECKS.rules(c, kind, c.pf);
   const capturedAt = [c.url, ...(c.alts || [])].map(u => PP_CHECKS.captureOf(logR.log, u)).find(Boolean) || c.packAt || null;
-  if (typeof acctOnOpen === 'function' && isSoc(c) && c.acct) acctOnOpen(c).then(r => { if (r && state.open === c.id) { FCD_STALE = true; render(true); } }).catch(() => {});
-  if (needsPostCheck(c) && !POST_BUSY.has(c.id)) postCheck(c).then(() => { if (state.open === c.id) render(true); }).catch(() => {});
-  else if (!c.pf && !PF_BUSY.has(c.id)) readTheirPage(c).then(() => { if (state.open === c.id) render(true); }).catch(() => {});
+  if (typeof acctOnOpen === 'function' && isSoc(c) && c.acct) acctOnOpen(c).then(r => { if (r && state.open === c.id) { FCD_STALE = true; renderAuto(); } }).catch(() => {});
+  if (needsPostCheck(c) && !POST_BUSY.has(c.id)) postCheck(c).then(() => { if (state.open === c.id) renderAuto(); }).catch(() => {});
+  else if (!c.pf && !PF_BUSY.has(c.id)) readTheirPage(c).then(() => { if (state.open === c.id) renderAuto(); }).catch(() => {});
   const ck = checksParts(c, reg, kind, hits, pub, capturedAt);
   const sz = c.w && p && p.w ? (Math.abs(c.w / c.h - p.w / p.h) / (p.w / p.h) > 0.06 ? 'cropped' : (c.w * c.h) / (p.w * p.h) > 1.15 ? 'bigger than your client\'s' : (c.w * c.h) / (p.w * p.h) < 0.85 ? 'smaller' : 'same size') : '';
   const idx = list.indexOf(c.id);
@@ -747,13 +747,57 @@ function fillCountriesSoon() {
   (async () => {
     for (let round = 0; round < 50; round++) {
       const r = await FC.fillCountries(FCD.copies, 12);
-      if (r.found && state.shown === 'found') { FCD_STALE = true; render(true); }
+      if (r.found && state.shown === 'found') { FCD_STALE = true; renderAuto(); }
       if (!r.left) break;
       await new Promise(ok => setTimeout(ok, 1500));
     }
   })().catch(e => console.warn('PageProof country:', e)).finally(() => { CC_BUSY = false; });
 }
+// 4.60 (Ben): the list stays put while you look at it. What is on screen is remembered (which
+// copies, in which order). A redraw then never adds new copies (they wait behind the "N new
+// copies" button), never re-sorts, and a redraw nobody clicked for (Keep searching, a background
+// check) leaves a row in place even when its details changed. Your own answers and hides still
+// take a row off at once. Changing a filter, the sort, the tab, or opening the page shows
+// everything fresh.
+const USER_DONE = new Set();     // copies you answered or hid on this page
+let HOLD_NEW = 0;
+function holdKey() {
+  return JSON.stringify(Object.keys(state).filter(k => (/^[fs][A-Z]/.test(k) || k === 'fq') && k !== 'fCols' && (state[k] == null || typeof state[k] !== 'object')).sort().map(k => [k, state[k]]));
+}
+function holdRows(rows, draw) {
+  const key = holdKey(), z = state.fz;
+  HOLD_NEW = 0;
+  if (!z || z.key !== key || !draw.keep) {
+    state.fz = { key, ids: rows.map(c => c.id), seen: new Set(rows.map(c => c.id)) };
+    return rows;
+  }
+  const rank = new Map(z.ids.map((id, i) => [id, i]));
+  const out = [];
+  let last = -1, n = 0;
+  for (const c of rows) {
+    if (!z.seen.has(c.id)) { n++; continue; }          // came in after you opened the list
+    const r = rank.has(c.id) ? rank.get(c.id) : last + 0.5;   // Undo puts a copy back where it was
+    if (rank.has(c.id)) last = r;
+    out.push([r, c]);
+  }
+  if (draw.auto) {
+    // A background change took a copy out of this view (a post check, Site gone, a spam re-check):
+    // it stays where it is until you click something.
+    const there = new Set(out.map(x => x[1].id)), byId = new Map(FCD.copies.map(c => [c.id, c]));
+    for (const id of z.ids) {
+      if (there.has(id) || USER_DONE.has(id) || PEND.has(id)) continue;
+      const c = byId.get(id);
+      if (c) out.push([rank.get(id), c]);
+    }
+  }
+  out.sort((a, b) => a[0] - b[0]);
+  HOLD_NEW = n;
+  const res = out.map(x => x[1]);
+  z.ids = res.map(c => c.id);
+  return res;
+}
 V.found = async () => {
+  const draw = state.draw || {};   // set just before this page is drawn: was it a click, or a background redraw?
   const me = RENDER_N;      // a newer redraw started meanwhile: this one is thrown away, so it must not change LIST
   await loadFC();
   fillCountriesSoon();
@@ -782,7 +826,8 @@ V.found = async () => {
   const sorters = { act: (a, b) => actScore(b) - actScore(a), pct: (a, b) => (b.pct || 0) - (a.pct || 0), risk: (a, b) => ({ sus: 2, watch: 1, ok: 0 }[b.risk.level] - { sus: 2, watch: 1, ok: 0 }[a.risk.level]), newest: (a, b) => (b.firstSeen || '').localeCompare(a.firstSeen || ''), fol: (a, b) => (folOf(b) ?? -1) - (folOf(a) ?? -1) || actScore(b) - actScore(a) };
   // 5d (Ben): copies on a site whose company is "Not a viable entity" go to the bottom.
   const low = c => (typeof ppEntLow === 'function' && ppEntLow(c) ? 1 : 0), srt = sorters[state.fSort] || sorters.act;
-  const rows = all.filter(c => passMain(c) && passStatus(c)).sort((a, b) => low(a) - low(b) || srt(a, b));
+  let rows = all.filter(c => passMain(c) && passStatus(c)).sort((a, b) => low(a) - low(b) || srt(a, b));
+  rows = holdRows(rows, draw);
   const main = all.filter(passMain);
   const cnt = f => main.filter(c => passStatus(c, f)).length;
   const groups = [];
@@ -876,6 +921,7 @@ V.found = async () => {
     }
     body += '</div>';
   }
+  if (HOLD_NEW) body += `<div class="holdbar" role="status"><span>${plural(HOLD_NEW, 'new copy', 'new copies')} came in</span><button class="btn sm primary" data-act="holdshow">Show ${HOLD_NEW === 1 ? 'it' : 'them'}</button></div>`;
   if (rows.length > shown) body += `<div class="more-row"><button class="btn" data-act="fmore">Show ${Math.min(250, rows.length - shown)} more (${rows.length - shown} not shown)</button></div>`;
   const active = [['fClient', state.fClient], ['fUse', state.fUse === 'Any' ? 'Any' : FC.USE[state.fUse][0]], ['fRisk', state.fRisk === 'Any' ? 'Any' : RISK[state.fRisk][0]], ['fCredit', state.fCredit === 'Any' ? 'Any' : CREDIT[state.fCredit]],
     ['fYear', state.fYear === 'Any' ? 'Any' : 'Year ' + state.fYear], ['fQuarter', state.fQuarter === 'Any' ? 'Any' : 'Quarter ' + state.fQuarter]].filter(([, v]) => v !== 'Any');
@@ -1104,13 +1150,13 @@ function dropRows(ids) {
   const byId = new Map(FCD.copies.map(c => [c.id, c]));
   for (const r of view.querySelectorAll('.frow[data-act="openrow"]')) {
     const c = byId.get(r.dataset.v);
-    if (c && (!ids || ids.has(c.id)) && !(visible(c) && passMain(c) && passStatus(c))) r.remove();
+    if (c && (!ids || ids.has(c.id)) && !(visible(c) && passMain(c) && passStatus(c))) { USER_DONE.add(c.id); r.remove(); }
   }
 }
 function markNow(ids, status) {
   if (status === 'skip') return;
   const set = new Set(ids);
-  for (const id of ids) PEND.set(id, status);
+  for (const id of ids) { PEND.set(id, status); USER_DONE.add(id); }
   if (FCD) for (const c of FCD.copies) if (set.has(c.id)) c.status = status;
   dropRows(set);
 }
@@ -1185,6 +1231,7 @@ async function undoLast() {
   await inTurn(() => h.undo());
   dropFC();
   if (h.open) state.open = h.open;
+  state.rvHold = '';
   toast('Undone: ' + h.label + '. It\'s back the way it was.');
   render(true);
 }
@@ -1380,6 +1427,7 @@ Object.assign(ACTS, {
   },
   gtoggle: v => { const i = state.exp.indexOf(v); if (i >= 0) state.exp.splice(i, 1); else state.exp.push(v); render(true); },
   fmore: () => { state.more += 250; render(true); },
+  holdshow: () => { state.fz = null; render(true); },
   ffilter: v => { state.fFilter = v; state.more = 250; if (route() !== 'found') location.hash = 'found'; else render(true); },
   qshop: () => { state.fShop = true; state.fFilter = 'All'; render(true); },
   qrepeat: () => { state.fRepeat = true; state.fFilter = 'New'; render(true); },
@@ -1585,14 +1633,14 @@ Object.assign(ACTS, {
     if (!c) return;
     const p = postCheck(c); render(true);
     await p.catch(() => {});
-    if (state.open === c.id) render(true);
+    if (state.open === c.id) renderAuto();
   },
   readpage: async () => {
     const c = FCD.copies.find(x => x.id === state.open);
     if (!c) return;
     const p = readTheirPage(c, true); render(true);
     await p.catch(() => {});
-    if (state.open === c.id) render(true);
+    if (state.open === c.id) renderAuto();
   },
   legalfix: async v => {
     if (v === 'capture') return ACTS.capturecopy();
@@ -1738,9 +1786,15 @@ V.review = async () => {
       <div class="row"><span class="tag copy">${plural(g.xs.length, 'new copy', 'new copies')}</span><button class="btn sm" style="margin-left:auto" data-act="rvall" data-v="${esc(g.xs.map(x => x.id).join('\n'))}">Mark all stolen</button></div></section>`).join('');
     return `${hd}${tabs}<div class="grid g2">${cards || '<p class="muted">Nothing waiting for you.</p>'}</div>`;
   }
-  if (!Q.length) return `${hd}${tabs}<section class="card pad" style="text-align:center;padding:48px 22px;display:flex;flex-direction:column;align-items:center;gap:12px"><span class="tag ok" style="font-size:14px;padding:6px 14px">${ic('check', 16, 3)} All new copies reviewed</span><h2>Nothing left to review${state.rvKind === 'all' ? '' : ' in ' + (state.rvKind === 'web' ? 'Websites' : 'Social media')}</h2>${state.rvKind !== 'all' && kindN.all ? `<p class="muted" style="margin:0">${plural(kindN.all, 'new copy', 'new copies')} still waiting in ${state.rvKind === 'web' ? 'Social media' : 'Websites'}. <button class="btn sm" data-act="rvkind" data-v="all">Show all</button></p>` : ''}<p class="muted" style="margin:0;max-width:52ch">The ones you marked as stolen are checked every week to see they are still online. Save their evidence reports from All copies found.</p><div class="row" style="justify-content:center">${HIST.length ? `<button class="btn" data-act="undo">↶ Undo: ${esc(HIST[HIST.length - 1].label)}</button>` : ''}<a class="btn primary" href="#found">All copies found</a></div></section>`;
+  // 4.60: the copy on screen stays on screen until you answer it, skip it or switch. New copies
+  // that sort ahead of it wait their turn, and a copy that a background check changed while you
+  // looked stays, with a note.
+  const held = state.rvHold ? FCD.copies.find(x => x.id === state.rvHold && rvKindOk(x, state.rvKind)) : null;
+  const heldOut = held && !Q.includes(held) && !USER_DONE.has(held.id) && !PEND.has(held.id) ? held : null;
+  if (!Q.length && !heldOut) return `${hd}${tabs}<section class="card pad" style="text-align:center;padding:48px 22px;display:flex;flex-direction:column;align-items:center;gap:12px"><span class="tag ok" style="font-size:14px;padding:6px 14px">${ic('check', 16, 3)} All new copies reviewed</span><h2>Nothing left to review${state.rvKind === 'all' ? '' : ' in ' + (state.rvKind === 'web' ? 'Websites' : 'Social media')}</h2>${state.rvKind !== 'all' && kindN.all ? `<p class="muted" style="margin:0">${plural(kindN.all, 'new copy', 'new copies')} still waiting in ${state.rvKind === 'web' ? 'Social media' : 'Websites'}. <button class="btn sm" data-act="rvkind" data-v="all">Show all</button></p>` : ''}<p class="muted" style="margin:0;max-width:52ch">The ones you marked as stolen are checked every week to see they are still online. Save their evidence reports from All copies found.</p><div class="row" style="justify-content:center">${HIST.length ? `<button class="btn" data-act="undo">↶ Undo: ${esc(HIST[HIST.length - 1].label)}</button>` : ''}<a class="btn primary" href="#found">All copies found</a></div></section>`;
   state.qi = Math.min(state.qi, Q.length - 1);
-  const c = Q[0];
+  const c = heldOut || (held && Q.includes(held) ? held : Q[0]);
+  state.rvHold = c.id;
   const p = FCD.photos.get(c.photo);
   const o = FCD.ownerOf.get(c.site);
   const id = p && p.hash ? await PP_EVIDENCE.matchId(p.hash, c.url) : '';
@@ -1754,7 +1808,7 @@ V.review = async () => {
   const at = state.rvStart - Q.length + 1;
   return `${hd}
   <div class="rvtop">${tabs}
-    <div class="rvprog" aria-label="Review progress"><div class="bar"><i style="width:${Math.max(2, (at - 1) / state.rvStart * 100)}%"></i></div><b class="num">${at.toLocaleString()} of ${state.rvStart.toLocaleString()}</b>${c.skipped ? '<span class="faint">skipped before</span>' : ''}</div>
+    <div class="rvprog" aria-label="Review progress"><div class="bar"><i style="width:${Math.max(2, (at - 1) / state.rvStart * 100)}%"></i></div><b class="num">${at.toLocaleString()} of ${state.rvStart.toLocaleString()}</b>${c.skipped ? '<span class="faint">skipped before</span>' : ''}${heldOut ? `<span class="tag warn" title="A check that ran in the background changed this copy while you were looking at it. It stays here until you move on.">Now ${heldOut.status === 'new' ? 'hidden by a filter' : esc((STATUS[heldOut.status] || ['changed'])[0])}</span><button class="btn sm" data-act="rvnext">Next copy</button>` : ''}</div>
     <button class="btn" data-act="undo"${HIST.length ? ` title="Undo: ${esc(HIST[HIST.length - 1].label)}"` : ' disabled data-why="Nothing to undo yet. After you answer a copy, Undo puts it back."'}>${ic('undo', 16)} Undo <span class="kbd">U</span></button>
     <div class="seg" role="radiogroup" aria-label="View">${[['side', 'Side by side'], ['swipe', 'Swipe']].map(([k, l]) => `<button role="radio" aria-checked="${state.cmpMode === k}" class="${state.cmpMode === k ? 'on' : ''}" data-act="cmode" data-v="${k}">${l}</button>`).join('')}</div></div>
   <div class="split rv">
@@ -1801,7 +1855,8 @@ V.review.after = () => {
 };
 Object.assign(ACTS, {
   rvtab: v => { state.rvTab = v; render(true); },
-  rvkind: v => { setRvKind(v); render(true); },
+  rvkind: v => { setRvKind(v); state.rvHold = ''; render(true); },
+  rvnext: () => { state.rvHold = ''; render(true); },
   cmode: v => { state.cmpMode = v; render(true); },
   rverdict: async v => {
     const c = FCD && FCD.copies.find(x => x.id === state.rvCurrent);
@@ -1810,6 +1865,7 @@ Object.assign(ACTS, {
     try {
       if (v === 'stolen') { v = await ruleGate(c); if (!v) return; }
       await answerCopies([c.id], v, c.site + ' ' + VERB[v]);
+      if (state.rvHold === c.id) state.rvHold = '';
       toastUndo(c.site + ' ' + VERB[v] + '.');
       await render(true);
     } finally { answering = false; }
@@ -1817,14 +1873,14 @@ Object.assign(ACTS, {
   rvall: async v => {
     const ids = v.split('\n').filter(Boolean);
     await answerCopies(ids, 'stolen', plural(ids.length, 'copy', 'copies') + ' marked stolen');
-    toastUndo(plural(ids.length, 'copy', 'copies') + ' marked stolen.'); render(true);
+    state.rvHold = ''; toastUndo(plural(ids.length, 'copy', 'copies') + ' marked stolen.'); render(true);
   },
   stopphoto: async v => { closeRowMenu(); await stopPhoto(v || state.open); },
   rvcompare: () => { state.open = state.rvCurrent; return ACTS.compare(); },
   // The same Capture and Approve site as the details panel, for the copy on screen here.
   rvcapture: async () => { state.open = state.rvCurrent; try { await ACTS.capturecopy(); } finally { state.open = ''; } },
   // 4.7: hide a site or account from One at a time; the next copy shows, Undo brings it back.
-  rvhide: async v => { await hideSite(v); await render(true); },
+  rvhide: async v => { await hideSite(v); state.rvHold = ''; await render(true); },
   rvapprove: async v => { state.open = state.rvCurrent; try { await ACTS.approvesite(v); } finally { state.open = ''; } },
 });
 

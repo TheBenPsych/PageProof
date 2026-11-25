@@ -404,7 +404,7 @@ function socRedrawSoon() {
   clearTimeout(socRedrawT);
   socRedrawT = setTimeout(() => {
     if (!['found', 'review'].includes(route()) || document.querySelector('#rowMenu, dialog[open], details.ddw[open]') || document.activeElement && document.activeElement.matches('input,select,textarea')) return socRedrawSoon();
-    FCD_STALE = true; render(true);
+    FCD_STALE = true; renderAuto();
   }, 2500);
 }
 // Step D: open the post in your own browser (signed in, like a Capture sees it) in a quiet pinned
