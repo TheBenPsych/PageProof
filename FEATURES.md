@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.47.5** (24 Nov 2026).
+Last updated: version **4.48.0** (24 Nov 2026).
 
 ---
 
@@ -95,6 +95,7 @@ Last updated: version **4.47.5** (24 Nov 2026).
 - **Camera dates.** A photo whose folders give no year gets its date from the camera (EXIF). (4.42)
 - **New client folders.** Once a week PageProof lists the folder names in Google Drive (names only) and Home shows new folders that aren't ticked. (4.42)
 - **The match in the Evidence report.** Page 2 shows your client's photo with their copy laid over it where it fits, the matching details marked and the shared area outlined, with one plain sentence: "N details line up across P% of the shared area." (4.47)
+- **Search pages filled out.** A square per photo, time left, per-site cards, copies as pictures, What's happening; All searches by day with weekly numbers. (4.48)
 
 ## 5. Review the copies found
 
@@ -284,3 +285,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.47.3 | 24 Nov | Fix: Untick folders inside a client; "No longer monitoring" searched again |
 | 4.47.4 | 24 Nov | Fix: Photo counts update while folders are read |
 | 4.47.5 | 24 Nov | Fix: Search a Skipped folder anyway |
+| 4.48 | 24 Nov | Search pages filled out |
