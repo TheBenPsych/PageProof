@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.56.1** (25 Nov 2026).
+Last updated: version **4.57.0** (25 Nov 2026).
 
 ---
 
@@ -192,6 +192,7 @@ Last updated: version **4.56.1** (25 Nov 2026).
 - **Look at these first.** Copies that are the same photo on a site stolen from before, a shop, or with the credit removed get their own red line on Home. (4.45)
 - **Since you were last here.** After 4 hours away (or the first visit of the day) Home lists new copies, clients finished, search sites that rested and anything that stopped. (4.45)
 - **Clients falling behind.** A ★ priority client not searched for 10 days, switched off, or with its folder missing, and a goal date that can't be met, show on Home. (4.45)
+- **One first-time setup.** A picture of how the photo folders should look, Google Drive and client folders inside setup, a check of each client folder (photos, year folders, registration numbers), and a "What this computer can do" step comparing Light, Normal and Strong. Skip photos for now if you only capture pages. (4.57)
 
 ## 9. Safety nets
 
@@ -332,3 +333,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.56 | 25 Nov | One at a time can show Websites only or Social media only |
 | 4.56.1 | 25 Nov | Fix: Country filled in for .com sites from the page's address and language |
 | 4.56.1 | 25 Nov | Small fixes |
+| 4.57 | 25 Nov | One first-time setup with folder guide, folder check and computer limits |
