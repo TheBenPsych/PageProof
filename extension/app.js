@@ -731,6 +731,7 @@ V.computer.after = () => {
 // What's new, help
 // =====================================================================================
 const NEWS = [
+  ['One first-time setup, with your photo folders and computer explained', 'First-time setup now does everything in one go (9 steps). It shows a picture of how the client photo folders should look (client, Registered images, year, quarter with the VA or 1- number, and what gets skipped), then connects Google Drive and lets you tick your clients, then checks each client folder: photos there, year folders, and a registration number for every quarter. A new "What this computer can do" step shows how many photo checks and search tabs this computer runs at once, the fastest pace, about how long today\'s 50 take, and Light / Normal / Strong side by side. Only capturing pages? Press Skip photos for now. Connect your photos step 4 has the same folder check.'],
   ['One at a time: Websites or Social media', 'One at a time has a new switch at the top: All, Websites or Social media, each with how many are waiting. PageProof remembers your choice, and the One at a time button on the Websites or Social media tab of Copies found starts on that kind.'],
   ['Update file works even when the download page hiccups', 'The Update PageProof file now tries the download 3 times and, if the Latest build page is missing, takes the newest numbered version instead. The release build also retries when GitHub has a hiccup, so the download page is never left empty.'],
   ['Stop searching a photo while you review', 'Found a photo you don\'t want searched any more? While looking at one of its copies, click "Stop searching this photo" (in the Summary tab, the ⋯ menu, or One at a time), tick "I understand" and confirm. Keep searching and Today\'s 50 skip it from now on, and its copies found so far stay. Press U to undo, or turn it back on with "Search again" on the client\'s photos page.'],
@@ -965,29 +966,76 @@ V.help = async () => `${head('Help', 'Help and tutorial', 'Step-by-step guides f
 // =====================================================================================
 // First-time setup (opens by itself after installing)
 // =====================================================================================
+// 4.56 (Ben's picks): one setup for everything. The photo folder steps of Connect your photos
+// (fc-photos.js) are part of it now, after a picture of how the folders should look, and the
+// computer step says plainly what this computer can do. A step can carry:
+//   .wide   a wider card          .pick / .check   the folder-ticking / folder-check step
+//   .next   runs before moving on (false = stay)   .nextLabel   the main button's words
+//   .photos one of the photo steps ("Skip photos for now" jumps to the last step)
 const SETUP = [
-  async () => `<div class="eyebrow" style="margin:0">Step 1 of 5</div><h2 style="font-size:24px">Welcome to PageProof</h2>
-    <p class="muted" style="margin:0">Five quick steps. You can change everything later in Settings.</p>
+  async () => `<h2 style="font-size:24px">Welcome to PageProof</h2>
+    <p class="muted" style="margin:0">A few quick steps. You can change everything later in Settings.</p>
     <label class="field" for="suName">Your name<input id="suName" placeholder="For example, Ben" value="${esc(await getName())}"></label>
     <p class="faint" style="margin:0;font-size:13px">It goes on every evidence pack and report as "Collected by".</p>`,
-  async () => { const s = await RS_DOCS.state(); return `<div class="eyebrow" style="margin:0">Step 2 of 5</div><h2 style="font-size:24px">Where should PageProof keep its lists?</h2>
+  async () => { const s = await RS_DOCS.state(); return `<h2 style="font-size:24px">Where should PageProof keep its lists?</h2>
     <p class="muted" style="margin:0">Your hidden sites, copies found and settings are kept as small text files in Documents › PageProof, so they survive updates and reinstalls.</p>
     ${s === 'granted' ? `<span class="tag ok" style="align-self:flex-start">${ic('check', 13, 3)} Folder ready</span>${(state.backup = await FC.readBackup()) ? `<div class="banner info" style="padding:10px 12px"><span style="flex:1;font-size:14px"><b>Found your PageProof settings from ${fmtDate(state.backup.saved)}</b><br><span class="muted">Your name, clients, flags, countries shown and copies found. Bring them back?</span></span><button class="btn primary" data-act="surestore">Bring them back</button></div>` : ''}` : s === 'prompt' ? `<button class="btn primary" style="align-self:flex-start" data-act="docsallow">Allow PageProof to use it</button>` : `<button class="btn primary" style="align-self:flex-start" data-act="docschoose">Pick Documents</button><span class="faint" style="font-size:13px">In the window that opens, click Documents, then Select Folder. If Chrome says it can't use Documents, make a new folder called PageProof inside it and pick that.</span>`}`; },
-  async () => { const h = await ppHardware(), L = h.limits; return `<div class="eyebrow" style="margin:0">Step 4 of 5</div><h2 style="font-size:24px">Checking your computer</h2><p class="muted" style="margin:0">So PageProof never slows it down. Nothing to do here.</p>
-    <div class="ofacts"><div class="ofact"><span>Processor</span><b>${h.cores} cores</b></div><div class="ofact"><span>Memory</span><b>${h.memGB} GB</b></div><div class="ofact"><span>System</span><b>${esc(h.system)}</b></div></div>
-    <div class="banner info" style="padding:10px 12px"><span class="tag ${h.level === 'Light' ? 'warn' : 'ok'}">${h.level}</span><span style="flex:1;font-size:14px">Up to <b>${L.checks}</b> photo ${L.checks > 1 ? 'checks' : 'check'} and <b>${L.tabs}</b> search ${L.tabs > 1 ? 'tabs' : 'tab'} at once. It pauses by itself when the computer is busy.</span></div>`; },
+  Object.assign(async () => {
+    const h = await ppHardware(), L = h.limits, me = h.level;
+    const card = lv => { const x = ppHwLimits(lv, 8, 16), y = lv === me ? L : x;
+      return `<div class="hwlv${lv === me ? ' me' : ''}"><div class="row" style="gap:6px"><b style="font-size:16px">${lv}</b>${lv === me ? '<span class="tag ok">This computer</span>' : ''}</div>
+        <span class="faint" style="font-size:12.5px">${lv === 'Light' ? 'Under 4 cores or under 4 GB' : lv === 'Normal' ? '4+ cores and 4+ GB' : '8+ cores and 8+ GB'}</span>
+        <dl><dt>Photo checks</dt><dd>${y.checks}</dd><dt>Search tabs</dt><dd>${y.tabs}</dd><dt>Fastest pace</dt><dd>${y.pace}</dd><dt>Today's 50</dt><dd>${y.fifty.replace('about ', '~')}</dd></dl></div>`; };
+    return `<h2 style="font-size:24px">What this computer can do</h2>
+    <p class="muted" style="margin:0">PageProof checked this computer so searching never slows down your other work. Nothing to do here.</p>
+    <div class="ofacts"><div class="ofact"><span>Processor</span><b>${h.cores} cores</b></div><div class="ofact"><span>Memory</span><b>${h.memGB} GB</b></div>${h.freeGB !== null ? `<div class="ofact"><span>Free right now</span><b>${h.freeGB} GB</b></div>` : `<div class="ofact"><span>System</span><b>${esc(h.system)}</b></div>`}<div class="ofact"><span>Level</span><b style="color:var(--accent)">${me}${h.choice !== 'auto' ? ' (picked by hand)' : ''}</b></div></div>
+    <b style="margin-top:4px">What that means</b>
+    <div class="hwlim">
+      <div><b>${L.checks}</b><span>photo ${L.checks > 1 ? 'checks' : 'check'} at once</span></div>
+      <div><b>${L.tabs}</b><span>search ${L.tabs > 1 ? 'tabs' : 'tab'} at once</span></div>
+      <div><b>${L.pace}</b><span>fastest search pace</span></div>
+      <div><b>${L.fifty.replace('about ', '~')}</b><span>for today's 50 photos</span></div></div>
+    <span class="muted" style="font-size:13.5px">PageProof uses ${L.ram} of memory while searching. One processor core is always left free for you.</span>
+    <b style="margin-top:4px">How it compares</b>
+    <div class="hwlvs">${['Light', 'Normal', 'Strong'].map(card).join('')}</div>
+    <div class="banner info" style="padding:10px 12px;font-size:14px"><span><b>It slows down by itself</b> when the memory is almost full or a laptop battery is under 30%. <b>It never</b> searches Google, Yandex or Bing faster than is safe, on any computer, so you don't get robot checks.</span></div>
+    <label class="field" style="max-width:360px">Change the level by hand (most people leave this)<select data-act="suhw">${[['auto', `Let PageProof decide (${h.auto})`], ['Light', 'Light: older or busy computer'], ['Normal', 'Normal'], ['Strong', 'Strong: fast computer']].map(([k, l]) => `<option value="${k}" ${h.choice === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`;
+  }, { wide: true }),
+  Object.assign(async () => `<h2 style="font-size:24px">How your photo folders should look</h2>
+    <p class="muted" style="margin:0">PageProof works out each client, the year and the registration number from the folder names in the shared Google Drive. Set them up like this and it all works by itself. Other layouts still work; this is just the easiest.</p>
+    ${ppFolderGuide()}`, { wide: true, photos: true, nextLabel: 'Got it' }),
+  Object.assign(async () => `<h2 style="font-size:24px">Google Drive for desktop</h2>
+    ${(await csBody(0, () => '')).replace(/<h2>1\. Install Google Drive for desktop<\/h2>/, '<b>1. Install it</b>')}
+    ${(await csBody(1, () => '')).replace(/<h2>2\. Set Drive to stream files<\/h2>/, '<b style="margin-top:6px">2. Set it to stream files</b>')}`, { wide: true, photos: true }),
+  Object.assign(async () => (await csBody(2, () => '')).replace(/<h2>3\. Pick your clients<\/h2>/, '<h2 style="font-size:24px">Pick your clients</h2>'),
+    { wide: true, photos: true, pick: true, next: async () => {
+      if (!(state.csPick || new Set()).size && !(await FC.extraHandles()).length) { toast('Tick at least one client folder, or press Skip photos for now.'); return false; }
+      return ACTS.cssave('quiet');
+    } }),
+  Object.assign(async () => (await csBody(3, () => '')).replace(/<h2>4\. Check your folders and start<\/h2>/, '<h2 style="font-size:24px">Checking your folders</h2>'),
+    { wide: true, photos: true, check: true, nextLabel: 'Start searching', next: async () => {
+      if (!(state.csClients || []).some(c => c.searching)) { toast('No clients ticked. Go back, or press Skip photos for now.'); return false; }
+      await ACTS.csstart('setup'); return true;
+    } }),
   async () => `<div style="text-align:center;display:flex;flex-direction:column;gap:10px;align-items:center"><span class="tag ok" style="font-size:14px;padding:4px 12px">✓ You're set</span><h2 style="font-size:24px">Two things to keep it handy</h2></div>
     <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">
       <div class="card pad" style="display:flex;flex-direction:column;gap:6px"><b>1. Pin the icon</b><span class="muted" style="font-size:14px">Click the jigsaw piece next to the address bar, then the pin beside PageProof.</span></div>
       <div class="card pad" style="display:flex;flex-direction:column;gap:6px"><b>2. Open the side panel</b><span class="muted" style="font-size:14px">Click the PageProof icon, then "Keep it open beside this page".</span></div>
-    </div>`
+    </div>
+    ${(await FC.drive()).done ? '' : '<p class="faint" style="margin:0;font-size:13px;text-align:center">Photos not connected yet. Home has a Connect them button whenever you\'re ready.</p>'}`
 ];
-V.setup = async () => `${head('Welcome', 'First-time setup', '')}
-  <div class="desk"><section class="card pad wiz" style="display:flex;flex-direction:column;gap:14px;padding:28px">
+V.setup = async () => {
+  const step = SETUP[state.setup], n = SETUP.length, last = state.setup === n - 1;
+  const body = await step();
+  return `${head('Welcome', 'First-time setup', '')}
+  <div class="desk"><section class="card pad wiz${step.wide ? ' wide' : ''}" style="display:flex;flex-direction:column;gap:14px;padding:28px">
     <div class="wdots" aria-hidden="true">${SETUP.map((_, i) => `<i class="${i <= state.setup ? 'on' : ''}"></i>`).join('')}</div>
-    ${await SETUP[state.setup]()}
-    <div class="row" style="gap:8px;margin-top:6px">${state.setup > 0 ? '<button class="btn" data-act="setup" data-v="-1">Back</button>' : ''}<button class="btn primary" style="margin-left:auto" data-act="setup" data-v="${state.setup < SETUP.length - 1 ? '1' : 'done'}">${state.setup === 0 ? 'Start' : state.setup < SETUP.length - 1 ? 'Next' : 'Open PageProof'}</button></div>
+    ${last ? '' : `<div class="eyebrow" style="margin:0">Step ${state.setup + 1} of ${n}${step.photos ? ' · Your clients\' photos' : ''}</div>`}
+    ${body}
+    <div class="row" style="gap:8px;margin-top:6px">${state.setup > 0 ? '<button class="btn" data-act="setup" data-v="-1">Back</button>' : ''}${step.photos ? '<button class="btn ghost" data-act="setup" data-v="skipphotos" title="Only capturing pages? You can connect the photos later from Home.">Skip photos for now</button>' : ''}<button class="btn primary" style="margin-left:auto" data-act="setup" data-v="${last ? 'done' : '1'}">${state.setup === 0 ? 'Start' : last ? 'Open PageProof' : step.nextLabel || 'Next'}</button></div>
   </section></div>`;
+};
+V.setup.noAutoRedraw = true;
 
 // =====================================================================================
 // The tour
@@ -1106,10 +1154,21 @@ async function act(a, v, el) {
   }
   else if (a === 'rcdone') { await api.storage.local.set({ ppReconnectVer: VERSION }); state.rc = null; location.hash = 'home'; }
   else if (a === 'newsseen') { await api.storage.local.set({ ppSeenVersion: VERSION }); location.hash = 'home'; }
+  else if (a === 'suhw') { await api.storage.local.set({ ppHw: { choice: el.value } }); toast('Speed level saved'); render(true); }
   else if (a === 'setup') {
     const n = document.getElementById('suName');
     if (n) await setName(n.value.trim());
     if (v === 'done') { await api.storage.local.set({ ppSetupDone: true, ppSeenVersion: VERSION, ppReconnectVer: VERSION }); state.setup = 0; location.hash = 'home'; if (!(await api.storage.local.get('ppTourDone')).ppTourDone) setTimeout(() => act('tour'), 300); return; }
+    if (v === 'skipphotos') { state.setup = SETUP.length - 1; return render(true); }
+    const step = SETUP[state.setup];
+    if (v === '1' && step.next) {
+      if (el) el.disabled = true;
+      let go = false;
+      try { go = await step.next(); } finally { if (el) el.disabled = false; }
+      if (!go) return render(true);
+    }
+    // Going back onto the folder check: check again (the ticks may have changed).
+    if (v === '-1' && (SETUP[state.setup - 1] || {}).pick) state.csCheck = null;
     state.setup = Math.max(0, Math.min(SETUP.length - 1, state.setup + Number(v)));
     render(true);
   }

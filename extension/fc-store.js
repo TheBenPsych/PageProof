@@ -1517,6 +1517,82 @@ const FC = (() => {
     qa: 'Qatar', kw: 'Kuwait', bh: 'Bahrain', om: 'Oman', jo: 'Jordan', lb: 'Lebanon', iq: 'Iraq', sy: 'Syria', ye: 'Yemen', af: 'Afghanistan', np: 'Nepal', lk: 'Sri Lanka', mm: 'Myanmar', kh: 'Cambodia', mo: 'Macau', kp: 'North Korea' };
   const baseOf = site => String(site || '').split('.').slice(/\.(co|com|net|org|gov|edu|ac|ltd|plc|me|or|ne|go)\.[a-z]{2}$/.test(site) ? -3 : -2).join('.');
   function countryOf(site) { const end = String(site || '').toLowerCase().replace(/:\d+$/, '').replace(/\.$/, '').split('.').pop(); return COUNTRY[end] || ''; }
+  // 4.56.1: most copies are on .com / .net / odd endings that don't say a country, so Country said
+  // "Not known" for nearly everything. The site's own page usually says it: its address in the
+  // site's data, its locale (og:locale "tr_TR", <html lang="bg-BG">), or a language spoken in just
+  // one country (Bulgarian, Turkish ...). English, Spanish, French, German, Portuguese, Arabic,
+  // Russian, Chinese, Dutch and other many-country languages never count on their own.
+  const LANG_COUNTRY = { bg: 'bg', tr: 'tr', el: 'gr', cs: 'cz', sk: 'sk', pl: 'pl', hu: 'hu', ro: 'ro', uk: 'ua', it: 'it', ja: 'jp', ko: 'kr', vi: 'vn', th: 'th', id: 'id', ms: 'my',
+    he: 'il', iw: 'il', fa: 'ir', hr: 'hr', sr: 'rs', sl: 'si', lt: 'lt', lv: 'lv', et: 'ee', fi: 'fi', sv: 'se', da: 'dk', no: 'no', nb: 'no', nn: 'no', is: 'is', ka: 'ge', hy: 'am',
+    az: 'az', kk: 'kz', uz: 'uz', mn: 'mn', bn: 'bd', ur: 'pk', hi: 'in', mr: 'in', te: 'in', gu: 'in', kn: 'in', ml: 'in', tl: 'ph', fil: 'ph', sq: 'al', mk: 'mk', bs: 'ba', be: 'by', km: 'kh', my: 'mm', ne: 'np', si: 'lk', am: 'et', sw: 'ke' };
+  const NAME_CODE = {}; for (const [k, v] of Object.entries(COUNTRY)) if (!NAME_CODE[v.toLowerCase()]) NAME_CODE[v.toLowerCase()] = k;
+  Object.assign(NAME_CODE, { usa: 'us', 'united states of america': 'us', uk: 'uk', 'great britain': 'uk', england: 'uk', 'türkiye': 'tr', turkiye: 'tr', 'czech republic': 'cz', 'republic of korea': 'kr', korea: 'kr', 'россия': 'ru', 'россия ': 'ru', 'българия': 'bg' });
+  function codeName(code) { code = String(code || '').toLowerCase(); return COUNTRY[code === 'gb' ? 'uk' : code] || ''; }
+  // Reads one page (text only, nothing runs). Returns { country, how } or null.
+  function countryFromDoc(doc) {
+    if (!doc) return null;
+    for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) {
+      let hit = '';
+      const walk = o => {
+        if (hit || !o || typeof o !== 'object') return;
+        if (Array.isArray(o)) return o.forEach(walk);
+        const a = o.address;
+        // Only the site's own organisation counts (not a shop or place the article is about).
+        if (a && typeof a === 'object' && /Organization|Corporation/.test([].concat(o['@type'] || []).join(' '))) { const v = a.addressCountry && (a.addressCountry.name || a.addressCountry); if (typeof v === 'string') hit = v.length === 2 ? codeName(v) : codeName(NAME_CODE[v.trim().toLowerCase()]); }
+        if (o.publisher) walk(o.publisher);
+        if (o['@graph']) walk(o['@graph']);
+      };
+      try { walk(JSON.parse(s.textContent)); } catch (e) { /* not valid */ }
+      if (hit) return { country: hit, how: 'the address in the site\'s own data' };
+    }
+    const og = doc.querySelector('meta[property="og:locale"]');
+    const tags = [og && og.getAttribute('content'), doc.documentElement && doc.documentElement.getAttribute('lang'), (doc.querySelector('meta[http-equiv="content-language" i]') || {}).content].filter(Boolean);
+    for (const t of tags) {
+      const m = /^([a-z]{2,3})[-_]([a-z]{2})$/i.exec(String(t).trim());
+      // en-US is WordPress's default, used by sites all over the world, so it doesn't say anything.
+      if (m && codeName(m[2]) && !(/^en$/i.test(m[1]) && /^us$/i.test(m[2]))) return { country: codeName(m[2]), how: 'the site\'s language setting (' + String(t).trim() + ')' };
+    }
+    for (const t of tags) {
+      const l = String(t).trim().toLowerCase().split(/[-_]/)[0];
+      if (LANG_COUNTRY[l]) return { country: codeName(LANG_COUNTRY[l]), how: 'the language of the site (' + l + ')' };
+    }
+    return null;
+  }
+  // Fills in the country for sites whose ending doesn't say it, reading the copy's page (or the
+  // home page). The answer is kept with the site's facts (cc: '' = looked, nothing found).
+  async function siteCountry(site, pageUrl) {
+    const old = await DB.get('sites', site);
+    if (old && old.cc !== undefined) return old.cc;
+    let res = null;
+    for (const url of [pageUrl, 'https://' + site + '/']) {
+      if (!url || !/^https?:/.test(url) || res) continue;
+      try {
+        const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 12000);
+        const r = await fetch(url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal });
+        clearTimeout(t);
+        if (!r.ok || !/html/i.test(r.headers.get('content-type') || 'html')) continue;
+        const html = (await r.text()).slice(0, 2e6);
+        res = countryFromDoc(new DOMParser().parseFromString(html.replace(/\son([a-z]+\s*=)/gi, ' data-pp-on$1').replace(/<script(?![^>]*ld\+json)[\s\S]*?<\/script>/gi, ''), 'text/html'));
+      } catch (e) { /* not reachable */ }
+    }
+    const f = (await DB.get('sites', site)) || { site, at: new Date().toISOString(), names: [], emails: [], phones: [], social: [], ids: [], pages: [], clues: [], partial: true };
+    f.cc = res ? res.country : ''; f.ccHow = res ? res.how : '';
+    await DB.put('sites', f);
+    return f.cc;
+  }
+  // A few sites at a time; returns how many got a country.
+  async function fillCountries(copies, max = 12) {
+    const seen = new Set(), todo = [];
+    for (const c of copies) {
+      if (c.status === 'removed' || seen.has(c.site) || countryOf(c.site) || useOf(c) === 'social') continue;
+      seen.add(c.site); todo.push(c);
+    }
+    const have = new Map((await DB.getMany('sites', todo.map(c => c.site))).filter(Boolean).map(f => [f.site, f]));
+    const list = todo.filter(c => !have.has(c.site) || have.get(c.site).cc === undefined).slice(0, max);
+    let n = 0, i = 0;
+    await Promise.all([0, 1, 2, 3].map(async () => { while (i < list.length) { const c = list[i++]; if (await siteCountry(c.site, c.url).catch(() => '')) n++; } }));
+    return { found: n, left: Math.max(0, todo.filter(c => !have.has(c.site) || have.get(c.site).cc === undefined).length - list.length) };
+  }
   function useOf(c) {
     const site = c.site || '';
     let ih = ''; try { ih = c.img && /^https?:/.test(c.img) ? new URL(c.img).hostname.replace(/^www\./, '') : ''; } catch (e) { /* none */ }
@@ -2197,7 +2273,7 @@ const FC = (() => {
     for (const [g, list] of Object.entries(GROUPS)) for (const d of list) if (site === d || site.endsWith('.' + d)) return { name: g, how: site === d ? 'On PageProof\'s list of big media groups' : 'A sub-site of ' + d };
     return null;
   }
-  async function facts(site) { return DB.get('sites', site); }
+  async function facts(site) { const f = await DB.get('sites', site); return f && !f.partial ? f : null; }
   const clean = s => String(s || '').replace(/\s+/g, ' ').trim();
   // Read the site: home page, the copy's page, and its About / Contact / Privacy pages.
   // Everything is read as text with DOMParser (nothing from the site is run).
@@ -2283,7 +2359,8 @@ const FC = (() => {
     const home = (globalThis.PP_LOOKUP_HOME || (s2 => 'https://' + s2))(site) + '/';     // tests point it at a local server
     const hp = await read(home, 'Home page');
     const doc = scrape(hp);
-    if (pageUrl && /^https?:/.test(pageUrl)) scrape(await read(pageUrl, 'The page with the copy'));
+    let lastPage = null;
+    if (pageUrl && /^https?:/.test(pageUrl)) lastPage = scrape(await read(pageUrl, 'The page with the copy'));
     // About, contact and privacy pages: the links the home page itself gives, else the usual names.
     const want = { about: /about|who-we-are|our-story|company/i, contact: /contact|impressum|imprint/i, privacy: /privacy/i, terms: /terms|conditions|\btos\b|legal/i };
     const LABEL = { about: 'About page', contact: 'Contact page', privacy: 'Privacy policy', terms: 'Terms of service' };
@@ -2321,6 +2398,8 @@ const FC = (() => {
       }
     } catch (e) { /* no record */ }
     f.group = groupOf(site);
+    { const prev = await DB.get('sites', site); const g = countryFromDoc(doc) || (lastPage && countryFromDoc(lastPage));
+      if (g) { f.cc = g.country; f.ccHow = g.how; } else if (prev && prev.cc !== undefined) { f.cc = prev.cc; f.ccHow = prev.ccHow; } else f.cc = ''; }
     await DB.put('sites', f);
     return f;
   }
@@ -2550,6 +2629,6 @@ const FC = (() => {
   return { claimed, claimReset, SET_ASIDE, DB, meta, open, touch, pics, dropDotMatches, checkerRemove, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, inHours, quietOK, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, unpicked, forced, setPicked, pickInside, SCAN, applyPendingFlags, missingPicks, movedNote, followMoves, watchFolders, newFolders, newFoldersSeen, goalPlan, workMinutes, exifDate, heatShoot, coolShoot, burstSibling, wakeBurst, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setStopped, setClients, logWeek, week, weekKey, firstNotes, searchedOnce, dayLog, speed, ladder, LADDER, alikeFrames, mixYears, mixLine,
-    isPool, shownCountries, setShownCountries, SHOWN_START, ownerFor, pathOf, logReport, USE, useOf, riskOf, spamMarks, randomLabel, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
+    isPool, shownCountries, setShownCountries, SHOWN_START, ownerFor, pathOf, logReport, USE, useOf, riskOf, spamMarks, randomLabel, countryOf, COUNTRY, countryFromDoc, siteCountry, fillCountries, baseOf, groupOf, facts, lookup, owners,
     backupSoon, backupCopiesSoon, writeSettings, writeCopies, readBackup, restore, restoreCopies, settingsSnapshot, monthsOld, newness, yearOf, quarterOf, dayOf };
 })();

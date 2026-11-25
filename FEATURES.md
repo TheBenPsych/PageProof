@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.56.0** (25 Nov 2026).
+Last updated: version **4.57.0** (25 Nov 2026).
 
 ---
 
@@ -124,6 +124,7 @@ Last updated: version **4.56.0** (25 Nov 2026).
 - **One at a time** view for fast reviewing. (4.2, 4.3)
 - **Hide a site** (this account / this sub-site / whole domain), **Approve a site** for one client or all, hidden countries. (3.10 to 4.6.5)
 - **Countries: pick the ones to show.** Website copies show only from the countries you pick (United States and Puerto Rico to start); sites whose country isn't known always show. (4.27)
+- **Country for .com sites too.** When a site's ending doesn't say a country (.com, .net, .fit ...), PageProof reads the page for its address, its language setting (tr_TR, bg-BG) or a one-country language (Bulgarian, Turkish ...). English and other many-country languages never count on their own. The copy's Site tab says how it was worked out. (4.56.1)
 - **Before you mark Stolen:** rule check by kind of site, photo credit read from their page, signs it was on purpose, date first published, damages hint, and a Ready for legal checklist. (4.4)
 - **Site owners** page groups sites run by one company (footer name, shared analytics IDs). **Who's behind this site** helps with OpenCorporates, USPTO and Google lookups. (4.0)
 - **Stolen copies are protected:** never hidden by a bulk Remove or a site hide. (4.15)
@@ -191,6 +192,7 @@ Last updated: version **4.56.0** (25 Nov 2026).
 - **Look at these first.** Copies that are the same photo on a site stolen from before, a shop, or with the credit removed get their own red line on Home. (4.45)
 - **Since you were last here.** After 4 hours away (or the first visit of the day) Home lists new copies, clients finished, search sites that rested and anything that stopped. (4.45)
 - **Clients falling behind.** A ★ priority client not searched for 10 days, switched off, or with its folder missing, and a goal date that can't be met, show on Home. (4.45)
+- **One first-time setup.** A picture of how the photo folders should look, Google Drive and client folders inside setup, a check of each client folder (photos, year folders, registration numbers), and a "What this computer can do" step comparing Light, Normal and Strong. Skip photos for now if you only capture pages. (4.57)
 
 ## 9. Safety nets
 
@@ -329,3 +331,6 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.55 | 25 Nov | Stop searching a photo from Copies found |
 | 4.55.1 | 25 Nov | Fix: Updater and release build retry GitHub hiccups |
 | 4.56 | 25 Nov | One at a time can show Websites only or Social media only |
+| 4.56.1 | 25 Nov | Fix: Country filled in for .com sites from the page's address and language |
+| 4.56.1 | 25 Nov | Small fixes |
+| 4.57 | 25 Nov | One first-time setup with folder guide, folder check and computer limits |
