@@ -22,7 +22,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
         runs: Object.fromEntries(E.map((e, k) => [e, done ? { state: 'done', at: t0 + k * 30000 } : i === 4 ? { state: 'go' } : { state: 'wait' }])) };
     });
     await RS_DB.put('jobs', 'jb', { id: 'jb', created: new Date(now - 31 * 60000).toISOString(), kind: 'fifty', engines: E, bg: true, started: true, pics });
-    for (let k = 0; k < 4; k++) await RS_DB.put('jobs', 'k' + k, { id: 'k' + k, created: new Date(now - (40 + k) * 60000).toISOString(), kind: 'keep', engines: E, finished: true, pics: [{ i: 0, name: 'p.jpg', thumb: '', links: [], runs: { google: { state: 'done' } } }] });
+    for (let k = 0; k < 4; k++) await RS_DB.put('jobs', 'k' + k, { id: 'k' + k, created: new Date(new Date().setHours(0, 0, 0, 0) - 12 * 3600e3 + k * 60000).toISOString(), kind: 'keep', engines: E, finished: true, pics: [{ i: 0, name: 'p.jpg', thumb: '', links: [], runs: { google: { state: 'done' } } }] });
   });
   const rs = await ctx.newPage(); await rs.setViewportSize({ width: 1900, height: 1100 });
   rs.on('pageerror', e => { fails++; console.log('PAGEERROR', String(e).slice(0, 300)); });
