@@ -257,7 +257,7 @@ const CVD = (() => {
 
   // Cleans an email's HTML so nothing in it can run or phone home.
   function cleanHtml(html, cidMap, allowRemote) {
-    const d = new DOMParser().parseFromString(html, 'text/html');
+    const d = new DOMParser().parseFromString(html.replace(/\son([a-z]+\s*=)/gi, ' data-pp-on$1'), 'text/html');
     d.querySelectorAll('script,iframe,frame,frameset,object,embed,form,input,button,select,textarea,link,meta,base,audio,video,svg').forEach(e => e.remove());
     let blocked = 0;
     d.querySelectorAll('*').forEach(e => {

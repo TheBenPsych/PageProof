@@ -841,7 +841,15 @@ const PP_ALIGN = (() => {
     const share = Math.max(d.shareA, d.shareB), fit = m.fit10 || 0, closeFit = m.blocks >= 12 && fit >= 0.93;
     const logos = d.m2 >= 6 && d.graphic >= 0.8 && d.lines2 < 0.85;
     const backdrop = !!rp.backdropOnly && d.graphic >= 0.6;
-    const emblem = !logos && d.m2 >= 4 && sp.spot >= 0.75 && sp.outT >= 8 && sp.outM / sp.outT < 0.25 && (!closeFit || sp.spot >= 0.9);
+    // A close-up of only the seal. The other picture shows just a small part of yours (under
+    // 15%), and inside that part only one compact spot lines up (the seal), not the whole part: a
+    // tight shot of a podium seal or a crest from another event. A real tight crop of your photo
+    // lines up all over the part it shows, so it still counts.
+    // Under 3% of yours (the seal blown up to fill the picture): too small a part to tell a crop of
+    // your photo from another photo of the same seal, so it doesn't count on its own either.
+    const closeup = !logos && ((d.m2 >= 4 && d.shareA < 0.15 && sp.spot >= 0.75 && sp.area < 0.6 && (sp.outT >= 3 || d.lines2 < 0.85) && sp.outM <= Math.max(1, sp.outT * 0.25))
+      || (d.shareA < 0.03 && d.shareB >= 0.5));
+    const emblem = !logos && (closeup || (d.m2 >= 4 && sp.spot >= 0.75 && sp.outT >= 8 && sp.outM / sp.outT < 0.25 && (!closeFit || sp.spot >= 0.9)));
     const slice = !logos && !emblem && (share < 0.5 || (share < 0.65 && !closeFit));
     // a pattern (chain-link fence, checkered floor, tiled wall) lines up, the one-of-a-kind parts don't
     const pattern = !logos && !emblem && !slice && rp.checkedMissed >= 6 && rp.patternShare >= 0.4 && rp.uniqueLines < 0.3 && d.lines2 < 0.3;
@@ -978,7 +986,10 @@ fn main(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_id) l: vec3u
       try {
         const nav = typeof navigator !== 'undefined' ? navigator : null;
         if (!nav || !nav.gpu) throw new Error('no WebGPU in this browser');
-        const ad = await nav.gpu.requestAdapter({ powerPreference: 'high-performance' });
+        // 4.51.1: Windows ignores "use the strong graphics card" and logs a warning every time it is
+        // asked (Ben saw dozens on the extensions page), so it is only asked for elsewhere.
+        const win = /windows/i.test((nav.userAgentData && nav.userAgentData.platform) || nav.platform || nav.userAgent || '');
+        const ad = await nav.gpu.requestAdapter(win ? {} : { powerPreference: 'high-performance' });
         if (!ad) throw new Error('no graphics card offered');
         // A "fallback" adapter is the processor pretending to be a graphics card: slower than the normal way.
         if (ad.info && ad.info.isFallbackAdapter && !(typeof self !== 'undefined' && self.PP_GPU_ANY)) throw new Error('only a software graphics card');

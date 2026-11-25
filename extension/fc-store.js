@@ -564,6 +564,9 @@ const FC = (() => {
   async function unpicked() { const p = await meta.get('unpicked'); return Array.isArray(p) ? p : []; }
   const tidyRels = list => [...new Set((list || []).map(r => String(r).replace(/^\/+|\/+$/g, '')).filter(Boolean))].sort();
   // 4.47.5: folders with client_info_ignore.txt that you ticked anyway (inside a ticked folder).
+  // 4.51.1: folders a person set aside by name. Inside a ticked folder they are skipped (shown as
+  // Skipped in setup), unless ticked there by hand. "No longer monitoring" is NOT set aside: Ben searches it in ticked clients.
+  const SET_ASIDE = /\b(not to use|do not use|don'?t use|recycled?|recycle bin|should not have been)\b/i;
   async function forced() { const p = await meta.get('forced'); return Array.isArray(p) ? p : []; }
   async function setPicked(list, unlist, forceList) {
     // A folder inside another ticked folder is already included.
@@ -641,7 +644,13 @@ const FC = (() => {
           }
           break;
         } catch (e) {
-          if (tries >= 1) { cf.errors = (cf.errors || 0) + 1; console.warn('PageProof could not read folder', rel, e); return; }
+          if (tries >= 1) {
+            cf.errors = (cf.errors || 0) + 1;
+            // 4.51.1: say what Drive actually answered ("[object DOMException]" told nothing). A very
+            // long folder path (Windows stops at about 260 letters) is the usual cause.
+            console.warn('PageProof could not read a folder: ' + ((e && e.name) || 'Error') + (e && e.message ? ' (' + e.message + ')' : '') + '. Left out: ' + rel);
+            return;
+          }
           await new Promise(r => setTimeout(r, 1500));
         }
       }
@@ -660,6 +669,9 @@ const FC = (() => {
       for (const [name, h] of dirs) {
         // 4.47.3: a folder you unticked in setup is left out, with everything inside it.
         if (cf.skip && cf.skip.includes(rel + '/' + name)) { if (onDir) onDir(rel + '/' + name, 0, true); continue; }
+        // 4.51.1: set-aside folders ("Image not to use", "recycled") are left
+        // out unless ticked by hand in setup.
+        if (SET_ASIDE.test(name) && !(cf.force || []).includes(rel + '/' + name)) { if (onDir) onDir(rel + '/' + name, 0, true); continue; }
         const c2 = { ...ctx };
         const y = yearOf(name), q = quarterOf(name), d = dayOf(name);
         // A folder that is clearly a year ("2024", "2024 Q1", "Year 2024"), at any depth. Right
@@ -1121,12 +1133,60 @@ const FC = (() => {
   // are none left. ⚑ High priority photos (and "Try again") always go first.
   // first = true (Today's 50 set to "Never searched first"): never-searched photos first, then
   // the normal line.
+  // 4.51.2 (Ben): a photo another search already has is never picked again. Two searches
+  // started minutes apart (Today's 50 "Next in line", then "Never searched first") both began
+  // with the same photos: the first search was still checking its matches, and each page keeps
+  // its own copy of the line for up to an hour, so neither knew. Now every pick leaves out
+  // (1) photos in a search from the last day that are waiting, searching or being checked, and
+  // (2) photos searched or quick-looked since this page made its line.
+  let CLAIM = null;
+  async function claimed() {
+    if (CLAIM && Date.now() - CLAIM.at < 3000) return CLAIM.ids;
+    const ids = new Set(), cut = Date.now() - DAY;
+    // Photos a big search is still getting ready from Google Drive (its search isn't saved yet).
+    try { const h = (await api.storage.local.get('fcHold')).fcHold; if (h && Date.now() - h.at < 15 * 60000) for (const id of h.ids || []) ids.add(id); } catch (e) { /* none */ }
+    try {
+      if (typeof RS_DB !== 'undefined') for (const j of await RS_DB.all('jobs')) {
+        if (!j || !Array.isArray(j.pics) || (Date.parse(j.created) || 0) < cut) continue;
+        const live = !j.finished && !j.stoppedAt;
+        for (const q of [...j.pics, ...(j.alike || [])]) {
+          if (!q || !q.fcId || q.ingested) continue;
+          const searched = q.runs && Object.values(q.runs).some(r => r && r.state === 'done');
+          if (live || searched) ids.add(q.fcId);
+        }
+      }
+    } catch (e) { /* no searches saved yet */ }
+    CLAIM = { at: Date.now(), ids };
+    return ids;
+  }
+  function claimReset() { CLAIM = null; }
   async function next(n = 1, skip = new Set(), opts = {}) {
+    const used = new Set(skip);
+    for (const id of await claimed()) used.add(id);
+    const out = [];
+    let stale = false;
+    for (let round = 0; round < 6 && out.length < n; round++) {
+      const got = await pickLine(n - out.length, used, { ...opts, solo: n === 1 && !opts.first });
+      if (!got.length) break;
+      const since = new Date(QUEUE_AT || 0).toISOString();
+      for (const p of got) {
+        used.add(p.id);
+        // Searched (or quick-looked) by another page since this line was made: skip it.
+        if ((p.lastSearched || '') > since || (p.quickAt || '') > since || (p.alikeAt || '') > since) { stale = true; continue; }
+        out.push(p);
+      }
+    }
+    if (stale) QUEUE = null;
+    // A big search (Today's 50, New search) holds its photos while they are read from Drive.
+    if (opts.hold && out.length) await api.storage.local.set({ fcHold: { at: Date.now(), ids: out.map(p => p.id) } }).catch(() => {});
+    return out;
+  }
+  async function pickLine(n = 1, skip = new Set(), opts = {}) {
     if (!QUEUE || Date.now() - QUEUE_AT > 3600000) await buildQueue();
     const k = await keep();
     const share = [2, 3, 4].includes(k.firstShare) ? k.firstShare : 3;
     // Keep searching (one photo at a time) remembers whose turn it is between photos.
-    const solo = n === 1 && !opts.first;
+    const solo = opts.solo != null ? opts.solo : n === 1 && !opts.first;
     let turn = solo ? ((await api.storage.local.get('fcFirstTurn')).fcFirstTurn || 0) : 0;
     const used = new Set(skip);
     let qi = 0, fi = 0;
@@ -2459,7 +2519,7 @@ const FC = (() => {
     }
   }
 
-  return { DB, meta, open, touch, pics, dropDotMatches, checkerRemove, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, inHours, quietOK, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
+  return { claimed, claimReset, SET_ASIDE, DB, meta, open, touch, pics, dropDotMatches, checkerRemove, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, inHours, quietOK, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, unpicked, forced, setPicked, pickInside, SCAN, applyPendingFlags, missingPicks, movedNote, followMoves, watchFolders, newFolders, newFoldersSeen, goalPlan, workMinutes, exifDate, heatShoot, coolShoot, burstSibling, wakeBurst, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setClients, logWeek, week, weekKey, firstNotes, searchedOnce, dayLog, speed, ladder, LADDER, alikeFrames, mixYears, mixLine,
     isPool, shownCountries, setShownCountries, SHOWN_START, ownerFor, pathOf, logReport, USE, useOf, riskOf, spamMarks, randomLabel, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,

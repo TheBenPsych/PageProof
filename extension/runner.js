@@ -397,15 +397,16 @@ async function fiftyWanted() {
   const k = await FC.keep();
   const n = Math.min(k.perDay, 100);
   await status('running', 'Getting today\'s ' + n + ' photos ready from Google Drive…');
-  const ps = await FC.next(n + 10, new Set(), { first: k.fiftyWhich === 'first' });
+  const ps = await FC.next(n + 10, new Set(), { first: k.fiftyWhich === 'first', hold: true });
   const pics = [];
   for (const p of ps) {
     if (pics.length >= n) break;
     const pic = await FC.readPhoto(p);
     if (!pic.error) pics.push(pic);
   }
-  if (!pics.length) return;
+  if (!pics.length) { await api.storage.local.remove('fcHold').catch(() => {}); return; }
   const job = await RS_JOB.create(pics, { kind: 'fifty' });
+  api.storage.local.remove('fcHold').catch(() => {});
   if (job) await RS_JOB.queue(job.id);
 }
 
