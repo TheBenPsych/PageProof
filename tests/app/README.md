@@ -48,3 +48,4 @@ npm install playwright
 npx playwright install chromium
 node run.js
 ```
+| `checks-steady.js` | Copies found and One at a time stay put while you look: new copies wait behind "N new copies came in", the row at the top of the screen stays at the same place, a row a background check changed stays until you click, your own answers still take rows off, and One at a time keeps the copy on screen until you answer, skip or press Next copy |

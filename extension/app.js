@@ -44,8 +44,25 @@ function showLive(id) {
 // after the one that follows a click and put old rows back (4.9.1). An older one now waits for the
 // newest instead.
 let RENDER_N = 0, RENDER_P = null;
-function render(keep) { const me = ++RENDER_N; const p = render1(keep, me); RENDER_P = p; return p; }
-async function render1(keep, me) {
+// auto = a redraw nobody clicked for (Keep searching, a check finishing in the background). Copies
+// found and One at a time keep exactly what you are looking at then (4.60).
+function render(keep, auto) { const me = ++RENDER_N; const p = render1(keep, me, !!auto); RENDER_P = p; return p; }
+const renderAuto = () => render(true, true);
+// The row at the top of the screen stays at the same height after a redraw, even when rows above
+// it came or went (4.60).
+function ppAnchor(root) {
+  const out = [];
+  for (const el of root.querySelectorAll('.crow[data-v], .morerow[data-v]')) {
+    const r = el.getBoundingClientRect();
+    if (r.height && r.bottom > 60) { out.push([el.className.split(' ')[0] + '|' + el.dataset.v, r.top]); if (out.length >= 12) break; }
+  }
+  return out.length && window.scrollY > 0 ? out : null;
+}
+function ppReanchor(root, anc) {
+  const els = new Map([...root.querySelectorAll('.crow[data-v], .morerow[data-v]')].map(el => [el.className.split(' ')[0] + '|' + el.dataset.v, el]));
+  for (const [k, top] of anc) { const el = els.get(k); if (!el) continue; const d = el.getBoundingClientRect().top - top; if (Math.abs(d) > 1) window.scrollBy(0, d); return; }
+}
+async function render1(keep, me, auto) {
   const old = () => me !== RENDER_N;
   let r = route();
   if (!V[r] && !FRAMES[r]) r = 'home';
@@ -74,6 +91,8 @@ async function render1(keep, me) {
     const SCROLLERS = '.cpick, .scroll, .drawer, .pgrid';
     const sy = window.scrollY, main = document.querySelector('.main'), my = main ? main.scrollTop : 0;
     const inner = keep ? [...view.querySelectorAll(SCROLLERS)].map(e => [e.scrollTop, e.scrollLeft]) : [];
+    const anc = keep ? ppAnchor(view) : null;
+    state.draw = { auto, keep: !!keep };   // read by the page as it starts drawing
     const html = await V[r]();
     if (old()) return RENDER_P;
     view.innerHTML = html;
@@ -82,6 +101,7 @@ async function render1(keep, me) {
       window.scrollTo(0, sy);
       if (main) main.scrollTop = my;
       view.querySelectorAll(SCROLLERS).forEach((e, i) => { if (inner[i]) { e.scrollTop = inner[i][0]; e.scrollLeft = inner[i][1]; } });
+      if (anc) ppReanchor(view, anc);
     }
     ppAddHelp(view); ppTidyHead(view);
     if (V[r].after) V[r].after();
@@ -107,7 +127,7 @@ let redrawT = null;
 // Keep searching writes a heartbeat every 30 seconds. Only what you can see counts as a change.
 const statusLook = s => (s ? [s.state, s.text, s.current && s.current.id].join('|') : '');
 api.storage.onChanged.addListener(ch => {
-  if (ch.fcEngines && ['home', 'health'].includes(state.shown)) { clearTimeout(redrawT); redrawT = setTimeout(() => render(true), 600); return; }
+  if (ch.fcEngines && ['home', 'health'].includes(state.shown)) { clearTimeout(redrawT); redrawT = setTimeout(() => renderAuto(), 600); return; }
   if (!ch.fcChanged && !ch.fcStatus) return;
   if (!ch.fcChanged && statusLook(ch.fcStatus.oldValue) === statusLook(ch.fcStatus.newValue)) return;
   if (ch.fcStatus && !['keep', 'home'].includes(state.shown)) return;
@@ -118,7 +138,7 @@ api.storage.onChanged.addListener(ch => {
   if (document.querySelector('dialog[open]')) return;
   clearTimeout(redrawT);
   // state.shown, not route(): a guard can show another page (setup) under this address (see 4.0.10).
-  redrawT = setTimeout(() => { const s = state.shown || route(); if (!FRAMES[route()] && V[s] && !V[s].noAutoRedraw) render(true); }, ch.fcStatus ? 400 : 1500);
+  redrawT = setTimeout(() => { const s = state.shown || route(); if (!FRAMES[route()] && V[s] && !V[s].noAutoRedraw) renderAuto(); }, ch.fcStatus ? 400 : 1500);
 });
 document.getElementById('themeBtn').onclick = () => ppTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
 document.getElementById('menuBtn').onclick = () => document.getElementById('side').classList.toggle('open');
