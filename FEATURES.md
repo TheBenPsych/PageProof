@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.52.0** (25 Nov 2026).
+Last updated: version **4.52.1** (25 Nov 2026).
 
 ---
 
@@ -315,3 +315,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.51.2 | 25 Nov | Fix: Two searches never pick the same photos |
 | 4.51.3 | 25 Nov | Fix: Close-ups of a podium seal no longer count as copies |
 | 4.52 | 25 Nov | Credit search on Google and Bing, progress on its own page, Extra searches card and stats |
+| 4.52.1 | 25 Nov | Fix: Keep searching flag counts fairly |
