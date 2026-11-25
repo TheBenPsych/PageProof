@@ -988,6 +988,9 @@ const FC = (() => {
   const isPool = name => /(^|[_\s.-])POOL([_\s.-]|$)/.test(String(name || ''));
   function plan(p, client) {
     if (isPool(p.name)) return { tier: 7, due: false, pool: true };
+    // Stopped by hand ("Stop searching this photo", Ben 4.52): never searched by Keep searching or
+    // Today's 50 until someone turns it back on. Its copies found so far stay.
+    if (p.stopped) return { tier: 7, due: false, stopped: true };
     const since = ageDays(p.lastSearched);
     if (p.retry) return { tier: 0, due: true };                       // "Try again" on the Skipped photos page
     // A photo that could not be opened is tried again every 3 months (never, if it is a kind
@@ -1030,6 +1033,7 @@ const FC = (() => {
       if (p.gone || p.doubleOf) continue;
       const c = clients.get(p.client);
       if (!c || c.searching !== true) continue;
+      if (p.stopped) continue;
       // Never searched yet: the "every photo once" line (4.10, Ben).
       // 4.42 bursts: a frame that looks almost the same as one already searched (with nothing found)
       // waits until every other photo has had its first search.
@@ -1183,13 +1187,14 @@ const FC = (() => {
     const g = { top: [0, 0], recent: [0, 0], year: [0, 0], older: [0, 0] };
     let quiet = 0, doubles = 0, total = 0;
     // Every photo searched at least once (4.10): per client [searched once, can be searched, can't].
-    const first = { done: 0, total: 0, cant: 0, pool: 0, broken: 0, week: 0, quick: 0, clients: {} };
+    const first = { done: 0, total: 0, stopped: 0, cant: 0, pool: 0, broken: 0, week: 0, quick: 0, clients: {} };
     const weekAgo = new Date(Date.now() - 7 * DAY).toISOString();
     for (const p of await DB.all('photos')) {
       if (p.gone) continue;
       if (p.doubleOf) { doubles++; continue; }
       const c = clients.get(p.client);
       if (!c || c.searching !== true) continue;
+      if (p.stopped) { first.stopped++; continue; }
       total++;
       // [searched once (with Google), can be searched, can't, quick look or more (any site)]
       const fc = first.clients[p.client] = first.clients[p.client] || [0, 0, 0, 0];
@@ -2044,6 +2049,23 @@ const FC = (() => {
     queueDirty(); backupSoon(true);
     return p.flag;
   }
+  // Stop searching these photos (on = true) or search them again (on = false). Gives back an
+  // undo that puts every photo back the way it was.
+  async function setStopped(ids, on) {
+    const was = [];
+    for (const id of new Set(ids)) {
+      const p = await DB.get('photos', id);
+      if (!p) continue;
+      was.push([id, p.stopped || '']);
+      if (on) p.stopped = p.stopped || new Date().toISOString(); else delete p.stopped;
+      await DB.put('photos', p);
+    }
+    COVER = null; queueDirty(); backupSoon(true);
+    return async () => {
+      for (const [id, st] of was) { const p = await DB.get('photos', id); if (!p) continue; if (st) p.stopped = st; else delete p.stopped; await DB.put('photos', p); }
+      COVER = null; queueDirty(); backupSoon(true);
+    };
+  }
   async function setClients(names, ch) {
     for (const n of names) {
       const c = await DB.get('clients', n);
@@ -2364,7 +2386,7 @@ const FC = (() => {
     let list = flagsDirty ? null : await meta.get('flagsBackup');
     if (!Array.isArray(list)) {
       flagsDirty = false;
-      list = (await DB.all('photos')).filter(p => p.flag || p.notDouble).map(p => [p.id, p.flag || '', p.notDouble ? 1 : 0]);
+      list = (await DB.all('photos')).filter(p => p.flag || p.notDouble || p.stopped).map(p => [p.id, p.flag || '', p.notDouble ? 1 : 0, p.stopped ? 1 : 0]);
       await meta.set('flagsBackup', list);
     }
     return list;
@@ -2430,7 +2452,7 @@ const FC = (() => {
     if (Array.isArray(j.forced)) await meta.set('forced', j.forced.filter(r => typeof r === 'string' && r && !r.split('/').includes('..')).map(r => r.slice(0, 1000)));
     if (Array.isArray(j.unpicked)) await meta.set('unpicked', j.unpicked.filter(r => typeof r === 'string' && r && !r.split('/').includes('..')).map(r => r.slice(0, 1000)));
     if (Array.isArray(j.picked)) await meta.set('picked', j.picked.filter(r => typeof r === 'string' && r && !r.split('/').includes('..')).map(r => r.slice(0, 1000)));
-    if (Array.isArray(j.flags)) await meta.set('pendingFlags', j.flags.filter(f => Array.isArray(f) && typeof f[0] === 'string').map(f => [f[0].slice(0, 2000), ['hi', 'pop'].includes(f[1]) ? f[1] : '', f[2] ? 1 : 0]));
+    if (Array.isArray(j.flags)) await meta.set('pendingFlags', j.flags.filter(f => Array.isArray(f) && typeof f[0] === 'string').map(f => [f[0].slice(0, 2000), ['hi', 'pop'].includes(f[1]) ? f[1] : '', f[2] ? 1 : 0, f[3] ? 1 : 0]));
     if (Array.isArray(j.hist)) {
       const iso = v => (typeof v === 'string' && /^\d{4}-\d\d-\d\dT/.test(v) ? v.slice(0, 30) : '');
       const n = v => (Number.isFinite(v) && v >= 0 ? Math.min(v, 1e6) : 0);
@@ -2447,7 +2469,7 @@ const FC = (() => {
     const list = await meta.get('pendingFlags');
     if (list && list.length) {
       const left = [];
-      for (const [id, flag, nd] of list) { const p = await DB.get('photos', alias[id] || id); if (p) { p.flag = flag; if (nd) p.notDouble = true; await DB.put('photos', p); } else left.push([id, flag, nd]); }
+      for (const [id, flag, nd, st] of list) { const p = await DB.get('photos', alias[id] || id); if (p) { p.flag = flag; if (nd) p.notDouble = true; if (st && !p.stopped) p.stopped = new Date().toISOString(); await DB.put('photos', p); } else left.push([id, flag, nd, st]); }
       await meta.set('pendingFlags', left);
       if (left.length !== list.length) backupSoon(true);
     }
@@ -2473,7 +2495,7 @@ const FC = (() => {
 
   return { SET_ASIDE, DB, meta, open, touch, pics, dropDotMatches, checkerRemove, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, inHours, quietOK, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, unpicked, forced, setPicked, pickInside, SCAN, applyPendingFlags, missingPicks, movedNote, followMoves, watchFolders, newFolders, newFoldersSeen, goalPlan, workMinutes, exifDate, heatShoot, coolShoot, burstSibling, wakeBurst, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
-    photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setClients, logWeek, week, weekKey, firstNotes, searchedOnce, dayLog, speed, ladder, LADDER, alikeFrames, mixYears, mixLine,
+    photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setStopped, setClients, logWeek, week, weekKey, firstNotes, searchedOnce, dayLog, speed, ladder, LADDER, alikeFrames, mixYears, mixLine,
     isPool, shownCountries, setShownCountries, SHOWN_START, ownerFor, pathOf, logReport, USE, useOf, riskOf, spamMarks, randomLabel, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
     backupSoon, backupCopiesSoon, writeSettings, writeCopies, readBackup, restore, restoreCopies, settingsSnapshot, monthsOld, newness, yearOf, quarterOf, dayOf };
 })();
