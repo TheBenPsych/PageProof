@@ -1183,8 +1183,7 @@ h2 .ahandle{font-size:13px}
 .rvprog .bar{height:12px;border-radius:99px}
 .rvprog .bar i{border-radius:99px;background:var(--accent)}
 .rvprog b{font-size:15px}
-.rvmore{flex-wrap:nowrap;gap:6px}
-@media (max-width:1100px){.rvmore{flex-wrap:wrap}}
+.rvmore{flex-wrap:wrap;gap:6px}
 .rvmore>.btn,.rvmore>details>summary.btn{padding:6px 11px;font-size:13.5px;white-space:nowrap}
 /* 13 floating dark bar for ticked rows */
 .bulk.float{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:40;display:flex;flex-wrap:nowrap;gap:4px;align-items:center;max-width:calc(100vw - 32px);overflow-x:auto;background:#1B1F2A;color:#fff;padding:6px 8px 6px 16px;border-radius:99px;box-shadow:0 12px 32px rgba(0,0,0,.35)}
