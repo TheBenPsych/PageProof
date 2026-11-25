@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.60.1** (25 Nov 2026).
+Last updated: version **4.60.2** (25 Nov 2026).
 
 ---
 
@@ -224,6 +224,7 @@ Last updated: version **4.60.1** (25 Nov 2026).
 - **Are the extra searches worth it?** How PageProof is doing (and the stats file for Claude) counts each extra search's work, copies found, time spent and time per copy. (4.52)
 - **Big searches stay in All searches.** Kept 90 days, apart from Keep searching's one-photo searches (2 days). (4.53.1)
 - **Updater never stuck on a missing download.** Update-PageProof.cmd retries and falls back to the newest numbered version; the release build retries and puts a lost download page back. (4.55.1)
+- **Copies found stays put.** New copies wait behind a "N new copies came in" button, rows never move under you, and One at a time keeps the copy on screen. (4.60.2)
 
 ---
 
@@ -342,3 +343,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.59 | 25 Nov | Just hidden list folded away; Site gone tag for copies on websites that no longer exist; Spam blogs filter catches search-words pages and spam-only endings |
 | 4.60 | 25 Nov | Site popularity tags and known bad site lists |
 | 4.60.1 | 25 Nov | Fix: "Who's behind it" box removed from the capture page |
+| 4.60.2 | 25 Nov | Fix: Copies found and One at a time stay put while you look |
