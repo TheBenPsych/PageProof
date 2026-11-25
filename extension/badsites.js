@@ -131,7 +131,9 @@ const PP_BAD = (() => {
     if (BUSY) return BUSY;
     BUSY = (async () => {
       const i = await info(), src = i.src || {}, now = Date.now();
-      const due = SOURCES.filter(s => force || !src[s.id] || (!src[s.id].at || now - src[s.id].at > s.every) && (!src[s.id].tried || now - src[s.id].tried > RETRY));
+      // 4.64: a download cut off half way (an update closed the page) is tried again, not left 6 hours.
+      const cut = x => x.tried && !(x.ended >= x.tried) && now - x.tried > 3 * 60000;
+      const due = SOURCES.filter(s => force || !src[s.id] || (!src[s.id].at || now - src[s.id].at > s.every) && (!src[s.id].tried || now - src[s.id].tried > RETRY || cut(src[s.id])));
       if (!due.length) return { fresh: true };
       let changed = 0; const errs = [];
       for (const s of due) {
@@ -142,11 +144,11 @@ const PP_BAD = (() => {
           const names = parse(await r.text(), s.form);
           if (!names.length) throw new Error('the list was empty');
           await put('src:' + s.id, names.join('\n'));
-          await setInfo({ src: { [s.id]: { at: Date.now(), tried: Date.now(), n: names.length, err: '' } } });
+          const t = Date.now(); await setInfo({ src: { [s.id]: { at: t, tried: t, ended: t, n: names.length, err: '' } } });
           changed++;
         } catch (e) {
           errs.push(s.name + ': ' + (e && e.message || e));
-          await setInfo({ src: { [s.id]: Object.assign({}, (await info()).src[s.id], { err: String(e && e.message || e) }) } });
+          await setInfo({ src: { [s.id]: Object.assign({}, (await info()).src[s.id], { err: String(e && e.message || e), ended: Date.now() }) } });
         }
       }
       if (changed) await rebuild();

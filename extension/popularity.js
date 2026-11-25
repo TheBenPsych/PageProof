@@ -128,7 +128,7 @@ const PP_POP = (() => {
     await put('list', rec);
     LIST = null; CACHE = { date, map: {} };
     await put('cache', CACHE).catch(() => {});
-    await setInfo({ date, n: rec.n, tried: Date.now(), err: '' });
+    const t = Date.now(); await setInfo({ date, n: rec.n, tried: t, ended: t, err: '' });
     return rec.n;
   }
   // Downloads the newest list, if the one here is a week old (or there is none). force = now.
@@ -138,7 +138,9 @@ const PP_POP = (() => {
     BUSY = (async () => {
       const i = await info();
       if (!force && i.date && Date.now() - Date.parse(i.date) < WEEK) return { fresh: true };
-      if (!force && i.tried && Date.now() - i.tried < RETRY) return { waiting: true };
+      // 4.64: a download cut off half way (an update closed the page) is tried again, not left 6 hours.
+      const cut = i.tried && !(i.ended >= i.tried) && Date.now() - i.tried > 3 * 60000;
+      if (!force && i.tried && Date.now() - i.tried < RETRY && !cut) return { waiting: true };
       await setInfo({ tried: Date.now() });
       try {
         const r = await fetch(URL_ZIP, { credentials: 'omit', cache: 'no-store' });
@@ -149,7 +151,7 @@ const PP_POP = (() => {
         const n = await save(new TextDecoder().decode(csv[1]), new Date().toISOString());
         return { n };
       } catch (e) {
-        await setInfo({ err: String(e && e.message || e) });
+        await setInfo({ err: String(e && e.message || e), ended: Date.now() });
         return { err: String(e && e.message || e) };
       }
     })().finally(() => { BUSY = null; });

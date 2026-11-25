@@ -860,8 +860,9 @@ const SEARCH_SITE = /^https?:\/\/([^/]+\.)?(google\.[a-z.]+|yandex\.[a-z.]+|ya\.
 let freshP = null;
 function freshStart() {
   if (!freshP) freshP = (async () => {
-    await api.storage.local.set({ ppRunVer: MY_VER }).catch(() => {});
     const all = await api.storage.local.get(null).catch(() => ({}));
+    const prevVer = all.ppRunVer || '';
+    await api.storage.local.set({ ppRunVer: MY_VER }).catch(() => {});
     const st = all.fcStatus || {};
     const shut = async (id, ok) => {
       if (!id && id !== 0) return;
@@ -889,6 +890,8 @@ function freshStart() {
     if (api.storage.session) await api.storage.session.remove('fcClosed').catch(() => {});
     await sleep(1500);
     await keepAlive(false, true);
+    // 4.64 (Ben): everything else that was running picks up too (see pickUpAfterUpdate).
+    await pickUpAfterUpdate(prevVer, all);
   })().catch(e => console.warn('PageProof fresh start', e));
   return freshP;
 }
@@ -898,6 +901,72 @@ function freshStart() {
 async function swCloseRestored() { try { const tabs = await api.tabs.query({ url: SW_PAGE + '*' }); for (const w of new Set(tabs.map(t => t.windowId))) await api.windows.remove(w).catch(() => {}); await swRemember(null); } catch (e) { /* none */ } }
 async function forgetSearchTabs() {
   try { const all = await api.storage.local.get(null); const marks = Object.keys(all).filter(k => k.startsWith('rsTabL:')); if (marks.length) await api.storage.local.remove(marks); } catch (e) { /* nothing saved */ }
+}
+
+// ---------- 4.64 (Ben): everything that was running carries on after an update ----------
+// An update (Update-PageProof.cmd, then Reload) restarts PageProof, and the browser closes every
+// PageProof tab. What carries on, and how:
+//  - Keep searching, its sweeps, watch list, credit steps and folder checks: the Keep searching
+//    tab opens again (freshStart above) and they carry on from what they saved.
+//  - Big searches (New search, Today's 50, photos you picked): still in line (fcBgJobs), so the
+//    Keep searching tab starts them again; each one carries on from the photo it had reached.
+//  - Today's 50 that was still getting its photos ready: asked for again (fcFiftyWant stays).
+//  - PageProof pages you had open (Copies found with its post checks, account reader, previews;
+//    a Credit search "Search now"): opened again at the same place, in the background, and their
+//    work starts again from what was saved.
+//  - Pause stays as it was: a paused search stays paused, nothing new opens for it.
+// Each open PageProof page notes itself (ppPage:<tab>, app.js). A tab you close yourself is
+// forgotten 3 seconds later; tabs the browser closes for the update are not (the background
+// stops first), so they are the ones opened again.
+async function reopenPages() {
+  const all = await api.storage.local.get(null).catch(() => ({}));
+  const keys = Object.keys(all).filter(k => k.startsWith('ppPage:'));
+  if (!keys.length) return 0;
+  await api.storage.local.remove(keys).catch(() => {});
+  const now = Date.now();
+  const want = keys.map(k => ({ id: +k.slice(7), ...all[k] })).filter(p => p && now - (p.beat || 0) < 3 * 864e5)
+    .sort((a, b) => (a.win - b.win) || (a.index - b.index)).slice(0, 6);
+  const wins = await normalWindows();
+  let n = 0;
+  for (const p of want) {
+    const url = OWN + 'app.html?back=1#' + String(p.hash || 'home').replace(/^#/, '');
+    // Still there (a browser that keeps them, cut off from PageProof): load it again with the new code.
+    try { const t = await api.tabs.get(p.id); if ((t.url || '').startsWith(OWN + 'app.html')) { await api.tabs.update(t.id, { url }); n++; continue; } } catch (e) { /* closed, as usual */ }
+    const win = wins.find(w => w.id === p.win) || wins.find(w => w.focused) || wins[0];
+    if (!win) break;
+    const opts = { url, active: false, ...(win.id !== undefined ? { windowId: win.id } : {}), ...(p.pinned ? { pinned: true } : {}) };
+    try { await api.tabs.create({ ...opts, ...(p.index >= 0 && win.id === p.win ? { index: p.index } : {}) }); n++; }
+    catch (e) { try { await api.tabs.create(opts); n++; } catch (e2) { /* no window */ } }
+  }
+  return n;
+}
+// The browser restarted: tab numbers start again, so the old notes of open pages mean nothing.
+// (Pages the browser brings back by itself note themselves again after this started: kept.)
+const PAGES_T0 = Date.now();
+api.runtime.onStartup.addListener(async () => {
+  try { const all = await api.storage.local.get(null); const k = Object.keys(all).filter(x => x.startsWith('ppPage:') && !((all[x] || {}).beat >= PAGES_T0)); if (k.length) await api.storage.local.remove(k); } catch (e) { /* nothing saved */ }
+});
+// A PageProof page you closed yourself: forgotten, so it never comes back after an update. Done a
+// moment later, so the tabs the browser closes while PageProof itself restarts are kept.
+api.tabs.onRemoved.addListener(id => { setTimeout(() => api.storage.local.remove('ppPage:' + id).catch(() => {}), 3000); });
+// What was running, in a few words, for the "Picked up after the update" note (app.js, runner.js).
+async function pickUpAfterUpdate(prevVer, before) {
+  const st = before || {};
+  const paused = !!st.fcPause;
+  const items = [];
+  if (st.fcKeep && st.fcKeep.on && st.fcDrive && st.fcDrive.done) items.push(paused ? 'Keep searching (still paused, as you left it)' : 'Keep searching, with its sweeps, watch list, credit steps and folder checks');
+  const big = (st.fcBgJobs || []).length;
+  if (big) items.push((big === 1 ? 'Your big search, from the photo it had reached' : big + ' big searches, each from the photo it had reached') + (paused ? ' (still paused)' : ''));
+  if (st.fcFiftyWant) items.push('Today\'s 50' + (paused ? ' (still paused)' : ''));
+  const cr = st.fcCreditRun;
+  if (cr && !cr.end && Date.now() - (cr.beat || 0) < 30 * 60000) items.push('Credit search for ' + cr.client + ', from the wording it had reached');
+  // Saved before the pages open, so they know straight away that an update happened (a Credit
+  // search "Search now" then carries on at once, see fc-watch.js resumeRun).
+  const note = { at: Date.now(), from: prevVer, to: MY_VER, items, paused, seen: false };
+  await api.storage.local.set({ ppPickedUp: note }).catch(() => {});
+  const pages = await reopenPages().catch(() => 0);
+  if (pages) items.push(pages === 1 ? 'The PageProof page you had open, with its checks' : 'The ' + pages + ' PageProof pages you had open, with their checks');
+  await api.storage.local.set({ ppPickedUp: { ...note, items } }).catch(() => {});
 }
 api.storage.local.get('ppRunVer').then(r => {
   if (r.ppRunVer === MY_VER) return;

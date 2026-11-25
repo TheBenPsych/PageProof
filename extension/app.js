@@ -1254,14 +1254,62 @@ document.addEventListener('DOMContentLoaded', async () => {
   await Promise.race([lists, new Promise(r => setTimeout(r, 3000))]);
   if (!listsIn) lists.then(() => render(true));
   const st = await api.storage.local.get(['ppSetupDone', 'ppReconnectVer', 'fcDrive']);
+  // 4.64: a page PageProof opened again after an update (app.html?back=1#…) stays where you were,
+  // unless Google Drive needs its click again (then the reconnect page comes first, as before).
+  const back = /[?&]back=1/.test(location.search);
+  if (back) { try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) { /* keep it */ } }
+  const driveOK = back && st.fcDrive && st.fcDrive.done ? await Promise.race([FC.driveStateSoft(true).catch(() => ''), new Promise(r => setTimeout(() => r(''), 4000))]) === 'granted' : false;
   if (!st.ppSetupDone && (!location.hash || location.hash === '#home')) location.hash = 'setup';
   // First time the full page opens after an update: check the folders before anything else.
-  else if (st.ppSetupDone && st.ppReconnectVer !== VERSION && st.fcDrive && st.fcDrive.done && !/^#(setup|reconnect)/.test(location.hash)) location.hash = 'reconnect';
+  else if (st.ppSetupDone && st.ppReconnectVer !== VERSION && st.fcDrive && st.fcDrive.done && !driveOK && !/^#(setup|reconnect)/.test(location.hash)) location.hash = 'reconnect';
   render();
+  ppNotePage(); ppPickedUpNote();
+  // A Credit search "Search now" that the update cut off carries on (fc-watch.js).
+  if (typeof PP_WATCH !== 'undefined' && PP_WATCH.resumeRun) PP_WATCH.resumeRun().catch(e => console.warn('PageProof credit search resume:', e));
   // One time after an update: preview pictures move to their own small database.
   // 4.1 kept a link to PageProof's own folder for the old self-updater. That is gone; forget the folder.
   try { RS_DB.del('handles', 'ppInstall').catch(() => {}); api.storage.local.remove('ppUpdated'); } catch (e) { /* none */ }
   FC.movePics().catch(e => console.warn('PageProof: moving preview pictures', e));
   FC.mergeSamePages().then(n => { if (n) { toast(plural(n, 'copy was', 'copies were') + ' the same page as another copy (phone version or tracking bits on the address), so they are now one row each.'); render(true); } }).catch(e => console.warn('PageProof: same pages', e));
   FC.dropDotMatches().then(n => { if (n) { toast(plural(n, 'wrong match was', 'wrong matches were') + ' moved to Removed (the photo check had scored them too high). Put back is still there.'); render(true); } }).catch(e => console.warn('PageProof: wrong matches', e));
+});
+
+
+// ---------- 4.64 (Ben): picking up after an update ----------
+// This page notes which tab it is in and where it is (ppPage:<tab>), so that after an update (which
+// closes every PageProof tab) the background opens it again at the same place (background.js
+// reopenPages). Copies found's own checks (post checks, account details, previews) start again there.
+async function ppNotePage() {
+  try {
+    const me = await api.tabs.getCurrent();
+    if (!me || me.id == null) return;
+    await api.storage.local.set({ ['ppPage:' + me.id]: { hash: location.hash.replace(/^#/, ''), win: me.windowId, index: me.index, pinned: !!me.pinned, beat: Date.now() } });
+  } catch (e) { /* not in a tab (side panel, frame) */ }
+}
+window.addEventListener('hashchange', ppNotePage);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) ppNotePage(); });
+setInterval(ppNotePage, 5 * 60000);
+// The small "Picked up after the update" note: what carried on by itself. Shown once (any page
+// that shows it marks it seen), within 2 hours of the update.
+async function ppPickedUpNote() {
+  let n;
+  try { n = (await api.storage.local.get('ppPickedUp')).ppPickedUp; } catch (e) { return; }
+  if (!n || n.seen || Date.now() - (n.at || 0) > 2 * 3600000 || !(n.items || []).length || document.getElementById('ppPicked')) return;
+  const box = document.createElement('div');
+  box.id = 'ppPicked'; box.setAttribute('role', 'status');
+  box.style.cssText = 'position:fixed;right:20px;bottom:20px;z-index:80;max-width:min(420px,calc(100% - 40px));background:var(--surface);color:var(--ink);border:1px solid var(--line);border-left:4px solid var(--ok);border-radius:12px;padding:14px 16px;box-shadow:0 8px 30px rgba(0,0,0,.18);font-size:14px;line-height:1.45';
+  box.innerHTML = `<div style="display:flex;gap:10px;align-items:flex-start"><div style="flex:1;min-width:0"><b>Picked up after the update${n.to ? ' to ' + esc(n.to) : ''}</b>
+    <ul style="margin:6px 0 0;padding-left:18px">${n.items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
+    ${n.paused ? '<div class="muted" style="margin-top:6px;font-size:13px">Paused things stay paused until you press Resume.</div>' : ''}</div>
+    <button class="btn sm" type="button" data-pp-picked>OK</button></div>`;
+  const done = () => { box.remove(); api.storage.local.set({ ppPickedUp: { ...n, seen: true } }).catch(() => {}); };
+  box.querySelector('[data-pp-picked]').onclick = done;
+  document.body.append(box);
+  // Seen once it has been on screen for a while (so it doesn't come back on the next page).
+  setTimeout(() => { if (box.isConnected && !document.hidden) api.storage.local.set({ ppPickedUp: { ...n, seen: true } }).catch(() => {}); }, 20000);
+}
+api.storage.onChanged.addListener(ch => {
+  if (!ch.ppPickedUp) return;
+  const v = ch.ppPickedUp.newValue;
+  if (v && !v.seen) ppPickedUpNote();
 });
