@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.64.0** (25 Nov 2026).
+Last updated: version **4.64.1** (25 Nov 2026).
 
 ---
 
@@ -354,3 +354,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.63 | 25 Nov | Finish this claim steps after Stolen, Not finished tab, Sent to legal |
 | 4.63.1 | 25 Nov | Fix: Social sites paced, rest after "too many requests" |
 | 4.64 | 25 Nov | Everything that was running carries on after an update, with a "Picked up after the update" note |
+| 4.64.1 | 25 Nov | Fix: Side panel removed (use the pop-up) |
