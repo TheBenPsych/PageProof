@@ -997,8 +997,12 @@ async function pageCheck(l) {
   let state = 'unknown';
   const t0 = Date.now();
   try {
+    // 4.64 (Ben): Instagram at most one page every 30 seconds (and none while it rests after a
+    // "too many requests"). A link that has to wait longer stays a Maybe; Copies found checks it later.
+    if (globalThis.PP_PACE && !(await PP_PACE.turn(l.url, 15000))) throw new Error('paced');
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 12000);
     const r = await fetch(l.url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal });
+    if (r.status === 429 && globalThis.PP_PACE) PP_PACE.note(r.url || l.url, 429);
     const type = r.headers.get('content-type') || 'html';
     const html = r.ok && /html/i.test(type) ? (await r.text()).slice(0, 3e6) : '';
     clearTimeout(t);
@@ -1023,7 +1027,7 @@ async function pageCheck(l) {
       if (state !== 'seen' && state !== 'card' && tried) state = social ? 'postOnly' : 'notSeen';
       TIMES.pages = (TIMES.pages || 0) + 1;
     }
-  } catch (e) { /* their page did not answer: unknown */ PP_STATS.site(l.url, 'f'); }
+  } catch (e) { /* their page did not answer (or Instagram has to wait): unknown */ if (!e || e.message !== 'paced') PP_STATS.site(l.url, 'f'); }
   l.onPage = state; l.pv = PV;
   PP_STATS.add('job.page.n'); PP_STATS.add('job.page.' + (state === 'unknown' ? 'fail' : 'ok')); PP_STATS.time('job.page', Date.now() - t0);
 }

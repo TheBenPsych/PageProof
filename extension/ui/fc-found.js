@@ -277,6 +277,7 @@ async function readTheirPage(c, again) {
   PF_BUSY.add(c.id);
   try {
     const pf = await PP_CHECKS.readPage(c);
+    if (pf && pf.paced) return c.pf && c.pf.ok ? c.pf : pf;     // 4.64: Instagram has to wait: read again later
     const cc = await FC.DB.get('copies', c.id);
     if (cc) { cc.pf = pf; await FC.DB.put('copies', cc); }
     c.pf = pf; FCD_STALE = true;      // 4.9: never cleared outright (it is also read in the background now)
@@ -388,7 +389,7 @@ async function postInBrowser(c, ours) {
       if (m.state === 'unsure') unsure = true;
     }
     return n ? { state: unsure ? 'unsure' : 'notSeen', n } : null;
-  } catch (e) { return null; } finally { if (tab) PP_SOCIAL.closeQuiet(tab); }
+  } catch (e) { if (e && e.paced) { c._paced = true; return { held: true }; } return null; } finally { if (tab) PP_SOCIAL.closeQuiet(tab); }
 }
 // How PageProof is doing: how many post checks ran, how long, and how many could not read the post.
 async function postCheck(c, opts = {}) {
@@ -398,10 +399,13 @@ async function postCheck(c, opts = {}) {
 }
 async function postCheckNow(c, opts = {}) {
   if (POST_BUSY.has(c.id) || typeof PP_ALIGN === 'undefined') return null;
+  // 4.64 (Ben): the site is resting after "too many requests": checked again after the rest.
+  if (globalThis.PP_PACE && PP_PACE.resting(c.url)) { c._paced = true; return null; }
   POST_BUSY.add(c.id);
   let ours = null;
   try {
     const pf = c.pf && c.pf.ok && 'pic' in c.pf ? c.pf : await readTheirPage(c, true).catch(() => null);
+    if (pf && pf.paced) { c._paced = true; return null; }
     const res = { v: POSTCHK_V, at: new Date().toISOString(), pic: '', state: 'unknown' };
     res.video = !!pf && (/^video/i.test(pf.type || '') || /\/(reel|videos?|watch)\b/i.test(pf.url || c.url || ''));
     try { ours = await bitmapOf(await ourBlob(FCD && FCD.photos.get(c.photo))); } catch (e) { res.err = String(e && e.message || e).slice(0, 120); }

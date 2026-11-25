@@ -966,6 +966,8 @@ async function acctReadRow() {
   const t = ms => new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   const name = x => x === 'x' ? 'X' : x.replace(/\.com$/, '').replace(/^./, c => c.toUpperCase());
   const resting = Object.entries(L).filter(([, v]) => v.restUntil > Date.now()).map(([k, v]) => name(k) + ' until ' + t(v.restUntil));
+  // 4.64: sites that said "too many requests" (429) and are left alone for a while.
+  if (globalThis.PP_PACE) for (const r of PP_PACE.rests()) if (!resting.some(x => x.startsWith(r.name + ' '))) resting.push(r.name + ' until ' + t(r.until) + ' (it said too many requests)');
   const fresh = a.beat && Date.now() - a.beat < 10 * 60000;
   const now = !on ? 'Off: account details are only read when you press "Read again now" on an account.'
     : fresh && (a.state === 'reading' || a.state === 'resting') && a.total ? 'Reading account details ' + Math.min(a.done + 1, a.total) + ' of ' + a.total + '.'

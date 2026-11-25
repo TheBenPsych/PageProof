@@ -144,6 +144,9 @@ async function siteLimits() {
 }
 // When may this site be read next? 0 = now.
 function siteWait(L, site) {
+  // 4.64: a site that said "too many requests" (429) rests for everything in PageProof.
+  const r429 = globalThis.PP_PACE ? PP_PACE.restUntil(site === 'x' ? 'x.com' : site) : 0;
+  if (r429) return r429;
   const v = L[site]; if (!v) return 0;
   const lim = limitOf(site), now = Date.now();
   if (v.restUntil && v.restUntil > now) return v.restUntil;
@@ -194,10 +197,10 @@ async function infoQueue() {
       const ready = due.filter(e => !siteWait(L, acctSite(e.acct)));
       if (!ready.length) {
         const until = Math.min(...due.map(e => siteWait(L, acctSite(e.acct))));
-        const resting = [...new Set(due.map(e => acctSite(e.acct)).filter(x => L[x] && L[x].restUntil > Date.now()))];
+        const resting = [...new Set(due.map(e => acctSite(e.acct)).filter(x => (L[x] && L[x].restUntil > Date.now()) || (globalThis.PP_PACE && PP_PACE.resting(x === 'x' ? 'x.com' : x))))];
         infoHeld = true;
         if (typeof PP_STATS !== 'undefined') PP_STATS.add('limit.held.' + (resting.length ? 'resting' : 'limit'));
-        await infoSay({ state: 'held', why: resting.length ? 'site' : 'limit', sites: resting, until: resting.length ? Math.min(...resting.map(x => L[x].restUntil)) : until, done, total: done + due.length });
+        await infoSay({ state: 'held', why: resting.length ? 'site' : 'limit', sites: resting, until: resting.length ? Math.min(...resting.map(x => siteWait(L, x))) : until, done, total: done + due.length });
         await infoWait(Math.max(5000, Math.min(until - Date.now(), 30 * 60000)));
         continue;
       }
@@ -380,14 +383,17 @@ async function socQueue() {
       // Pause stops these page checks too (4.30.2); Resume starts them again.
       if ((await api.storage.local.get('fcPause')).fcPause) break;
       if (!FCD) await loadFC();
-      const todo = FCD.copies.filter(c => isSoc(c) && !c.acct && c.status !== 'removed' && !FIND_BUSY.has(c.id) && (!c.acctTry || Date.now() - c.acctTry > 3 * 864e5)).slice(0, 2);
+      const rested = c => globalThis.PP_PACE && PP_PACE.resting(c.url);     // 4.64: a site resting after a 429 waits
+      const todo = FCD.copies.filter(c => isSoc(c) && !c.acct && c.status !== 'removed' && !FIND_BUSY.has(c.id) && !rested(c) && (!c.acctTry || Date.now() - c.acctTry > 3 * 864e5)).slice(0, 2);
       if (!todo.length) {
         // 4.30: then each new social copy's own picture is checked against your client's photo
         // (one at a time), so "Not seen in the post" shows in the list without opening it.
-        const chk = FCD.copies.find(c => (c.status === 'new' || c.removedBy === 'postcheck') && needsPostCheck(c) && !POST_BUSY.has(c.id) && !(c.postTry && Date.now() - c.postTry < 864e5));
+        const chk = FCD.copies.find(c => (c.status === 'new' || c.removedBy === 'postcheck') && needsPostCheck(c) && !POST_BUSY.has(c.id) && !rested(c) && !(c.postTry && Date.now() - c.postTry < 864e5));
         if (!chk) break;
         chk.postTry = Date.now();
         const r = await postCheck(chk).catch(() => 'err');
+        // Instagram has to wait (4.64): this post is checked again in 30 minutes, the others go on.
+        if (r === null && chk._paced) { chk._paced = false; chk.postTry = Date.now() - 864e5 + 30 * 60000; continue; }
         if (r === null) { chk.postTry = 0; break; }      // held by Pause / Off / hours: again after Resume
         socRedrawSoon();
         await new Promise(r => setTimeout(r, 800));

@@ -425,6 +425,9 @@ const PP_SOCIAL = (() => {
   const brandQuiet = id => api.scripting.executeScript({ target: { tabId: id }, func: brandTab, args: [LOGO, QUIET_TITLE], injectImmediately: true }).catch(() => {});
   // Opens url quietly and waits until it has loaded (at most ms). Returns the tab.
   async function openQuiet(url, ms = 25000) {
+    // 4.64 (Ben): Instagram at most one page every 30 seconds for all of PageProof, none while a
+    // site rests after "too many requests" (429).
+    if (globalThis.PP_PACE && !(await PP_PACE.turn(url))) { const e = new Error('paced'); e.paced = true; throw e; }
     let win;
     try { const me = await api.tabs.getCurrent(); if (me) win = me.windowId; } catch (e) { /* not in a tab */ }
     const tab = await ppOpenSearchTab(url, win);   // the searching window, or pinned (4.57)

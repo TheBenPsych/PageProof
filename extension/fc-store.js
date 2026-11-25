@@ -1568,9 +1568,9 @@ const FC = (() => {
       if (!url || !/^https?:/.test(url) || res) continue;
       try {
         const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 12000);
-        const r = await fetch(url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal });
+        const r = globalThis.PP_PACE ? await PP_PACE.fetch(url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal }, 0) : await fetch(url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal });
         clearTimeout(t);
-        if (!r.ok || !/html/i.test(r.headers.get('content-type') || 'html')) continue;
+        if (!r || !r.ok || !/html/i.test(r.headers.get('content-type') || 'html')) continue;
         const html = (await r.text()).slice(0, 2e6);
         res = countryFromDoc(new DOMParser().parseFromString(html.replace(/\son([a-z]+\s*=)/gi, ' data-pp-on$1').replace(/<script(?![^>]*ld\+json)[\s\S]*?<\/script>/gi, ''), 'text/html'));
       } catch (e) { /* not reachable */ }
@@ -2372,9 +2372,9 @@ const FC = (() => {
       seen.add(url);
       try {
         const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 15000);
-        const r = await fetch(url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal });
+        const r = globalThis.PP_PACE ? await PP_PACE.fetch(url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal }, 0) : await fetch(url, { credentials: 'omit', redirect: 'follow', signal: ctl.signal });
         clearTimeout(t);
-        if (!r.ok || !/html/i.test(r.headers.get('content-type') || 'html')) return null;
+        if (!r || !r.ok || !/html/i.test(r.headers.get('content-type') || 'html')) return null;
         const html = (await r.text()).slice(0, 3e6);
         f.pages.push({ url: r.url || url, label });
         // Nothing in it ever runs, but the browser still logs a red "inline event handler" error for every
