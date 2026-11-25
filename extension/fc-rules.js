@@ -214,7 +214,8 @@ const FC_RULES = (() => {
     return true;
   }
   // A picture the sweep matched: added to New for that photo (once per page).
-  async function addFound(photoId, page, img, base, dist) {
+  // extra (credit search, watch list): { by: 'how it was found', tag: { via: 'credit' } }
+  async function addFound(photoId, page, img, base, dist, extra = {}) {
     const key = typeof RS_UTIL !== 'undefined' ? RS_UTIL.key(page) : page.replace(/^https?:\/\/(www\.)?/, '');
     const id = photoId + '|' + key;
     if (await FC.DB.get('copies', id)) return false;
@@ -225,7 +226,7 @@ const FC_RULES = (() => {
     const site = (() => { try { return new URL(page).hostname.replace(/^www\./, ''); } catch (e) { return base; } })();
     const now = new Date().toISOString();
     const n = { id, photo: photoId, client: p.client || '', url: page, key, pk, site, title: '', thumb: '', img, engines: [], exact: false, pct: Math.max(0, 100 - dist * 6), match: 'maybe',
-      firstSeen: now, lastSeen: now, times: 1, by: 'a sweep of ' + base, sweep: 1, status: 'new', online: 'up' };
+      firstSeen: now, lastSeen: now, times: 1, by: extra.by || 'a sweep of ' + base, ...(extra.tag || { sweep: 1 }), status: 'new', online: 'up' };
     n.country = FC.countryOf(site); n.use = FC.useOf(n);
     await FC.DB.put('copies', n);
     p.copies = (await FC.copiesOf(photoId)).filter(c => c.status !== 'removed').length;

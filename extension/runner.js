@@ -160,6 +160,9 @@ async function chores() {
     if (typeof FC_RULES !== 'undefined' && now - (m.weak || 0) > 20 * 3600000) { await FC_RULES.tidyWeak(); ch.weak = now; }
     // 4.43: a sweep of a Stolen site, one small step at a time (about 20 seconds at most).
     if (typeof FC_RULES !== 'undefined') await FC_RULES.sweepStep().catch(e => console.warn('PageProof sweep:', e));
+    // New tools (Ben's picks): a credit line search and the watch list, one small step at a time,
+    // only while Keep searching is on and in your hours.
+    if (typeof PP_WATCH !== 'undefined' && (await FC.quietOK()).ok) await PP_WATCH.step().catch(e => console.warn('PageProof watch:', e));
     // Who's behind new sites: one site at a time, only sites with copies you still care about.
     if (now - (m.owner || 0) > 120000) {
       ch.owner = now;

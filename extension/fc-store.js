@@ -2121,7 +2121,7 @@ const FC = (() => {
     const f = { site, at: new Date().toISOString(), names: [], emails: [], phones: [], social: [], ids: [], pages: [], clues: [] };
     const seen = new Set();
     const read = async (url, label) => {
-      if (seen.has(url) || f.pages.length >= 6) return null;
+      if (seen.has(url) || f.pages.length >= 8) return null;
       seen.add(url);
       try {
         const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 15000);
@@ -2173,24 +2173,39 @@ const FC = (() => {
           if (!/\/(sharer|share|intent|dialog|plugins|tr)\b/.test(u) && !f.social.includes(u) && f.social.length < 8) f.social.push(u);
         }
       }
+      // 5a (Ben's way of finding the company): Terms, Privacy, About and Contact pages often say who
+      // runs the site: "operated by Example Media LLC", "Example Inc. (\"we\", \"us\")".
+      if (/Terms|Privacy|About|Contact/.test(label)) {
+        const addCo = (n, how) => {
+          n = clean(n).replace(/^(the|by)\s+/i, '').replace(/[,;:\s]+$/, '');
+          if (n.length < 4 || n.length > 80 || GENERIC_NAME.test(n) || f.names.includes(n)) return;
+          f.names.push(n); (f.nameFrom = f.nameFrom || {})[n] = label;
+          addClue('doc', how + ' (' + label + ')', n, label);
+        };
+        const CO = "((?:[A-Z0-9][\\w&'’-]*,?\\s){0,6}?(?:LLC|L\\.L\\.C\\.|Inc\\.?|Incorporated|Ltd\\.?|Limited|Corp\\.?|Corporation|LLP|PLLC|PLC|L\\.P\\.|LP|GmbH))(?![\\w])";
+        for (const m of text.matchAll(new RegExp("(?:operated|owned|run|published|managed|provided)\\s+by\\s+" + CO, 'g'))) addCo(m[1], 'Runs the site');
+        for (const m of text.matchAll(new RegExp(CO + "\\s*\\(\\s*[\"“]?(?:[Ww]e|[Uu]s|[Cc]ompany|[Tt]he [Cc]ompany)\\b", 'g'))) addCo(m[1], 'Calls itself "we"');
+        for (const m of text.matchAll(/\b(?:d\/b\/a|dba|doing business as|trading as)\s+["“]?([A-Z][\w&'’ .-]{2,50}?)["”]?(?=[,.;)]|\s+(?:and|or)\b)/g)) addCo(m[1], 'Trades as');
+        if (!/Runs the site|Calls itself/.test(JSON.stringify(f.clues))) { const m = new RegExp(CO).exec(text); if (m) addCo(m[1], 'Company named'); }
+      }
       const og = doc.querySelector('meta[property="og:site_name"]');
       if (og && og.content && !f.siteName) f.siteName = clean(og.content).slice(0, 80);
       return doc;
     };
-    const home = 'https://' + site + '/';
+    const home = (globalThis.PP_LOOKUP_HOME || (s2 => 'https://' + s2))(site) + '/';     // tests point it at a local server
     const hp = await read(home, 'Home page');
     const doc = scrape(hp);
     if (pageUrl && /^https?:/.test(pageUrl)) scrape(await read(pageUrl, 'The page with the copy'));
     // About, contact and privacy pages: the links the home page itself gives, else the usual names.
-    const want = { about: /about|who-we-are|our-story|company/i, contact: /contact|impressum|imprint/i, privacy: /privacy|legal|terms/i };
-    const LABEL = { about: 'About page', contact: 'Contact page', privacy: 'Privacy policy' };
+    const want = { about: /about|who-we-are|our-story|company/i, contact: /contact|impressum|imprint/i, privacy: /privacy/i, terms: /terms|conditions|\btos\b|legal/i };
+    const LABEL = { about: 'About page', contact: 'Contact page', privacy: 'Privacy policy', terms: 'Terms of service' };
     for (const [k, re] of Object.entries(want)) {
       let url = '';
       if (doc) for (const a of doc.querySelectorAll('a[href]')) {
         const t = (a.textContent || '') + ' ' + a.getAttribute('href');
         if (re.test(t)) { try { const u = new URL(a.getAttribute('href'), hp.url); if (u.hostname.replace(/^www\./, '') === site.replace(/^www\./, '') || u.hostname.endsWith('.' + baseOf(site))) { url = u.href; break; } } catch (e) { /* bad link */ } }
       }
-      if (!url) url = home + (k === 'about' ? 'about' : k === 'contact' ? 'contact' : 'privacy-policy');
+      if (!url) url = home + (k === 'about' ? 'about' : k === 'contact' ? 'contact' : k === 'terms' ? 'terms' : 'privacy-policy');
       const pg = await read(url, LABEL[k]);
       if (pg) { f[k] = pg.url; scrape(pg); }
     }
@@ -2360,7 +2375,10 @@ const FC = (() => {
     return { app: 'PageProof', version: api.runtime.getManifest().version, saved: new Date().toISOString(), name: (st.lastCase || {}).collector || '', theme: st.ppTheme || 'light',
       search: st.rsSettings || null, keep: st.fcKeep || null, drive: st.fcDrive || null, shownCountries: Array.isArray(st.fcShownCountries) ? st.fcShownCountries : SHOWN_START, showGov: !!st.ppShowGov, showPerson: !!st.ppShowPerson, hardware: st.ppHw || null,
       clients: clients.map(c => ({ name: c.name, searching: c.searching, priority: !!c.priority, licensed: c.licensed || [], licensedAcc: c.licensedAcc || [] })), flags, regs, picked: await picked(), unpicked: await unpicked(), forced: await forced(), hist: await histList(), alias: (await meta.get('photoAlias')) || {},
-      socialSites: st.ppSocialSites || {}, accounts: (await meta.get('acctKept')) || {}, acctLinks: (await meta.get('acctLinks')) || [], acctType: (await meta.get('acctType')) || {} };
+      socialSites: st.ppSocialSites || {}, accounts: (await meta.get('acctKept')) || {}, acctLinks: (await meta.get('acctLinks')) || [], acctType: (await meta.get('acctType')) || {},
+      // New tools (Ben's picks): the company cards, credit search wordings and the watch list you set.
+      entities: (await meta.get('entities')) || {}, creditCfg: (await meta.get('creditCfg')) || null,
+      watch: Object.values(((await meta.get('watch')) || {}).items || {}).filter(i => i.by === 'hand' || i.off).map(i => ({ key: i.key, kind: i.kind, base: i.base || '', url: i.url || '', label: i.label || '', plat: i.plat || '', by: i.by, off: !!i.off })) };
   }
   async function writeSettings() {
     try { await RS_DOCS.writeText('pageproof-settings.json', JSON.stringify(await settingsSnapshot(), null, 1)); await api.storage.local.set({ ppBackupAt: new Date().toISOString() }); } catch (e) { /* folder not set up */ }
@@ -2393,6 +2411,9 @@ const FC = (() => {
     if (Array.isArray(j.clients)) await DB.putMany('clients', j.clients.filter(c => c && typeof c.name === 'string').map(c => ({ name: tidyClient(c.name), searching: c.searching === true ? true : c.searching === false ? false : null, priority: !!c.priority, licensed: Array.isArray(c.licensed) ? c.licensed.map(str) : [], licensedAcc: Array.isArray(c.licensedAcc) ? c.licensedAcc.map(str) : [], photos: 0 })));
     if (j.accounts && typeof j.accounts === 'object') { const a = {}; for (const [k, v] of Object.entries(j.accounts)) if (v && typeof v.key === 'string') a[str(k)] = { key: str(v.key), handle: str(v.handle), url: /^https?:\/\//.test(v.url || '') ? str(v.url) : '', plat: str(v.plat), from: v.from === 'browser' ? 'browser' : 'you' }; await meta.set('acctKept', a); }
     if (j.acctType && typeof j.acctType === 'object') { const TY = ['Business', 'Creator', 'Organisation', 'Government', 'News or media', 'Fan page', 'Group', 'Person']; await meta.set('acctType', Object.fromEntries(Object.entries(j.acctType).filter(([k, v]) => typeof k === 'string' && TY.includes(v)).map(([k, v]) => [str(k), v]))); }
+    if (j.entities && typeof j.entities === 'object') { const E = {}; for (const [k, v] of Object.entries(j.entities)) if (v && typeof v === 'object') E[str(k)] = Object.fromEntries(Object.entries(v).filter(([, x]) => typeof x === 'string').map(([f, x]) => [str(f), str(x)])); await meta.set('entities', E); }
+    if (j.creditCfg && typeof j.creditCfg === 'object') { const cl = {}; for (const [k, v] of Object.entries(j.creditCfg.clients || {})) if (v && typeof v === 'object') cl[str(k)] = { on: v.on !== false, words: Array.isArray(v.words) ? v.words.filter(w => typeof w === 'string').map(str).slice(0, 8) : [] }; await meta.set('creditCfg', { on: j.creditCfg.on !== false, every: Number.isInteger(j.creditCfg.every) && j.creditCfg.every >= 5 ? j.creditCfg.every : 15, clients: cl }); }
+    if (Array.isArray(j.watch)) { const items = {}; for (const i of j.watch) if (i && typeof i.key === 'string' && /^[as]:/.test(i.key)) items[str(i.key)] = { key: str(i.key), kind: i.kind === 'acct' ? 'acct' : 'site', base: str(i.base), url: /^https?:\/\//.test(i.url || '') ? str(i.url) : '', label: str(i.label), plat: str(i.plat), by: i.by === 'hand' ? 'hand' : 'auto', off: !!i.off }; await meta.set('watch', { items }); }
     if (Array.isArray(j.acctLinks)) await meta.set('acctLinks', j.acctLinks.filter(Array.isArray).map(g => g.filter(k => typeof k === 'string').map(str)).filter(g => g.length > 1));
     if (Array.isArray(j.forced)) await meta.set('forced', j.forced.filter(r => typeof r === 'string' && r && !r.split('/').includes('..')).map(r => r.slice(0, 1000)));
     if (Array.isArray(j.unpicked)) await meta.set('unpicked', j.unpicked.filter(r => typeof r === 'string' && r && !r.split('/').includes('..')).map(r => r.slice(0, 1000)));

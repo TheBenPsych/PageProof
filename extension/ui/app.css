@@ -1410,3 +1410,12 @@ tr.rowlink td.chev{color:var(--faint);font-size:18px;text-align:center} tr.rowli
 .hidtabs .tabs button{border:0;border-radius:8px;padding:7px 12px;white-space:nowrap;margin:0}
 .hidtabs .tabs button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12),inset 0 0 0 1px var(--line)}
 .hidtabs .tabs button.on::after{display:none}
+
+/* New tools (credit search, watching, registrations, the company card) */
+.ntt{width:100%;border-collapse:collapse;font-size:13.5px}
+.ntt td{padding:8px 6px;border-top:1px solid var(--line);vertical-align:middle}
+.ntt tr:first-child td{border-top:0}
+.ntt tr.off td{opacity:.65}
+.efields{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.efld{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted);min-width:0}
+.efld .sinput{width:100%;min-width:0}
