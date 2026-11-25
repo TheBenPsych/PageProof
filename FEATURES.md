@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.63.0** (25 Nov 2026).
+Last updated: version **4.63.1** (25 Nov 2026).
 
 ---
 
@@ -228,6 +228,7 @@ Last updated: version **4.63.0** (25 Nov 2026).
 - **Big searches stay in All searches.** Kept 90 days, apart from Keep searching's one-photo searches (2 days). (4.53.1)
 - **Updater never stuck on a missing download.** Update-PageProof.cmd retries and falls back to the newest numbered version; the release build retries and puts a lost download page back. (4.55.1)
 - **Copies found stays put.** New copies wait behind a "N new copies came in" button, rows never move under you, and One at a time keeps the copy on screen. (4.60.2)
+- **Social sites paced.** Each social site has a safe pace for all of PageProof (Instagram one page every 30 seconds); a "too many requests" answer makes that site rest 1 hour (up to 12). Searches never wait for it. (4.63.1)
 
 ---
 
@@ -350,3 +351,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.61 | 25 Nov | Search tabs move to a separate minimized window (setting to keep pinned tabs) |
 | 4.62 | 25 Nov | Stop searching a photo also removes its unanswered matches |
 | 4.63 | 25 Nov | Finish this claim steps after Stolen, Not finished tab, Sent to legal |
+| 4.63.1 | 25 Nov | Fix: Social sites paced, rest after "too many requests" |
