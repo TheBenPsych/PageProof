@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.55.0** (25 Nov 2026).
+Last updated: version **4.55.1** (25 Nov 2026).
 
 ---
 
@@ -218,6 +218,7 @@ Last updated: version **4.55.0** (25 Nov 2026).
 - **Check-up after every update.** About a minute after a new version opens, PageProof checks the photo checker, opening a Drive photo, saving, the timestamp services and the search sites, and Home says "everything checked" or what broke. (4.41)
 - **Are the extra searches worth it?** How PageProof is doing (and the stats file for Claude) counts each extra search's work, copies found, time spent and time per copy. (4.52)
 - **Big searches stay in All searches.** Kept 90 days, apart from Keep searching's one-photo searches (2 days). (4.53.1)
+- **Updater never stuck on a missing download.** Update-PageProof.cmd retries and falls back to the newest numbered version; the release build retries and puts a lost download page back. (4.55.1)
 
 ---
 
@@ -325,3 +326,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.53.1 | 25 Nov | Fix: Big searches kept 90 days, one-photo searches 2 days |
 | 4.54 | 25 Nov | Checker tuned on your answers (few-detail Same is Maybe, Weak Maybes folded, test pairs from every answer) |
 | 4.55 | 25 Nov | Stop searching a photo from Copies found |
+| 4.55.1 | 25 Nov | Fix: Updater and release build retry GitHub hiccups |
