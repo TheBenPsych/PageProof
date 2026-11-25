@@ -643,7 +643,7 @@ let POOL_SIZE = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1
 // This computer's limits (ui/hardware.js), read fresh each time a search opens, so a new speed
 // level in Settings › Your computer counts from the next search on.
 let LIM = { checks: POOL_SIZE, tabs: 3, dl: POOL_SIZE + 4, decode: POOL_SIZE + 1 };
-// Easing off: while the computer is busy (processor flat out for a minute, memory nearly full, a
+// Easing off: while the computer is busy (memory nearly full, a
 // laptop low on battery) a running search drops to ONE photo check, ONE picture opened and ONE
 // search tab, and goes back to full speed a minute after the computer calms down. It never stops,
 // so today's 50 still finishes. (Only the work on this computer changes; how fast the search sites

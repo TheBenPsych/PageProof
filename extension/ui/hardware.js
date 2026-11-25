@@ -51,8 +51,8 @@ async function ppHardware() {
 }
 
 // Is the computer busy right now? Call it about every 30 seconds with the same state object.
-// Busy = processor over 80% for about a minute, less than 10% of the memory free, or a laptop on
-// battery below 30%. Returns the reason in plain words, or '' when the computer is fine.
+// Busy = less than 10% of the memory free, or a laptop on battery below 30% (not the processor:
+// that counts PageProof's own work too). Returns the reason in plain words, or '' when the computer is fine.
 // Keep searching waits while it is busy; a big search (today's 50, a 100-photo search) slows
 // down to one photo check and one search tab instead, so it still finishes.
 async function ppBusy(state) {
@@ -66,7 +66,9 @@ async function ppBusy(state) {
         state.busyTicks = use > 0.8 ? (state.busyTicks || 0) + 1 : 0;
       }
       state.cpu = t;
-      if (state.busyTicks >= 2) return 'The processor has been very busy for a minute';
+      // Since 2026-11-24 the processor no longer slows searches down. It counts every program,
+      // including the browser and PageProof's own photo checks, so a big search kept slowing
+      // itself down. Only low memory and a low laptop battery do now. (The reading is kept for stats.)
     }
   } catch (e) { /* not allowed */ }
   try {

@@ -26,6 +26,15 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   // 2. Busy check answers in plain words (here the computer is fine or the reason is given).
   const busy = await page.evaluate(async () => { const st = {}; const a = await ppBusy(st); const b = await ppBusy(st); return typeof a === 'string' && typeof b === 'string' && !!st.cpu; });
   ok(busy, 'The busy check reads the processor and answers in words');
+  const flat = await page.evaluate(async () => {
+    const real = chrome.system && chrome.system.cpu; let n = 0;
+    const fake = { getInfo: async () => { n += 1000; return { processors: [{ usage: { user: n, kernel: 0, total: n } }] }; } };
+    chrome.system = chrome.system || {}; chrome.system.cpu = fake;
+    const st = {}; let r = ''; for (let i = 0; i < 4; i++) r = await ppBusy(st);
+    if (real) chrome.system.cpu = real;
+    return { r, ticks: st.busyTicks };
+  });
+  ok(flat.r === '' && flat.ticks >= 2, 'A processor at 100% (PageProof\'s own photo checks count too) no longer slows searching down');
 
   // 3. A search eases off and comes back.
   const p2 = await ctx.newPage();
