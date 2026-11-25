@@ -564,6 +564,9 @@ const FC = (() => {
   async function unpicked() { const p = await meta.get('unpicked'); return Array.isArray(p) ? p : []; }
   const tidyRels = list => [...new Set((list || []).map(r => String(r).replace(/^\/+|\/+$/g, '')).filter(Boolean))].sort();
   // 4.47.5: folders with client_info_ignore.txt that you ticked anyway (inside a ticked folder).
+  // 4.51.1: folders a person set aside by name. Inside a ticked folder they are skipped (shown as
+  // Skipped in setup), unless ticked there by hand. "No longer monitoring" is NOT set aside: Ben searches it in ticked clients.
+  const SET_ASIDE = /\b(not to use|do not use|don'?t use|recycled?|recycle bin|should not have been)\b/i;
   async function forced() { const p = await meta.get('forced'); return Array.isArray(p) ? p : []; }
   async function setPicked(list, unlist, forceList) {
     // A folder inside another ticked folder is already included.
@@ -622,7 +625,6 @@ const FC = (() => {
   }
   // Read one client's photos. "only" = a list of year/quarter keys to look in (the hourly check
   // looks at this quarter and last quarter only). onFile(photoFields) for each photo.
-  const SET_ASIDE = /\b(not to use|do not use|don'?t use|recycled?|recycle bin|should not have been)\b/i;
   async function walkClient(cf, onFile, only, onDir) {
     const regs = {};
     const walk = async (dir, rel, depth, ctx) => {
@@ -667,8 +669,8 @@ const FC = (() => {
       for (const [name, h] of dirs) {
         // 4.47.3: a folder you unticked in setup is left out, with everything inside it.
         if (cf.skip && cf.skip.includes(rel + '/' + name)) { if (onDir) onDir(rel + '/' + name, 0, true); continue; }
-        // 4.51.1: folders a person set aside ("Image not to use", "recycled", "should not have been
-        // in this reg") hold photos that are not the client's to protect, so they are never searched.
+        // 4.51.1: set-aside folders ("Image not to use", "recycled") are left
+        // out unless ticked by hand in setup.
         if (SET_ASIDE.test(name) && !(cf.force || []).includes(rel + '/' + name)) { if (onDir) onDir(rel + '/' + name, 0, true); continue; }
         const c2 = { ...ctx };
         const y = yearOf(name), q = quarterOf(name), d = dayOf(name);
@@ -2469,7 +2471,7 @@ const FC = (() => {
     }
   }
 
-  return { DB, meta, open, touch, pics, dropDotMatches, checkerRemove, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, inHours, quietOK, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
+  return { SET_ASIDE, DB, meta, open, touch, pics, dropDotMatches, checkerRemove, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, inHours, quietOK, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, unpicked, forced, setPicked, pickInside, SCAN, applyPendingFlags, missingPicks, movedNote, followMoves, watchFolders, newFolders, newFoldersSeen, goalPlan, workMinutes, exifDate, heatShoot, coolShoot, burstSibling, wakeBurst, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setClients, logWeek, week, weekKey, firstNotes, searchedOnce, dayLog, speed, ladder, LADDER, alikeFrames, mixYears, mixLine,
     isPool, shownCountries, setShownCountries, SHOWN_START, ownerFor, pathOf, logReport, USE, useOf, riskOf, spamMarks, randomLabel, countryOf, COUNTRY, baseOf, groupOf, facts, lookup, owners,
