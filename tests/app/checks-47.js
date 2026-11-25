@@ -16,7 +16,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await go('help'); await seed(page); await page.reload(); await page.waitForTimeout(1000);
   // Two photos get firm-style dated names: one published last week, one long ago.
   const ids = await page.evaluate(async () => {
-    const cs = (await FC.allCopies()).filter(c => c.status === 'new' && (!c.country || FC.SHOWN_START.includes(c.country)));   // 4.24: other countries don't show by default
+    const cs = (await FC.allCopies()).filter(c => c.status === 'new' && (!c.country || FC.SHOWN_START.includes(c.country)) && !(c.match === 'maybe' && c.pct < 60) && c.use !== 'social');   // 4.52: weak Maybes fold at the bottom   // 4.24: other countries don't show by default
     const a = cs[0], b = cs.find(c => c.photo !== a.photo);
     const d = new Date(Date.now() - 7 * 864e5);
     const pa = await FC.DB.get('photos', a.photo); pa.name = `${d.getMonth() + 1}.${d.getDate()}.${String(d.getFullYear()).slice(2)}_Parade_Doe.jpg`; await FC.DB.put('photos', pa);

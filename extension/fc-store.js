@@ -1746,7 +1746,7 @@ const FC = (() => {
       // A small picture that is too big to keep is left out (cutting it short would break it).
       const th = String(l.thumb || '');
       const base = { url: other ? c.url : l.url, key: other ? c.key : l.key, pk: pageKey(other ? c.url : l.url), site: other ? c.site : l.site, title: l.title || '', thumb: th.length <= 60000 ? th : '', img: l.img || '', engines: l.engines || [], exact: !!l.exact,
-        pct: l.pct, inl: l.inl, tiles: l.tiles, str: l.str, mid: l.mid, match: l.verdict, w: l.w, h: l.h, from: l.from || '', onPage: l.onPage || '', cover: l.cover ? 1 : 0 };
+        pct: l.pct, inl: l.inl, tiles: l.tiles, str: l.str, mid: l.mid, match: l.verdict, w: l.w, h: l.h, from: l.from || '', onPage: l.onPage || '', cover: l.cover ? 1 : 0, coverImg: l.cover ? l.coverImg || '' : '' };
       if (c) {
         if (!base.thumb && c.thumb) base.thumb = c.thumb;
         if (!base.thumb && !c.thumb && c.th) delete base.thumb;      // its preview is already kept
@@ -2003,7 +2003,13 @@ const FC = (() => {
       if (status === 'stolen' || status === 'licensed' || status === 'removed') tally[c.client || ''] = (tally[c.client || ''] || 0) + 1;
       // 4.47: a Same photo you removed goes into your own checker test set (on this computer only).
       // Not for big bulk removes (a whole site at once), which say little about the checker.
-      if (status === 'removed' && got.length <= 5 && !extra.removedBy && before[before.length - 1].status !== 'removed' && c.match === 'same' && typeof PP_CTESTS !== 'undefined') PP_CTESTS.keep(c, 'different');
+      // 4.52 (Ben's pick): every kind of answer is kept (Stolen and Licensed as real copies, removed
+      // Same and Maybe as different pictures), so the checker can be tuned on both.
+      const was = before[before.length - 1].status;
+      if (got.length <= 5 && !extra.removedBy && was !== status && ['same', 'maybe'].includes(c.match) && typeof PP_CTESTS !== 'undefined') {
+        if (status === 'removed') PP_CTESTS.keep(c, 'different');
+        else if ((status === 'stolen' || status === 'licensed') && was === 'new') PP_CTESTS.keep(c, 'copy');
+      }
     }
     await DB.putMany('copies', got);
     if (rejects) { try { await RS_REJECT.save(); } catch (e) { /* lists not loaded */ } }

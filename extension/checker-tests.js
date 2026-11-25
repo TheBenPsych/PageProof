@@ -1,6 +1,6 @@
 // 4.47 (Ben's pick): your own real test set for the photo checker.
 // Every time you Remove a copy the checker called Same photo, or press "It is a copy" on one it
-// threw out, PageProof keeps a small pair (your photo and theirs, at most 800 pixels) in
+// threw out (4.52: and every Stolen, Licensed or removed Maybe too, so both kinds of answer are kept), PageProof keeps a small pair (your photo and theirs, at most 800 pixels) in
 // Documents\PageProof\checker-tests, on this computer only. Nothing is uploaded and nothing goes
 // into PageProof's public code. The Checker test (Settings › How PageProof is doing) then runs
 // these real pairs too, so mistakes made on your own photos show up, and Claude can read the
@@ -84,20 +84,22 @@ const PP_CTESTS = (() => {
     try {
       while (Q.length) {
         const { c, truth, oursBlob } = Q.shift();
-        try { await keepOne(c, truth, oursBlob); } catch (e) { stat('ctest.fail'); }
+        // 4.52: a photo on Google Drive that never opens must not hold up every later pair.
+        try { if ((await RS_LATE(keepOne(c, truth, oursBlob).then(() => 1), 60000, 'slow')) === 'slow') stat('ctest.slow'); } catch (e) { stat('ctest.fail'); }
       }
     } finally { busy = false; }
   }
   async function keepOne(c, truth, oursBlob) {
+    stat('ctest.try');
     const dir = await folder(true);
     if (!dir) { stat('ctest.nofolder'); return; }
     const id = await idOf((c.photo || '') + '|' + c.url);
-    const [ob, tb] = [await oursOf(c, oursBlob), (await fetchBlob(c.pic && c.pic.url)) || (await fetchBlob(c.img)) || (await fetchBlob(c.thumb))];
+    const [ob, tb] = [await RS_LATE(oursOf(c, oursBlob), 20000, null), (await fetchBlob(c.pic && c.pic.url)) || (await fetchBlob(c.img)) || (await fetchBlob(c.thumb))];
     if (!ob || !tb) { stat('ctest.nopicture'); return; }
     const pd = await dir.getDirectoryHandle(id, { create: true });
     await write(pd, 'ours.jpg', await small(ob));
     await write(pd, 'theirs.jpg', await small(tb));
-    const info = { v: 1, truth, checker: c.match || c.verdict || '', pct: c.pct ?? null, inl: c.inl ?? null, exact: !!c.exact, kind: kindOf(c),
+    const info = { v: 1, truth, checker: c.match || c.verdict || '', pct: c.pct ?? null, inl: c.inl ?? null, tiles: c.tiles ?? null, str: c.str ?? null, mid: c.mid ?? null, from: c.from || '', engines: c.engines || [], answer: c.status || '', exact: !!c.exact, kind: kindOf(c),
       site: c.site || '', url: c.url, photo: c.photo || '', copy: c.id || '', at: new Date().toISOString(), version: api.runtime.getManifest().version };
     await write(pd, 'pair.json', JSON.stringify(info, null, 2));
     stat('ctest.kept.' + truth);

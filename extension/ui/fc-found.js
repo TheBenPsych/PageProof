@@ -124,7 +124,7 @@ function flagsFor(c) {
 // drawn straight away; otherwise the <img> gets data-th and ppLoadPics() fills it in a moment later.
 const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 const lazyPic = (rec, fallback) => `${BLANK}" data-th="${esc(rec.id)}${fallback ? `" data-fb="${fallback}` : ''}`;   // goes inside src="…"; fallback is already made safe
-const theirImg = c => c.thumb ? safeImg(c.thumb) : c.th ? (FC.pics.seen(c.id) || lazyPic(c, safeImg(c.img))) : safeImg(c.img);
+const theirImg = c => !c.img && !c.thumb && c.coverImg ? safeImg(c.coverImg) : c.thumb ? safeImg(c.thumb) : c.th ? (FC.pics.seen(c.id) || lazyPic(c, safeImg(c.img))) : safeImg(c.img);
 async function ppLoadPics(root = document) {
   const imgs = [...root.querySelectorAll('img[data-th]')];
   if (!imgs.length) return;
@@ -402,7 +402,9 @@ async function postCheckNow(c, opts = {}) {
     // Ben (4.30): only the post's own pictures count, never a picture in its comments or links.
     // Removed by itself only when every picture of the post was looked at and none is the photo.
     if (res.state === 'card' && c.status === 'new' && !c.cardV && !/by hand/.test(c.by || '')) await cardRemove(c);
-    else if (res.state === 'notSeen' && res.browser === 'notSeen' && notInPost(c) && c.status === 'new' && !/by hand/.test(c.by || '')) {
+    else if (c.status === 'new' && !/by hand/.test(c.by || '') && ((res.state === 'notSeen' && res.browser === 'notSeen' && notInPost(c))
+      // 4.52 (Ben): a post whose cover is another picture stays only if the post check finds the photo.
+      || (c.cover && res.state !== 'seen' && !/^https?:/i.test(c.img || '')))) {
       await FC.answer([c.id], 'removed', { removedBy: 'postcheck' });
       c.status = 'removed'; c.removedBy = 'postcheck';
     }
@@ -432,6 +434,9 @@ async function cardSweep() {
   return xs.length;
 }
 // 4.50: a post the search site listed whose cover is another picture (a carousel, an album, slides).
+// 4.52: a website Maybe under 60% nobody has a reason to look at first (see the list below).
+const WEAK_MAYBE = 60;
+const weakMaybe = c => c.status === 'new' && c.match === 'maybe' && c.pct != null && c.pct >= 0 && c.pct < WEAK_MAYBE && !isSoc(c) && !c.repeat && !c.known && !c.rescued && !c.cover;
 const coverWait = c => !!c.cover && isSoc(c) && (!c.postChk || c.postChk.v !== POSTCHK_V);
 const COVER_WAIT = 'The search site listed this post for your photo, but its first picture is a different one. PageProof looks at every picture of the post in your browser, and keeps it only if your photo is one of them.';
 const notInPost = c => isSoc(c) && !acctPageLink(c) && c.postChk && c.postChk.state === 'notSeen' && !/^https?:/i.test(c.img || '');
@@ -721,7 +726,7 @@ function copyRow(c) {
       <a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink" title="Open this page in a new tab"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>${c.alts && c.alts.length ? `<span class="tag grey altn" title="${esc(c.alts.join('\n'))}" data-gloss="Same page">+${c.alts.length} ${c.alts.length === 1 ? 'address' : 'addresses'}</span>` : ''}
       <div class="l3">${esc(c.photoName)}<span class="l3x">${isSoc(c) && c.acct ? ' · ' + esc(c.site) : ''}${c.pct >= 0 && c.pct != null ? ` · <b class="num" data-gloss="Lines up">${c.pct}%</b> lines up` : ''} · ${esc(FC.USE[c.use][0])}${c.country ? ' · ' + esc(c.country) : ''} · found ${shortDate(c.firstSeen).toLowerCase()}</span></div>
     </div>
-    <div class="ccols">${cell('pct', 'Match', luBar(c.pct))}${cell('client', 'Client', c.clientName ? `<span title="${esc(c.clientName)}">${esc(c.clientName)}</span>` : '<span style="color:var(--warn);font-weight:600">Unknown</span>')}${K.dmg ? (dmgCell(c) ? `<span class="cc-dmg"><i>Damages</i>${dmgCell(c)}</span>` : '<span class="cc-dmg" aria-hidden="true"></span>') : ''}${cell('use', 'Use', `<span title="${esc(FC.USE[c.use][0])}">${esc(FC.USE[c.use][0])}</span>`)}${cell('country', 'Country', `<span>${esc(c.country || 'Not known')}</span>`)}${cell('found', 'Found', `<span>${esc(shortDate(c.firstSeen))}</span>`)}</div>
+    <div class="ccols">${cell('pct', 'Match', coverWait(c) ? '<span class="faint" title="The post\'s cover is another picture. PageProof is opening the post to look at all its pictures.">Checking…</span>' : luBar(c.pct))}${cell('client', 'Client', c.clientName ? `<span title="${esc(c.clientName)}">${esc(c.clientName)}</span>` : '<span style="color:var(--warn);font-weight:600">Unknown</span>')}${K.dmg ? (dmgCell(c) ? `<span class="cc-dmg"><i>Damages</i>${dmgCell(c)}</span>` : '<span class="cc-dmg" aria-hidden="true"></span>') : ''}${cell('use', 'Use', `<span title="${esc(FC.USE[c.use][0])}">${esc(FC.USE[c.use][0])}</span>`)}${cell('country', 'Country', `<span>${esc(c.country || 'Not known')}</span>`)}${cell('found', 'Found', `<span>${esc(shortDate(c.firstSeen))}</span>`)}</div>
     <div class="acts">${c.status === 'removed' ? `<button class="btn sm" data-act="rowans" data-v="new|${esc(c.id)}">Put back</button>` : done ? `<button class="btn sm" data-act="rowans" data-v="new|${esc(c.id)}">Change answer</button>`
       : `<button class="btn sm stolen" data-act="rowans" data-v="stolen|${esc(c.id)}">Stolen</button><button class="btn sm licensed" data-act="rowans" data-v="licensed|${esc(c.id)}">Licensed</button><button class="btn sm" data-act="rowans" data-v="removed|${esc(c.id)}">Remove</button>`}
       <button class="btn sm icon" data-act="rowmenu" data-v="${esc(c.id)}" aria-label="More choices for ${esc(c.site)}">${ic('dots', 18)}</button></div></div>`;
@@ -791,6 +796,17 @@ V.found = async () => {
         : `<span class="oav grey">?</span><div style="min-width:0"><b class="gname">Other sites</b><div class="faint">${plural(sites.size, 'site')} with no shared owner found</div></div>`, xs, true]);
     }
   } else groups.push(['', '', rows, false]);
+  // 4.52 (Ben's pick): website Maybes under 60% were all removed by hand (none of about 85 kept),
+  // so they fold into one "Weak Maybes" heading at the bottom, closed until clicked.
+  if (!social) {
+    const weak = [];
+    for (const g of groups) { const keep = []; for (const c of g[2]) (weakMaybe(c) ? weak : keep).push(c); g[2] = keep; }
+    for (let i = groups.length - 1; i >= 0; i--) if (!groups[i][2].length && groups.length > 1) groups.splice(i, 1);
+    if (weak.length) {
+      if (groups.length === 1 && !groups[0][2].length) groups.length = 0;
+      groups.push(['weak', `<b class="gname">Weak Maybes</b><span class="faint">Under ${WEAK_MAYBE}% lines up. You have removed nearly all of these before.</span>`, weak, true]);
+    }
+  }
   const list = [];
   let shown = 0, body = '';
   const foldSites = state.fView !== 'site' && state.fView !== 'owner' && state.fView !== 'account';
@@ -803,9 +819,9 @@ V.found = async () => {
         open = !state.exp.includes(k);
         body += `<div class="ghead fold chead" data-act="gtoggle" data-v="${esc(k)}" aria-expanded="${open}" title="${open ? 'Click to fold' : 'Click to open'}">${html}<span class="gfold${open ? ' on' : ''}" aria-hidden="true">▾</span></div>`;
       } else {
-      const canFold = fold && xs.length > 3;
+      const canFold = fold && (xs.length > 3 || k === 'weak');
       open = !canFold || state.exp.includes(k);
-      body += `<div class="ghead${canFold ? ' fold' : ''}" ${canFold ? `data-act="gtoggle" data-v="${esc(k)}"` : ''}>${canFold ? `<span class="caret${open ? ' on' : ''}">▸</span>` : ''}${html}<span class="faint gcount">${plural(xs.length, 'copy', 'copies')}${canFold ? (open ? ' · click to fold' : ' · click to open') : ''}</span></div>`;
+      body += `<div class="ghead${canFold ? ' fold' : ''}${k === 'weak' ? ' weakhead' : ''}" ${canFold ? `data-act="gtoggle" data-v="${esc(k)}"` : ''}>${canFold ? `<span class="caret${open ? ' on' : ''}">▸</span>` : ''}${html}<span class="faint gcount">${plural(xs.length, 'copy', 'copies')}${canFold ? (open ? ' · click to fold' : ' · click to open') : ''}</span></div>`;
       }
       if (!open && !xs.some(x => x.id === state.open)) continue;
     }
