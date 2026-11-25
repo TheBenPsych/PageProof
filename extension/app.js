@@ -557,6 +557,7 @@ V.settings = async () => {
   const zoomKey = await ppZoomKey();
   const st = await api.storage.local.get(['ppPopups', 'ppAcctRead', 'fcPageAuto']);
   const pops = st.ppPopups !== false, acct = st.ppAcctRead !== false, pageAuto = st.fcPageAuto !== false;
+  const place = (await api.storage.local.get('ppSearchPlace').catch(() => ({}))).ppSearchPlace === 'pinned' ? 'pinned' : 'window';   // 4.57
   const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
   const sec = (id, title, lines) => `<section class="card ssec" id="ss-${id}"><h2>${title}</h2>${lines}</section>`;
   const docsCtl = docs === 'granted' ? `<span class="tag ok">${ic('check', 13, 3)} Connected</span><button class="btn" data-act="docschoose">Change folder</button>`
@@ -576,6 +577,7 @@ V.settings = async () => {
       sLine('Close pop-ups before the first screen', 'Cookie notices, newsletter and "open in the app" boxes. PageProof presses the site\'s own close button and the capture log says what it closed. Log-in walls are left alone.', sSwitch('id="sPopups"', pops, 'Close pop-ups'), 'popSet'))}
     ${sec('search', 'Searching',
       sLine('Keep searching', 'Pace, hours, a goal date and Today\'s 50.', '<a class="btn" href="#keep">Open Keep searching</a>') +
+      sLine('Where searches run', 'Separate minimized window: every search tab opens in one small PageProof searching window, kept minimized, so your own window stays clear. Pinned tabs: small pinned tabs at the left of your own window, like before.', `<div class="seg" role="group" aria-label="Where searches run">${[['window', 'Separate minimized window'], ['pinned', 'Pinned tabs']].map(([k, l]) => `<button class="${place === k ? 'on' : ''}" aria-pressed="${place === k}" data-act="searchplace" data-v="${k}">${l}</button>`).join('')}</div>`) +
       sLine('Read account details by itself', 'Followers, verified and owner company of social accounts, one account a minute, only while Keep searching is on.', sSwitch('data-act="acctread"', acct, 'Read account details by itself')) +
       sLine('Show their pages by themselves', 'In a copy\'s panel, load the site\'s page in a small window and keep a small picture of it.', sSwitch('data-act="pageauto"', pageAuto, 'Show their pages by themselves')) +
       sLine('Your computer', `${hw.cores} cores, ${hw.memGB} GB memory. Up to ${hw.limits.checks} photo ${hw.limits.checks > 1 ? 'checks' : 'check'} and ${hw.limits.tabs} search ${hw.limits.tabs > 1 ? 'tabs' : 'tab'} at once.`, `<span class="tag ${hw.level === 'Light' ? 'warn' : 'ok'}">${hw.level}</span><a class="btn" href="#computer">See limits</a>`))}

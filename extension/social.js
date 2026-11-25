@@ -427,9 +427,7 @@ const PP_SOCIAL = (() => {
   async function openQuiet(url, ms = 25000) {
     let win;
     try { const me = await api.tabs.getCurrent(); if (me) win = me.windowId; } catch (e) { /* not in a tab */ }
-    const opts = { url, active: false, ...(win != null ? { windowId: win } : {}) };
-    let tab;
-    try { tab = await api.tabs.create({ ...opts, pinned: true }); } catch (e) { tab = await api.tabs.create(opts); }
+    const tab = await ppOpenSearchTab(url, win);   // the searching window, or pinned (4.57)
     QUIET.add(tab.id);
     await new Promise(res => {
       const t = setTimeout(done, ms);
@@ -741,3 +739,55 @@ const PP_SOCIAL = (() => {
     big, quickType, kindOf, cardPic, personName, isGovText, profilePages, readProfileInTab, readProfile, openQuiet, closeQuiet, stopQuiet, halt, profileFacts, addShopSign, FOL_BANDS, folBand, shortNum };
 })();
 if (typeof self !== 'undefined') self.PP_SOCIAL = PP_SOCIAL;
+
+// 4.57 (Ben): where search tabs open. By default every search tab (Keep searching, Google Lens,
+// Yandex, Bing, "checking owner") goes into one separate minimized "PageProof searching" window,
+// so the main window stays clear. Settings can switch back to the old pinned tabs. The
+// background worker owns that window; pages ask it for its number. null = use pinned tabs.
+async function ppSearchPlaces() {
+  if (typeof ppSearchWindowBg === 'function') { try { return { sw: await ppSearchWindowBg(), own: await ppOwnWindowBg() }; } catch (e) { return { sw: null, own: null }; } }
+  const api = typeof browser !== 'undefined' ? browser : chrome;
+  try { const r = await api.runtime.sendMessage({ type: 'ppSearchWin' }); return { sw: r && r.windowId != null ? r.windowId : null, own: r ? r.ownId : null }; } catch (e) { return { sw: null, own: null }; }
+}
+async function ppSearchWindow() { return (await ppSearchPlaces()).sw; }
+// Opens a search tab in the searching window (or pinned, in fallback). Never in front of you.
+// Safety net: if the browser pops the minimized window open when a tab is added (a test browser
+// did, a normal one with a desktop did not), it is minimized again at once and your own window
+// gets the focus back.
+async function ppOpenSearchTab(url, fallbackWin) {
+  const api = typeof browser !== 'undefined' ? browser : chrome;
+  const { sw, own } = await ppSearchPlaces();
+  if (sw != null) {
+    // Not being looked at (minimized, or left open behind your work): keep it minimized.
+    let wasMin = false; try { const w0 = await api.windows.get(sw); wasMin = w0.state === 'minimized' || !w0.focused; } catch (e) { /* gone */ }
+    try {
+      const t = await api.tabs.create({ windowId: sw, url, active: false });
+      if (wasMin) {
+        // The browser can pop it open a moment later, so look again shortly after.
+        const fix = async () => {
+          try {
+            const w = await api.windows.get(sw);
+            if (w.state !== 'minimized' && (await api.tabs.get(t.id).catch(() => null))?.active !== true) {
+              await api.windows.update(sw, { state: 'minimized' });
+              if (own != null) await api.windows.update(own, { focused: true }).catch(() => {});
+            }
+          } catch (e) { /* gone */ }
+        };
+        await fix(); setTimeout(fix, 300); setTimeout(fix, 1200);
+      }
+      return t;
+    } catch (e) { /* window just closed: pinned below */ }
+  }
+  const win = fallbackWin != null && fallbackWin !== sw ? fallbackWin : own;
+  const opts = { url, active: false, ...(win != null ? { windowId: win } : {}) };
+  try { return await api.tabs.create({ ...opts, pinned: true }); } catch (e) { return api.tabs.create(opts); }
+}
+// Brings a tab to the front, opening its window if it is minimized (the robot check, "Show me").
+async function ppShowTab(tabId) {
+  const api = typeof browser !== 'undefined' ? browser : chrome;
+  const t = await api.tabs.update(tabId, { active: true });
+  let w = null; try { w = await api.windows.get(t.windowId); } catch (e) { /* gone */ }
+  await api.windows.update(t.windowId, w && w.state === 'minimized' ? { state: 'normal', focused: true } : { focused: true });
+  return t;
+}
+if (typeof self !== 'undefined') Object.assign(self, { ppSearchWindow, ppOpenSearchTab, ppShowTab });

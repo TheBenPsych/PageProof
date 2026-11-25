@@ -810,7 +810,7 @@ V.keep = async () => {
     const j = await RS_DB.get('jobs', store.fcFifty.id);
     if (j && j.pics) { const d = j.pics.filter(p => Object.values(p.runs).every(r => !['wait', 'go', 'captcha'].includes(r.state))).length; fiftyJob = { done: d, total: j.pics.length, left: j.pics.length - d > 0 ? Math.max(1, Math.round((j.pics.length - d) * 0.6)) + ' min' : '' }; }
   } catch (e) { /* no job yet */ }
-  return `${head('Find copies', 'Keep searching', 'Searches your clients\' photos one at a time, all day, in a small pinned PageProof tab. It goes gently so the search sites don\'t block you.')}
+  return `${head('Find copies', 'Keep searching', 'Searches your clients\' photos one at a time, all day, in the background. It goes gently so the search sites don\'t block you.')}
   ${await driveBanner()}
   ${k.on && !store.fcPause && st && st.state === 'closed' ? keepClosedBanner() : ''}${await keepReopenedBanner()}
   <section class="card pad keeplive" style="display:flex;flex-direction:column;gap:14px">
@@ -841,6 +841,7 @@ V.keep = async () => {
       <div class="kline"><span class="kl">Hours</span>
         <div class="seg" role="radiogroup" aria-label="Hours">${[['work', 'Work hours'], ['all', 'All day and night']].map(([h, l]) => `<button role="radio" aria-checked="${k.hours === h}" class="${k.hours === h ? 'on' : ''}" data-act="keepset" data-v="hours|${h}">${l}</button>`).join('')}</div></div>
       ${k.hours === 'work' ? `<div class="row" style="padding-left:114px"><label class="mini">From<select data-act="keepnum" data-v="from">${hourOpts.map(h => `<option value="${h}" ${k.from === h ? 'selected' : ''}>${hlabel(h)}</option>`).join('')}</select></label><label class="mini">To<select data-act="keepnum" data-v="to">${hourOpts.map(h => `<option value="${h}" ${k.to === h ? 'selected' : ''}>${hlabel(h)}</option>`).join('')}</select></label><label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="checkbox" data-act="keepwd" ${k.weekdays ? 'checked' : ''}> Weekdays only</label></div>` : ''}
+      ${await searchPlaceRow()}
       ${await acctReadRow()}
     </section>
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
@@ -880,12 +881,23 @@ V.keep = async () => {
   </section>`;
 };
 V.keep.guard = V.found.guard;
+// 4.57 (Ben): search tabs in one separate minimized window (default) or pinned in your own window.
+async function searchPlaceRow() {
+  const place = (await api.storage.local.get('ppSearchPlace').catch(() => ({}))).ppSearchPlace === 'pinned' ? 'pinned' : 'window';
+  return `<div class="kline"><span class="kl">Where searches run ${kInfo('Separate minimized window: every search tab opens in one small PageProof searching window, kept minimized, so your own window stays clear. It closes with your last browser window. If a search site asks "are you a robot?", that window opens for you. Pinned tabs: search tabs open as small pinned tabs at the left of your own window, like before.')}</span>
+    <div class="seg" role="radiogroup" aria-label="Where searches run">${[['window', 'Separate minimized window'], ['pinned', 'Pinned tabs']].map(([v, l]) => `<button role="radio" aria-checked="${place === v}" class="${place === v ? 'on' : ''}" data-act="searchplace" data-v="${v}">${l}</button>`).join('')}</div></div>`;
+}
 Object.assign(ACTS, {
+  searchplace: async v => {
+    await api.storage.local.set({ ppSearchPlace: v === 'pinned' ? 'pinned' : 'window' });
+    toast(v === 'pinned' ? 'Searches now run in pinned tabs in your own window.' : 'Searches now run in a separate minimized PageProof window.');
+    setTimeout(() => render(true), 300);
+  },
   keepon: async (v, el) => {
     await FC.setKeep({ on: el.checked });
     if (el.checked) { await api.storage.local.remove('fcPause'); api.runtime.sendMessage({ type: 'fcKeepWake' }).catch(() => {}); }
     else api.runtime.sendMessage({ type: 'fcKeepStop' }).catch(() => {});
-    toast(el.checked ? 'Keep searching is on. It runs in a small pinned PageProof tab.' : 'Keep searching is off.');
+    toast(el.checked ? 'Keep searching is on. It runs in the background.' : 'Keep searching is off.');
     render(true);
   },
   keeppause: async () => { const p = (await api.storage.local.get('fcPause')).fcPause; if (p) await api.storage.local.remove('fcPause'); else await api.storage.local.set({ fcPause: Date.now() }); render(true); },

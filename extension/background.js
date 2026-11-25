@@ -678,17 +678,95 @@ async function keepAlive(show, force) {
   // Already open? (Its heartbeat is fresh and its tab is still there.)
   const s = st.fcStatus;
   if (s && s.tabId && Date.now() - s.beat < 90000) {
-    try { const t = await api.tabs.get(s.tabId); if (show) { await api.tabs.update(t.id, { active: true }); await api.windows.update(t.windowId, { focused: true }); } return; } catch (e) { /* closed */ }
+    try { const t = await api.tabs.get(s.tabId); if (show) await ppShowTab(t.id); return; } catch (e) { /* closed */ }
   }
   // A second helper closes itself if one is already running (see runner.js).
-  const win = wins.find(w => w.focused) || wins[0];
-  const t = await api.tabs.create({ windowId: win.id, url: api.runtime.getURL('runner.html'), pinned: true, index: 0, active: !!show });
+  // 4.57: in the separate minimized searching window when that is picked (the default).
+  const sw = await ppSearchWindowBg();
+  let t;
+  if (sw != null) {
+    t = await ppOpenSearchTab(api.runtime.getURL('runner.html'));
+    if (show) await ppShowTab(t.id).catch(() => {});
+  } else {
+    const win = wins.find(w => w.focused) || wins[0];
+    t = await api.tabs.create({ windowId: win.id, url: api.runtime.getURL('runner.html'), pinned: true, index: 0, active: !!show });
+  }
   // Browsers put quiet tabs to sleep to save memory; this one must stay awake to keep searching.
   api.tabs.update(t.id, { autoDiscardable: false }).catch(() => {});
   runnerTab = t.id;
 }
 let runnerTab = null;
-const normalWindows = async () => { try { return await api.windows.getAll({ windowTypes: ['normal'] }); } catch (e) { return [{ id: undefined }]; } };
+// Your own browser windows (the minimized searching window doesn't count).
+const normalWindows = async () => { try { return (await api.windows.getAll({ windowTypes: ['normal'], populate: true })).filter(w => !isSearchWin(w)); } catch (e) { return [{ id: undefined }]; } };
+
+// ---------- 4.57 (Ben): one separate minimized "PageProof searching" window ----------
+// Every search tab opens there instead of pinned in your own window (Settings: Keep searching ›
+// Where searches run). It opens sized like a normal window (so the search pages lay out properly)
+// and minimizes straight away. Closed by hand: a new one opens the next time a search needs it,
+// and Keep searching comes back as before. It closes by itself with your last own window, so the
+// browser never keeps running in the background because of it.
+const SW_PAGE = api.runtime.getURL('searchwin.html');
+let swId = null, swLast = null, swMaking = null;
+const isSearchWin = w => !!(w && ((swId != null && w.id === swId) || (w.tabs || []).some(t => (t.url || t.pendingUrl || '').startsWith(SW_PAGE))));
+async function swPlace() { try { return (await api.storage.local.get('ppSearchPlace')).ppSearchPlace === 'pinned' ? 'pinned' : 'window'; } catch (e) { return 'window'; } }
+async function swRemember(id) { swId = id; if (id != null) swLast = id; if (api.storage.session) await api.storage.session.set({ ppSwId: id }).catch(() => {}); }
+async function swFind() {
+  if (swId == null && api.storage.session) { try { const r = await api.storage.session.get('ppSwId'); if (r.ppSwId != null) { swId = r.ppSwId; swLast = swId; } } catch (e) { /* none */ } }
+  if (swId != null) { try { await api.windows.get(swId); return swId; } catch (e) { await swRemember(null); } }
+  try { const tabs = await api.tabs.query({ url: SW_PAGE + '*' }); if (tabs.length) { await swRemember(tabs[0].windowId); return swId; } } catch (e) { /* none */ }
+  return null;
+}
+// The searching window's number, opening it if needed. null = use pinned tabs.
+async function ppSearchWindowBg(make = true) {
+  if (await swPlace() !== 'window' || !api.windows) return null;
+  const have = await swFind();
+  if (have != null || !make) return have;
+  if (!(await normalWindows()).length) return null;   // every own window is closed
+  if (!swMaking) swMaking = (async () => {
+    let w;
+    try { w = await api.windows.create({ url: SW_PAGE, type: 'normal', focused: false, width: 1280, height: 900 }); }
+    catch (e) { try { w = await api.windows.create({ url: SW_PAGE, focused: false }); } catch (e2) { return null; } }
+    await swRemember(w.id);
+    try { await api.windows.update(w.id, { state: 'minimized' }); } catch (e) { /* stays open behind */ }
+    return w.id;
+  })().finally(() => { swMaking = null; });
+  return swMaking;
+}
+// One of your own windows (the one you used last), where a search tab is made before it moves.
+async function ppOwnWindowBg() {
+  const wins = await normalWindows();
+  if (!wins.length || wins[0].id === undefined) return null;
+  try { const f = await api.windows.getLastFocused({ windowTypes: ['normal'] }); if (f && wins.some(w => w.id === f.id)) return f.id; } catch (e) { /* none */ }
+  return (wins.find(w => w.focused) || wins[0]).id;
+}
+async function swClose() { const id = await swFind(); if (id == null) return; await api.storage.local.set({ ppRunnerQuit: Date.now() }).catch(() => {}); await swRemember(null); await api.windows.remove(id).catch(() => {}); }
+// Nothing left in the searching window but its own page: close it after 2 quiet minutes, so no
+// empty window sits in the taskbar (Keep searching off and the last search done).
+let swIdle = null;
+api.tabs.onRemoved.addListener((id, info) => {
+  if (info.isWindowClosing || swId == null || info.windowId !== swId) return;
+  clearTimeout(swIdle);
+  swIdle = setTimeout(async () => {
+    try { const w = await api.windows.get(swId, { populate: true }); if (w.tabs.every(t => (t.url || t.pendingUrl || '').startsWith(SW_PAGE))) await swClose(); } catch (e) { /* gone */ }
+  }, 120000);
+});
+if (api.windows) {
+  api.windows.onRemoved.addListener(async id => {
+    if (id === swId) { await swRemember(null); return; }
+    // Your last own window closed: close the searching window too.
+    setTimeout(async () => { if (!(await normalWindows()).length) swClose(); }, 500);
+  });
+}
+// Settings changed: move searching to the new place (Keep searching carries on where it was).
+api.storage.onChanged.addListener(async (ch, area) => {
+  if (area !== 'local' || !ch.ppSearchPlace) return;
+  const st = (await api.storage.local.get('fcStatus')).fcStatus;
+  await api.storage.local.set({ ppRunnerQuit: Date.now() }).catch(() => {});
+  if (st && st.tabId) await api.tabs.remove(st.tabId).catch(() => {});
+  if (runnerTab != null && (!st || runnerTab !== st.tabId)) await api.tabs.remove(runnerTab).catch(() => {});
+  if (ch.ppSearchPlace.newValue === 'pinned') await swClose();
+  setTimeout(() => keepAlive(false, true), 1500);
+});
 // You closed the helper tab yourself (not by closing the whole window): it stays closed until the
 // browser opens again, or you press Start it again in PageProof.
 // 4.15 (Ben: "closing the wrong thing"): a Keep searching tab closed by hand comes straight back,
@@ -699,7 +777,7 @@ api.tabs.onRemoved.addListener(async (id, info) => {
   if (id !== runnerTab && !(st && st.tabId === id)) return;
   runnerTab = null;
   await api.storage.local.set({ fcStatus: { ...(st || {}), state: 'closed', beat: 0 } }).catch(() => {});
-  if (info.isWindowClosing) return;
+  if (info.isWindowClosing && !(info.windowId === swLast && (await normalWindows()).length)) return;
   const quit = (await api.storage.local.get('ppRunnerQuit')).ppRunnerQuit;
   if (quit && Date.now() - quit < 15000) return;          // PageProof closed it itself
   const r = (await api.storage.local.get('fcReopened')).fcReopened || { times: [] };
@@ -713,7 +791,7 @@ api.tabs.onRemoved.addListener(async (id, info) => {
   setTimeout(() => keepAlive(false, true), 1500);
 });
 // A browser window opened again: start Keep searching again (it closed with the last window).
-api.windows.onCreated.addListener(w => { if (w && w.type === 'normal') setTimeout(() => keepAlive(false), 3000); });
+api.windows.onCreated.addListener(w => { if (w && w.type === 'normal' && w.id !== swId && !swMaking) setTimeout(() => keepAlive(false), 3000); });
 // Today's 50 at the time you picked (weekdays), if "Start by itself" is on.
 async function fiftySchedule() {
   if (!api.alarms) return;
@@ -813,6 +891,9 @@ function freshStart() {
   return freshP;
 }
 // Tab numbers start again when the browser restarts, so the old marks mean nothing then.
+// A searching window the browser brought back from last time ("continue where you left off"):
+// close it. A fresh minimized one opens when a search needs it.
+async function swCloseRestored() { try { const tabs = await api.tabs.query({ url: SW_PAGE + '*' }); for (const w of new Set(tabs.map(t => t.windowId))) await api.windows.remove(w).catch(() => {}); await swRemember(null); } catch (e) { /* none */ } }
 async function forgetSearchTabs() {
   try { const all = await api.storage.local.get(null); const marks = Object.keys(all).filter(k => k.startsWith('rsTabL:')); if (marks.length) await api.storage.local.remove(marks); } catch (e) { /* nothing saved */ }
 }
@@ -876,7 +957,7 @@ api.storage.onChanged.addListener(ch => {
   if (ch.fcChanged || ch.rsHidden || ch.fcShownCountries || ch.ppShowGov) { clearTimeout(badgeT); badgeT = setTimeout(newBadge, 2000); }
 });
 let badgeT = null;
-api.runtime.onStartup.addListener(() => { forgetSearchTabs(); fiftySchedule(); keepAlive(false); newBadge(); driveNudge(true); });
+api.runtime.onStartup.addListener(() => { forgetSearchTabs(); swCloseRestored(); fiftySchedule(); keepAlive(false); newBadge(); driveNudge(true); });
 api.runtime.onInstalled.addListener(d => {
   fiftySchedule(); newBadge();
   if (d.reason === 'update') freshStart();
@@ -909,6 +990,7 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || sender.id !== api.runtime.id) return false;
   const jobs = {
     captureUrl: () => captureUrl(msg.url, sender.tab),
+    ppSearchWin: async () => ({ windowId: await ppSearchWindowBg(), ownId: await ppOwnWindowBg() }),
     fcKeepWake: async () => { await keepAlive(!!msg.show, true); return { ok: true }; },
     fcBgStart: async () => { await keepAlive(false, true); return { ok: true }; },
     fcKeepStop: async () => ({ ok: true }),   // the window closes itself when Keep searching is turned off
@@ -923,7 +1005,7 @@ if (api.notifications) {
   api.notifications.onClicked.addListener(id => {
     api.notifications.clear(id);
     // A search site wants a quick check in a big search: show that tab.
-    if (id.startsWith('rsCaptcha:')) api.tabs.update(+id.slice(10), { active: true }).then(t => api.windows.update(t.windowId, { focused: true })).catch(() => {});
+    if (id.startsWith('rsCaptcha:')) ppShowTab(+id.slice(10)).catch(() => {});
     if (id === 'fcAllow' || id === 'fcDrive') api.tabs.create({ url: api.runtime.getURL('app.html#keep') });
     if (id.startsWith('fcEngine:')) api.tabs.create({ url: api.runtime.getURL('app.html#health') });
   });
