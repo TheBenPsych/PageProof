@@ -60,7 +60,7 @@ async function status(state, text, extra = {}) {
   if (state !== S.statState) { if (PAUSES.includes(state)) PP_STATS.add('keep.pause.' + state); S.statState = state; }
   S.lastText = text; S.lastExtra = extra;
   if (state !== 'paused' && state !== 'off') text += acctLine();
-  // 4.61: for 10 minutes after an update, say that it carried on by itself.
+  // 4.64: for 10 minutes after an update, say that it carried on by itself.
   if (S.picked && Date.now() - S.picked < 10 * 60000 && state !== 'off') text = (state === 'paused' ? 'PageProof was updated and stays paused, as you left it. ' : 'Picked up after the update. ') + text;
   const st = { state, text, beat: Date.now(), win: S.win, tabId: S.me, jobTab: S.jobs[0] ? S.jobs[0].tab : null, jobs: S.jobs.length, ver: MY_VER, ...extra };
   S.lastSt = st;
@@ -148,7 +148,7 @@ async function chores() {
     // Setup has just read every folder, so the first weekly check is a week after the first run.
     if (!m.full) ch.full = now;
     else if (workTime && now - m.full > 6.5 * 86400000) {
-      // 4.61: the weekly check notes when it started, so if it is cut off (an update, the browser
+      // 4.64: the weekly check notes when it started, so if it is cut off (an update, the browser
       // closed) it carries on next time with the clients it had not read yet, instead of starting
       // again from the first one. A start more than 3 days old begins again.
       const since = m.fullStart && now - m.fullStart < 3 * 86400000 ? m.fullStart : now;
@@ -402,7 +402,7 @@ async function fiftyWanted() {
     }
     return;
   }
-  // 4.61: the ask stays until the search is in line, so an update while the photos are being got
+  // 4.64: the ask stays until the search is in line, so an update while the photos are being got
   // ready from Google Drive (it can take a few minutes) starts it again instead of losing it.
   const k = await FC.keep();
   const n = Math.min(k.perDay, 100);

@@ -131,7 +131,7 @@ const PP_BAD = (() => {
     if (BUSY) return BUSY;
     BUSY = (async () => {
       const i = await info(), src = i.src || {}, now = Date.now();
-      // 4.61: a download cut off half way (an update closed the page) is tried again, not left 6 hours.
+      // 4.64: a download cut off half way (an update closed the page) is tried again, not left 6 hours.
       const cut = x => x.tried && !(x.ended >= x.tried) && now - x.tried > 3 * 60000;
       const due = SOURCES.filter(s => force || !src[s.id] || (!src[s.id].at || now - src[s.id].at > s.every) && (!src[s.id].tried || now - src[s.id].tried > RETRY || cut(src[s.id])));
       if (!due.length) return { fresh: true };

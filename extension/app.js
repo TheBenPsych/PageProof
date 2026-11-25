@@ -1254,7 +1254,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await Promise.race([lists, new Promise(r => setTimeout(r, 3000))]);
   if (!listsIn) lists.then(() => render(true));
   const st = await api.storage.local.get(['ppSetupDone', 'ppReconnectVer', 'fcDrive']);
-  // 4.61: a page PageProof opened again after an update (app.html?back=1#…) stays where you were,
+  // 4.64: a page PageProof opened again after an update (app.html?back=1#…) stays where you were,
   // unless Google Drive needs its click again (then the reconnect page comes first, as before).
   const back = /[?&]back=1/.test(location.search);
   if (back) { try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) { /* keep it */ } }
@@ -1275,7 +1275,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 
-// ---------- 4.61 (Ben): picking up after an update ----------
+// ---------- 4.64 (Ben): picking up after an update ----------
 // This page notes which tab it is in and where it is (ppPage:<tab>), so that after an update (which
 // closes every PageProof tab) the background opens it again at the same place (background.js
 // reopenPages). Copies found's own checks (post checks, account details, previews) start again there.

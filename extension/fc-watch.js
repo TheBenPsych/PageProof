@@ -72,7 +72,7 @@ const PP_WATCH = (() => {
   async function setCreditCfg(cfg) { await FC.meta.set('creditCfg', cfg); FC.touch('credit'); }
   async function creditState() {
     const s = (await FC.meta.get('creditState')) || { done: {}, queue: [], seen: {}, nomatch: [], log: [], found: 0, pages: 0 };
-    // 4.61: a page that was being read when PageProof stopped (an update, the tab closed) goes back
+    // 4.64: a page that was being read when PageProof stopped (an update, the tab closed) goes back
     // to the front of the line, so it is not lost. Tried at most 3 times. (Only once it is clearly
     // not being read any more: 5 minutes.)
     if (s.cur && Date.now() - (s.cur.at || 0) > 5 * 60000) {
@@ -260,7 +260,7 @@ const PP_WATCH = (() => {
   }
   async function runInfo() { return (await api.storage.local.get(RUN_KEY).catch(() => ({})))[RUN_KEY] || null; }
   let RUN = null;
-  // prev (4.61): a run that was cut off (an update closed its page): it carries on from the wording
+  // prev (4.64): a run that was cut off (an update closed its page): it carries on from the wording
   // it had reached, with its counts so far, then reads that client's pages still in line.
   async function creditRun(client, prev) {
     if (RUN && !RUN.end) return RUN;
@@ -314,7 +314,7 @@ const PP_WATCH = (() => {
     return r;
   }
 
-  // 4.61 (Ben): a "Search now" cut off by an update (its page closed with it) carries on in the
+  // 4.64 (Ben): a "Search now" cut off by an update (its page closed with it) carries on in the
   // PageProof page that opens next. Only one page takes it (a lock), only if nothing has said it is
   // still running for 90 seconds, and only if it stopped in the last 30 minutes.
   async function resumeRun() {

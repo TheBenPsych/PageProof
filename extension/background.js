@@ -890,7 +890,7 @@ function freshStart() {
     if (api.storage.session) await api.storage.session.remove('fcClosed').catch(() => {});
     await sleep(1500);
     await keepAlive(false, true);
-    // 4.61 (Ben): everything else that was running picks up too (see pickUpAfterUpdate).
+    // 4.64 (Ben): everything else that was running picks up too (see pickUpAfterUpdate).
     await pickUpAfterUpdate(prevVer, all);
   })().catch(e => console.warn('PageProof fresh start', e));
   return freshP;
@@ -903,7 +903,7 @@ async function forgetSearchTabs() {
   try { const all = await api.storage.local.get(null); const marks = Object.keys(all).filter(k => k.startsWith('rsTabL:')); if (marks.length) await api.storage.local.remove(marks); } catch (e) { /* nothing saved */ }
 }
 
-// ---------- 4.61 (Ben): everything that was running carries on after an update ----------
+// ---------- 4.64 (Ben): everything that was running carries on after an update ----------
 // An update (Update-PageProof.cmd, then Reload) restarts PageProof, and the browser closes every
 // PageProof tab. What carries on, and how:
 //  - Keep searching, its sweeps, watch list, credit steps and folder checks: the Keep searching

@@ -138,7 +138,7 @@ const PP_POP = (() => {
     BUSY = (async () => {
       const i = await info();
       if (!force && i.date && Date.now() - Date.parse(i.date) < WEEK) return { fresh: true };
-      // 4.61: a download cut off half way (an update closed the page) is tried again, not left 6 hours.
+      // 4.64: a download cut off half way (an update closed the page) is tried again, not left 6 hours.
       const cut = i.tried && !(i.ended >= i.tried) && Date.now() - i.tried > 3 * 60000;
       if (!force && i.tried && Date.now() - i.tried < RETRY && !cut) return { waiting: true };
       await setInfo({ tried: Date.now() });

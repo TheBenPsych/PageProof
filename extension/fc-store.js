@@ -736,7 +736,7 @@ const FC = (() => {
         // The hourly look skips clients nobody searches. A ticked folder that holds several
         // clients (each named by its client_info.txt) is still read if any of those is searched.
         if (!full && client.searching !== true && ![...known.values()].some(c => c.from === cf.name && c.searching === true)) continue;
-        // 4.61: a weekly check that was cut off carries on: clients already read all the way
+        // 4.64: a weekly check that was cut off carries on: clients already read all the way
         // through since it started are not read again.
         if (full && since && old && old.scanned && Date.parse(old.scanned) >= since) { pres.push('d:' + (cf.extra ? '+' : '') + cf.rel + '/'); total += old.photos || 0; continue; }
         // 4.47.1: a client whose folders were never read all the way through (the first read was
