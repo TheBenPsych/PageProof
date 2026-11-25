@@ -1,7 +1,7 @@
 // 4.24: spam blog farms. Copies on random-looking addresses of throwaway sites (ab3cd9.madeupname.blog)
 // get a grey Spam blog tag and stay out of Copies found and One at a time until you show them.
 // Hide all of those sites hides the whole site. Nothing is answered by itself.
-const { start } = require('./h.js');
+const H = require('./h.js'), { start } = H;
 process.env.NP = 600; process.env.NC = 120;
 const { seed } = require('./seed.js');
 let fails = 0;
@@ -61,6 +61,22 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const back = await page.evaluate(async () => (await RS_LISTS.load()).hidden.includes('madeupname.blog'));
   ok(!back, 'Undo takes the spam sites off the hidden list');
   ok((await page.evaluate(() => FC.countNew())) <= pick.before, 'The new-copies number leaves spam blog copies out');
+  // Site gone: a website whose name no longer exists gets a Site gone tag and is hidden like spam. Checked once.
+  H.goneHosts = ['deadsite-test.com'];
+  const g = await page.evaluate(async () => {
+    FCD = null; await loadFC();
+    const c = FCD.copies.find(x => x.status === 'new' && !isSoc(x) && !siteHidden(x) && !x.spam);
+    const r = await FC.DB.get('copies', c.id); r.site = 'deadsite-test.com'; r.url = 'https://deadsite-test.com/2025/12/04/a-story/'; r.country = ''; await FC.DB.put('copies', r);
+    FC.dropCache && FC.dropCache();
+    FCD = null; await loadFC();
+    for (let i = 0; i < 40 && ((await chrome.storage.local.get('ppGoneSites')).ppGoneSites || {})['deadsite-test.com'] !== 0; i++) await new Promise(f => setTimeout(f, 100));
+    await new Promise(f => setTimeout(f, 500));
+    FCD = null; await loadFC();
+    const d = FCD.copies.find(x => x.id === c.id), m = (await chrome.storage.local.get('ppGoneSites')).ppGoneSites || {};
+    return { gone: m['deadsite-test.com'], tag: sigIcons(d).includes('Site gone'), hidden: !!d.spam, others: Object.values(m).filter(v => v === 1).length };
+  });
+  ok(g.gone === 0 && g.tag && g.hidden, 'A site that no longer exists gets a Site gone tag and is hidden (' + JSON.stringify(g) + ')');
+  ok(g.others > 0, 'Sites that still exist are noted as fine and not checked again');
   await ctx.close();
   console.log(fails ? fails + ' FAILED' : 'ALL PASS');
   process.exit(fails ? 1 : 0);

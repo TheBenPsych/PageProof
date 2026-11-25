@@ -103,8 +103,11 @@ async function readFC() {
     if (c.knownN) { if (!c.repeat) c.repeatWho = isSoc(c) && c.acct ? c.acct.handle : c.site; c.repeat = (c.repeat || 0) + c.knownN; }
   }
   // 4.24: spam blog farms (random addresses on throwaway sites). Tagged, and hidden until you show them.
+  await FC.goneLoad();
   const spam = FC.spamMarks(copies);
   for (const c of copies) c.spam = spam.get(c.id) || null;
+  // Websites of new copies not checked yet: does the site still exist? Checked once each, in the background.
+  FC.checkGone(copies).then(n => { if (n) { FCD_STALE = true; if (state.shown === 'found') render(true); } }).catch(() => {});
   let unhid = [];
   try { unhid = (await (globalThis.browser || chrome).storage.local.get('ppSocialUnhid')).ppSocialUnhid || []; } catch (e) { /* none */ }
   return { unhid, copies, photos, clients: new Map(clients.map(c => [c.name, c])), countries, facts, owners: ownerList, ownerOf, ...soc };
@@ -512,7 +515,7 @@ function signals(c) {
   return s;
 }
 const knownTag = c => c.known ? '<span class="tag bad" style="font-size:11.5px" title="This exact page is on your list of links stolen before (Settings › Hidden and approved sites › Stolen before links)">Stolen before</span>' : '';
-const spamTag = c => c.spam ? `<span class="tag grey" style="font-size:11.5px" title="${esc('Looks like a spam blog: ' + c.spam.join(', '))}">Spam blog</span>` : '';
+const spamTag = c => !c.spam ? '' : c.spam[0] === FC.GONE_WHY ? `<span class="tag grey" style="font-size:11.5px" title="This website no longer exists: its address leads nowhere">Site gone</span>` : `<span class="tag grey" style="font-size:11.5px" title="${esc('Looks like a spam blog: ' + c.spam.join(', '))}">Spam blog</span>`;
 const sigIcons = c => { const s = signals(c); return knownTag(c) + spamTag(c) + (s.length ? `<span class="sig">${s.map(([col, i, t, w]) => `<span class="tag ${col}" title="${esc(t)}">${ic(i, 13)}<span>${esc(w || t)}</span></span>`).join('')}</span>` : ''); };
 // Before a copy is marked Stolen: the kind of site (once per site) and the rules that apply.
 // Resolves 'stolen', 'removed' (Remove instead) or null (cancelled).
@@ -977,7 +980,7 @@ V.found = async () => {
       </div></div>` : ''}
     ${shownOn.length ? `<div class="showing" role="status"><span>Showing <b class="num">${rows.length}</b> of <b class="num">${all.filter(c => passStatus(c)).length}</b> ${esc(state.fFilter === 'All' ? '' : state.fFilter.toLowerCase())} copies</span>${shownOn.map(([k, v]) => `<button class="stag" data-act="unfilter" data-v="${k}" title="Turn this filter off">${esc(v)} <span aria-hidden="true">✕</span></button>`).join('')}<button class="sclear" data-act="unfilter" data-v="all">Clear filters</button></div>` : ''}
     ${recent.length ? `<div class="row activebar">
-      ${recent.length ? `<span class="faint" style="margin-left:auto">Just hidden</span>${recent.map(h => `<button class="chip" style="cursor:pointer;text-decoration:line-through;text-decoration-color:var(--faint)" data-act="showsite" data-v="${esc(h)}" title="Show ${esc(h)} again">${esc(h)} <span style="text-decoration:none">↺</span></button>`).join('')}` : ''}</div>` : ''}
+      <details class="justhid" style="margin-left:auto;max-width:100%"${state.justHidOpen ? ' open' : ''}><summary class="faint" style="cursor:pointer;text-align:right">Just hidden (${recent.length})</summary><div class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-top:6px">${recent.map(h => `<button class="chip" style="cursor:pointer;text-decoration:line-through;text-decoration-color:var(--faint)" data-act="showsite" data-v="${esc(h)}" title="Show ${esc(h)} again">${esc(h)} <span style="text-decoration:none">↺</span></button>`).join('')}</div></details></div>` : ''}
     <div class="cbody">${social && state.sView === 'accounts' ? accountsView(all.filter(c => passMain(c) && passStatus(c))) : body || (state.fFilter === 'New' && !active.length && state.fWhen === 'any' && state.fMatch === 'any' ? caughtUp(cnt('Stolen'), cnt('Check later')) : state.fFilter === 'Check later' && !rows.length ? `<div class="cempty"><b>Nothing saved to check later</b>Not sure about a copy? Press Check later (or the C key) and it waits here, out of the New list, until you answer it.</div>` : `<div class="cempty"><b>Nothing matches</b>Try another tab, or clear a filter.</div>`)}</div>
     <div class="row faint cfoot"><span>Keys with a copy open: <span class="kbd">Y</span> stolen <span class="kbd">L</span> licensed <span class="kbd">N</span> remove <span class="kbd">C</span> check later <span class="kbd">→</span> skip <span class="kbd">U</span> undo <span class="kbd">↑</span><span class="kbd">↓</span> move <span class="kbd">?</span> all keys. Also kept in Documents › PageProof › found-copies.txt.</span></div>
   </section>
@@ -1886,5 +1889,6 @@ document.addEventListener('click', e => {
 }, true);
 document.addEventListener('toggle', e => {
   const d = e.target;
+  if (d.matches && d.matches('details.justhid')) state.justHidOpen = d.open;   // stays as you left it while the list redraws
   if (d.matches && d.matches('details.ddw') && d.open) document.querySelectorAll('details.ddw[open]').forEach(x => { if (x !== d) x.open = false; });
 }, true);
