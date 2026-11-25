@@ -756,7 +756,7 @@ function copyRow(c) {
     <input type="checkbox" class="cpick" aria-label="Pick ${esc(isSoc(c) && c.acct ? c.acct.handle : c.site)}" data-act="pick" data-v="${esc(c.id)}" ${state.picked.includes(c.id) ? 'checked' : ''}>
     <div class="cpair" data-hover="${esc(c.id)}"><img class="ours" src="${oursImg(p)}" alt="" loading="lazy"><img class="thumb" src="${theirImg(c)}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>
     <div class="cinfo">
-      ${isSoc(c) ? socLine(c) : `<div class="l1"><b>${esc(c.site)}</b>${popTag(c)}${done || c.status === 'later' ? tagFor(c) : ''}${embedTag(c)}${sigIcons(c)}${c.sweep ? '<span class="tag blue" title="Found by reading this site\'s own list of pictures (a sweep), not by a search site">Found by sweep</span>' : ''}${typeof ppRowTags === 'function' ? ppRowTags(c) : ''}${c.status === 'removed' && c.removedBy === 'weakmaybe' ? '<span class="tag grey" title="A Maybe under 50% that nobody answered for 30 days. Put back if it is a copy.">Weak Maybe, never answered</span>' : ''}</div>`}
+      ${isSoc(c) ? socLine(c) : `<div class="l1"><b>${esc(c.site)}</b>${popTag(c)}${done || c.status === 'later' ? tagFor(c) : ''}${embedTag(c)}${sigIcons(c)}${c.sweep ? '<span class="tag blue" title="Found by reading this site\'s own list of pictures (a sweep), not by a search site">Found by sweep</span>' : ''}${typeof ppRowTags === 'function' ? ppRowTags(c) : ''}${c.status === 'removed' && c.removedBy === 'stopped' ? '<span class="tag grey" title="Removed when you stopped searching this photo. Search again on the client\'s photos page brings it back.">Photo stopped</span>' : ''}${c.status === 'removed' && c.removedBy === 'weakmaybe' ? '<span class="tag grey" title="A Maybe under 50% that nobody answered for 30 days. Put back if it is a copy.">Weak Maybe, never answered</span>' : ''}</div>`}
       <a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink" title="Open this page in a new tab"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>${c.alts && c.alts.length ? `<span class="tag grey altn" title="${esc(c.alts.join('\n'))}" data-gloss="Same page">+${c.alts.length} ${c.alts.length === 1 ? 'address' : 'addresses'}</span>` : ''}
       <div class="l3">${esc(c.photoName)}<span class="l3x">${isSoc(c) && c.acct ? ' · ' + esc(c.site) : ''}${c.pct >= 0 && c.pct != null ? ` · <b class="num" data-gloss="Lines up">${c.pct}%</b> lines up` : ''} · ${esc(FC.USE[c.use][0])}${c.country ? ' · ' + esc(c.country) : ''} · found ${shortDate(c.firstSeen).toLowerCase()}</span></div>
     </div>
@@ -1282,7 +1282,7 @@ function toastUndo(msg) { toast(msg, undoLast); }
 // searching and Today's 50 skip it from now on; the copies already found stay. Undo (U) or
 // Clients and photos › the client's photos turn it back on.
 const isStopped = c => { const p = FCD && FCD.photos.get(c.photo); return !!(p && p.stopped); };
-const STOP_TIP = 'Keep searching and Today\'s 50 skip this photo from now on. The copies found so far stay. Turn it back on any time in Clients and photos.';
+const STOP_TIP = 'Keep searching and Today\'s 50 skip this photo from now on, and its unanswered matches move to Removed. Stolen and Licensed stay. Turn it back on any time in Clients and photos.';
 function stopRow(c) {
   if (!FCD || !FCD.photos.get(c.photo)) return '';
   return isStopped(c)
@@ -1303,7 +1303,7 @@ function stopBtn(c) {
 }
 // Before a photo stops being searched: a box that says what will happen, and a tick to say
 // you understand (Ben). Resolves true only when ticked and confirmed.
-function askStop(names, pic) {
+function askStop(names, pic, cnt = {}) {
   return new Promise(res => {
     const n = names.length, one = n === 1;
     const d = document.createElement('dialog');
@@ -1314,10 +1314,11 @@ function askStop(names, pic) {
       <div class="row" style="gap:12px;flex-wrap:nowrap;align-items:center">${pic ? `<img src="${pic}" alt="" style="width:84px;height:56px;object-fit:cover;border-radius:8px;flex-shrink:0">` : ''}<span style="min-width:0;overflow-wrap:anywhere;font-weight:600">${esc(one ? names[0] : names.slice(0, 3).join(', ') + (n > 3 ? ' and ' + (n - 3) + ' more' : ''))}</span></div>
       <ul style="margin:0;padding-left:20px;font-size:14px;line-height:1.5">
         <li>PageProof will <b>no longer look for new copies</b> of ${one ? 'this photo' : 'these photos'} (Keep searching and Today's 50 skip ${one ? 'it' : 'them'}).</li>
-        <li>Copies already found stay in Copies found.</li>
-        <li>You can turn it back on any time: Clients and photos › the client › <b>Search again</b>.</li>
+        ${cnt.open == null ? `<li>Matches not answered yet (New and Check later) move to <b>Removed</b>. Stolen and Licensed stay.</li>` : cnt.open ? `<li><b>${plural(cnt.open, 'match', 'matches')} not answered yet</b> (New and Check later) move${cnt.open === 1 ? 's' : ''} to Removed.</li>` : '<li>No unanswered matches to remove.</li>'}
+        ${cnt.kept ? `<li>${plural(cnt.kept, 'match', 'matches')} you marked Stolen or Licensed stay${cnt.kept === 1 ? 's' : ''}.</li>` : ''}
+        <li>Undo, or <b>Search again</b> later (Clients and photos › the client), brings the removed matches back.</li>
       </ul>
-      <label style="display:flex;gap:8px;align-items:flex-start;font-size:14px;cursor:pointer;background:var(--sunk);border-radius:10px;padding:10px 12px"><input type="checkbox" class="stopok" style="margin-top:3px"><span>I understand new copies of ${one ? 'this photo' : 'these photos'} won't be found while ${one ? 'it is' : 'they are'} stopped.</span></label>
+      <label style="display:flex;gap:8px;align-items:flex-start;font-size:14px;cursor:pointer;background:var(--sunk);border-radius:10px;padding:10px 12px"><input type="checkbox" class="stopok" style="margin-top:3px"><span>I understand new copies of ${one ? 'this photo' : 'these photos'} won't be found while ${one ? 'it is' : 'they are'} stopped, and unanswered matches are removed.</span></label>
       <div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" value="no" type="submit">Cancel</button><button class="btn primary stopgo" value="yes" type="submit" disabled data-why="Tick the box first.">Stop searching</button></div></form>`;
     document.body.appendChild(d);
     const tick = d.querySelector('.stopok'), go = d.querySelector('.stopgo');
@@ -1337,15 +1338,26 @@ async function stopPhoto(copyId) {
   const p = c && FCD.photos.get(c.photo);
   if (!p) return;
   const on = !p.stopped;
-  if (on && !(await askStop([c.photoName || p.name], p.thumb ? safeImg(p.thumb) : safeImg(([...document.querySelectorAll('img[data-our]')].find(i => i.dataset.our === p.id) || {}).src || '')))) return;
   // A double is searched as one photo, so every version of it stops (or starts) together.
   const ids = (await FC.doublesOf(p)).map(d => d.id);
   if (!ids.includes(p.id)) ids.push(p.id);
+  const mine = x => ids.includes(x.photo);
+  const open = FCD.copies.filter(x => mine(x) && ['new', 'later'].includes(x.status)).length;
+  const kept = FCD.copies.filter(x => mine(x) && ['stolen', 'licensed'].includes(x.status)).length;
+  if (on && !(await askStop([c.photoName || p.name], p.thumb ? safeImg(p.thumb) : safeImg(([...document.querySelectorAll('img[data-our]')].find(i => i.dataset.our === p.id) || {}).src || ''), { open, kept }))) return;
+  // The open copy goes to Removed with the others: open the next copy of another photo instead.
+  const wasOpen = state.open;
+  let nextId = state.open;
+  if (on && state.open && mine(FCD.copies.find(x => x.id === state.open) || {})) {
+    const i = LIST.indexOf(state.open), other = x => { const o = FCD.copies.find(y => y.id === x); return o && !mine(o); };
+    nextId = LIST.slice(i + 1).find(other) || LIST.slice(0, Math.max(0, i)).reverse().find(other) || '';
+  }
   const undo = await FC.setStopped(ids, on);
-  const name = c.photoName || p.name;
-  HIST.push({ label: (on ? 'stopped searching ' : 'searching again ') + name, undo, open: state.open || '' });
+  const name = c.photoName || p.name, moved = undo.moved || 0;
+  HIST.push({ label: (on ? 'stopped searching ' : 'searching again ') + name, undo, open: wasOpen || '' });
   dropFC();
-  toastUndo(on ? `${name} won't be searched any more. Its copies found so far stay.` : `${name} will be searched again.`);
+  state.open = nextId;
+  toastUndo(on ? `${name} won't be searched any more.${moved ? ' ' + plural(moved, 'match', 'matches') + ' moved to Removed.' : ''}${kept ? ' Stolen and Licensed stay.' : ''}` : `${name} will be searched again.${moved ? ' ' + plural(moved, 'match', 'matches') + ' back in New.' : ''}`);
   render(true);
 }
 

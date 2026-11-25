@@ -18,8 +18,10 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     // Make sure the photo would be searched (due) before we stop it.
     const p = await FC.DB.get('photos', c.photo); p.lastSearched = new Date(Date.now() - 400 * 864e5).toISOString(); p.flag = 'hi'; await FC.DB.put('photos', p);
     const cl = await FC.DB.get('clients', p.client); cl.searching = true; await FC.DB.put('clients', cl);
+    // A Stolen copy of the same photo (must stay when the photo is stopped).
+    const st = JSON.parse(JSON.stringify(await FC.DB.get('copies', c.id))); st.id = c.id + '#stolen'; st.url = st.url + '?x=1'; st.status = 'stolen'; await FC.DB.put('copies', st);
     FC.resetQueue(); await FC.buildQueue();
-    return { id: c.id, photo: c.photo, client: p.client, inLine: (await FC.next(400)).some(x => x.id === c.photo) };
+    return { stolenId: st.id, id: c.id, photo: c.photo, client: p.client, inLine: (await FC.next(400)).some(x => x.id === c.photo) };
   });
   ok(c.inLine, 'Before: the photo is in the search line');
   await page.goto(url('app.html#found?open=' + encodeURIComponent(c.id))); await page.waitForTimeout(1500);
@@ -28,18 +30,26 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await btn.click(); await page.waitForTimeout(500);
   // The "are you sure" box: Stop is greyed out until the box is ticked; Cancel changes nothing.
   ok(await page.locator('dialog.stopask .stopgo').isDisabled(), 'Are-you-sure box: Stop searching is greyed out until ticked');
+  const box = await page.textContent('dialog.stopask');
+  ok(/not answered yet[\s\S]*Removed/.test(box) && /1 match you marked Stolen or Licensed stays/.test(box), 'Box says unanswered matches move to Removed and the Stolen one stays');
   await page.locator('dialog.stopask button[value="no"]').click(); await page.waitForTimeout(500);
   ok(await page.evaluate(async c => !(await FC.DB.get('photos', c.photo)).stopped, c), 'Cancel leaves the photo searched');
   await btn.click(); await page.waitForTimeout(500);
   await page.locator('dialog.stopask .stopok').check(); await page.locator('dialog.stopask .stopgo').click(); await page.waitForTimeout(1200);
-  const s1 = await page.evaluate(async c => { FC.resetQueue(); const p = await FC.DB.get('photos', c.photo); return { stopped: !!p.stopped, inLine: (await FC.next(400)).some(x => x.id === c.photo), first: (await FC.next(400, new Set(), { first: true })).some(x => x.id === c.photo), plan: FC.plan(p, { priority: true }), copy: !!(await FC.DB.get('copies', c.id)), panel: document.querySelector('.drawer') ? document.querySelector('.drawer').textContent : '' }; }, c);
+  const s1 = await page.evaluate(async c => { FC.resetQueue(); const p = await FC.DB.get('photos', c.photo); return { stopped: !!p.stopped, inLine: (await FC.next(400)).some(x => x.id === c.photo), first: (await FC.next(400, new Set(), { first: true })).some(x => x.id === c.photo), plan: FC.plan(p, { priority: true }), copy: (await FC.DB.get('copies', c.id)), stolen: (await FC.DB.get('copies', c.stolenId)).status, open: state.open }; }, c);
   ok(s1.stopped && !s1.inLine && !s1.first && !s1.plan.due, 'Stopped: not in Keep searching or Today\'s 50 lines');
-  ok(s1.copy, 'Its copy is still there');
-  ok(/Not searched any more/.test(s1.panel) && /Search it again/.test(s1.panel), 'Panel says "Not searched any more" with Search it again');
+  ok(s1.copy && s1.copy.status === 'removed' && s1.copy.removedBy === 'stopped', 'Its unanswered match moved to Removed');
+  ok(s1.stolen === 'stolen', 'The Stolen match stays');
+  ok(s1.open !== c.id, 'The panel moved on to another copy');
+  await page.evaluate(id => { state.fFilter = 'All'; state.open = id; return render(true); }, c.id); await page.waitForTimeout(1200);
+  const panel = await page.textContent('.drawer');
+  ok(/Not searched any more/.test(panel) && /Search it again/.test(panel), 'Panel says "Not searched any more" with Search it again');
   ok(/won't be searched any more/.test(await page.textContent('body')), 'Toast says it won\'t be searched');
   await page.keyboard.press('u'); await page.waitForTimeout(1200);
-  const s2 = await page.evaluate(async c => { FC.resetQueue(); const p = await FC.DB.get('photos', c.photo); return { stopped: !!p.stopped, inLine: (await FC.next(400)).some(x => x.id === c.photo) }; }, c);
+  const s2 = await page.evaluate(async c => { FC.resetQueue(); const p = await FC.DB.get('photos', c.photo); return { stopped: !!p.stopped, inLine: (await FC.next(400)).some(x => x.id === c.photo), st: (await FC.DB.get('copies', c.id)).status }; }, c);
   ok(!s2.stopped && s2.inLine, 'U undoes it: back in the search line');
+  ok(s2.st === 'new', 'U brings the match back to New');
+  await page.evaluate(id => { state.fFilter = 'All'; state.open = id; return render(true); }, c.id); await page.waitForTimeout(1200);
   // More menu
   await page.locator('.drawer [data-act="dmore"]').click(); await page.waitForTimeout(400);
   const mi = page.locator('#rowMenu [data-act="stopphoto"]');
@@ -59,7 +69,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.locator('[data-act="phstopshow"]').click(); await page.waitForTimeout(800);
   ok(await page.locator('.pcard').count() === 1, 'Show it lists only the stopped photo');
   await page.locator(`.pcard [data-act="phstop"]`).click(); await page.waitForTimeout(1000);
-  ok(await page.evaluate(async c => !(await FC.DB.get('photos', c.photo)).stopped, c), 'Search again turns it back on');
+  ok(await page.evaluate(async c => !(await FC.DB.get('photos', c.photo)).stopped && (await FC.DB.get('copies', c.id)).status === 'new', c), 'Search again turns it back on and brings the match back to New');
   // Bulk on the photos page
   await page.evaluate(() => { state.phStop = false; return render(); }); await page.waitForTimeout(600);
   await page.locator('.pcard [data-act="phpick"]').first().check(); await page.waitForTimeout(400);

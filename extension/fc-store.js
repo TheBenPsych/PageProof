@@ -2247,20 +2247,37 @@ const FC = (() => {
   }
   // Stop searching these photos (on = true) or search them again (on = false). Gives back an
   // undo that puts every photo back the way it was.
+  // 4.56 (Ben): stopping also moves the photo's unanswered copies (New and Check later) to
+  // Removed, marked removedBy 'stopped' so "Search again" (or Undo) brings them back. Stolen and
+  // Licensed copies stay. These are not your answers: not counted, not learned from, and not
+  // put on the rejected-links list.
   async function setStopped(ids, on) {
-    const was = [];
+    const was = [], copiesWas = [], touched = new Set();
     for (const id of new Set(ids)) {
       const p = await DB.get('photos', id);
       if (!p) continue;
       was.push([id, p.stopped || '']);
       if (on) p.stopped = p.stopped || new Date().toISOString(); else delete p.stopped;
       await DB.put('photos', p);
+      const changed = [];
+      for (const c of await copiesOf(id)) {
+        if (on ? !['new', 'later'].includes(c.status) : !(c.status === 'removed' && c.removedBy === 'stopped')) continue;
+        copiesWas.push(JSON.parse(JSON.stringify(c)));
+        if (on) { c.stopWas = c.status; c.status = 'removed'; c.removedBy = 'stopped'; c.answered = new Date().toISOString(); }
+        else { c.status = c.stopWas === 'later' ? 'later' : 'new'; delete c.removedBy; delete c.stopWas; delete c.answered; }
+        changed.push(c);
+      }
+      if (changed.length) { await DB.putMany('copies', changed); touched.add(id); }
     }
+    if (touched.size) { await recount(touched); backupCopiesSoon(); touch('copies'); }
     COVER = null; queueDirty(); backupSoon(true);
-    return async () => {
+    const undo = async () => {
       for (const [id, st] of was) { const p = await DB.get('photos', id); if (!p) continue; if (st) p.stopped = st; else delete p.stopped; await DB.put('photos', p); }
+      if (copiesWas.length) { await DB.putMany('copies', copiesWas); await recount(touched); backupCopiesSoon(); touch('copies'); }
       COVER = null; queueDirty(); backupSoon(true);
     };
+    undo.moved = copiesWas.length;
+    return undo;
   }
   async function setClients(names, ch) {
     for (const n of names) {

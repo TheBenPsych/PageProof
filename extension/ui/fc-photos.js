@@ -638,11 +638,17 @@ Object.assign(ACTS, {
     const i = v.lastIndexOf('|'), one = v.slice(0, i), on = v.slice(i + 1) === '1';
     const ids = one ? [one] : state.phPicked.slice();
     if (!ids.length) return;
-    if (on && !(await askStop(PH && PH.list ? ids.map(id => (PH.list.find(p => p.id === id) || {}).name || id) : ids))) return;
+    if (on) {
+      const cs = (await Promise.all(ids.map(id => FC.copiesOf(id)))).flat();
+      const cnt = { open: cs.filter(x => ['new', 'later'].includes(x.status)).length, kept: cs.filter(x => ['stolen', 'licensed'].includes(x.status)).length };
+      if (!(await askStop(PH && PH.list ? ids.map(id => (PH.list.find(p => p.id === id) || {}).name || id) : ids, '', cnt))) return;
+    }
     const undo = await FC.setStopped(ids, on);
     PH = null; if (!one) state.phPicked = [];
     HIST.push({ label: (on ? 'stopped searching ' : 'searching again ') + plural(ids.length, 'photo'), undo: async () => { await undo(); PH = null; } });
-    toast(on ? plural(ids.length, 'photo') + ' won\'t be searched any more. Copies found so far stay.' : plural(ids.length, 'photo') + (ids.length === 1 ? ' is' : ' are') + ' searched again from now on.', undoLast);
+    const moved = undo.moved || 0;
+    if (typeof dropFC === 'function') dropFC();
+    toast(on ? plural(ids.length, 'photo') + ' won\'t be searched any more.' + (moved ? ' ' + plural(moved, 'match', 'matches') + ' moved to Removed.' : '') : plural(ids.length, 'photo') + (ids.length === 1 ? ' is' : ' are') + ' searched again from now on.' + (moved ? ' ' + plural(moved, 'match', 'matches') + ' back in New.' : ''), undoLast);
     render(true);
   },
   phstopshow: () => { state.phStop = !state.phStop; state.phMore = 50; render(true); },
