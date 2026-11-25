@@ -35,7 +35,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.click('[data-act="cspk"][data-v="11. Group I-J/Beta News"]'); await page.waitForTimeout(600);
   ok(await page.evaluate(() => /2 folders ticked/.test(document.getElementById('view').textContent) && !!document.querySelector('[data-act="cssave"]')), 'Ticking a folder updates the count and the Next button at once');
   await page.click('[data-act="cssave"]'); await page.waitForTimeout(1500);
-  ok(await page.evaluate(() => /Check and start/.test(document.querySelector('.wiz').textContent) && /Searching for/.test(document.getElementById('view').textContent)), 'Next moves to step 4 at once');
+  ok(await page.evaluate(() => /Check your folders/.test(document.querySelector('.wiz').textContent) && /Searching for/.test(document.getElementById('view').textContent)), 'Next moves to step 4 at once');
   await ctx.close();
   console.log(fails ? fails + ' FAILED' : 'ALL PASSED');
   process.exit(fails ? 1 : 0);

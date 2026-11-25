@@ -177,14 +177,14 @@ V.moving = async () => {
 
 // ---------------------------------------------------------------- first-time setup: Back up and share
 SETUP.splice(2, 0, async () => {
-  if (!PP_SYNC.supported) return `<div class="eyebrow" style="margin:0">Step 3 of 5</div><h2 style="font-size:24px">Back up and share</h2><p class="muted" style="margin:0">Backups and team lists need Chrome or Edge. You can skip this step.</p>`;
+  if (!PP_SYNC.supported) return `<h2 style="font-size:24px">Back up and share</h2><p class="muted" style="margin:0">Backups and team lists need Chrome or Edge. You can skip this step.</p>`;
   const [bs, ts] = [await PP_SYNC.state('bk'), await PP_SYNC.state('team')];
   let found = '';
   if (bs === 'granted') {
     if (state.suBk === undefined) { state.suBk = null; PP_SYNC.list().then(async l => { state.suBk = (l || []).find(b => !b.before) || (l || [])[0] || false; state.suEmpty = !(await FC.DB.count('copies')); if (state.shown === 'setup') render(true); }).catch(() => { state.suBk = false; }); }
     if (state.suBk && state.suEmpty) found = `<div class="banner info" style="padding:10px 12px"><span style="flex:1;font-size:14px"><b>Found your backup from ${esc(new Date(state.suBk.modified).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }))}</b><br><span class="muted">Your copies found, answers, lists, clients and settings. You'll see the numbers before anything changes.</span></span><button class="btn primary" data-act="bklook" data-v="${esc(state.suBk.name)}">Bring it back</button></div>`;
   }
-  return `<div class="eyebrow" style="margin:0">Step 3 of 5</div><h2 style="font-size:24px">Back up and share</h2>
+  return `<h2 style="font-size:24px">Back up and share</h2>
     <p class="muted" style="margin:0">Both use <b>Google Drive for desktop</b> and your own <b>My Drive</b>. PageProof never writes to the company's shared drive. You can skip this and do it later in Settings.</p>
     <div class="ppchk"><div class="row"><b>1. Back up to your own Google Drive</b>${bs === 'granted' ? `<span class="tag ok" style="margin-left:auto">${ic('check', 13, 3)} On</span>` : ''}</div>
       <span class="muted" style="font-size:13.5px">Once a day PageProof saves a copy of your work into My Drive › PageProof Backup. If this computer breaks, nothing is lost. Only you can see it.</span>
