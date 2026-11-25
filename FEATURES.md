@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.53.1** (25 Nov 2026).
+Last updated: version **4.54.0** (25 Nov 2026).
 
 ---
 
@@ -321,3 +321,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.52.3 | 25 Nov | Fix: Portal card shows the exact drop-down choices |
 | 4.53 | 25 Nov | Breaking News saver removed |
 | 4.53.1 | 25 Nov | Fix: Big searches kept 90 days, one-photo searches 2 days |
+| 4.54 | 25 Nov | Checker tuned on your answers (few-detail Same is Maybe, Weak Maybes folded, test pairs from every answer) |
