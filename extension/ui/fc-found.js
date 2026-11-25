@@ -648,6 +648,7 @@ async function drawer(list) {
   ${soc ? `<div class="dpane" data-tab="acct"${show('acct')}>${acctPane(c)}</div>` : ''}
   <div class="dpane" data-tab="claim"${show('claim')}>
     ${ck.legalBox}
+    ${typeof ppPortalCard === 'function' ? await ppPortalCard(c, p, reg) : ''}
     ${p && p.rel && reg ? `<section class="dsec"><div class="dsh">Copyright registration</div>${regBox(p, reg)}</section>` : ''}
     ${ck.damages}
     ${ck.rules}

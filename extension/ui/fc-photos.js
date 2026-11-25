@@ -686,6 +686,7 @@ V.keep = async () => {
       <div class="ktile"><b class="num">~${Math.round(rate.ladOn ? rate.googlePerDay : perHour * hrs).toLocaleString()}</b><span>photos a day at this ${rate.ladOn ? 'speed step' : 'pace'}${today.quick ? ' · ' + today.quick + ' quick looks today' : ''}</span></div>
     </div>
   </section>
+  ${typeof ntKeepExtras === 'function' ? await ntKeepExtras() : ''}
   <div class="grid g2">
     <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
       <h2>How it searches</h2>
