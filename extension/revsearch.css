@@ -7,7 +7,7 @@
 button.btn { background: #fff; color: #1e3a8a; border: 1px solid #cbd5e1; font-size: 13px; padding: 5px 10px; }
 button.btn:not(:disabled):hover { background: #eff6ff; filter: none; }
 button.btn.green { background: #16a34a; color: #fff; border-color: #16a34a; }
-button.btn.blue { background: var(--accent); color: #fff; border-color: var(--accent); }
+button.btn.blue { background: var(--accent); color:var(--accent-ink,#fff); border-color: var(--accent); }
 .addbtn { align-self: center; display: inline-flex; align-items: center; gap: 10px; padding: 14px 24px; font-size: 17px; border-radius: 12px; box-shadow: 0 6px 18px rgba(37,99,235,.3); }
 .addbtn.small { font-size: 15px; padding: 10px 20px; }
 
@@ -182,7 +182,7 @@ h2.sec { margin: 6px 0 0; font-size: 18px; }
 .sumcard .ease { flex-basis: 100%; order: 5; color: #92400e !important; }
 .sumcard b { font-size: 16px; } .sumcard small { color: #475569; font-size: 13px; }
 .sumcard a.btn { text-decoration: none; padding: 9px 14px; border-radius: 8px; font-weight: 600; font-size: 14px; border: 1px solid #cbd5e1; background: #fff; color: #1e3a8a; }
-.sumcard a.btn.blue { background: var(--accent); color: #fff; border-color: var(--accent); }
+.sumcard a.btn.blue { background: var(--accent); color:var(--accent-ink,#fff); border-color: var(--accent); }
 details.thrown { margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; padding: 4px 14px; }
 details.thrown > summary { cursor: pointer; padding: 10px 0; font-size: 14.5px; color: #334155; }
 details.thrown .hint { margin: 0 0 10px; color: #64748b; font-size: 13px; }

@@ -50,11 +50,35 @@ function ppRenderSide(route) {
     h += `<a class="nav${on ? ' on' : ''}" href="#${it.href}"${on ? ' aria-current="page"' : ''}>${ic(it.icon || it.id)}<span class="t"><b>${it.label}</b></span>${badge ? `<span class="pill-n ${tone}${loud ? ' loud' : ''}"${loud ? ` title="${esc(loud)}"` : ''}>${badge}</span>` : ''}</a>`;
     if (on && it.subs) h += `<div class="subs">${it.subs.map(([l, r]) => `<a href="#${r}" class="${r === sub ? 'on' : ''}">${l}</a>`).join('')}</div>`;
   }
-  // 4.40: the status line (Drive, Keep searching, search sites) lives at the foot of the menu.
-  h += `<div class="grow"></div><div class="statusline sidestat${PP_STATUS.bad ? ' bad' : ''}" id="statusLine" role="status" aria-label="PageProof status"${PP_STATUS.html ? '' : ' hidden'}>${PP_STATUS.html}</div>`;
+  // Calm look: the status (Drive, Keep searching, search sites) left the menu. It is three small
+  // tiles at the top right of every page (ppPlaceStatus below).
   document.getElementById('side').innerHTML = h;
   if (typeof ppSideLive === 'function') ppSideLive();
+  ppPlaceStatus();
 }
+
+// ---------- the status tiles (calm look) ----------
+// One element, kept for the whole life of the page and put back at the top right of whatever page
+// is showing: beside the page title, or in the top bar when a page has no title line.
+const PP_STATUS_EL = (() => {
+  const d = document.createElement('div');
+  d.id = 'statusLine'; d.className = 'stiles'; d.hidden = true;
+  d.setAttribute('role', 'status'); d.setAttribute('aria-label', 'PageProof status');
+  return d;
+})();
+function ppPlaceStatus() {
+  const view = document.getElementById('view');
+  if (!view) return;
+  const head = view.querySelector('.head');
+  let home = head && head.querySelector('.headact');
+  if (head && !home) { home = document.createElement('div'); home.className = 'row headact'; head.appendChild(home); }
+  if (!home) home = document.querySelector('.top .topr');
+  if (home && (PP_STATUS_EL.parentNode !== home || home.firstChild !== PP_STATUS_EL)) home.prepend(PP_STATUS_EL);
+}
+try {
+  new MutationObserver(() => { if (!PP_STATUS_EL.isConnected || !PP_STATUS_EL.closest('.head, .topr')) ppPlaceStatus(); else if (PP_STATUS_EL.closest('.topr') && document.querySelector('#view .head')) ppPlaceStatus(); })
+    .observe(document.getElementById('view'), { childList: true, subtree: true });
+} catch (e) { /* no page yet */ }
 
 // ---------- light / dark ----------
 async function ppTheme(next) {
@@ -137,7 +161,7 @@ function ppAddHelp(root = document) {
 // lives under (Home keeps its date), and the buttons on the right have at most ONE blue main
 // button, always last (ppTidyHead, run after each page is drawn).
 const ppSection = () => { const r = (location.hash.slice(1).split('?')[0] || 'home'); const m = PP_MENU.find(x => x.id === (PP_ROUTES[r] || [])[0]); return m && m.id !== 'home' ? m.label : ''; };
-const head = (eyebrow, title, lede, right = '') => { const e = ppSection() || eyebrow; return `<div class="head"><div class="l"><div class="eyebrow">${e === title ? '' : esc(e)}</div><h1>${title}</h1>${lede ? `<p class="lede">${lede}</p>` : ''}</div>${right ? `<div class="row headact">${right}</div>` : ''}</div>`; };
+const head = (eyebrow, title, lede, right = '') => { const e = ppSection() || eyebrow; return `<div class="head"><div class="l"><div class="eyebrow">${e === title ? '' : esc(e)}</div><h1>${e && e === ppSection() && e !== title && !String(title).includes(e + ' ›') ? `<span class="bc">${esc(e)}</span><span class="bcs" aria-hidden="true">›</span>` : ''}${title}</h1>${lede ? `<p class="lede">${lede}</p>` : ''}</div>${right ? `<div class="row headact">${right}</div>` : ''}</div>`; };
 function ppTidyHead(root) {
   const r = root.querySelector('.head > .headact'); if (!r) return;
   const btns = [...r.children].filter(b => b.classList.contains('btn'));

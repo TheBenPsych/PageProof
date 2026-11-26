@@ -15,7 +15,7 @@ Object.assign(state, { bkList: null, bkBusy: false, bkPick: null, bkPreview: nul
   .dmenu span.sep{padding:0;border-top:1px solid var(--line);margin:3px 0}
   .gsteps{display:flex;flex-direction:column;gap:12px;margin:0;padding:0;list-style:none;counter-reset:g}
   .gsteps>li{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:start;counter-increment:g}
-  .gsteps>li::before{content:counter(g);width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;font-size:13px;display:grid;place-items:center}
+  .gsteps>li::before{content:counter(g);width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-ink,#fff);font-weight:700;font-size:13px;display:grid;place-items:center}
   .gsteps>li>div{display:flex;flex-direction:column;gap:6px;min-width:0}
   .gpath{font-family:ui-monospace,Consolas,monospace;font-size:12.5px;background:var(--bg);border:1px solid var(--line);padding:1px 6px;border-radius:6px;overflow-wrap:anywhere}
   .ppchk{display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--surface)}

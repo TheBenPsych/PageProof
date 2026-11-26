@@ -10,7 +10,7 @@ header { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; g
 #domain { font-weight: 700; font-size: 18px; }
 #sub { font-size: 13px; opacity: .75; overflow-wrap: anywhere; }
 .buttons { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-button { font: inherit; font-weight: 600; padding: 8px 14px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; cursor: pointer; }
+button { font: inherit; font-weight: 600; padding: 8px 14px; border: 0; border-radius: 8px; background: var(--accent); color:var(--accent-ink,#fff); cursor: pointer; }
 button:disabled { opacity: .5; cursor: default; }
 button:not(:disabled):hover { filter: brightness(1.1); }
 #status { padding: 10px 16px; font-size: 14px; }
@@ -99,6 +99,6 @@ body.with-side { display: flex; align-items: flex-start; }
 .ppwarn li .no{color:var(--t-warn,#B45309);font-weight:700}
 .ppwarn .row{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .ppwarn button{font:inherit;font-size:13px;font-weight:600;border-radius:8px;padding:6px 10px;cursor:pointer;border:1px solid var(--t-line,#475569);background:transparent;color:var(--t-ink,#fff)}
-.ppwarn button.go{background:var(--t-accent,#2563EB);border-color:transparent;color:#fff}
+.ppwarn button.go{background:var(--t-accent,#2563EB);border-color:transparent;color:var(--accent-ink,#fff)}
 #caseBox input.miss{border-color:var(--t-warn,#B45309);box-shadow:0 0 0 2px color-mix(in srgb,var(--t-warn,#B45309) 30%,transparent)}
 /* 4.45 who's behind it */

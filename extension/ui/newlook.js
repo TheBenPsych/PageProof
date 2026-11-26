@@ -127,12 +127,22 @@ function openRowMenu(el, html) {
   closeRowMenu();
   const m = document.createElement('div');
   m.className = 'tmenu rowmenu'; m.id = 'rowMenu'; m.setAttribute('role', 'menu'); m.innerHTML = html;
+  m.dataset.y = window.scrollY;
   document.body.appendChild(m);
   const r = el.getBoundingClientRect(), h = m.offsetHeight, w = m.offsetWidth;
   m.style.left = Math.max(8, Math.min(r.right - w, innerWidth - w - 8)) + 'px';
   m.style.top = (r.bottom + h + 8 > innerHeight ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
 }
-document.addEventListener('scroll', closeRowMenu, true);
+// A real scroll closes the row menu. A scroll event with no movement since the menu opened (the
+// page settling after a small redraw, or the event of a scroll that ended just before the click)
+// and a scroll inside the menu itself do not.
+document.addEventListener('scroll', e => {
+  const m = $id('rowMenu'), t = e.target;
+  if (!m) return;
+  if (t && t.nodeType === 1 && t.closest && t.closest('#rowMenu')) return;
+  if (t === document && Math.abs(window.scrollY - (+m.dataset.y || 0)) <= 2) return;
+  closeRowMenu();
+}, true);
 
 // ---------------------------------------------------------------- a picture of their page
 // The copy details panel shows their page in a small window (a live view, about 3 times
@@ -261,37 +271,42 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(async () => {
 // red with a Fix it button, so you never have to go looking for what is wrong.
 let STATUS_T = null, STATUS_HTML = '';
 async function ppStatusLine() {
-  const el = $id('statusLine');
-  if (!el) return;
+  // Calm look: three tiles at the top right of the page (a round sign, a name and one line).
+  // Each item: [level, name, what it says, button].
+  const el = PP_STATUS_EL;
+  if (!document.getElementById('view')) return;   // the pop-up has no page frame
+  ppPlaceStatus();
   const items = [];
   try {
     const d = await FC.drive();
     const st = await api.storage.local.get(['fcStatus', 'fcPause', 'fcDriveOffline', 'fcToday']);
-    if (!d.done) items.push(['grey', 'Photos not connected', { href: '#connect', label: 'Connect' }]);
+    if (!d.done) items.push(['grey', 'Your photos', 'Photos not connected', { href: '#connect', label: 'Connect' }]);
     else {
       const ds = st.fcDriveOffline ? 'offline' : await RS_LATE(FC.driveStateSoft(false), 2000, 'granted');
-      if (ds === 'offline') items.push(['bad', 'Can\'t reach Google Drive', { href: '#keep', label: 'Fix it' }]);
-      else if (ds === 'prompt') items.push(['warn', 'Drive needs one click', { act: 'driveallow', label: 'Allow' }]);
-      else items.push(['ok', 'Drive connected']);
+      if (ds === 'offline') items.push(['bad', 'Google Drive', 'Can\'t reach Google Drive', { href: '#keep', label: 'Fix it' }]);
+      else if (ds === 'prompt') items.push(['warn', 'Google Drive', 'Needs one click', { act: 'driveallow', label: 'Allow' }]);
+      else items.push(['ok', 'Google Drive', 'Connected']);
       const k = await FC.keep(), s = st.fcStatus;
       const alive = s && Date.now() - s.beat < 90000;
       const today = st.fcToday && st.fcToday.day === new Date().toDateString() ? st.fcToday : { searched: 0, found: 0 };
-      if (!k.on) items.push(['grey', 'Keep searching is off', { href: '#keep', label: 'Turn on' }]);
-      else if (st.fcPause) items.push(['warn', 'Searching paused', { href: '#keep', label: 'Open' }]);
-      else if (s && s.state === 'closed') items.push(['bad', 'Keep searching stopped', { act: 'keepshow', label: 'Fix it' }]);
-      else items.push([alive ? 'run' : 'grey', (alive ? 'Searching' : 'Starting') + ` · ${today.searched} today${today.found ? ', ' + today.found + ' new' : ''}`, { href: '#keep' }]);
+      if (!k.on) items.push(['grey', 'Keep searching', 'Off', { href: '#keep', label: 'Turn on' }]);
+      else if (st.fcPause) items.push(['warn', 'Keep searching', 'Paused', { href: '#keep', label: 'Open' }]);
+      else if (s && s.state === 'closed') items.push(['bad', 'Keep searching', 'Stopped', { act: 'keepshow', label: 'Fix it' }]);
+      else items.push([alive ? 'run' : 'grey', 'Keep searching', (alive ? 'Searching' : 'Starting') + ` · ${today.searched} today${today.found ? ', ' + today.found + ' new' : ''}`, { href: '#keep' }]);
       const broken = Object.keys(await FC.brokenEngines());
-      if (broken.length) items.push(['bad', broken.map(e => FC.ENGINE_NAME[e]).join(', ') + ' resting', { href: '#health', label: 'Fix it' }]);
-      else items.push(['ok', 'Search sites working']);
+      if (broken.length) items.push(['bad', 'Search sites', broken.map(e => FC.ENGINE_NAME[e]).join(', ') + ' resting', { href: '#health', label: 'Fix it' }]);
+      else items.push(['ok', 'Search sites', 'All working']);
     }
   } catch (e) { return; }
   const bad = items.some(i => i[0] === 'bad');
-  const html = items.map(([lvl, text, b]) => {
-    const t = `<span class="sdot"></span><span>${esc(text)}</span>`;
-    if (b && b.label) return `<span class="si s-${lvl}">${t}${b.href ? `<a class="sfix" href="${b.href}"${b.act ? ` data-act="${b.act}"` : ''}>${b.label}</a>` : `<button class="sfix" data-act="${b.act}">${b.label}</button>`}</span>`;
-    return b && b.href ? `<a class="si s-${lvl}" href="${b.href}">${t}</a>` : `<span class="si s-${lvl}">${t}</span>`;
+  const SIGN = { ok: '✓', run: '●', grey: '–', warn: '!', bad: '!' };
+  const html = items.map(([lvl, name, text, b]) => {
+    const fix = b && b.label ? (b.href ? `<a class="sfix" href="${b.href}"${b.act ? ` data-act="${b.act}"` : ''}>${b.label}</a>` : `<button class="sfix" data-act="${b.act}">${b.label}</button>`) : '';
+    const t = `<span class="sico" aria-hidden="true">${SIGN[lvl] || ''}</span><span class="stx"><b>${esc(name)}</b><span>${esc(text)}${fix ? ' ' + fix : ''}</span></span>`;
+    return b && b.href && !b.label ? `<a class="si stile s-${lvl}" href="${b.href}">${t}</a>` : `<span class="si stile s-${lvl}">${t}</span>`;
   }).join('');
-  if (html !== STATUS_HTML || el.innerHTML !== html) { STATUS_HTML = html; el.innerHTML = html; }
+  // Only redrawn when it changed: a redraw above a scrolled page nudges the page, which would close an open row menu.
+  if (html !== STATUS_HTML || (html && !el.firstChild)) { STATUS_HTML = html; el.innerHTML = html; }
   PP_STATUS.html = html; PP_STATUS.bad = bad;
   el.classList.toggle('bad', bad);
   el.hidden = !items.length;

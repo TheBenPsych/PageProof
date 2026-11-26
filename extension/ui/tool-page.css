@@ -23,10 +23,10 @@ body.tp .tp-act>button,body.tp .tp-act>a,body.tp .tp-act>label{display:inline-fl
   cursor:pointer;text-decoration:none;white-space:nowrap;box-shadow:none;filter:none;opacity:1}
 body.tp .tp-act>[hidden]{display:none}
 body.tp .tp-act>button:not(:disabled):hover,body.tp .tp-act>a:hover,body.tp .tp-act>label:hover{border-color:var(--p-faint);background:var(--p-surface)}
-body.tp .tp-act>button.main,body.tp .tp-act>button.save{background:var(--p-accent-btn);border-color:transparent;color:#fff}
+body.tp .tp-act>button.main,body.tp .tp-act>button.save{background:var(--p-accent-btn);border-color:transparent;color:var(--accent-ink,#fff)}
 body.tp .tp-act>button.main:not(:disabled):hover{filter:brightness(1.08);background:var(--p-accent-btn)}
 /* main buttons are PageProof blue, not green; not ready = grey */
-body.tp #side .save,body.tp #side button.main,body.tp button.main{background:var(--p-accent-btn);color:#fff;border:0}
+body.tp #side .save,body.tp #side button.main,body.tp button.main{background:var(--p-accent-btn);color:var(--accent-ink,#fff);border:0}
 body.tp button:disabled,body.tp #side .tile:disabled,body.tp #side .save:disabled,body.tp #side button.main:disabled,body.tp .tp-act>button:disabled{
   background:var(--p-sunk)!important;color:var(--p-faint)!important;border:1px dashed var(--p-line)!important;opacity:1!important;filter:none!important;box-shadow:none!important}
 body.tp #side .tile{background:var(--p-surface);color:var(--p-ink);border:1px solid var(--p-line)}
@@ -40,7 +40,7 @@ body.tp .tp-drop .ph svg{width:30px;height:30px}
 body.tp .tp-drop h2{margin:0;font-size:20px;color:var(--p-ink)}
 body.tp .tp-drop .alt,body.tp .tp-drop p{margin:0;color:var(--p-muted);font-size:14px}
 body.tp .tp-drop kbd{background:var(--p-sunk);border:1px solid var(--p-line);color:var(--p-ink);border-radius:5px;padding:1px 6px;font-size:12px}
-body.tp .tp-drop button.main,body.tp .tp-drop .addbtn{background:var(--p-accent-btn);color:#fff;border:0;font-size:15px;font-weight:600;padding:11px 22px;border-radius:12px;margin:8px 0 0}
+body.tp .tp-drop button.main,body.tp .tp-drop .addbtn{background:var(--p-accent-btn);color:var(--accent-ink,#fff);border:0;font-size:15px;font-weight:600;padding:11px 22px;border-radius:12px;margin:8px 0 0}
 body.over .tp-drop,.tp-drop.over{border-color:var(--p-accent);background:var(--p-accent-soft)}
 
 /* ---- Inspect */
