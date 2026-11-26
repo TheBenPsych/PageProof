@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.73.0** (26 Nov 2026).
+Last updated: version **4.74.0** (26 Nov 2026).
 
 ---
 
@@ -209,6 +209,7 @@ Last updated: version **4.73.0** (26 Nov 2026).
 - **One first-time setup.** A picture of how the photo folders should look, Google Drive and client folders inside setup, a check of each client folder (photos, year folders, registration numbers), and a "What this computer can do" step comparing Light, Normal and Strong. Skip photos for now if you only capture pages. (4.57)
 - **The calm look (Windows 11 style).** One font (Lexend), Windows 11 colours in light and a grey dark mode, 4 px buttons and 8 px cards, Windows tick boxes and switches, coloured menu icons with a cogwheel for Settings, page titles like "Copies found › Keep searching". (4.65)
 - **Status tiles at the top right.** Google Drive, Keep searching and Search sites show as three small tiles beside every page title, and turn red with a Fix it link when something stopped. (4.65)
+- **Calm Home.** Number-first tiles (answered today, oldest capture wait in days), jobs and Most copied photos on one level, client and site chips, folded While you were away line, Clients board, photo panel from a most copied photo, red warning when a Stolen copy has waited 3 days or more for its capture. (4.74)
 
 ## 9. Safety nets
 
@@ -375,3 +376,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.71 | 26 Nov | Calm look step 7: Credit search in three tabs, Stop, usual wordings for everyone |
 | 4.72 | 26 Nov | Calm look step 8: Watching with turns, time limit per computer, Stop |
 | 4.73 | 26 Nov | Calm look step 9: Site owners under Copies found, Look up a site as a tab, Copy owner details |
+| 4.74 | 26 Nov | Calm look step 10: Home with number-first tiles, chips, Clients board, photo panel |
