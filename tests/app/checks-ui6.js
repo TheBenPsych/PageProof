@@ -24,14 +24,10 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
       brand: getComputedStyle(document.querySelector('#side .brand')).display, blank: document.querySelectorAll('#side a[target=_blank]').length,
       drop: !!document.querySelector('.tp-drop'),
     }));
-    if (f !== 'convert') {   // Inspect, Compare and Mark up have the calm look (checks-calm17b.js, checks-calm17c.js): their own title and drop card
-      const c = await page.evaluate(() => ({ h1: document.querySelector('.tn .nhead').textContent, old: !!document.getElementById('tpHead').offsetParent || !!document.getElementById('side').offsetParent, drop: !!document.querySelector('.tn .tn-drop .nbtn').offsetParent }));
-      ok(c.h1.includes(h1) && !c.old && r.blank === 0, f + ': calm page title, no second logo or link list');
-      ok(c.drop, f + ': starts with the drop card');
-      continue;
-    }
-    ok(r.h1.trim() === h1 && r.acts >= 1 && r.brand === 'none' && r.blank === 0, f + ': page heading "' + r.h1 + '" with ' + r.acts + ' buttons on the right, no second logo or link list');
-    ok(r.drop, f + ': starts with the shared drop card');
+    // The four tools have the calm look (checks-calm17b.js to checks-calm17d.js): their own title and drop card
+    const c = await page.evaluate(() => ({ h1: document.querySelector('.tn .nhead').textContent, old: !!document.getElementById('tpHead').offsetParent || !!document.getElementById('side').offsetParent, drop: !!document.querySelector('.tn .tn-drop .nbtn').offsetParent }));
+    ok(c.h1.includes(h1) && !c.old && r.blank === 0, f + ': calm page title, no second logo or link list');
+    ok(c.drop, f + ': starts with the drop card');
   }
 
   // Inspect: plain sentence + six fact cards after adding a picture
@@ -58,7 +54,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
 
   // Convert: what it can do as tiles
   await page.goto(url('convert.html')); await page.waitForTimeout(800);
-  ok(await page.evaluate(() => getComputedStyle(document.querySelector('.tp-drop .can')).display === 'grid' && document.querySelectorAll('.tp-drop .can span').length >= 6), 'Convert: what it can do is a grid of tiles');
+  ok(await page.evaluate(() => document.querySelectorAll('#fEmpty .tn-what .tn-wr').length >= 4 && !document.getElementById('view').offsetParent), 'Convert: what it can do is a calm list under the drop card');
 
   // Tools page: the six real tools (Opened lately is checked in checks-calm17.js)
   await page.goto(url('app.html#tools')); await page.waitForTimeout(1200);

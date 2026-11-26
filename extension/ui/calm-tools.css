@@ -277,3 +277,33 @@ body.icalm>#iRoot,body.ccalm>#cRoot,body.mcalm>#mRoot{padding:22px 32px 48px 28p
 .tn-board{padding:16px;display:flex;justify-content:center;background:repeating-conic-gradient(var(--sunk) 0 25%,var(--surface) 0 50%) 0 0/20px 20px;overflow:hidden}
 .tn-board #board{box-shadow:0 1px 6px rgba(0,0,0,.18)}
 .tn-note{display:flex;align-items:center;gap:8px;margin:0}
+
+/* ---------- Convert files and Open odd files ---------- */
+body.fcalm{grid-template-columns:minmax(0,1fr) 400px;grid-template-areas:"head head" "main side";gap:20px;padding:22px 32px 48px 28px;max-width:none;background:var(--bg);color:var(--ink)}
+body.fcalm>#tpHead{display:none!important}
+body.fcalm>#fTop{grid-area:head;gap:6px}
+body.fcalm #side nav.links{display:none}
+.tn-tabs{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+.tn-tabs .utabs{display:flex;gap:32px;align-self:stretch}
+.tn-tabs .utabs button{background:none;border:0;border-radius:0;padding:12px 0 15px;font:inherit;font-size:16px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;font-weight:500;cursor:pointer}
+.tn-tabs .utabs button.on{color:var(--ink);font-weight:600;border-bottom-color:var(--accent)}
+.tn-tabs .nbtn[hidden]{display:none}
+body.fcalm #fEmpty[hidden],body.fcalm #fMain[hidden],body.fcalm #fOpens[hidden]{display:none}
+body.fcalm #fMain{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:20px 24px 24px;display:flex;flex-direction:column;gap:14px;min-width:0}
+body.fcalm #fSum{font-size:18px;font-weight:600;color:var(--ink);margin:0}
+body.fcalm #fSum .kfaint{font-size:14px;font-weight:400;color:var(--muted)}
+body.fcalm #view .topline h2{font-size:16.5px;font-weight:600;color:var(--ink)}
+body.fcalm #view .topline .hint{color:var(--muted)}
+body.fcalm #side{background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:none;padding:20px 22px;display:flex;flex-direction:column;gap:18px;counter-reset:fstep;top:16px}
+body.fcalm #side>section:not(#fOpens){background:none!important;border:0;border-radius:0;padding:0 0 0 44px;margin:0;position:relative;counter-increment:fstep;min-height:30px}
+body.fcalm #side>section:not(#fOpens)[hidden]{display:none}
+body.fcalm #side>section:not(#fOpens)::before{content:counter(fstep);position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--accent-ink,#fff);display:grid;place-items:center;font-size:14px;font-weight:600}
+body.fcalm #side>section>h3,body.fcalm #side>section>.lab:first-child,body.fcalm #side>section>div:first-child>.lab:first-child{font-size:16.5px;font-weight:600;color:var(--ink);text-transform:none;letter-spacing:0;opacity:1;margin:3px 0 12px;line-height:1.3}
+body.fcalm #side .lab{color:var(--ink);opacity:1;font-size:14px}
+body.fcalm #side #go{margin:0}
+body.fcalm #side #fOpens{padding:0 0 0 44px;margin:0}
+body.fcalm #side #fOpens .lab{font-size:14px;font-weight:600;margin:0 0 8px}
+body.fcalm .kchips{display:flex;flex-wrap:wrap;gap:6px}
+body.fcalm .ktag{display:inline-flex;align-items:center;padding:2px 10px;border-radius:999px;background:var(--sunk);color:var(--muted);font-size:13px;font-weight:600}
+@media (max-width:1100px){body.fcalm{grid-template-columns:minmax(0,1fr);grid-template-areas:"head" "main" "side"}body.fcalm #side{position:static;max-height:none}}
+@media (max-width:700px){body.fcalm{padding:16px}}
