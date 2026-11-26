@@ -265,3 +265,28 @@ body.with-side #preview>canvas,body.with-side #preview>img{display:block;max-wid
 :root[data-theme="dark"] details.thrown .hint{color:var(--t-muted)}
 /* DARK-AUTO-END */
 :root[data-theme="dark"] .sumcard .ease{color:var(--t-warn)!important}
+
+/* Calm look batch 19 (capture page only): blue Save evidence pack, the four single parts in one
+   row under "Or just one part", the timestamp bar and the Fit the window / Real size switch. */
+body.with-side #saveBox #pack{background:#005FB8;color:#fff;border-radius:6px;min-height:44px;padding:10px;font-size:15px;font-weight:600}
+body.with-side #saveBox #pack:not(:disabled):hover{background:#0067C0;filter:none}
+:root[data-theme="dark"] body.with-side #saveBox #pack{background:#60CDFF;color:#000}
+:root[data-theme="dark"] body.with-side #saveBox #pack:not(:disabled):hover{background:#7CD6FF}
+body.with-side #saveBox .onepart{font-size:13px;color:var(--t-muted);margin:2px 0 -2px}
+body.with-side #saveBox .grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+body.with-side #saveBox .tile{flex-direction:column;gap:4px;padding:8px 2px;font-size:12.5px;border-radius:6px;white-space:nowrap}
+body.with-side #content .tsbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 16px 12px;padding:10px 14px;border-radius:6px;border:1px solid color-mix(in srgb,#9D5D00 30%,transparent);background:#FFF4CE;color:#1B1B1B;font-size:14px}
+:root[data-theme="dark"] body.with-side #content .tsbar{background:#433519;color:#fff;border-color:#5C4A20}
+.tsbar .tsi{color:#9D5D00;font-size:16px}
+:root[data-theme="dark"] .tsbar .tsi{color:#FCE100}
+.tsbar .tst{flex:1 1 300px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.tsbar .tst b{font-weight:600}
+.tsbar details{flex:1 1 100%;font-size:13px;margin:0 0 0 28px;padding:0;background:none;border:0}
+.tsbar summary{cursor:pointer;width:max-content}
+.tsbar ul{margin:6px 0 0;padding-left:18px}
+body.with-side #content .zoombar{display:flex;justify-content:center;flex-wrap:wrap;gap:10px;align-items:center;margin:0 16px 12px;font-size:13.5px;color:var(--t-muted)}
+.zoombar .seg{display:inline-flex;background:var(--t-sunk);border:1px solid var(--t-line);border-radius:6px;padding:3px;gap:2px}
+.zoombar .seg button{padding:4px 12px;border:0;border-radius:4px;background:transparent;color:var(--t-ink);font:inherit;font-size:13.5px;cursor:pointer}
+.zoombar .seg button.on{background:var(--t-surface);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.14)}
+body.with-side #preview.real{max-width:none;overflow-x:auto}
+body.with-side #preview.real>img,body.with-side #preview.real>canvas{max-width:none}

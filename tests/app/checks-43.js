@@ -128,7 +128,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   }));
   ok(cap.proof.length === 4 && /^ok:Whole page captured/.test(cap.proof[0]) && /^ok:1 picture saved/.test(cap.proof[1]) && /^ok:Fingerprints made for \d+ files/.test(cap.proof[2]) && !/^wait/.test(cap.proof[3]), 'Capture page proof checklist: ' + cap.proof.join('; '));
   ok(/proof caseBox saveBox/.test(cap.order) && /1\s*Case details \| 2\s*Save/.test(cap.steps) && cap.fields === 'Case Notes Collected', 'Capture page: step 1 Case details comes before step 2 Save (' + cap.steps + ')');
-  ok(cap.tiles === 'Copy Markup PDF HTML' && !EMOJI.test(cap.emoji) && cap.sheet, 'Capture page keeps Copy, Markup, PDF and HTML, with line icons');
+  ok(cap.tiles === 'Copy Mark up PDF HTML' && !EMOJI.test(cap.emoji) && cap.sheet, 'Capture page keeps Copy, Mark up (batch 19 wording), PDF and HTML, with line icons');
   await shot('capture', v);
 
   await ctx.close(); srv.close();
