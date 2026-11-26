@@ -65,7 +65,7 @@
   const caseLine = () => { const who = F.collector.value.trim(), ref = F.caseRef.value.trim(); caseSub.textContent = [who ? 'Collected by ' + who : 'No name yet', ref ? 'case ' + ref : 'no case number yet'].join(' · '); };
   for (const el of Object.values(F)) el.addEventListener('input', caseLine);
   const folds = h('section', { class: 'card tn-folds', id: 'iFolds' }, caseFold, $('folds'));
-  const shownView = h('div', { class: 'tn-view', id: 'iShown', hidden: true }, cmd, h('div', { class: 'tn-ins' }, pic, h('aside', { class: 'tn-side' }, sayCard, facts, folds)));
+  const shownView = h('div', { class: 'tn-view', id: 'iShown', hidden: true }, h('div', { class: 'tn-ins' }, pic, h('aside', { class: 'tn-side' }, sayCard, facts, folds)));
 
   // Save evidence pack: the first press opens Case details (so the case number isn't forgotten);
   // with the fold open, or a case number typed, it saves straight away.
@@ -116,13 +116,14 @@
   }
   new MutationObserver(() => { backBtn.hidden = $('backAll').hidden; }).observe($('backAll'), { attributes: true, attributeFilter: ['hidden'] });
 
-  root.append(TK.head('Inspect a photo'), status, emptyView, galView, shownView);
+  cmd.hidden = true;
+  root.append(TK.head('Inspect a photo'), cmd, status, emptyView, galView, shownView);
   // inspect.js says which of the three views is on, and when a picture has been read.
   const show = showOnly, draw = render;
-  showOnly = which => { show(which); emptyView.hidden = which !== 'empty'; galView.hidden = which !== 'gallery'; shownView.hidden = which !== 'shown'; if (which === 'empty') drawEmpty(); };   // eslint-disable-line no-global-assign
+  showOnly = which => { show(which); emptyView.hidden = which !== 'empty'; galView.hidden = which !== 'gallery'; shownView.hidden = cmd.hidden = which !== 'shown'; if (which === 'empty') drawEmpty(); };   // eslint-disable-line no-global-assign
   // "© Author and copyright" has a letter where the other folds have a picture: give it the line icon too.
   const foldIcons = () => { for (const sm of document.querySelectorAll('#folds details.fold > summary')) { const t = [...sm.childNodes].find(n => n.nodeType === 3 && /^\s*©\s*/.test(n.nodeValue)); if (t) { t.nodeValue = t.nodeValue.replace(/^\s*©\s*/, ''); sm.prepend(ic('cr')); } } };
   render = () => { draw(); foldIcons(); drawShown(); };   // eslint-disable-line no-global-assign
   // whatever inspect.js has on screen by now
-  { const now = ['empty', 'gallery', 'shown'].find(id => !$(id).hidden) || 'empty'; emptyView.hidden = now !== 'empty'; galView.hidden = now !== 'gallery'; shownView.hidden = now !== 'shown'; if (now === 'empty') drawEmpty(); else if (now === 'shown' && cur) { foldIcons(); drawShown(); } }
+  { const now = ['empty', 'gallery', 'shown'].find(id => !$(id).hidden) || 'empty'; emptyView.hidden = now !== 'empty'; galView.hidden = now !== 'gallery'; shownView.hidden = cmd.hidden = now !== 'shown'; if (now === 'empty') drawEmpty(); else if (now === 'shown' && cur) { foldIcons(); drawShown(); } }
 })();

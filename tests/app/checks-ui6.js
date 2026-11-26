@@ -24,9 +24,9 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
       brand: getComputedStyle(document.querySelector('#side .brand')).display, blank: document.querySelectorAll('#side a[target=_blank]').length,
       drop: !!document.querySelector('.tp-drop'),
     }));
-    if (f === 'inspect') {   // Inspect has the calm look (checks-calm17b.js): its own title and drop card
-      const c = await page.evaluate(() => ({ h1: document.querySelector('#iRoot .nhead').textContent, old: !!document.getElementById('tpHead').offsetParent || !!document.getElementById('side').offsetParent, drop: !!document.getElementById('iPick').offsetParent }));
-      ok(/Inspect a photo/.test(c.h1) && !c.old && r.blank === 0, f + ': calm page title, no second logo or link list');
+    if (f !== 'convert') {   // Inspect, Compare and Mark up have the calm look (checks-calm17b.js, checks-calm17c.js): their own title and drop card
+      const c = await page.evaluate(() => ({ h1: document.querySelector('.tn .nhead').textContent, old: !!document.getElementById('tpHead').offsetParent || !!document.getElementById('side').offsetParent, drop: !!document.querySelector('.tn .tn-drop .nbtn').offsetParent }));
+      ok(c.h1.includes(h1) && !c.old && r.blank === 0, f + ': calm page title, no second logo or link list');
       ok(c.drop, f + ': starts with the drop card');
       continue;
     }
@@ -41,18 +41,20 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(fc.shown && fc.n >= 6, 'Inspect: the facts as label rows beside the picture (' + fc.n + ')');
   ok(!/rgb\(2[0-9], 1[2-6][0-9], [4-7][0-9]\)/.test(fc.blue) && /rgb\(0, (94|95|112), (153|184)\)/.test(fc.blue), 'Inspect: Save evidence pack is PageProof blue, not green (' + fc.blue + ')');
 
-  // Compare: slots on top, floating bar under the picture
+  // Compare: the two files above the picture; a button that is not ready is grey and says why
   await page.goto(url('compare.html')); await page.waitForTimeout(800);
-  const cp = await page.evaluate(() => { const s = document.querySelector('.tp-slots').getBoundingClientRect(), st = document.getElementById('stage').getBoundingClientRect(), fl = document.getElementById('tpFloat').getBoundingClientRect(); return { slotsAbove: s.bottom <= st.top + 2, floatBelow: fl.top >= st.top, modes: !!document.querySelector('#tpFloat #modes'), op: !!document.querySelector('#tpFloat #opacity') }; });
-  ok(cp.slotsAbove && cp.floatBelow && cp.modes && cp.op, 'Compare: Original and Copy above the picture, modes and slider in the floating bar under it');
-  const dis = await page.evaluate(() => { const b = document.getElementById('auto'); return { off: b.disabled, why: b.dataset.why, bg: getComputedStyle(b).backgroundColor }; });
+  await page.setInputFiles('#slotA input', { name: 'photo.png', mimeType: 'image/png', buffer: png }); await page.waitForTimeout(1500);
+  const dis = await page.evaluate(() => { const b = document.getElementById('cBtnAuto'); return { off: b.disabled, why: b.title, bg: getComputedStyle(b).backgroundColor }; });
   ok(dis.off && dis.why && !/rgb\(1[2-9]\d, 2\d\d, 1\d\d\)/.test(dis.bg), 'A button that is not ready is grey (not pale green) and says why');
+  await page.setInputFiles('#slotB input', { name: 'copy.png', mimeType: 'image/png', buffer: png }); await page.waitForTimeout(2000);
+  const cp = await page.evaluate(() => { const s = document.getElementById('cCmd').getBoundingClientRect(), st = document.getElementById('view').getBoundingClientRect(), fl = document.getElementById('tpFloat').getBoundingClientRect(); return { slotsAbove: s.bottom <= st.top + 2, floatBelow: fl.top >= st.top, modes: !!document.querySelector('#tpFloat #modes'), op: !!document.querySelector('#tpFloat #opacity') }; });
+  ok(cp.slotsAbove && cp.floatBelow && cp.modes && cp.op, 'Compare: Original and Copy above the picture, modes and slider in the floating bar');
 
-  // Mark up: the tool column sits left of the picture once a picture is open
+  // Mark up: one toolbar across the top of the picture
   await page.goto(url('markup.html')); await page.waitForTimeout(800);
   await page.setInputFiles('#pick', { name: 'photo.png', mimeType: 'image/png', buffer: png }); await page.waitForTimeout(2000);
-  const mk = await page.evaluate(() => { const s = document.getElementById('side').getBoundingClientRect(), st = document.getElementById('stage').getBoundingClientRect(); return { left: s.right <= st.left + 2, slim: s.width < 220 }; });
-  ok(mk.left && mk.slim, 'Mark up: slim tool column on the left of the picture');
+  const mk = await page.evaluate(() => { const s = document.getElementById('mBar').getBoundingClientRect(), st = document.getElementById('board').getBoundingClientRect(); return { above: s.bottom <= st.top + 2, slim: s.height < 120 }; });
+  ok(mk.above && mk.slim, 'Mark up: one slim toolbar above the picture');
 
   // Convert: what it can do as tiles
   await page.goto(url('convert.html')); await page.waitForTimeout(800);
