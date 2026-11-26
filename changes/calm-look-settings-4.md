@@ -1,5 +1,0 @@
-type: new
-title: Stats in the calm look, with new charts
-news: Settings › Health › Stats has new charts. On top: slim bars for anything that looks off, and four tiles with a trend and a two-week line. Jump to takes you to one of five groups: What it found, Search sites, The checker, This computer, Extra searches and helpers. From search to copy is four steps in a line with a column for each day. Each search site has its own card. Speed is drawn as bars on one scale. The checker test and Photos covered are rings. Keep searching is a week grid with a square for each hour. Tables became rows with a coloured dot. Every card has a "What is this?" line. Saving a weekly stats file is now a switch at the bottom, and Save stats for Claude stays on top.
-timeline: Settings redrawn in the calm look (part 4): Stats charts.
-feature 2: **Stats.** A tab of Health: tiles with trends, a card per search site, speed bars, the checker test ring, a week grid for Keep searching, and "What is this?" on every card.
