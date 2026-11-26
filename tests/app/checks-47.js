@@ -40,11 +40,11 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(await page.evaluate(() => !document.querySelector('.showing')), 'The Showing line goes away when nothing is filtered');
   if (SHOTS) { await page.evaluate(() => { state.fMatch = 'strong'; state.fFresh = true; state.fView = 'client'; return render(true); }); await page.waitForTimeout(500); await page.screenshot({ path: SHOTS + '/411-filters.png', clip: { x: 0, y: 0, width: 1920, height: 620 } });
     await page.evaluate(() => { state.fFresh = false; state.fView = 'list'; return render(true); }); }
-  await page.evaluate(() => { state.fMatch = 'strong'; return render(true); }); await page.waitForTimeout(400);
-  const ch = await page.evaluate(() => ({ n: document.querySelectorAll('.ddb.chosen').length, x: !!document.querySelector('[data-dd="fMatch"] .ddx'), tab: (document.querySelector('.found-card .tabs button.on .tick') || {}).textContent }));
-  ok(ch.n === 1 && ch.x && ch.tab === '✓', 'A changed dropdown lights up with an ✕, and the chosen status tab has a tick');
+  await page.evaluate(() => { state.fMatch = 'strong'; state.showFilters = true; return render(true); }); await page.waitForTimeout(400);
+  const ch = await page.evaluate(() => ({ n: document.querySelectorAll('.fpanel .ddb.chosen').length, x: !!document.querySelector('[data-dd="fMatch"] .ddx'), tab: (document.querySelector('.found-card .tabs button.on .tick') || {}).textContent }));
+  ok(ch.n === 1 && ch.x && ch.tab === '✓', 'In Filters, a changed dropdown lights up with an ✕, and the chosen status tab has a tick');
   await page.click('[data-dd="fMatch"] .ddx'); await page.waitForTimeout(400);
-  ok(await page.evaluate(() => state.fMatch === 'any' && !document.querySelector('.ddb.chosen')), 'The ✕ puts the dropdown back to normal');
+  ok(await page.evaluate(() => state.fMatch === 'any' && !document.querySelector('.fpanel .ddb.chosen')), 'The ✕ puts the dropdown back to normal');
   const dm = await page.evaluate(ids => {
     const cell = id => { const r = document.querySelector(`.crow[data-v="${CSS.escape(id)}"] .cc-dmg`); return r ? r.textContent.trim() : null; };
     return { fresh: cell(ids.fresh), old: cell(ids.old), nodate: cell(ids.nodate) };
@@ -56,11 +56,11 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(await page.evaluate(() => document.querySelectorAll('.crow .sig .tag svg').length > 0 && !document.querySelector('.crow .l1 .tag.bad:not(.sig .tag)')), 'Rows use small warning icons instead of word tags');
   ok(await page.evaluate(() => [...document.querySelectorAll('.crow .sig .tag')].every(t => t.textContent.trim().length > 2)), 'Each row warning says what it means next to its icon (e.g. Suspicious site)');
   ok(await page.evaluate(() => !!document.querySelector('.crow .mpill')), 'Match pill on each row');
-  // Columns menu: turn Country off, it stays off after reload
-  await page.click('[data-dd="cols"] > summary'); await page.click('[data-act="fcol"][data-v="country"]'); await page.waitForTimeout(700);
-  ok(await page.evaluate(() => !document.querySelector('.crow .cc-country') && document.querySelector('[data-dd="cols"]').open), 'Columns menu turns a column off and stays open');
+  // Columns menu: turn Found off, it stays off after reload
+  await page.click('[data-dd="cols"] > summary'); await page.click('[data-act="fcol"][data-v="found"]'); await page.waitForTimeout(700);
+  ok(await page.evaluate(() => !document.querySelector('.crow .cc-found') && document.querySelector('[data-dd="cols"]').open), 'Columns menu turns a column off and stays open');
   await page.reload(); await page.waitForTimeout(1500);
-  ok(await page.evaluate(() => !document.querySelector('.crow .cc-country')), 'The column choice is remembered');
+  ok(await page.evaluate(() => !document.querySelector('.crow .cc-found')), 'The column choice is remembered');
   await page.evaluate(() => { state.fCols.country = true; api.storage.local.set({ fcCols: state.fCols }); });
   // dropdowns: one tidy line
   await page.click('[data-dd="fView"] > summary'); await page.click('[data-act="fset"][data-v="fView|client"]'); await page.waitForTimeout(600);
@@ -76,7 +76,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     return { look: !!d.querySelector('#lookbox'), tabs: [...d.querySelectorAll('.dtabs button')].map(b => b.textContent.trim()), shown: [...d.querySelectorAll('.dpane')].filter(p => !p.hidden).map(p => p.dataset.tab), pinned: f.bottom <= innerHeight + 1 && f.top > innerHeight / 2, ans: d.querySelectorAll('.dfoot [data-act="dverdict"]').length, noReg: !d.querySelector('#regIn') };
   });
   ok(p.look, 'Panel has the "Look at these" box');
-  ok(p.tabs.join() === 'Summary,Their page,Claim,Site' && p.shown.join() === 'sum', 'Four tabs, Summary open first');
+  ok(p.tabs.join() === 'This copy,Claim,The site' && p.shown.join() === 'sum', 'Three tabs, This copy open first');
   ok(p.pinned && p.ans === 5, 'Answer buttons are pinned at the bottom of the panel');
   ok(p.noReg, 'Still no "Add the number" box in the panel');
   await page.click('.dtabs [data-v="claim"]'); await page.waitForTimeout(300);

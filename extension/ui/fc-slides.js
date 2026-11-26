@@ -69,8 +69,11 @@ function picLink(c) {
   return null;
 }
 const expText = iso => new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-function picLinkRow(c) {
+// calm = the copy panel's This copy tab: the plain picture address is already in "Their picture"
+// there, so the row only shows when it says more (a TikTok slide, or a link that stops working).
+function picLinkRow(c, calm) {
   const L = picLink(c);
+  if (calm && (!L || (!L.slide && !L.exp && L.url === c.img))) return '';
   if (!L) {
     const why = typeof PP_TIKTOK !== 'undefined' && PP_TIKTOK.isPhotoPost(c.url) ? 'Not found yet. PageProof opens the post and reads each slide during the post check.'
       : 'Not known: the search site only gave its small preview. PageProof gets the link when it finds the photo on their page.';

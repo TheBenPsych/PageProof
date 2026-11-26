@@ -9,7 +9,8 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); 
   // Every page with its own look loads the shared look last.
   for (const f of ['app.html', 'popup.html', 'runner.html', 'compare.html', 'convert.html', 'inspect.html', 'markup.html', 'revsearch.html', 'verify.html']) {
     const links = [...fs.readFileSync(path.join(ext, f), 'utf8').matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map(m => m[1]);
-    ok(links[links.length - 1] === 'ui/win11.css', f + ' loads the shared calm look last');
+    const own = links.filter(l => l !== 'ui/calm.css');   // the page layouts of the calm look (app.html) build on the shared look
+    ok(own[own.length - 1] === 'ui/win11.css' && links.indexOf('ui/calm.css') !== 0, f + ' loads the shared calm look last');
   }
   const { ctx, url } = await start();
   const page = await ctx.newPage();

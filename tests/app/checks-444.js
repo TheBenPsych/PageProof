@@ -53,7 +53,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
 
   // ---- Look at these first: the filter on Copies found
   await page.goto(url('app.html#found?strong=1')); await page.waitForTimeout(3000);
-  const f = await page.evaluate(() => ({ rows: [...document.querySelectorAll('.crow')].map(r => (r.querySelector('.l1 b') || {}).textContent), tag: document.body.innerText.includes('Strong claims') }));
+  const f = await page.evaluate(() => ({ rows: [...document.querySelectorAll('.crow:not(.calmhdr)')].map(r => (r.querySelector('.l1 b') || {}).textContent), tag: document.body.innerText.includes('Strong claims') }));
   ok(f.tag && f.rows.length === 2 && f.rows.includes('thief-example.com') && f.rows.includes('shop-example.com'), 'Look at these first shows only the strong claims: ' + f.rows.join(', '));
 
   // ---- Who's behind it box: removed (Ben: not useful). The capture page has no box for it.

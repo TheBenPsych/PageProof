@@ -78,6 +78,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await shot('found-chip');
   await page.click('[data-act="qtoggle"][data-v="sus"]'); await page.waitForTimeout(400);
   ok(await cnt() === all, 'Clicking the chip again takes the filter off');
+  await page.evaluate(() => { state.showFilters = true; return render(true); }); await page.waitForTimeout(400);   // calm look: Found and Match live in Filters
   for (const [k, v, test, name] of [
     ['fWhen', 'week', `c => Date.now() - new Date(c.firstSeen) < 7 * 864e5 + 6e4`, 'Found: this week'],
     ['fMatch', 'exact', `c => matchKind(c) === 'exact'`, 'Match: Exact'],

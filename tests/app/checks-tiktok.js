@@ -79,7 +79,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(/Picture link/.test(d.t) && /Slide 3 of 4/.test(d.t) && /Copy link/.test(d.t) && /Open/.test(d.t) && /stops working/.test(d.t) && d.copy, 'The panel shows "Slide 3 of 4" and the picture link with Copy link and Open');
   // A website copy with a real picture address shows it too.
   const w = await page.evaluate(async () => { const c = FCD.copies.find(x => !isSoc(x) && /^https:/.test(x.img || '')); window.__img = c.img; state.open = c.id; await render(true); await new Promise(r => setTimeout(r, 400)); return { t: document.getElementById('drawer').textContent.replace(/\s+/g, ' '), b: !!document.querySelector('#drawer [data-act="copytext"][data-v="' + __img + '"]') }; });
-  ok(/Picture link/.test(w.t) && w.b, 'A website copy shows its picture link');
+  ok(/Their picture/.test(w.t) && w.b, 'A website copy shows its picture link');
 
   await ctx.close();
   console.log(fails ? fails + ' FAILED' : 'ALL PASSED');

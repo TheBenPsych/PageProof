@@ -98,7 +98,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   // ---- the panel: The post instead of the live page, the Account tab, set the account by hand
   await page.evaluate(() => { state.dView = 'page'; }); await page.click('.crow[data-v="s6"] [data-act="openacct"]'); await page.waitForTimeout(900);
   const d = await page.evaluate(() => { const d = document.getElementById('drawer'); return { tabs: [...d.querySelectorAll('.dtabs button')].map(b => b.textContent.trim()), shown: [...d.querySelectorAll('.dpane')].filter(p => !p.hidden).map(p => p.dataset.tab), post: !!d.querySelector('.dview .postcard'), live: !!d.querySelector('#pgbox'), look: d.querySelector('#lookbox').textContent }; });
-  ok(d.tabs.join(',') === 'Summary,The post,Account,Claim' && d.shown.join() === 'acct', 'Social panel tabs: Summary, The post, Account, Claim; Set account opens the Account tab');
+  ok(d.tabs.join(',') === 'This copy,The post,Account,Claim' && d.shown.join() === 'acct', 'Social panel tabs: This copy, The post, Account, Claim; Set account opens the Account tab');
   ok(d.post && !d.live, '"The post" shows instead of the live page');
   ok(/Account not found yet/.test(d.look), 'Look at these says the account is not found yet');
   await page.fill('#acctIn', 'facebook.com/harborlightfans'); await page.click('[data-act="saveacct"]'); await page.waitForTimeout(900);
