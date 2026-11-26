@@ -395,37 +395,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && state.show
 // =====================================================================================
 // Capture a page
 // =====================================================================================
-V.capture = async () => {
-  const log = await getLog();
-  const caps = [...log].reverse().slice(0, 12);
-  const t = await lastWebTab();
-  const step = (n, icon, t, d) => `<div class="cstep"><span class="ci">${ic(icon, 20)}</span><b><em>${n}</em> ${t}</b><span>${d}</span></div>`;
-  const capCard = e => {
-    const sv = e.saves && e.saves.length ? e.saves[e.saves.length - 1] : null, ts = sv && (sv.timestamps || sv.timestamp);
-    return `<button class="capcard lc" data-act="opencap" data-v="${esc(e.id)}" title="${esc(e.url)}">
-      <span class="capimg" data-capthumb="${esc(e.id)}"><b>${esc((site(e.url)[0] || '?').toUpperCase())}</b></span>
-      <span class="capt"><b class="capsite">${esc(site(e.url))}</b><span class="faint">${fmtDate(e.time)}</span></span>
-      <span class="lcok">${sv ? `<span class="okline">${ic('check', 12, 3)} Pack saved</span>${ts ? `<span class="okline">${ic('check', 12, 3)} Timestamped</span>` : ''}` : '<span class="tag warn">Pack not saved</span>'}</span></button>`;
-  };
-  return `${head('Collect evidence', 'Capture a page', 'PageProof saves the whole web page from top to bottom as a PDF and a web copy, with fingerprints and three trusted timestamps.')}
-  <section class="card pad caphero">
-    ${t ? `<span class="sitebig" style="background:${avColor(site(t.url))}" aria-hidden="true">${esc((site(t.url).replace(/^www\./, '')[0] || '?').toUpperCase())}</span>
-      <div class="ct"><span class="faint" style="font-size:12.5px">Your last tab</span><b>${esc(t.title || site(t.url))}</b><span class="faint mono" style="font-size:12.5px">${esc(site(t.url))}</span></div>
-      <button class="btn go big" data-act="capturelast">${ic('capture', 20)} Capture this page</button>`
-    : `<span class="sitebig" style="background:var(--faint)" aria-hidden="true">?</span><div class="ct"><b>Open the web page you want in another tab first</b><span class="faint" style="font-size:13px">Then come back here, or click the PageProof icon on that page.</span></div>`}
-  </section>
-  <div class="csteps">
-    ${step(1, 'globe', 'Open the page', 'Let it finish loading.')}
-    ${step(2, 'capture', 'Press Capture', 'Here, on the PageProof icon, or Alt+Shift+P.')}
-    ${step(3, 'pause', 'Hands off', 'Don\'t scroll while it works. A box shows each step.')}
-    ${step(4, 'down', 'Save the pack', 'Type the case number and press Save evidence pack.')}
-  </div>
-  <section class="card" style="min-width:0;overflow:hidden">
-    <div class="pad row" style="border-bottom:1px solid var(--line)"><h2>Your last captures</h2><a class="btn ghost" style="margin-left:auto" href="#library">All evidence</a></div>
-    ${caps.length ? `<div class="capgrid lcgrid">${caps.map(capCard).join('')}</div>` : '<div class="pad muted">No captures yet. They show here after your first one.</div>'}
-  </section>`;
-};
-V.capture.after = () => capThumbs();
+// The page itself (now Evidence › Overview) is in ui/pp-overview.js (calm look step 15).
 
 // =====================================================================================
 // Evidence library
@@ -1133,7 +1103,7 @@ async function act(a, v, el) {
     const t = await lastWebTab();
     if (!t) return toast('Open the web page you want in another tab first.');
     await api.tabs.update(t.id, { active: true });
-    api.runtime.sendMessage({ type: 'captureTab', tabId: t.id });
+    api.runtime.sendMessage({ type: 'captureTab', tabId: t.id, src: 'app' });
   }
   else if (a === 'libcsv') libCsv();
   else if (a === 'shortcuts') api.tabs.create({ url: /Edg\//.test(navigator.userAgent) ? 'edge://extensions/shortcuts' : 'chrome://extensions/shortcuts' });

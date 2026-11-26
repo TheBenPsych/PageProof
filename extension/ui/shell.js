@@ -12,7 +12,7 @@ const PP_MENU = [
     subs: [['All copies', 'found'], ['One at a time', 'review'], ['Keep searching', 'keep'], ['New search', 'search'], ['All searches', 'searches'], ['Credit search', 'credit'], ['Watching', 'watching'], ['Site owners', 'owners']] },
   { id: 'clients', label: 'Clients', href: 'clients', icon: 'people', subs: [['Clients and photos', 'clients'], ['Skipped photos', 'skipped']] },
   { id: 'library', label: 'Evidence', href: 'library',
-    subs: [['All evidence', 'library'], ['Capture a page', 'capture'], ['Weekly summary', 'weekly']] },
+    subs: [['All evidence', 'library'], ['Overview', 'capture'], ['Weekly summary', 'weekly']] },
   { id: 'tools', label: 'Tools', href: 'tools', icon: 'tools',
     subs: [['All tools', 'tools'], ['Inspect a photo', 'inspect'], ['Compare two photos', 'compare'], ['Mark up a copy', 'markup'], ['Convert files', 'files']] },
   { id: 'settings', label: 'Settings', href: 'settings',
@@ -30,7 +30,7 @@ const PP_ROUTES = {
 };
 const PP_CRUMBS = {
   results: 'Search results', credit: 'Credit search', watching: 'Watching', regs: 'Registrations',
-  home: 'Home', tools: 'All tools', capture: 'Capture a page', search: 'New search', searches: 'All searches', found: 'All copies found',
+  home: 'Home', tools: 'All tools', capture: 'Evidence › Overview', search: 'New search', searches: 'All searches', found: 'All copies found',
   review: 'One at a time', clients: 'Clients and photos', photos: 'Clients and photos', owners: 'Site owners',
   who: 'Who\'s behind this site', keep: 'Keep searching', connect: 'Connect your photos', weekly: 'Evidence › Weekly summary', tocapture: 'Evidence › All evidence',
   inspect: 'Tools › Inspect a photo', compare: 'Tools › Compare two photos', markup: 'Tools › Mark up a copy', files: 'Tools › Convert files',
