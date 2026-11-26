@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.70.0** (26 Nov 2026).
+Last updated: version **4.71.0** (26 Nov 2026).
 
 ---
 
@@ -156,6 +156,7 @@ Last updated: version **4.70.0** (26 Nov 2026).
 - **Calm Keep searching in four tabs.** Now (Searching now card, Up next with the reason, Search sites and Social media with today's counts, rest and cool-down times, four number tiles, Last searches with what each found, Today's 50, Extra searches), Progress (ring, Google and Quick look bars, goal line, Kept up to date rings, how searches are shared, 7-day chart), Clients (find, All / ★ Priority / Not done, sort) and Settings (rows for Speed, When, Search sites, Where and what, Today's 50). The tab stays open after a reload. (4.68)
 - **Calm New search and Search results.** New search: photos as real thumbnails with Add photos, From my clients' photos, Paste a link (a box on the page) and Clear all; Search on switches, Speed choices and one Search button that says how long or what is missing; Recent searches. Search results: one progress card (ring, sent to Copies found, thrown out, time, a light per search site), every photo as a picture coloured by what it found, the picked photo with its facts, a line per search site, Copies it found, Thrown out folded, and What's happening. (4.69)
 - **Calm All searches.** Command bar (New search, All / New searches / Today's 50 / Keep searching with counts, Only searches that found copies, Find a photo or client, one Delete for the ticked searches with Undo), last 7 days as tiles and a chart, a Running now card (progress, photos, Open, Stop), named columns, a heading per day with totals, thumbnails, numbers for Same photo / Maybe / New, Keep searching's fold opening as a photo grid, and Search the last N on a search that did not finish. (4.70)
+- **Calm Credit search in three tabs.** Overview (live search card with Stop, search site lights and the next weekly search, four tiles, Last searches in columns, Wordings that find copies over 30 days, How it works in 3 steps), Clients (find, All / On / Off / Own wordings, sort, wording chips, a panel per client to add and remove wordings and see what each found, Change the usual wordings for every client at once) and Credit but no photo (find, client box, sort, Open page, Look closer in Inspect a photo, Take off). The tab stays open after a reload. (4.71)
 
 ## 6. Social media accounts
 
@@ -369,3 +370,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.68 | 26 Nov | Calm look step 4: Keep searching in four tabs |
 | 4.69 | 26 Nov | Calm look step 5: New search and Search results |
 | 4.70 | 26 Nov | Calm look step 6: All searches |
+| 4.71 | 26 Nov | Calm look step 7: Credit search in three tabs, Stop, usual wordings for everyone |
