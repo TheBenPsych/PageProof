@@ -125,7 +125,10 @@ iframe.tool{background:var(--bg)}
 @media (max-width:1100px){.stiles .stx>span{display:none}.stiles{gap:6px 16px}}
 
 /* ---------- cards ---------- */
-.card,.start,.htile{border-radius:var(--r-card);box-shadow:none;border:1px solid var(--line);background:var(--surface)}
+.card,.start,.htile{border-radius:var(--r-card);box-shadow:none;background:var(--surface)}
+.card,.start{border:1px solid var(--line)}
+/* tiles keep their own coloured left edge (Is everything working) */
+.htile{border-top-color:var(--line);border-right-color:var(--line);border-bottom-color:var(--line)}
 .banner{border-radius:var(--r-card)}
 
 /* ---------- buttons: Windows standard and accent ---------- */

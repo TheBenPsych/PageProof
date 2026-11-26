@@ -127,12 +127,22 @@ function openRowMenu(el, html) {
   closeRowMenu();
   const m = document.createElement('div');
   m.className = 'tmenu rowmenu'; m.id = 'rowMenu'; m.setAttribute('role', 'menu'); m.innerHTML = html;
+  m.dataset.y = window.scrollY;
   document.body.appendChild(m);
   const r = el.getBoundingClientRect(), h = m.offsetHeight, w = m.offsetWidth;
   m.style.left = Math.max(8, Math.min(r.right - w, innerWidth - w - 8)) + 'px';
   m.style.top = (r.bottom + h + 8 > innerHeight ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
 }
-document.addEventListener('scroll', closeRowMenu, true);
+// A real scroll closes the row menu. A scroll event with no movement since the menu opened (the
+// page settling after a small redraw, or the event of a scroll that ended just before the click)
+// and a scroll inside the menu itself do not.
+document.addEventListener('scroll', e => {
+  const m = $id('rowMenu'), t = e.target;
+  if (!m) return;
+  if (t && t.nodeType === 1 && t.closest && t.closest('#rowMenu')) return;
+  if (t === document && Math.abs(window.scrollY - (+m.dataset.y || 0)) <= 2) return;
+  closeRowMenu();
+}, true);
 
 // ---------------------------------------------------------------- a picture of their page
 // The copy details panel shows their page in a small window (a live view, about 3 times
@@ -295,7 +305,8 @@ async function ppStatusLine() {
     const t = `<span class="sico" aria-hidden="true">${SIGN[lvl] || ''}</span><span class="stx"><b>${esc(name)}</b><span>${esc(text)}${fix ? ' ' + fix : ''}</span></span>`;
     return b && b.href && !b.label ? `<a class="si stile s-${lvl}" href="${b.href}">${t}</a>` : `<span class="si stile s-${lvl}">${t}</span>`;
   }).join('');
-  if (html !== STATUS_HTML || el.innerHTML !== html) { STATUS_HTML = html; el.innerHTML = html; }
+  // Only redrawn when it changed: a redraw above a scrolled page nudges the page, which would close an open row menu.
+  if (html !== STATUS_HTML || (html && !el.firstChild)) { STATUS_HTML = html; el.innerHTML = html; }
   PP_STATUS.html = html; PP_STATUS.bad = bad;
   el.classList.toggle('bad', bad);
   el.hidden = !items.length;
