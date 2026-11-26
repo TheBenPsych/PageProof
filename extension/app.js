@@ -118,8 +118,8 @@ const ppDaysSince = iso => { const t = Date.parse(iso || ''); return isNaN(t) ? 
 async function ppBadges() {
   try {
     const n = await FC.countNew();
-    let t = 0, loud = ''; try { const up = (await needsCapture()).up; t = up.length; const d = up.length ? ppDaysSince(up[0].answered || up[0].firstSeen) : 0; if (d >= 7) loud = `A stolen copy has waited ${d} days for a capture`; } catch (e) { /* none */ }
-    if (PP_BADGES.newCopies !== n || PP_BADGES.toCapture !== t || PP_BADGES.toCaptureUrgent !== loud) { PP_BADGES.newCopies = n || 0; PP_BADGES.toCapture = t; PP_BADGES.toCaptureUrgent = loud; ppRenderSide(PP_ROUTES[route()] ? route() : 'home'); }
+    // Calm look: the Evidence item has no number any more (Needs a capture is gone).
+    if (PP_BADGES.newCopies !== n) { PP_BADGES.newCopies = n || 0; ppRenderSide(PP_ROUTES[route()] ? route() : 'home'); }
   } catch (e) { /* no copies yet */ }
 }
 // Another PageProof page (the search window, Keep searching) changed something: redraw.
@@ -196,7 +196,7 @@ function homeTiles(s) {
   const ans = s.answered ? ` · ${s.answered.toLocaleString()} answered today` : '';
   return `<section class="htiles" id="homeTiles" aria-label="Today in numbers">
     ${t('#found', 'New copies to answer', s.nNew.toLocaleString(), (s.newToday ? `<b class="up">+${s.newToday.toLocaleString()}</b> in the last day` : 'none in the last day') + ans)}
-    ${t('#tocapture', 'Stolen, need a capture', s.caps.toLocaleString(), s.caps ? (s.oldest ? `<b class="${s.oldest >= 3 ? 'late' : ''}">Oldest has waited ${s.oldest} ${s.oldest === 1 ? 'day' : 'days'}</b>` : 'Marked today') : 'All captured')}
+    ${t('#found?filter=Not%20finished', 'Stolen, need a capture', s.caps.toLocaleString(), s.caps ? (s.oldest ? `<b class="${s.oldest >= 3 ? 'late' : ''}">Oldest has waited ${s.oldest} ${s.oldest === 1 ? 'day' : 'days'}</b>` : 'Marked today') : 'All captured')}
     ${t('#keep', 'Photos searched today', s.searched.toLocaleString(), s.found ? `${s.found} new ${s.found === 1 ? 'copy' : 'copies'} found` : 'no new copies yet')}
     <a class="card htile hring" href="#keep?clients=1" id="homeFirstTile"><span><span class="hn num">${pct == null ? '…' : pct + '%'}</span><span class="hl">Every photo searched once</span><span class="hs">${homeFirstLine(F, s.doneBy)}</span></span>${ring}</a>
   </section>`;
@@ -341,7 +341,7 @@ function capJob(up) {
   const days = up.length ? ppDaysSince(up.oldest || (up[0] && (up[0].answered || up[0].firstSeen))) : 0;
   const sites = (up.sites || [...new Set(up.map(c => c.site))]).slice(0, 3);
   return { lvl: days >= 3 ? 'bad' : 'warn', icon: 'capture', id: 'jobCapture', title: `${up.length.toLocaleString()} stolen ${up.length === 1 ? 'copy needs' : 'copies need'} a capture`,
-    sub: (days >= 1 ? `<b class="hwait">The oldest has waited ${days} ${days === 1 ? 'day' : 'days'}.</b> ` : '') + 'Capture them before the sites take them down.' + homeChips(sites.map(x => homeChip(x, null, '#tocapture'))), btn: { href: '#tocapture', label: 'Capture them', main: 1 } };
+    sub: (days >= 1 ? `<b class="hwait">The oldest has waited ${days} ${days === 1 ? 'day' : 'days'}.</b> ` : '') + 'Capture them before the sites take them down.' + homeChips(sites.map(x => homeChip(x, null, '#found?filter=Not%20finished'))), btn: { href: '#found?filter=Not%20finished', label: 'Capture them', main: 1 } };
 }
 // Home card: every photo searched once. Uses the small copy saved by the last count, so Home
 // never reads every photo; a count older than an hour is redone after Home has drawn.
@@ -438,53 +438,7 @@ function libRows(log) {
   }
   return rows;
 }
-// 4.14: the library shows a small picture of every capture (cards), or the old table (list).
-V.library = async () => {
-  const log = await getLog(), rows = libRows(log);
-  const q = (state.libQ || '').toLowerCase();
-  const view = state.libView || (await api.storage.local.get('ppLibView')).ppLibView || 'cards';
-  const hit = (e, s) => !q || [e.url, e.title, s.caseRef, s.collector, e.captureId].join(' ').toLowerCase().includes(q);
-  const shown = rows.filter(({ e, s }) => hit(e, s));
-  const caps = [...log].reverse().filter(e => (e.saves && e.saves.length ? e.saves : [{}]).some(s => hit(e, s)));
-  const reps = ((await api.storage.local.get('fcReports')).fcReports || []).slice().reverse().filter(r => !q || [r.site, r.url, r.caseNo, r.photo, r.client, r.id].join(' ').toLowerCase().includes(q));
-  const nCap = (await needsCapture().catch(() => ({ up: [] }))).up.length;
-  const card = e => {
-    const sv = e.saves && e.saves.length ? e.saves[e.saves.length - 1] : null;
-    return `<button class="capcard" data-act="opencap" data-v="${esc(e.id)}" title="${esc(e.url)}">
-      <span class="capimg" data-capthumb="${esc(e.id)}"><b>${esc((site(e.url)[0] || '?').toUpperCase())}</b></span>
-      <span class="capt"><b class="mono">${esc((sv && sv.caseRef) || 'No case number')}</b><span class="capsite">${esc(site(e.url))}</span><span class="faint">${fmtDate(e.time)}</span></span>
-      ${sv ? `<span class="tag ok">${ic('check', 12, 3)} Pack saved</span>` : '<span class="tag grey">Not saved yet</span>'}</button>`;
-  };
-  return `${head('', 'Evidence library', 'Every page you captured on this computer, and every evidence pack saved from it.', `<button class="btn" data-act="libcsv">${ic('down', 18)} Download list (CSV)</button><a class="btn" href="#verify">${ic('verify', 18)} Verify a pack</a><a class="btn primary" href="#capture">${ic('capture', 18)} Capture a page</a>`)}
-  ${nCap ? `<a class="banner warn" href="#tocapture" style="text-decoration:none;color:inherit">${ic('capture', 20)}<div style="flex:1 1 260px"><b>${nCap} stolen ${nCap === 1 ? 'copy needs' : 'copies need'} a capture</b><div style="font-size:13.5px">They have no evidence pack yet.</div></div><span class="btn">See them</span></a>` : ''}
-  <section class="card" style="overflow:hidden">
-    <div class="row" style="gap:10px;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--bg)">
-      <input id="libq" class="chip" style="min-height:38px;padding:0 12px;font-size:14px;flex:1 1 260px" placeholder="Find by case number, site, name or capture ID" value="${esc(state.libQ || '')}" aria-label="Find evidence">
-      <span class="faint" style="font-size:13px">${view === 'cards' ? caps.length + ' of ' + log.length : shown.length + ' of ' + rows.length}</span>
-      <div class="seg" role="group" aria-label="Show as"><button class="${view === 'cards' ? 'on' : ''}" data-act="libview" data-v="cards">Pictures</button><button class="${view === 'list' ? 'on' : ''}" data-act="libview" data-v="list">List</button></div></div>
-    ${view === 'cards' ? `<div class="capgrid" id="capGrid">${caps.slice(0, 300).map(card).join('') || `<div class="muted" style="padding:28px;text-align:center;grid-column:1/-1">${log.length ? 'Nothing matches.' : 'Nothing captured yet. Open a web page, click the PageProof icon, then <b>Capture this page</b>.'}</div>`}</div>`
-    : `<div class="scroll"><table><thead><tr><th>Captured</th><th>Page</th><th>Case</th><th>Collected by</th><th>Evidence pack</th><th style="text-align:right">Open</th></tr></thead><tbody>
-    ${shown.map(({ e, s }) => `<tr><td class="muted" style="white-space:nowrap">${fmtDate(e.time)}<div class="mono faint" style="font-size:11.5px">${esc(e.captureId || '')}</div></td>
-      <td style="max-width:360px"><b>${esc(site(e.url))}</b><div class="faint" style="font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.title || e.url)}</div></td>
-      <td class="mono">${esc(s.caseRef || '—')}</td><td>${esc(s.collector || '—')}</td>
-      <td>${s.at ? `<span class="tag ok">Saved</span> <span class="faint" style="font-size:12.5px">${fmtDate(s.at)}</span>` : '<span class="tag grey">Not saved</span>'}</td>
-      <td style="text-align:right;white-space:nowrap"><button class="btn" style="min-height:32px;font-size:13px" data-act="opencap" data-v="${esc(e.id)}">Open</button></td></tr>`).join('') || `<tr><td colspan="6" class="muted" style="padding:28px;text-align:center">${rows.length ? 'Nothing matches.' : 'Nothing captured yet.'}</td></tr>`}
-    </tbody></table></div>`}
-  </section>
-  <section class="card" style="overflow:hidden">
-    <div class="pad row" style="border-bottom:1px solid var(--line)"><h2>Evidence reports</h2><span class="faint" style="font-size:13px">From Copies found: one report per copy</span><a class="btn ghost" style="margin-left:auto" href="#weekly">Weekly summary</a></div>
-    <div class="scroll"><table><thead><tr><th>Made</th><th>Copy</th><th>Client's photo</th><th>Case</th><th>Match ID</th><th style="text-align:right">Open</th></tr></thead><tbody>
-    ${reps.slice(0, 300).map(r => `<tr><td class="muted" style="white-space:nowrap">${fmtDate(r.at)}</td><td style="max-width:300px"><b>${esc(r.site)}</b><div class="faint" style="font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.url)}</div></td><td>${esc(r.photo || '')}<div class="faint" style="font-size:12.5px">${esc(r.client || '')}</div></td><td class="mono">${esc(r.caseNo || '—')}</td><td class="mono" style="font-size:12.5px">${esc(r.id || '')}</td><td style="text-align:right"><a class="btn" style="min-height:32px;font-size:13px" href="${safeUrl(r.url)}" target="_blank" rel="noreferrer">Their page</a></td></tr>`).join('') || `<tr><td colspan="6" class="muted" style="padding:28px;text-align:center">No evidence reports yet. Make one from a copy in Copies found.</td></tr>`}
-    </tbody></table></div>
-    <div class="pad faint" style="font-size:12.5px;border-top:1px solid var(--line)">The PDF files themselves are in your Downloads folder, named PageProof_evidence_….</div>
-  </section>
-  <p class="faint" style="margin:0;font-size:12.5px">Captures are kept inside this browser. The evidence packs you saved are in your Downloads folder (or wherever you chose).</p>`;
-};
-V.library.after = () => {
-  const i = document.getElementById('libq');
-  i.oninput = () => { state.libQ = i.value; render(true).then(() => { const j = document.getElementById('libq'); j.focus(); j.setSelectionRange(j.value.length, j.value.length); }); };
-  capThumbs();
-};
+// All evidence itself is in ui/pp-evidence.js (calm look step 14).
 ACTS.libview = async v => { state.libView = v; try { await api.storage.local.set({ ppLibView: v }); } catch (e) { /* only this time */ } render(true); };
 // Fill in each card's picture: the small picture saved when the capture was opened, or one made
 // now from the capture itself while the browser still holds it (it keeps the last 10).
@@ -514,23 +468,10 @@ async function needsCapture() {
     .sort((a, b) => String(a.answered || a.firstSeen).localeCompare(String(b.answered || b.firstSeen)));
   return { up: list };   // 4.15: no "still online" check any more, so no Gone group
 }
-V.tocapture = async () => {
-  const { up } = await needsCapture();
-  const ps = new Map((await FC.DB.getMany('photos', [...new Set(up.map(c => c.photo))])).filter(Boolean).map(p => [p.id, p]));
-  const row = (c, can, top) => { const p = ps.get(c.photo) || {}, d = ppDaysSince(c.answered || c.firstSeen); return `<div class="caprow" data-id="${esc(c.id)}">
-    <img class="thumb" src="${safeImg(c.thumb || (c.th && FC.pics.seen(c.id)) || 'icons/icon48.png')}" alt="" referrerpolicy="no-referrer">
-    <div style="min-width:0;flex:1"><div class="row" style="gap:8px;flex-wrap:nowrap"><span class="sl" style="background:${avColor(FC.baseOf(c.site))}" aria-hidden="true">${esc((FC.baseOf(c.site)[0] || '?').toUpperCase())}</span><b>${esc(c.site)}</b><span class="agechip ${d >= 7 ? 'r' : d >= 3 ? 'a' : ''}">${d >= 1 ? 'Waiting ' + plural(d, 'day') : 'Today'}</span></div><a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>
-      <div class="faint" style="font-size:12.5px">${esc(p.client || c.client || 'Client unknown')} · ${esc(p.name || 'Photo')} · marked stolen ${esc(fmtDate(c.answered || c.firstSeen))}</div></div>
-    <div class="row" style="gap:6px">${can ? `<button class="btn" data-act="capdone" data-v="${esc(c.id)}" title="It was captured another way (another computer, another tool)">Already captured</button><button class="btn${top ? ' primary' : ''}" data-act="capturecopy" data-v="${esc(c.id)}">${ic('capture', 16)} Capture</button>` : `<button class="btn" data-act="capdone" data-v="${esc(c.id)}">Take off this list</button>`}</div></div>`; };
-  return `${head('', 'Needs a capture', 'Copies you marked Stolen that have no evidence pack yet, oldest first. Capture each one before the site takes it down. When you save its evidence pack, it leaves this list by itself.', `<a class="btn" href="#found?filter=Stolen">All stolen copies</a>${up.length ? `<button class="btn primary" data-act="capturecopy" data-v="${esc(up[0].id)}">${ic('capture', 16)} Capture the oldest</button>` : ''}`)}
-  <section class="card" id="capList">
-    ${up.length ? up.map((c, i) => row(c, true, i === 0)).join('') : `<div class="job lvl-ok"><span class="jdot">${ic('check', 16, 3)}</span><div class="jt"><b>Every stolen copy has an evidence pack</b><span>Copies you mark Stolen show up here until they are captured.</span></div></div>`}
-  </section>`;
-};
 ACTS.capdone = async v => {
   const undo = await FC.markCaptured(v, 'hand');
   render(true);
-  toast('Taken off Needs a capture.', undo ? async () => { await undo(); render(true); } : null);
+  toast('Taken off the waiting list.', undo ? async () => { await undo(); render(true); } : null);
 };
 
 async function libCsv() {

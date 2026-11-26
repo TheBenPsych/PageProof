@@ -38,7 +38,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); 
       font: getComputedStyle(document.body).fontFamily, over: document.documentElement.scrollWidth - innerWidth };
   });
   ok(r.capBg === 'rgb(0, 95, 184)' && /^Capture this page/.test(r.cap) && r.small === 'example-news.com', 'Capture this page is the blue button and names the site only: ' + r.cap);
-  ok(r.rows.join('|') === 'New copies=review|To capture=tocapture|Searched today=keep' && new Set(r.icos).size === 3, 'the numbers are three rows, each with its own coloured icon: ' + r.rows.join(' | '));
+  ok(r.rows.join('|') === 'New copies=review|To capture=found?filter=Not%20finished|Searched today=keep' && new Set(r.icos).size === 3, 'the numbers are three rows, each with its own coloured icon: ' + r.rows.join(' | '));
   ok(r.tools.map(t => t.split('=')[0]).join('|') === 'Inspect|Compare|Mark up|Convert|Open file' && r.tools[0] === 'Inspect=inspect=Inspect a photo' && r.tools[4] === 'Open file=openfiles=Open odd files' && r.toolCols === 5, 'five tool buttons with full names as tips and five colours');
   ok(!r.photos && !r.tip, '"Photos on this page" and the tip line are gone');
   ok(r.sw && r.pause === 'lk:Pause', 'Keep searching is one row, switch on the right, Pause is a link');

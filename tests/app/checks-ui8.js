@@ -26,7 +26,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     tools: [...document.querySelectorAll('#tools .ntool')].map(t => t.dataset.go), photos: /Photos on this page/.test(document.body.textContent), panel: !!document.getElementById('panel'),
   }));
   ok(r.cap === 'example-news.com' && r.title === 'An example story', 'Capture card names the site (the page title is its tip): ' + r.cap);
-  ok(r.rows.join(',') === 'review,tocapture,keep', 'Three number rows: new copies, to capture, searched today');
+  ok(r.rows.join(',') === 'review,found?filter=Not%20finished,keep', 'Three number rows: new copies, to capture, searched today');
   ok(r.sw, 'Keep searching is one row with a switch');
   ok(r.tools.join(',') === 'inspect,compare,markup,files,openfiles' && !r.photos, 'Five tool buttons took the place of Photos on this page');
   ok(!r.panel, 'The side panel is gone: no "Keep it open beside this page" button');
