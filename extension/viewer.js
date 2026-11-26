@@ -14,6 +14,31 @@ function setStatus(text, isError) {
   $('status').className = isError ? 'error' : '';
 }
 
+function tsBar(stamps) {
+  const b = $('tsBar');
+  if (!b) return;
+  b.hidden = !stamps;
+  if (!stamps) { b.textContent = ''; return; }
+  b.innerHTML = '<span class="tsi" aria-hidden="true">⚠</span><span class="tst"><b>No trusted timestamp could be added</b><span></span></span><details><summary>What each service said</summary><ul></ul></details>';
+  b.querySelector('.tst span').textContent = 'None of the ' + stamps.length + ' timestamp services answered, so this capture has none. Everything else is saved. For a timestamp, capture the page again in a minute.';
+  const ul = b.querySelector('ul');
+  for (const t of stamps) { const li = document.createElement('li'); li.textContent = t.service + ': ' + (t.error || 'no answer'); ul.appendChild(li); }
+}
+// Calm look batch 19: the preview fits the window, or shows the capture at its real size.
+function zoomBar(w, h, parts) {
+  const z = $('zoomBar');
+  if (!z) return;
+  z.hidden = false;
+  $('zSize').textContent = parts + (parts === 1 ? ' section' : ' sections') + ' · ' + w.toLocaleString() + ' × ' + h.toLocaleString() + ' px';
+  const set = real => {
+    $('preview').classList.toggle('real', real);
+    $('zFit').classList.toggle('on', !real); $('zFit').setAttribute('aria-pressed', String(!real));
+    $('zReal').classList.toggle('on', real); $('zReal').setAttribute('aria-pressed', String(real));
+  };
+  $('zFit').onclick = () => set(false);
+  $('zReal').onclick = () => set(true);
+}
+
 function stamp(d) {
   const p = n => String(n).padStart(2, '0');
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + '_' + p(d.getHours()) + '-' + p(d.getMinutes()) + '-' + p(d.getSeconds());
@@ -326,6 +351,7 @@ async function start() {
     img.width = Math.round(plan.W / s);
     $('preview').appendChild(img);
   }
+  zoomBar(Math.round(plan.W / s), Math.round(plan.H / s), 1 + rec.sections.length);
 
   // One picture of the whole capture (made a little smaller if it is too big for the browser to draw).
   const fullCanvas = () => {
@@ -519,8 +545,10 @@ async function start() {
   const want = stamps.filter(t => !t.spare).length, missing = stamps.filter(t => t.error && !t.spare), spare = good.filter(t => t.spare);
   proof('pfStamp', !good.length ? 'bad' : good.length < want ? 'part' : 'ok',
     good.length ? Math.min(good.length, want) + ' of ' + want + ' trusted timestamps' + (spare.length ? ' (' + spare.map(t => t.service).join(' and ') + ' stood in)' : '') : 'No trusted timestamp (services did not answer)');
-  if (!good.length) notes.push('No trusted timestamp could be added (' + stamps.map(t => t.service + ': ' + t.error).join('; ') + '). Everything else is saved.');
-  else if (missing.length) notes.push('Timestamped by ' + good.map(t => t.service).join(', ') + ' (' + missing.map(t => t.service).join(', ') + ' did not answer after 3 tries' + (spare.length ? ', so ' + spare.map(t => t.service).join(' and ') + ' stood in' : '') + ').');
+  // Calm look batch 19: no timestamp at all shows as an amber bar in plain words, with what
+  // each service said folded underneath (the pack and its read-me are not changed by this).
+  tsBar(good.length ? null : stamps);
+  if (good.length && missing.length) notes.push('Timestamped by ' + good.map(t => t.service).join(', ') + ' (' + missing.map(t => t.service).join(', ') + ' did not answer after 3 tries' + (spare.length ? ', so ' + spare.map(t => t.service).join(' and ') + ' stood in' : '') + ').');
   setStatus(notes.join(' '));
   // 4.15 idea 5: the trusted timestamps carry the time servers' own clocks. If this computer's
   // clock is more than 2 minutes off, the times written in the pack won't match them.

@@ -41,9 +41,10 @@
       <h3><b class="stepn">2</b> Save</h3>
       <div id="checkBox" class="ppwarn" role="alert" hidden></div>
       <button id="pack" class="main save" disabled data-why="Still getting the capture ready (stitching, pictures, fingerprints, timestamps). This takes a few seconds.">⬇ Save evidence pack</button>
+      <div class="onepart">Or just one part</div>
       <div class="grid">
         <button id="copy" class="tile" disabled data-why="Still getting the capture ready (stitching, pictures, fingerprints, timestamps). This takes a few seconds." title="Copy the whole capture as a picture, to paste into an email, chat or document"><span>📋</span>Copy</button>
-        <button id="markup" class="tile" disabled data-why="Still getting the capture ready (stitching, pictures, fingerprints, timestamps). This takes a few seconds." title="Highlight, draw and type on a copy of this capture"><span>✏️</span>Markup</button>
+        <button id="markup" class="tile" disabled data-why="Still getting the capture ready (stitching, pictures, fingerprints, timestamps). This takes a few seconds." title="Highlight, draw and type on a copy of this capture"><span>✏️</span>Mark up</button>
         <button id="pdf" class="tile" disabled data-why="Still getting the capture ready (stitching, pictures, fingerprints, timestamps). This takes a few seconds." title="Download just the PDF"><span>📄</span>PDF</button>
         <button id="html" class="tile" disabled data-why="Still getting the capture ready (stitching, pictures, fingerprints, timestamps). This takes a few seconds." title="Download just the HTML backup"><span>🌐</span>HTML</button>
       </div>
@@ -60,6 +61,8 @@
 
   <div id="content">
     <div id="status"></div>
+    <div id="tsBar" class="tsbar" role="alert" hidden></div>
+    <div id="zoomBar" class="zoombar" hidden><span>Preview</span><span class="seg" role="group" aria-label="Preview size"><button type="button" id="zFit" class="on" aria-pressed="true">Fit the window</button><button type="button" id="zReal" aria-pressed="false">Real size</button></span><span id="zSize"></span></div>
     <main id="preview"></main>
   </div>
   <script src="db.js"></script>
