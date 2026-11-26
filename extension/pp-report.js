@@ -115,7 +115,7 @@ const PP_REPORT = (() => {
   // Each: [level 'bad' | 'warn', what, more]. Compares the last days with this computer's usual.
   function alerts(st, m) {
     const out = [], days = st.days || {};
-    if (m && m.saveFail && Date.now() - m.saveFail.at < 7 * 864e5) out.push(['bad', 'PageProof could not save some changes', (m.saveFail.quota ? 'The browser\'s storage for PageProof is full. ' : '') + 'Last time ' + new Date(m.saveFail.at).toLocaleString() + ' (' + m.saveFail.n + ' times in all). Open Settings › Is everything working.']);
+    if (m && m.saveFail && Date.now() - m.saveFail.at < 7 * 864e5) out.push(['bad', 'PageProof could not save some changes', (m.saveFail.quota ? 'The browser\'s storage for PageProof is full. ' : '') + 'Last time ' + new Date(m.saveFail.at).toLocaleString() + ' (' + m.saveFail.n + ' times in all). Open Settings › Health.']);
     const today = keyOf(new Date()), recent = lastDays(8).map(k => [k, days[k]]).filter(([, d]) => d);
     const T = days[today];
     const before = PP_STATS.sum(lastDays(7, 1).map(k => days[k]));

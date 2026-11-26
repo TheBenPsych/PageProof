@@ -95,8 +95,8 @@ const SX = (() => {
     ['Back up now', 'backup google drive', 'backups', 'sxHero'], ['Restore a backup', 'bring it back', 'backups', 'sxRestore'], ['Team lists', 'share people', 'backups', 'sxTeam'],
     ['Your photos folder', 'google drive reconnect pick again', 'backups', 'sxPhotos'], ['PageProof folder', 'documents', 'backups', 'sxDocs'], ['Backup folder', 'my drive', 'backups', 'sxBkFolder'],
     ['Moving to a new computer', 'new pc laptop', 'backups', 'sxMoving'],
-    ['Is everything working?', 'health lights sign in right now', 'health', ''], ['Space used', 'storage room free up space clear', 'health?tab=space', ''], ['Where the time goes', 'speed slow fast checker', 'health', 'sxTime'], ['Stats', 'how pageproof is doing numbers', 'stats', ''],
-    ['Help and tutorial', 'guide learn', 'help', ''], ['Keyboard keys', 'shortcuts', 'help', ''], ['Run setup again', 'first time', 'setup', ''],
+    ['Right now', 'health is everything working lights sign in', 'health', ''], ['Space used', 'storage room free up space clear', 'health?tab=space', ''], ['Where the time goes', 'speed slow fast checker', 'health', 'sxTime'], ['Stats', 'how pageproof is doing numbers', 'stats', ''],
+    ['Tutorial and help', 'guide learn about', 'help', ''], ['Keyboard keys', 'shortcuts', 'help', ''], ['Run setup again', 'first time', 'setup', ''],
   ];
   const find = () => `<div class="sx-find" role="search">${ic('search', 16)}<input id="sxFind" type="search" placeholder="Find a setting" aria-label="Find a setting" autocomplete="off"><div class="sx-found" id="sxFound" hidden></div></div>`;
   const matches = q => {

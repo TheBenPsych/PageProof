@@ -84,7 +84,7 @@
       if (c && c.ver === VERSION) {
         if (!c.at) out.push({ lvl: 'info', id: 'checkupRun', icon: 'check', title: 'Checking the new version', sub: 'About a minute: the photo checker, Google Drive, saving, timestamps and the search sites.' });
         else if (!c.ok && !c.seen) out.push({ lvl: 'bad', id: 'checkupBad', title: 'Updated to ' + VERSION + ', but ' + (c.items.filter(i => !i[1]).length === 1 ? 'one thing' : c.items.filter(i => !i[1]).length + ' things') + ' did not work',
-          sub: c.items.filter(i => !i[1]).map(i => esc(i[0]) + (i[2] ? ' (' + esc(i[2]) + ')' : '')).join(' · ') + '. Save stats for Claude (Settings › How PageProof is doing) to get it fixed.',
+          sub: c.items.filter(i => !i[1]).map(i => esc(i[0]) + (i[2] ? ' (' + esc(i[2]) + ')' : '')).join(' · ') + '. Save stats for Claude (Settings › Health › Stats) to get it fixed.',
           btn: { act: 'checkupagain', label: 'Check again', main: 1 }, btn2: { act: 'checkupseen', label: 'OK' } });
         else if (!c.seen) out.push({ lvl: 'info', id: 'checkupOk', icon: 'check', title: 'Updated to ' + VERSION + ': everything checked', sub: c.items.map(i => esc(i[0])).join(' · '), btn2: { act: 'checkupseen', label: 'OK' } });
       }

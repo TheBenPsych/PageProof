@@ -305,7 +305,7 @@ async function csCheckHtml() {
   const row = (lvl, title, text) => `<div class="ckrow"><span class="ckic ${lvl}" aria-hidden="true">${lvl === 'ok' ? '✓' : lvl === 'warn' ? '!' : lvl === 'bad' ? '✕' : '…'}</span><div style="flex:1;min-width:0"><b>${title}</b><br><span class="muted" style="font-size:13.5px">${text}</span></div></div>`;
   const rows = [
     root && drv === 'granted' ? row('ok', 'Google Drive is connected', `PageProof can read ${esc(root.name)}.`) : row('bad', 'Google Drive is not connected', 'Go back a step and choose the top folder.'),
-    docs === 'granted' ? row('ok', 'Documents › PageProof is ready', 'Your lists and backups are kept there.') : row('warn', 'Documents › PageProof is not set up', 'Your lists will only be kept inside the browser. Set it up later in Settings › Backups.'),
+    docs === 'granted' ? row('ok', 'Documents › PageProof is ready', 'Your lists and backups are kept there.') : row('warn', 'Documents › PageProof is not set up', 'Your lists will only be kept inside the browser. Set it up later in Settings › Backups and team.'),
   ];
   for (const [name, r] of [...ck.res].sort((x, y) => x[0].localeCompare(y[0]))) { const [lvl, t, d] = csCheckSay(r); rows.push(row(lvl, `${esc(name)} <span class="tag ${lvl === 'ok' ? 'ok' : lvl === 'warn' ? 'warn' : 'bad'}" style="margin-left:4px">${esc(t)}</span>`, d)); }
   if (ck.busy) rows.push(row('wait', `Checking ${ck.total ? (ck.res.size + 1) + ' of ' + ck.total : 'your clients'}…`, 'About 15 seconds a client at most.'));

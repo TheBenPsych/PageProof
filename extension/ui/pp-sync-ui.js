@@ -3,7 +3,7 @@
 // a "Back up and share" step in first-time setup, who added a team entry on Hidden and approved
 // sites, Home jobs when Google Drive isn't answering or the team disagrees, and two health lights.
 Object.assign(PP_ROUTES, { backups: ['settings', 'settings'], team: ['settings', 'settings'], moving: ['settings', 'settings'] });
-Object.assign(PP_CRUMBS, { backups: 'Settings › Backups', team: 'Settings › Team lists', moving: 'Settings › Moving to a new computer' });
+Object.assign(PP_CRUMBS, { backups: 'Settings › Backups and team', team: 'Settings › Backups and team › Team lists', moving: 'Settings › Moving to a new computer' });
 Object.assign(state, { bkList: null, bkBusy: false, bkPick: null, bkPreview: null, bkNow: null, teamCheck: '', teamWho: 'lead' });
 
 (function addStyle() {
@@ -36,7 +36,7 @@ const TEAM_STEPS_TEXT = `How to get PageProof's team lists (2 minutes, once):
 1. Go to drive.google.com and click "Shared with me" on the left.
 2. Right-click the "PageProof Team" folder and choose Organize > Add shortcut. Pick "My Drive", then "Add".
 3. Wait about a minute. The folder then shows up on your computer in File Explorer under Google Drive > My Drive > PageProof Team.
-4. In PageProof, open Settings > Team lists and press "Pick the PageProof Team folder". Click Google Drive, then My Drive, then PageProof Team, then "Select Folder". If the browser asks, press "Allow".
+4. In PageProof, open Settings > Backups and team, find Team lists and press "Pick the PageProof Team folder". Click Google Drive, then My Drive, then PageProof Team, then "Select Folder". If the browser asks, press "Allow".
 5. Press "Check it works". It should say the lists are shared.`;
 function teamGuide(st) {
   const lead = state.teamWho === 'lead';
@@ -92,7 +92,7 @@ V.team = async () => {
       : st === 'offline' ? `<span class="muted" style="font-size:14px">Your changes wait and go out by themselves when Drive is back. Check Google Drive for desktop is running and signed in (its icon by the clock).</span><button class="btn" style="align-self:flex-start" data-act="teamretry">Try again</button>`
       : `<span class="muted" style="font-size:14px">Follow the steps below once. It takes about 2 minutes.</span>`}
     ${st !== 'none' ? `<div class="row" style="gap:8px"><button class="btn" data-act="teampick">Pick the folder again</button><button class="btn ghost" data-act="teamstop">Stop sharing on this computer</button></div>` : ''}
-    <span class="faint" style="font-size:12.5px">Copies you marked Stolen are never hidden by anyone's list. A site a teammate hid can be shown again for you only, from Hidden and approved sites.</span>
+    <span class="faint" style="font-size:12.5px">Copies you marked Stolen are never hidden by anyone's list. A site a teammate hid can be shown again for you only, from Settings › Site lists.</span>
   </section>
   ${t.nDisagree ? `<section class="card" id="teamDis" style="overflow:hidden"><div class="pad"><h2>The team disagrees on ${t.nDisagree === 1 ? '1 site' : t.nDisagree.toLocaleString() + ' sites'}</h2><p class="muted" style="margin:4px 0 0;font-size:14px">One person hid these and another approved them. Until you choose, the newest answer is used. Your choice goes to everyone.</p></div>
     <div class="scroll"><table><tbody>${dis}</tbody></table></div></section>` : ''}
@@ -223,7 +223,7 @@ Object.assign(ACTS, {
   teamstop: async () => { await PP_SYNC.forget('team'); toast('Stopped sharing on this computer. Your own lists stay as they are.'); render(true); },
   teamcopy: async () => {
     try { await navigator.clipboard.writeText(TEAM_STEPS_TEXT); toast('Copied. Paste it into an email or chat to your team.'); }
-    catch (e) { toast('Could not copy here. The steps are in Settings › Team lists.'); }
+    catch (e) { toast('Could not copy here. The steps are in Settings › Backups and team.'); }
   },
   teamcheck: async () => {
     state.teamCheck = 'Checking…'; render(true);

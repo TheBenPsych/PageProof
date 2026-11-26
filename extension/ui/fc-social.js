@@ -500,7 +500,7 @@ function acctPane(c) {
       <button class="lookup" style="text-align:left;cursor:pointer" data-act="approveacct" data-v="all"><span style="color:var(--ok);display:inline-flex">${ic('check', 20)}</span><span><b>Approve ${esc(a.handle)} for every client</b><br><span class="muted" style="font-size:12.5px">For a client's own account or a licensed partner. All their posts are marked Licensed.</span></span></button></div></details>` : ''}
     <details class="hidebox" id="hidebox"${a ? '' : ' open'}><summary><b>Don't want results from this account?</b> <span class="muted" style="font-size:13px">Hide it</span></summary>
       <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">${hideChoices(c).map(([v, l, d, warn]) => `<button class="lookup${warn ? ' warnhide' : ''}" style="text-align:left;cursor:pointer" data-act="hidesite" data-v="${esc(v)}"><span style="color:var(--bad);display:inline-flex">${ic('ban', 20)}</span><span><b>${esc(l)}</b><br><span class="${warn ? '' : 'muted'}" style="font-size:12.5px;${warn ? 'color:var(--bad)' : ''}">${esc(d)}</span></span></button>`).join('')}
-      <span class="faint" style="font-size:12.5px">Hidden accounts and sites never show again. Bring them back from Settings › Hidden and approved sites.</span></div></details>`;
+      <span class="faint" style="font-size:12.5px">Hidden accounts and sites never show again. Bring them back from Settings › Site lists.</span></div></details>`;
 }
 // Hide choices on social copies: only the account. A whole social site can never be hidden (4.9.4).
 function socHideChoices(c) {
