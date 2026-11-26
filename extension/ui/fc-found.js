@@ -799,7 +799,7 @@ function copyRow(c) {
       <div class="l3">${esc(c.photoName)}<span class="l3x">${isSoc(c) && c.acct ? ' · ' + esc(c.site) : ''}${c.pct >= 0 && c.pct != null ? ` · <b class="num" data-gloss="Lines up">${c.pct}%</b> lines up` : ''} · ${esc(FC.USE[c.use][0])}${c.country ? ' · ' + esc(c.country) : ''} · found ${shortDate(c.firstSeen).toLowerCase()}</span></div>
     </div>
     <div class="ccols">${cell('pct', 'Match', coverWait(c) ? '<span class="faint" title="The post\'s cover is another picture. PageProof is opening the post to look at all its pictures.">Checking…</span>' : luBar(c.pct))}${cell('client', 'Client', c.clientName ? `<span title="${esc(c.clientName)}">${esc(c.clientName)}</span>` : '<span style="color:var(--warn);font-weight:600">Unknown</span>')}${K.dmg ? (dmgCell(c) ? `<span class="cc-dmg"><i>Damages</i>${dmgCell(c)}</span>` : '<span class="cc-dmg" aria-hidden="true"></span>') : ''}${cell('use', 'Use', `<span title="${esc(FC.USE[c.use][0])}">${esc(FC.USE[c.use][0])}</span>`)}${cell('country', 'Country', `<span>${esc(c.country || 'Not known')}</span>`)}${cell('found', 'Found', `<span>${esc(shortDate(c.firstSeen))}</span>`)}</div>
-    <div class="acts">${c.status === 'removed' ? `<button class="btn sm" data-act="rowans" data-v="new|${esc(c.id)}">Put back</button>` : done ? `<button class="btn sm" data-act="rowans" data-v="new|${esc(c.id)}">Change answer</button>`
+    <div class="acts">${c.status === 'removed' ? `<button class="btn sm" data-act="rowans" data-v="new|${esc(c.id)}">Put back</button>` : done && typeof clOpen === 'function' && clOpen(c) ? `<button class="btn sm" data-act="openrow" data-v="${esc(c.id)}" title="Open the claim steps where you left off">Continue</button>` : done ? `<button class="btn sm" data-act="rowans" data-v="new|${esc(c.id)}">Change answer</button>`
       : `<button class="btn sm stolen" data-act="rowans" data-v="stolen|${esc(c.id)}">Stolen</button><button class="btn sm licensed" data-act="rowans" data-v="licensed|${esc(c.id)}">Licensed</button><button class="btn sm" data-act="rowans" data-v="removed|${esc(c.id)}">Remove</button>`}
       <button class="btn sm icon" data-act="rowmenu" data-v="${esc(c.id)}" aria-label="More choices for ${esc(c.site)}">${ic('dots', 18)}</button></div></div>`;
 }
@@ -1616,6 +1616,7 @@ Object.assign(ACTS, {
       <button data-act="mdo" data-v="okall|${id}">${ic('check', 16)}<span>For every client</span></button>` : ''}
       <small>${isSoc(c) ? 'Hide' : 'Hide this site'}</small>
       ${hideChoices(c).map(([h, l, d, warn]) => `<button data-act="mhide" data-v="${esc(h)}"${warn ? ` title="${esc(d)}" style="color:var(--bad)"` : ''}>${ic('ban', 16)}<span>${esc(l)}</span></button>`).join('')}
+      ${typeof clOpen === 'function' && clOpen(c) ? `<hr><button data-act="mdo" data-v="changeans|${id}">${ic('undo', 16)}<span>Change answer</span></button>` : ''}
       <hr>
       <button data-act="mdo" data-v="compare|${id}">${ic('layers', 16)}<span>Compare the two photos</span></button>
       <button data-act="mdo" data-v="evidence|${id}">${ic('doc', 16)}<span>Make evidence report</span></button>
@@ -1635,6 +1636,7 @@ Object.assign(ACTS, {
     const i = v.indexOf('|'), what = v.slice(0, i), id = v.slice(i + 1);
     const c = FCD && FCD.copies.find(x => x.id === id);
     if (!c) return;
+    if (what === 'changeans') return ACTS.rowans('new|' + id);
     if (what === 'evidence') return ACTS.evidence(id);
     if (what === 'who') return ACTS.gowho(id);
     if (what === 'copy') return ACTS.copytext(c.url);
