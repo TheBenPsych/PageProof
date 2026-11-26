@@ -77,7 +77,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await web.bringToFront(); await sp.waitForTimeout(300); await sp.evaluate(() => draw()); await sp.waitForTimeout(1200);
   const spTxt = await sp.evaluate(() => document.getElementById('mini').innerText.slice(0, 160));
   console.log(JSON.stringify(spTxt));
-  ok(/in your finds/.test(spTxt), 'Pop-up says the site is in your finds');
+  ok(/Found on this site/.test(spTxt), 'Pop-up says copies were found on this site');
   // The pop-up is narrow: its contents must be on screen, not slid away by the main page's menu styles.
   await sp.setViewportSize({ width: 380, height: 700 }); await sp.waitForTimeout(300);
   const spBox = await sp.evaluate(() => { const r = document.getElementById('mini').getBoundingClientRect(); return { x: r.x, w: r.width }; });
