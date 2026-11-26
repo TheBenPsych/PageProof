@@ -104,8 +104,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
 
   // Weekly summary.
   await page.goto(url('app.html#weekly')); await page.waitForTimeout(1200);
-  const wk = await page.evaluate(() => document.querySelector('.paper').textContent.replace(/\s+/g, ' '));
-  ok(/1 photo was searched for the first time this week/.test(wk) && /C \(13 photos\)/.test(wk), 'Weekly summary: first searches and finished clients');
+  const wk = await page.evaluate(() => document.querySelector('#wkFirst').textContent.replace(/\s+/g, ' '));
+  ok(/1 photo ?searched for the first time this week/.test(wk) && /C ?All 13 photos searched at least once/.test(wk), 'Weekly summary: first searches and finished clients');
 
   // Dark mode: the new block reads well.
   await ctx.close();
