@@ -79,7 +79,7 @@
 /* column names, once, staying on screen while you scroll */
 .crow.calmhdr{cursor:default;background:var(--bg);border:1px solid transparent;border-radius:0;padding-top:10px;padding-bottom:8px;padding-right:52px;position:sticky;top:var(--top-h,61px);z-index:6;box-shadow:none}
 .crow.calmhdr:hover{background:var(--bg)}
-.crow.calmhdr .cpair{width:128px;height:0;visibility:hidden}
+.crow.calmhdr .chpair{display:block;flex-shrink:0;width:128px;height:0;visibility:hidden}
 .crow.calmhdr .cinfo b,.crow.calmhdr .ccols b,.crow.calmhdr .hsort{font-size:13px;font-weight:600;color:var(--muted);letter-spacing:0;text-transform:none}
 .crow.calmhdr .hsort{border:0;background:none;padding:0;cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-family:inherit}
 .crow.calmhdr .hsort i{font-style:normal;opacity:.45;font-weight:700}
@@ -90,8 +90,8 @@
 @container pg (min-width:1150px){.crow.calmhdr .ccols>.cc-client{display:flex}}
 @container pg (min-width:1350px){.crow.calmhdr .ccols>.cc-found{display:flex}}
 @container pg (min-width:1550px){.crow.calmhdr .ccols>.cc-use,.crow.calmhdr .ccols>.cc-country{display:flex}}
-@media (min-width:1500px){.crow.calmhdr .cpair{width:196px}}
-@media (min-width:2200px){.crow .cpair img{width:124px;height:100px}.crow.calmhdr .cpair{width:252px}}
+@media (min-width:1500px){.crow.calmhdr .chpair{width:196px}}
+@media (min-width:2200px){.crow .cpair img{width:124px;height:100px}.crow.calmhdr .chpair{width:252px}}
 /* client headings: lighter */
 .found-card .cbody>.ghead{background:var(--bg);border:0;padding:20px 4px 6px;font-size:13.5px;gap:10px;color:var(--faint);top:calc(var(--top-h,61px) + 37px)}
 .ghead .cav{width:26px;height:26px;font-size:11px}
