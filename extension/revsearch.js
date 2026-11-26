@@ -225,21 +225,14 @@ async function addToDraft(files) {
 // UI overhaul (batch 3): New search, All searches and Search results use the main PageProof look
 // (page heading, cards, tiles) with no inner side panel of their own.
 function plain(on, wide) { document.body.classList.toggle('plain', on); document.body.classList.toggle('with-side', !on); document.body.classList.toggle('wide', !!(on && wide)); }
-function pgHead(title, sub, ...right) { return h('div', { class: 'pg-head' }, h('div', {}, h('h1', { text: title }), sub ? h('p', { text: sub }) : null), ...right); }
-// A small progress ring. Only numbers go into its markup.
-function ring(done, total, size) {
-  const z = size || 40, r = z / 2 - 4, c = 2 * Math.PI * r, f = total ? Math.min(1, done / total) : 0;
-  const el = h('span', { class: 'pg-ring' + (total && done >= total ? ' done' : ''), style: 'width:' + z + 'px;height:' + z + 'px', title: done + ' of ' + total + ' done', role: 'img', 'aria-label': done + ' of ' + total + ' done' });
-  el.innerHTML = `<svg width="${z}" height="${z}" viewBox="0 0 ${z} ${z}" aria-hidden="true"><circle class="tr" cx="${z / 2}" cy="${z / 2}" r="${r}" fill="none" stroke-width="4"/><circle class="fg" cx="${z / 2}" cy="${z / 2}" r="${r}" fill="none" stroke-width="4" stroke-linecap="round" stroke-dasharray="${(c * f).toFixed(1)} ${c.toFixed(1)}"/></svg><b>${f >= 1 ? '✓' : Math.round(f * 100) + '%'}</b>`;
-  return el;
-}
-// Google / Yandex / Bing with a green, amber or red light. lights: [[engine, 'ok'|'warn'|'bad'|'off', note]]
-const engLights = lights => h('div', { class: 'pg-eng', role: 'list', 'aria-label': 'Search sites' }, lights.map(([e, c, note]) =>
-  h('span', { class: 'e', role: 'listitem', title: note || (c === 'ok' ? 'Working' : '') }, h('i', { class: c === 'ok' ? '' : c }), ENGINES[e].short, note ? h('small', { text: note }) : null)));
-
 // ---- calm look (batch 6): icons and small builders for New search and Search results.
 // The icons are fixed drawings from this file; text from web pages still only goes in as text.
 const NIC = {
+  cal: '<rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 6.5h12M5 1.8v2.4M11 1.8v2.4M5 9h1.5M7.3 9h1.5M9.6 9h1.5M5 11.3h1.5M7.3 11.3h1.5"/>',
+  loop: '<path d="M13 6.5A5 5 0 0 0 3.6 5M3 9.5A5 5 0 0 0 12.4 11"/><path d="M3.3 2.4 3.6 5l2.6-.4M12.7 13.6l-.3-2.6-2.6.4"/>',
+  trash: '<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/>',
+  star: '<path d="m8 1.8 1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.6l-3.8 2 .7-4.3-3.1-3 4.3-.6z"/>',
+  up: '<path d="M4 10l4-4 4 4"/>',
   add: '<path d="M8 3v10M3 8h10"/>',
   photo: '<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><circle cx="5.5" cy="6.3" r="1.3"/><path d="m2 12 3.8-3.6 2.7 2.4 2.2-1.8L14 12"/>',
   folder: '<path d="M1.5 4.5a1 1 0 0 1 1-1h3.3l1.4 1.5h6.3a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/>',
@@ -1882,6 +1875,8 @@ async function initResults() {
   for (const p of job.pics) maybeIngest(p);
   if (unfinished) PP_STATS.add('strain.resumed');        // the page was reloaded or crashed mid-search
   if (mine && (!job.started || unfinished)) runJob();
+  // All searches' "Search the last N" button opens this page and asks for the rest straight away.
+  try { if (sessionStorage.getItem('ppRest') === job.id) { sessionStorage.removeItem('ppRest'); const b = $('restBtn'); if (b && !R.running) b.click(); } } catch (e) { /* private window */ }
   // 4.30.2: the browser only shows "Leave site?" after someone clicked in the tab, and logs an error
   // (shown on edge://extensions) when a page asks without that click. So it only asks after one.
   const clicked = () => !navigator.userActivation || navigator.userActivation.hasBeenActive;
@@ -1900,98 +1895,166 @@ async function initResults() {
 // =====================================================================================
 async function renderPast() {
   plain(true, true);
+  const me = ++PAST.n;
   const jobs = (await RS_DB.all('jobs')).sort((a, b) => b.created.localeCompare(a.created));
   await RS_LISTS.load();
-  const KIND = { keep: 'Keep searching', fifty: 'Today\'s 50' };
-  const head = pgHead('All searches', 'Big searches are kept for 90 days. Keep searching\'s one-photo searches are kept for 2 days. Every copy they found is also in Copies found.',
-    h('a', { class: 'pg-btn primary', href: appUrl('search'), onclick: e => goApp('search', e), text: '🔎 New search' }));
+  if (me !== PAST.n) return;
+  const KIND = { new: ['New search', 'search', '#005FB8'], fifty: ['Today\'s 50', 'cal', '#8764B8'], keep: ['Keep searching', 'loop', '#0F7B0F'] };
+  const kindOf = j => j.kind === 'keep' ? 'keep' : j.kind === 'fifty' || j.folder ? 'fifty' : 'new';
+  const kico = (k, z = 36) => nsq(KIND[k][2], KIND[k][1], z);
+  const tm = d => new Date(d).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const isDone = p => Object.values(p.runs).every(r => !['wait', 'go', 'captcha'].includes(r.state));
   // What each search found, worked out once.
   const info = j => {
-    const shown = l => !RS_LISTS.isHidden(l.site, l.url);
     let same = 0, maybe = 0, nNew = 0;
-    for (const p of j.pics) for (const l of p.links) { if (!shown(l)) continue; const v = verdict(l); if (v === 'same') { same++; if (l.isNew) nNew++; } else if (v === 'maybe') maybe++; }
-    const done = j.pics.filter(p => Object.values(p.runs).every(r => !['wait', 'go', 'captcha'].includes(r.state))).length;
-    return { same, maybe, nNew, done, running: j.bg && !j.finished };
+    for (const p of j.pics) for (const l of p.links) { if (RS_LISTS.isHidden(l.site, l.url)) continue; const v = verdict(l); if (v === 'same') { same++; if (l.isNew) nNew++; } else if (v === 'maybe') maybe++; }
+    return { same, maybe, nNew, done: j.pics.filter(isDone).length, running: !!(j.bg && !j.finished) };
   };
   const I = new Map(jobs.map(j => [j.id, info(j)]));
-  const chipsOf = (x, all) => h('div', { class: 'chips' },
-    x.same ? h('span', { class: 'pg-chip bad', text: plural(x.same, 'same photo', 'same photo') }) : null,
-    x.maybe ? h('span', { class: 'pg-chip warn', text: x.maybe + ' maybe' }) : null,
-    x.nNew ? h('span', { class: 'pg-chip ok', text: x.nNew + ' new' }) : null,
-    !x.same && !x.maybe && all ? h('span', { class: 'pg-chip', text: 'No copies' }) : null);
-  const thumbs = pics => h('div', { class: 'pg-thumbs', 'aria-hidden': 'true' }, pics.filter(p => p.thumb).slice(0, 4).map(p => h('img', { src: p.thumb, alt: '' })));
-  const rowOf = j => {
-    const x = I.get(j.id);
-    const when = new Date(j.created).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-    const what = KIND[j.kind] || (j.folder ? 'Daily 50' : 'New search');
-    const sites = (j.engines || []).map(e => ENGINES[e] ? ENGINES[e].short : e).join(', ');
-    const pc = (() => { const st = j.pics.map(q => q.t0).filter(Boolean), en = j.pics.map(q => q.t1).filter(Boolean); return st.length && en.length && !x.running && x.done >= j.pics.length ? ' · ' + fmtDur(Math.max(...en) - Math.min(...st)) : ''; })();
-    const open = () => goResults(j.id);
-    return h('div', { class: 'pg-row past', role: 'button', tabindex: 0, title: 'Open this search', onclick: open, onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } } },
-      ring(x.done, j.pics.length, 40),
-      h('div', { class: 't' }, h('b', { text: when + ' · ' + plural(j.pics.length, 'photo') }),
-        h('small', { text: what + (sites ? ' · ' + sites : '') + (x.running ? (j.started ? ' · running in the pinned tab, ' + x.done + ' done' : ' · waiting for the pinned tab') : pc) })),
-      thumbs(j.pics),
-      chipsOf(x, x.done >= j.pics.length),
-      h('button', { class: 'del', title: 'Delete this search from the list (the copies it found stay in Copies found)', 'aria-label': 'Delete this search', text: '🗑', onclick: async e => {
-        e.stopPropagation();
-        await RS_DB.del('jobs', j.id); renderPast();
-        banner([h('b', { text: 'Search deleted. ' }), 'The copies it found are still in Copies found.', h('span', { class: 'sp' }), h('button', { text: '↶ Undo', onclick: async () => { await RS_DB.put('jobs', j.id, j); banner(null); renderPast(); } })], 'info');
-      } }));
+  for (const id of [...PAST.sel]) if (!I.has(id)) PAST.sel.delete(id);
+  const took = j => { const x = I.get(j.id), st = j.pics.map(q => q.t0).filter(Boolean), en = j.pics.map(q => q.t1).filter(Boolean); return st.length && en.length && !x.running && x.done >= j.pics.length ? fmtDur(Math.max(...en) - Math.min(...st)) : '–'; };
+  const num = (n, c) => h('span', { class: 'anum ' + (n ? c : 'zero'), text: n || '–' });
+  const newTag = n => n ? h('span', { class: 'anewt', text: n + ' new' }) : h('span', { class: 'anum zero', text: '–' });
+  const thumbs = (pics, max = 5) => { const t = pics.filter(p => p.thumb); return h('span', { class: 'athumbs', 'aria-hidden': 'true' }, t.slice(0, max).map(p => h('img', { src: p.thumb, alt: '' })), t.length > max ? h('span', { class: 'amore', text: '+' + (t.length - max) }) : null); };
+  const sitesOf = es => h('span', { class: 'asites' }, (es || []).filter(e => ENGINES[e]).map(e => { const b = nbadge(e); b.title = ENGINES[e].name; return b; }));
+  const tick = (on, label, set, some) => { const i = h('input', { type: 'checkbox', checked: on, 'aria-label': label, onclick: e => e.stopPropagation(), onchange: e => { set(e.target.checked); renderPast(); } }); if (some) i.indeterminate = true; return h('label', { class: 'achkb', title: label, onclick: e => e.stopPropagation() }, i); };
+  const running = jobs.filter(j => I.get(j.id).running);
+  const list = jobs.filter(j => !I.get(j.id).running);
+  // ---- what the command bar asks for
+  const q = PAST.q.trim().toLowerCase();
+  const hit = j => (PAST.kind === 'all' || kindOf(j) === PAST.kind) && (!PAST.found || I.get(j.id).same + I.get(j.id).maybe > 0)
+    && (!q || j.pics.some(p => ((p.name || '') + ' ' + (p.folderKey || '') + ' ' + (p.client || '')).toLowerCase().includes(q)) || String(j.folder || '').toLowerCase().includes(q));
+  const shown = list.filter(hit);
+  const cnt = k => list.filter(j => k === 'all' || kindOf(j) === k).length;
+  const sel = shown.filter(j => PAST.sel.has(j.id));
+  const del = async () => {
+    const gone = sel.slice(); if (!gone.length) return;
+    for (const j of gone) { await RS_DB.del('jobs', j.id); PAST.sel.delete(j.id); }
+    renderPast();
+    banner([h('b', { text: plural(gone.length, 'search', 'searches') + ' deleted. ' }), 'The copies ' + (gone.length > 1 ? 'they' : 'it') + ' found are still in Copies found.', h('span', { class: 'sp' }),
+      h('button', { id: 'undoDel', text: '↶ Undo', onclick: async () => { for (const j of gone) await RS_DB.put('jobs', j.id, j); banner(null); renderPast(); } })], 'info');
   };
-  // Keep searching's one-photo searches: 3 or more in a row (finished, nothing running) fold into one line.
-  const small = j => j.kind === 'keep' && j.pics.length === 1 && !I.get(j.id).running;
-  const foldOf = (list, key) => {
-    const xs = list.map(j => I.get(j.id)), same = xs.reduce((a, x) => a + x.same, 0), maybe = xs.reduce((a, x) => a + x.maybe, 0), nNew = xs.reduce((a, x) => a + x.nNew, 0);
-    const unfinished = list.filter((j, k) => xs[k].done < j.pics.length).length;
-    const t = j => new Date(j.created).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-    const isOpen = PAST.open.has(key);
-    const toggle = () => { if (isOpen) PAST.open.delete(key); else PAST.open.add(key); renderPast(); };
-    return [h('div', { class: 'pg-row past fold' + (isOpen ? ' open' : ''), role: 'button', tabindex: 0, 'aria-expanded': String(isOpen), title: isOpen ? 'Fold these searches again' : 'Show each of these searches',
-      onclick: toggle, onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } } },
-      h('span', { class: 'fico', text: isOpen ? '▾' : '▸' }),
-      h('div', { class: 't' }, h('b', { text: 'Keep searching · ' + list.length + ' one-photo searches' }),
-        h('small', { text: t(list[list.length - 1]) + ' to ' + t(list[0]) + (unfinished ? ' · ' + unfinished + ' did not finish' : '') })),
-      thumbs(list.flatMap(j => j.pics)),
-      chipsOf({ same, maybe, nNew }, true), h('span', { class: 'del-sp' })),
-      ...(isOpen ? list.map(j => { const r = rowOf(j); r.classList.add('inner'); return r; }) : [])];
-  };
-  // Grouped by day: Today, Yesterday, then the date.
-  const dayKey = d => new Date(d).toDateString();
-  const today = new Date(), yest = new Date(Date.now() - 864e5);
-  const dayName = k => k === today.toDateString() ? 'Today' : k === yest.toDateString() ? 'Yesterday' : new Date(k).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
-  const body = [];
-  let curDay = '';
-  for (let k = 0; k < jobs.length;) {
-    const j = jobs[k], d = dayKey(j.created);
-    if (d !== curDay) { curDay = d; body.push(h('div', { class: 'pg-day', text: dayName(d) })); }
-    if (small(j)) {
-      let m = k; while (m < jobs.length && small(jobs[m]) && dayKey(jobs[m].created) === d) m++;
-      if (m - k >= 3) { body.push(...foldOf(jobs.slice(k, m), jobs[k].id)); k = m; continue; }
-    }
-    body.push(rowOf(j)); k++;
-  }
-  // This week in numbers (Batch 9, idea 9).
-  const week = jobs.filter(j => Date.now() - Date.parse(j.created) < 7 * 864e5);
-  const wk = week.map(j => [j, I.get(j.id)]);
+  const find = h('input', { type: 'search', id: 'pastFind', placeholder: 'Find a photo or client', 'aria-label': 'Find a photo or client', value: PAST.q, autocomplete: 'off',
+    oninput: e => { PAST.q = e.target.value; clearTimeout(PAST.typing); PAST.typing = setTimeout(renderPast, 180); } });
+  const cmd = h('div', { class: 'acmd' },
+    h('a', { class: 'nbtn acc', id: 'pastNew', href: appUrl('search'), onclick: e => goApp('search', e) }, ni('search'), 'New search'), h('span', { class: 'cmdsep' }),
+    h('div', { class: 'aseg', role: 'group', 'aria-label': 'Which searches' }, [['all', 'All'], ['new', 'New searches'], ['fifty', 'Today\'s 50'], ['keep', 'Keep searching']].map(([k, t]) =>
+      h('button', { class: PAST.kind === k ? 'on' : '', 'data-kind': k, 'aria-pressed': String(PAST.kind === k), onclick: () => { PAST.kind = k; renderPast(); } }, t + ' ', h('span', { text: cnt(k) })))),
+    h('label', { class: 'achk' }, h('input', { type: 'checkbox', id: 'pastFound', checked: PAST.found, onchange: e => { PAST.found = e.target.checked; renderPast(); } }), 'Only searches that found copies'),
+    h('span', { class: 'sp' }), h('label', { class: 'afind' }, ni('search'), find), h('span', { class: 'cmdsep' }),
+    nbtn('trash', sel.length ? 'Delete (' + sel.length + ')' : 'Delete', 'ghost', { id: 'pastDel', disabled: !sel.length, title: sel.length ? 'Delete the ticked searches from this list. The copies they found stay in Copies found.' : 'Tick the searches to delete first', onclick: del }));
+  // ---- the last 7 days in numbers, and as a chart
+  const week = jobs.filter(j => Date.now() - Date.parse(j.created) < 7 * 864e5), wk = week.map(j => [j, I.get(j.id)]);
   const best = wk.filter(([, x]) => x.same + x.maybe).sort((a, b) => (b[1].same + b[1].maybe) - (a[1].same + a[1].maybe))[0];
-  const tiles = jobs.length ? h('div', { class: 'pg-tiles four' },
-    h('div', { class: 'pg-tile' }, h('b', { text: week.length }), h('span', { text: 'searches in the last 7 days' })),
-    h('div', { class: 'pg-tile' }, h('b', { text: wk.reduce((a, [, x]) => a + x.done, 0).toLocaleString() }), h('span', { text: 'photos searched' })),
-    h('div', { class: 'pg-tile' + (wk.some(([, x]) => x.same + x.maybe) ? ' bad' : '') }, h('b', { text: wk.reduce((a, [, x]) => a + x.same + x.maybe, 0) }), h('span', { text: 'same photo or maybe found' })),
-    best ? h('div', { class: 'pg-tile best', role: 'button', tabindex: 0, title: 'Open this search', onclick: () => goResults(best[0].id), onkeydown: e => { if (e.key === 'Enter') goResults(best[0].id); } },
-      h('b', { text: (KIND[best[0].kind] || 'New search') + ', ' + new Date(best[0].created).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) }), h('span', { text: 'found the most: ' + plural(best[1].same + best[1].maybe, 'copy', 'copies') }))
-      : h('div', { class: 'pg-tile grey' }, h('b', { text: '–' }), h('span', { text: 'no copies found this week yet' }))) : null;
-  $('main').replaceChildren(...[head, tiles,
-    jobs.length ? h('section', { class: 'pg-card pg-list', 'aria-label': 'Searches' }, body)
-      : h('section', { class: 'pg-card pg-empty' }, h('b', { text: 'No searches yet' }),
-        h('p', { text: 'Search a few photos on Google Lens, Yandex and Bing. Keep searching and Today\'s 50 also show their searches here.' }),
-        h('a', { class: 'pg-btn primary', href: appUrl('search'), onclick: e => goApp('search', e), text: '🔎 Start a new search' }))].filter(Boolean));
+  const tile = (ic, c, n, t) => h('div', { class: 'card atile' }, nsq(c, ic, 40), h('span', { class: 'kn1' }, h('b', { class: 'num', text: n }), h('span', { text: t })));
+  const bestPic = best && (best[0].pics.find(p => p.thumb && p.links.length) || best[0].pics.find(p => p.thumb));
+  const tiles = h('div', { class: 'atiles', id: 'pastTiles' },
+    tile('search', '#005FB8', week.length.toLocaleString(), 'searches in the last 7 days'),
+    tile('photo', '#8764B8', wk.reduce((a, [, x]) => a + x.done, 0).toLocaleString(), 'photos searched'),
+    tile('copies', '#C42B1C', wk.reduce((a, [, x]) => a + x.same + x.maybe, 0).toLocaleString(), 'copies found · ' + wk.reduce((a, [, x]) => a + x.nNew, 0) + ' new'),
+    best ? h('div', { class: 'card atile best', role: 'button', tabindex: 0, title: 'Open this search', onclick: () => goResults(best[0].id), onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goResults(best[0].id); } } },
+      bestPic ? h('img', { src: bestPic.thumb, alt: '' }) : nsq('#986F0B', 'star', 40),
+      h('span', { class: 'kn1' }, h('span', { class: 'aover' }, ni('star', 14), 'Found the most'), h('b', { text: KIND[kindOf(best[0])][0] + ', ' + new Date(best[0].created).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' + plural(best[1].same + best[1].maybe, 'copy', 'copies') })), ni('chev', 14))
+      : h('div', { class: 'card atile' }, nsq('#6E6E6E', 'star', 40), h('span', { class: 'kn1' }, h('b', { text: 'No copies yet' }), h('span', { text: 'found in the last 7 days' }))));
+  const days = [];
+  for (let d = 6; d >= 0; d--) {
+    const day = new Date(Date.now() - d * 864e5), k = day.toDateString(), js = jobs.filter(j => new Date(j.created).toDateString() === k);
+    days.push([day.toLocaleDateString(undefined, { weekday: 'short' }), js.reduce((a, j) => a + I.get(j.id).done, 0), js.reduce((a, j) => a + I.get(j.id).same + I.get(j.id).maybe, 0), day.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })]);
+  }
+  const mx = Math.max(...days.map(d => d[1]), 1);
+  const chart = h('section', { class: 'card achart', id: 'pastChart', 'aria-label': 'Last 7 days' }, h('h2', { class: 'kh2' }, 'Last 7 days ', h('span', { class: 'kfaint', text: 'photos searched · copies found' })),
+    h('div', { class: 'abars' }, days.map(([l, p, c, full]) => h('div', { class: 'abar', title: full + ': ' + plural(p, 'photo') + ' searched, ' + plural(c, 'copy', 'copies') + ' found' },
+      h('span', { class: 'kfaint num', text: p.toLocaleString() }), h('i', { style: 'height:' + (Math.round(p / mx * 110) + 4) + 'px' }, h('em', { style: 'height:' + (p ? Math.min(100, Math.round(c / p * 100)) : 0) + '%' })), h('b', { text: l })))));
+  // ---- Running now: one card per search in the small pinned tab
+  const runCards = running.map(j => {
+    const x = I.get(j.id), n = j.pics.length, f = n ? x.done / n : 0, k = kindOf(j);
+    const st = j.pics.map(p => p.t0).filter(Boolean), per = x.done && st.length ? (Date.now() - Math.min(...st)) / x.done : 0;
+    const left = per && x.done < n ? ' · about ' + fmtDur(per * (n - x.done)) + ' left' : '';
+    const stop = e => { e.stopPropagation(); api.runtime.sendMessage({ type: 'ppBgStop', job: j.id }).catch(() => {}); banner([h('b', { text: 'Stopping… ' }), 'The searches already running finish their page, then it stops.'], 'info'); };
+    const firstWait = j.pics.findIndex(p => !isDone(p));
+    return h('section', { class: 'card arun', 'data-job': j.id, 'aria-label': 'Running now' },
+      h('div', { class: 'arunh' }, kico(k, 40), h('span', { class: 'kn1' }, h('span', { class: 'aover' }, h('i', { class: 'alive' }), j.started ? 'Running now' : 'Waiting to start'), h('b', { text: KIND[k][0] + ' · ' + plural(n, 'photo') + ' · started ' + tm(j.created) })),
+        h('span', { class: 'sp' }), sitesOf(j.engines), h('span', { class: 'arnums' }, num(x.same, 'bad'), h('small', { text: 'same' }), num(x.maybe, 'warn'), h('small', { text: 'maybe' })),
+        nbtn('open', 'Open', 'acc', { onclick: () => goResults(j.id) }), nbtn('stop', 'Stop', 'stop', { title: 'Stop and keep the results so far', onclick: stop })),
+      h('div', { class: 'arprog' }, h('span', { class: 'kn1' }, h('b', { text: x.done + ' of ' + n + ' photos done' }), h('span', {}, ni('pin', 14), (j.started ? 'In the small pinned PageProof tab' : 'Waiting for the small pinned PageProof tab') + left)),
+        h('div', { class: 'arbar', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': n, 'aria-valuenow': x.done }, h('i', { style: 'width:' + (f * 100).toFixed(1) + '%' })), h('b', { class: 'num', text: Math.round(f * 100) + '%' })),
+      h('div', { class: 'arstrip' }, j.pics.slice(0, 12).map((p, i) => {
+        const d = isDone(p), go = !d && (Object.values(p.runs).some(r => r.state === 'go') || i === firstWait);
+        const kept = p.links.filter(l => !RS_LISTS.isHidden(l.site, l.url) && ['same', 'maybe'].includes(verdict(l))).length;
+        return h('span', { class: 'arp s-' + (d ? (kept ? 'hit' : 'nil') : go ? 'go' : 'wait'), title: p.name }, nthumb(p.thumb), h('em', { text: d ? (kept ? kept + ' found' : 'None') : go ? 'Searching' : 'Waiting' }));
+      }), n > 12 ? h('span', { class: 'arp more', text: '+' + (n - 12) + ' more' }) : null));
+  });
+  // ---- the list: named columns, a heading per day, one line per search
+  const openRow = (fn, title) => ({ role: 'button', tabindex: 0, title, onclick: fn, onkeydown: e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); fn(); } } });
+  const restOf = j => e => { e.stopPropagation(); try { sessionStorage.setItem('ppRest', j.id); } catch (err) { /* private window */ } goResults(j.id); };
+  const rowOf = j => {
+    const x = I.get(j.id), k = kindOf(j), n = j.pics.length, unf = x.done < n;
+    return h('div', { class: 'arow' + (PAST.sel.has(j.id) ? ' sel' : ''), 'data-job': j.id, ...openRow(() => goResults(j.id), 'Open this search') },
+      tick(PAST.sel.has(j.id), 'Tick this search', on => { if (on) PAST.sel.add(j.id); else PAST.sel.delete(j.id); }),
+      h('span', { class: 'awhen num', text: tm(j.created) }),
+      h('span', { class: 'awhat' }, kico(k), h('span', { class: 'kn1' }, h('b', { text: KIND[k][0] }), h('span', {}, plural(n, 'photo'), unf ? ' · ' : null, unf ? h('em', { class: 'awarn', text: 'Not finished: ' + x.done + ' of ' + n + ' done' }) : null))),
+      thumbs(j.pics), sitesOf(j.engines), h('span', { class: 'atook num', text: took(j) }),
+      h('span', { class: 'r' }, num(x.same, 'bad')), h('span', { class: 'r' }, num(x.maybe, 'warn')), h('span', { class: 'r' }, newTag(x.nNew)),
+      h('span', { class: 'aend' }, unf ? nbtn('again', 'Search the last ' + (n - x.done), 'sm arest', { title: 'Search the photos this search did not get to', onclick: restOf(j) }) : null, ni('chev', 14)));
+  };
+  // Keep searching's one-photo searches: 3 or more in a row fold into one line, which opens as a grid of photos.
+  const small = j => j.kind === 'keep' && j.pics.length === 1;
+  const foldOf = (js, key) => {
+    const xs = js.map(j => I.get(j.id)), s = a => xs.reduce((t, x) => t + x[a], 0), unf = xs.filter((x, i) => x.done < js[i].pics.length).length;
+    const isOpen = PAST.open.has(key), nSel = js.filter(j => PAST.sel.has(j.id)).length;
+    const toggle = () => { if (isOpen) PAST.open.delete(key); else PAST.open.add(key); renderPast(); };
+    const r = h('div', { class: 'arow afold' + (isOpen ? ' open' : ''), 'aria-expanded': String(isOpen), ...openRow(toggle, isOpen ? 'Fold these searches again' : 'Show each of these searches') },
+      tick(nSel === js.length, 'Tick these ' + js.length + ' searches', on => { for (const j of js) { if (on) PAST.sel.add(j.id); else PAST.sel.delete(j.id); } }, nSel > 0 && nSel < js.length),
+      h('span', { class: 'awhen num' }, tm(js[js.length - 1].created), h('small', { text: 'to ' + tm(js[0].created) })),
+      h('span', { class: 'awhat' }, kico('keep'), h('span', { class: 'kn1' }, h('b', { text: 'Keep searching' }), h('span', {}, js.length + ' one-photo searches', unf ? ' · ' : null, unf ? h('em', { class: 'awarn', text: unf + ' did not finish' }) : null))),
+      thumbs(js.flatMap(j => j.pics)), sitesOf([...new Set(js.flatMap(j => j.engines || []))]), h('span', { class: 'atook num', text: '–' }),
+      h('span', { class: 'r' }, num(s('same'), 'bad')), h('span', { class: 'r' }, num(s('maybe'), 'warn')), h('span', { class: 'r' }, newTag(s('nNew'))),
+      h('span', { class: 'aend' }, h('span', { class: 'afoldt', text: isOpen ? 'Hide' : 'Show all' }), ni(isOpen ? 'up' : 'dn', 14)));
+    if (!isOpen) return [r];
+    return [r, h('div', { class: 'agrid' }, js.map(j => {
+      const x = I.get(j.id), p = j.pics[0], u = x.done < 1, t = u ? ['', 'Not finished'] : x.same ? ['bad', x.same + ' same'] : x.maybe ? ['warn', x.maybe + ' maybe'] : ['', 'No copies'];
+      return h('div', { class: 'agt' + (u ? ' unf' : '') + (PAST.sel.has(j.id) ? ' sel' : ''), 'data-job': j.id, ...openRow(() => goResults(j.id), p.name + ': open this search') },
+        h('span', { class: 'agi' }, nthumb(p.thumb), (j.engines || []).filter(e => ENGINES[e]).slice(0, 1).map(e => nbadge(e)),
+          tick(PAST.sel.has(j.id), 'Tick this search', on => { if (on) PAST.sel.add(j.id); else PAST.sel.delete(j.id); })),
+        h('span', { class: 'agl' }, h('b', { class: 'num', text: tm(j.created) }), h('span', { class: 'ktag ' + t[0], text: t[1] })));
+    }))];
+  };
+  const dayKey = d => new Date(d).toDateString(), today = new Date().toDateString(), yest = new Date(Date.now() - 864e5).toDateString();
+  const dayName = k => k === today ? 'Today' : k === yest ? 'Yesterday' : new Date(k).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+  const body = [];
+  for (let k = 0; k < shown.length;) {
+    const d = dayKey(shown[k].created);
+    let end = k; while (end < shown.length && dayKey(shown[end].created) === d) end++;
+    const dj = shown.slice(k, end), found = dj.reduce((a, j) => a + I.get(j.id).same + I.get(j.id).maybe, 0);
+    body.push(h('div', { class: 'aday' }, h('b', { text: dayName(d) }), h('span', { text: plural(dj.length, 'search', 'searches') + ' · ' + plural(found, 'copy', 'copies') + ' found' })));
+    for (let a = 0; a < dj.length;) {
+      if (small(dj[a])) { let m = a; while (m < dj.length && small(dj[m])) m++; if (m - a >= 3) { body.push(...foldOf(dj.slice(a, m), dj[a].id)); a = m; continue; } }
+      body.push(rowOf(dj[a])); a++;
+    }
+    k = end;
+  }
+  const allSel = shown.length > 0 && sel.length === shown.length;
+  const cols = h('div', { class: 'arow ahead' }, tick(allSel, 'Tick every search shown', on => { for (const j of shown) { if (on) PAST.sel.add(j.id); else PAST.sel.delete(j.id); } }, sel.length > 0 && !allSel),
+    h('span', { text: 'When' }), h('span', { text: 'Search' }), h('span', { text: 'Photos' }), h('span', { text: 'Sites' }), h('span', { text: 'Took' }),
+    h('span', { class: 'r', text: 'Same photo' }), h('span', { class: 'r', text: 'Maybe' }), h('span', { class: 'r', text: 'New' }), h('span'));
+  const listCard = h('section', { class: 'card alist', id: 'pastList', 'aria-label': 'Searches' }, cols,
+    body.length ? body : h('div', { class: 'anone' }, h('b', { text: 'No searches match' }), h('span', { text: 'Try another word, or show every kind of search.' }),
+      nbtn('clear', 'Show all searches', '', { id: 'pastClear', onclick: () => { PAST.q = ''; PAST.kind = 'all'; PAST.found = false; renderPast(); } })));
+  const foot = h('p', { class: 'afoot' }, ni('info'), 'Big searches are kept for 90 days, Keep searching\'s one-photo searches for 2 days. Every copy they found is also in Copies found.');
+  const empty = h('section', { class: 'card aempty' }, h('span', { class: 'nbigic' }, ni('search', 56)), h('h3', { text: 'No searches yet' }),
+    h('p', { class: 'kmuted', text: 'Search a few photos on Google Lens, Yandex and Bing. Keep searching and Today\'s 50 also show their searches here.' }),
+    h('a', { class: 'nbtn acc big', id: 'pastStart', href: appUrl('search'), onclick: e => goApp('search', e) }, ni('search'), 'Start a new search'));
+  // The page redraws now and then (a running search, typing in Find): keep the cursor and the scroll.
+  const hadFocus = document.activeElement && document.activeElement.id === 'pastFind', caret = hadFocus ? document.activeElement.selectionStart : 0, pageY = window.scrollY;
+  $('main').replaceChildren(h('div', { class: 'nnew anew2' }, nhead('Copies found', 'All searches'),
+    ...(jobs.length ? [cmd, h('div', { class: 'atop' }, tiles, chart), ...runCards, list.length ? listCard : null, foot] : [empty])));
+  if (hadFocus && $('pastFind')) { $('pastFind').focus(); try { $('pastFind').setSelectionRange(caret, caret); } catch (e) { /* not a text box */ } }
+  if (window.scrollY !== pageY) window.scrollTo(0, pageY);
   // A search running in the pinned tab: the list shows how far it is, so it is read again now and then.
   clearTimeout(pastTimer);
-  if (jobs.some(j => j.bg && !j.finished)) pastTimer = setTimeout(renderPast, 15000);
+  if (running.length) pastTimer = setTimeout(renderPast, 15000);
 }
-const PAST = { open: new Set() };
+const PAST = { open: new Set(), sel: new Set(), kind: 'all', found: false, q: '', n: 0, typing: null };
 let pastTimer = null;
 
 // =====================================================================================
