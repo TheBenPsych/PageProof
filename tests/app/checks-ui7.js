@@ -32,7 +32,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(h.sum && h.groups.join('|') === 'Your computer|Searching|Search sites|Sign-ins' && h.tiles > 8 && h.dots === h.tiles, 'Health: summary bar, then rows in 4 groups, each with a coloured light');
 
   await page.goto(url('app.html#stats')); await page.waitForTimeout(2000);
-  ok(await page.evaluate(() => document.querySelectorAll('.st-funnel .fun-r').length === 5), 'How PageProof is doing: From search to copy is a funnel of 5 bars');
+  ok(await page.evaluate(() => document.querySelectorAll('#ssFound .ss-steps .ss-step').length === 4), 'Stats: From search to copy is four steps in a line');
 
   await page.goto(url('app.html#hidden')); await page.waitForTimeout(1800);
   const hd = await page.evaluate(() => ({ rows: document.querySelectorAll('.sx-list .sx-lrow').length, mono: /mono/i.test(getComputedStyle(document.querySelector('.sx-site')).fontFamily), kind: !!document.querySelector('.sx-lrow .sx-kind'), bar: document.querySelectorAll('.sx-pivot .utabs [data-act="hidtab"]').length }));
