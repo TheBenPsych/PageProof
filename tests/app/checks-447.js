@@ -116,7 +116,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   });
   await page.goto(url('app.html#stats')); await page.waitForTimeout(3500);
   const st = await page.evaluate(() => document.body.innerText);
-  ok(/Your real pairs/.test(st) && /Real pairs 8 of 10/.test(st) && /News sites 5 of 6/.test(st), 'the checker test card shows your real pairs');
+  ok(/Your real pairs/.test(st) && /8 of 10 right/.test(st) && /News sites 5 of 6/.test(st), 'the checker test card shows your real pairs');
   ok(/Where the checker goes wrong/.test(st) && /Social media/.test(st) && /News sites/.test(st) && /Shops and ads/.test(st), 'the table shows the checker\'s answers next to yours by kind of site');
   ok(/Most room to improve: Social media/.test(st), 'it names the kind of site with the most wrong Same answers');
   const file = await page.evaluate(async () => PP_REPORT.text ? PP_REPORT.text(await PP_REPORT.model('30')) : '');
