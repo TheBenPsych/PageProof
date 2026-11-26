@@ -101,7 +101,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     const r = await p.evaluate(() => {
       const lum = c => { const m = c.match(/[\d.]+/g).map(Number); return m.length > 3 && m[3] === 0 ? -1 : (0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2]) / 255; };
       const light = [...document.querySelectorAll('body *')].filter(e => e.offsetParent && !e.closest('canvas,img,.tic,#board,#view,input') && e.getBoundingClientRect().width > 30 && lum(getComputedStyle(e).backgroundColor) > 0.85);
-      return { labels: [...document.querySelectorAll('button,a,summary,h1,h2,h3')].filter(e => e.offsetParent).map(e => e.textContent).join(' '), icons: document.querySelectorAll('.tic svg').length, light: light.slice(0, 3).map(e => e.tagName + '.' + e.className) };
+      return { labels: [...document.querySelectorAll('button,a,summary,h1,h2,h3')].filter(e => e.offsetParent).map(e => e.textContent).join(' '), icons: document.querySelectorAll('.tic svg, .nbtn svg').length, light: light.slice(0, 3).map(e => e.tagName + '.' + e.className) };
     });
     ok(!EMOJI.test(r.labels) && r.icons > 2, f + ': buttons use line icons, no emoji (' + r.icons + ' icons)');
     ok(!r.light.length, f + ': nothing is left white in dark mode ' + r.light.join(', '));

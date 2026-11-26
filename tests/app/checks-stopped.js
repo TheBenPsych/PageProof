@@ -18,12 +18,12 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     const other = { i: 43, links: [], runs: { google: run('skip', 'Google was skipped. Use "Search the rest" later.'), yandex: run('done'), bing: run('done') } };
     return { a: sqState(stopped, 0), b: sqState(before, 0), c: sqState(other, 0), by: [byYou(stopped.runs.google), byYou(other.runs.google), byYou(stopped.runs.yandex)] };
   });
-  ok(r.a[1] === 'not finished: stopped by you' && r.b[1] === 'not finished: stopped by you', 'a photo you stopped shows as not finished, stopped by you: ' + r.a[1]);
-  ok(r.c[1] === 'skipped on a search site', 'a site that skipped by itself still says skipped');
+  ok(r.a[0] === 'bad' && r.a[1] === 'Stopped by you' && r.b[1] === 'Stopped by you' && /Not finished: stopped by you/.test(fs.readFileSync(path.join(__dirname, '../../extension/revsearch.js'), 'utf8')), 'a photo you stopped is marked Stopped by you, and its card says not finished: ' + r.a[1]);
+  ok(r.c[1] === 'Skipped', 'a site that skipped by itself still says skipped');
   ok(r.by.join() === 'true,false,false', 'only your Stop counts as stopped by you');
   const src = fs.readFileSync(path.join(__dirname, '../../extension/revsearch.js'), 'utf8');
   ok(!/finishTask\(t, 'skip', 'Stopped'\)/.test(src) && (src.match(/finishTask\(t, 'skip', STOPPED\)/g) || []).length === 2, 'both Stop buttons say Stopped by you');
-  ok(/stopped by you on/.test(src) && /'stopped by you'/.test(src) && /You stopped this search, so/.test(src), 'the timeline, the site chip and the note say stopped by you');
+  ok(/stopped by you on/.test(src) && /'Stopped by you'/.test(src) && /You stopped this search, so/.test(src), 'the timeline, the site chip and the note say stopped by you');
   ok(/if \(R\.stop && R\.scoreQ\.length\) scoreAll\(\)/.test(src), 'after Stop the links already found are still checked');
   const run = fs.readFileSync(path.join(__dirname, '../../extension/runner.js'), 'utf8');
   ok(/const hold = job\.stoppedAt \|\| \(job\.finished && \(await bgList\(\)\)\.some\(x => x !== job\.id\)\) \? 3 : 10;/.test(run) && /job\.finished && Date\.now\(\) - Date\.parse\(job\.finished\) > hold \* 60000/.test(run), 'a search you stopped lets the next big search start after 3 minutes');
