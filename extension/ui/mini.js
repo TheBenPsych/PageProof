@@ -1,5 +1,5 @@
-// The toolbar menu (popup.html): Capture this page, the
-// photos on this page, new copies, Keep searching, and Open full PageProof.
+// The toolbar menu (popup.html): Capture this page, the numbers, the five tools, Keep searching,
+// and a bottom bar with Open full PageProof and light/dark.
 const api = ppApi;
 const $ = id => document.getElementById(id);
 const appUrl = h => api.runtime.getURL('app.html#' + h);
@@ -14,22 +14,13 @@ async function send(msg) { const r = await api.runtime.sendMessage(msg); if (r &
 const done = () => window.close();
 const open = h => { api.tabs.create({ url: appUrl(h) }); done(); };
 
-// The biggest photos on the page (up to 4 to show) and how many there are.
-async function pagePics(tab) {
-  try {
-    const [r] = await api.scripting.executeScript({ target: { tabId: tab.id }, func: () => {
-      const seen = new Set(), out = [];
-      for (const el of document.images) {
-        const src = el.currentSrc || el.src;
-        if (!/^https?:/.test(src || '') || seen.has(src) || (el.naturalWidth || 0) < 120 || (el.naturalHeight || 0) < 120) continue;
-        seen.add(src); out.push({ src, best: '', w: el.naturalWidth, h: el.naturalHeight, alt: (el.alt || '').slice(0, 300), kind: 'image' });
-      }
-      out.sort((a, b) => b.w * b.h - a.w * a.h);
-      return { n: out.length, items: out.slice(0, 4) };
-    } });
-    return r && r.result ? r.result : null;
-  } catch (e) { return null; }
-}
+// The five tools of the Tools page, one press away (calm look: they took the place of "Photos on
+// this page", which was hidden on browser pages and pushed the pop-up past the browser's height).
+const TOOLS = [['inspect', 'Inspect', 'Inspect a photo', '<path d="M13 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6"/><path d="M3 15l4-4 4 4"/><circle cx="13.5" cy="8.5" r="1.3"/><circle cx="17" cy="17" r="3"/><path d="M19.2 19.2L22 22"/>'],
+  ['compare', 'Compare', 'Compare two photos', '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>'],
+  ['markup', 'Mark up', 'Mark up a copy', '<path d="M4 20l4-1L19 8l-3-3L5 16z"/>'],
+  ['files', 'Convert', 'Convert files', '<path d="M4 8h14l-3-3M20 16H6l3 3"/>'],
+  ['openfiles', 'Open file', 'Open odd files', '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>']];
 
 async function draw() {
   const tab = await activeTab();
@@ -48,38 +39,30 @@ async function draw() {
   const site = canUse(tab) && /^https?:/.test(tab.url) ? RS_SITE.of(tab.url) : '';
   const extra = await api.storage.local.get(['fcNeedsAllow']);
   const needAllow = drive.done && (extra.fcNeedsAllow || (alive && st.state === 'allow'));
-  // UI overhaul batch 8: the capture card names the page; three number tiles; a Keep searching
-  // switch with a live line; the photos on this page as small pictures.
   let nStolen = 0;
   try { nStolen = (await FC.allCopies()).filter(c => c.status === 'stolen' && !c.packAt).length; } catch (e) { /* none */ }
-  const pics = canUse(tab) && /^https?:/.test(tab.url) ? await pagePics(tab) : null;
   const title = tab && tab.title && canUse(tab) ? tab.title : '';
   const live = !k.on ? 'Off. Switch it on to search your photos all day.' : store.fcPause ? 'Paused by you.' : alive && st.text ? st.text : label;
+  let keys = '';
+  try { const c = (await api.commands.getAll()).find(x => x.name === 'capture-page'); keys = (c && c.shortcut) || ''; } catch (e) { /* none set */ }
+  const row = (go, cls, icon, name, n) => `<button class="nrow" data-go="${go}"><span class="ico ${cls}">${ic(icon, 18)}</span><span class="nl1">${name}</span><b class="num${n ? '' : ' zero'}">${n.toLocaleString()}</b><span class="chev" aria-hidden="true">›</span></button>`;
+  // Calm look: warnings are slim bars, the numbers are a list like Windows Settings, the five
+  // tools sit in one row, Keep searching is one row with its switch on the right, and Open full
+  // PageProof and the light/dark button live in a bar at the bottom.
   $('mini').innerHTML = `
-    ${needAllow ? `<div class="msec mfind" role="alert" style="border-color:var(--warn)"><b>One click needed</b><span style="font-size:13.5px">Your browser asks once after it restarts. Press Allow and PageProof can read your photos and start searching.</span><div class="mrow"><button class="btn primary" id="allow">Allow</button></div></div>` : ''}
-    ${here ? `<div class="msec mfind" role="alert"><b>This site is in your finds</b><span style="font-size:13.5px">${here.n} ${here.n === 1 ? 'copy' : 'copies'} of your clients' photos on ${esc(site)}${here.stolen ? ', marked stolen' : ''}.</span><div class="mrow"><button class="btn sm" data-go="found?open=${encodeURIComponent(here.first)}">See ${here.n === 1 ? 'it' : 'them'}</button></div></div>` : ''}
-    ${busy ? `<button class="mcap stop" id="stop"><span style="font-size:24px">⏹</span><span><b>Stop the capture</b><small>Keeps what's captured so far</small></span></button>`
-      : `<button class="mcap" id="cap"${canUse(tab) ? '' : ' disabled data-why="This tab is a browser page (like a new tab or settings), not a website. Open the website you want to capture, then press Capture."'}>${site ? `<span class="msl" aria-hidden="true">${esc(site.replace(/^www\./, '')[0] || '?')}</span>` : `<span style="font-size:24px">${ic('capture', 26)}</span>`}<span class="mct"><b>Capture this page</b><small>${site ? esc(site) + (title ? ' · ' + esc(title) : '') : 'Open a website first'}</small></span>${site ? ic('capture', 22) : ''}</button>`}
-    ${drive.done ? `<div class="mtiles">
-      <button class="mtile${nNew ? ' blue' : ''}" data-go="review"><b>${nNew.toLocaleString()}</b><span>new ${nNew === 1 ? 'copy' : 'copies'}</span></button>
-      <button class="mtile${nStolen ? ' amber' : ''}" data-go="tocapture"><b>${nStolen.toLocaleString()}</b><span>to capture</span></button>
-      <button class="mtile" data-go="keep"><b>${today.searched.toLocaleString()}</b><span>searched today</span></button></div>` : ''}
-    <div class="msec"><h3>Photos on this page</h3>
-      ${pics && pics.items.length ? `<div class="mthumbs">${pics.items.map((p, i) => `<button class="mth" data-pic="${i}" title="Inspect this photo"><img src="${esc(p.src)}" alt="" loading="lazy" referrerpolicy="no-referrer"></button>`).join('')}${pics.n > pics.items.length ? `<button class="mth more" id="all" title="Show them all">+${pics.n - pics.items.length}</button>` : ''}</div>
-        <span class="faint" style="font-size:12.5px">Click one to inspect it. Or right-click any photo › PageProof › Find copies of it.</span>`
-      : `<div class="mrow"><button class="btn" id="pick">${ic('find', 16)} Inspect one</button><button class="btn" id="all">${ic('photo', 16)} Show them all</button></div><span class="faint" style="font-size:12.5px">${pics ? 'No big photos found on this page yet. ' : ''}Or right-click any photo › PageProof › Find copies of it.</span>`}</div>
+    ${needAllow ? `<div class="ibar warn${here ? ' two' : ''}" role="alert"><span class="ii" aria-hidden="true">!</span><span class="it"><b>Drive needs one click</b>${here ? '' : '<span class="i2">to start searching</span>'}</span><button class="btn primary" id="allow">Allow</button></div>` : ''}
+    ${here ? `<div class="ibar bad mfind${needAllow ? ' two' : ''}" role="alert"><span class="ii" aria-hidden="true">!</span><span class="it">${needAllow ? `<b>${here.n} ${here.stolen ? 'stolen ' : ''}${here.n === 1 ? 'copy' : 'copies'} ${here.stolen ? 'here' : 'on this site'}</b>` : `<b>Found on this site</b><span class="i2">${here.n} ${here.n === 1 ? 'copy' : 'copies'}${here.stolen ? ' · stolen' : ''}</span>`}</span><button class="btn" data-go="found?open=${encodeURIComponent(here.first)}">See ${here.n === 1 ? 'it' : 'them'}</button></div>` : ''}
+    ${busy ? `<button class="mcap stop" id="stop"><span class="cico" aria-hidden="true">⏹</span><span class="mct"><b>Stop the capture</b><small>Keeps what's captured so far</small></span></button>`
+      : `<button class="mcap" id="cap"${canUse(tab) ? '' : ' disabled data-why="This tab is a browser page (like a new tab or settings), not a website. Open the website you want to capture, then press Capture."'}${title ? ` title="${esc(title)}"` : ''}><span class="cico" aria-hidden="true">${ic('capture', 22)}</span><span class="mct"><b>Capture this page</b><small>${site ? esc(site.replace(/^www\./, '')) : 'Open a website first'}</small></span>${keys && canUse(tab) ? `<span class="kc">${esc(keys)}</span>` : ''}</button>`}
+    ${drive.done ? `<div class="nrows" id="nums">
+      ${row('review', 'i-new', 'eye', 'New copies', nNew)}
+      ${row('tocapture', 'i-cap', 'capture', 'To capture', nStolen)}
+      ${row('keep', 'i-srch', 'find', 'Searched today', today.searched)}</div>` : ''}
+    <div class="ntools" id="tools">${TOOLS.map(t => `<button class="ntool" data-go="${t[0]}" title="${t[2]}" aria-label="${t[2]}"><span class="ti"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${t[3]}</svg></span><span class="tl">${t[1]}</span></button>`).join('')}</div>
     <div class="msec">
-      ${drive.done ? `<div class="mline"><label class="switch"><input type="checkbox" id="keepon" ${k.on ? 'checked' : ''} aria-label="Keep searching"><span></span></label><b>Keep searching</b><span class="tag ${dot === 'on' ? 'ok' : dot || 'grey'}" style="margin-left:auto">${esc(k.on ? label : 'Off')}</span></div>
-      ${live !== label ? `<span class="muted mlive">${esc(live)}${today.found ? ' · ' + today.found + ' new today' : ''}</span>` : today.found ? `<span class="muted mlive">${today.found} new today</span>` : ''}
-      ${k.on ? `<div class="mrow"><button class="btn sm" id="pause">${store.fcPause ? 'Resume' : 'Pause'}</button></div>` : ''}`
+      ${drive.done ? `<div class="krow"><div class="kt"><b>Keep searching</b><span id="klive">${esc(String(live).replace('Resting between photos. Next photo in', 'Resting · next photo in'))}</span>${k.on ? `<span class="k2">${today.found ? today.found.toLocaleString() + ' new today · ' : ''}<button class="lk" id="pause">${store.fcPause ? 'Resume' : 'Pause'}</button></span>` : ''}</div><label class="switch"><input type="checkbox" id="keepon" ${k.on ? 'checked' : ''} aria-label="Keep searching"><span></span></label></div>`
       : `<h3>Copies found</h3><span class="muted" style="font-size:13px">Search all your clients' photos, all day, from the shared Google Drive.</span><div class="mrow"><button class="btn" data-go="connect">Connect your photos</button></div>`}
-    </div>
-    <div class="mrow"><button class="btn primary" data-go="home">Open full PageProof</button></div>
-    <p class="faint" id="tip" style="margin:0;font-size:12px;text-align:center"></p>`;
-  for (const b of document.querySelectorAll('[data-pic]')) b.onclick = async () => {
-    const p = pics.items[+b.dataset.pic];
-    try { await send({ type: 'inspect', mode: 'one', page: tab.url, title: tab.title || '', items: [p] }); done(); } catch (e) { err('Could not open the Inspector: ' + e.message); }
-  };
+    </div>`;
   const ko = $('keepon');
   if (ko) ko.onchange = async () => {
     await FC.setKeep({ on: ko.checked });
@@ -90,8 +73,6 @@ async function draw() {
   const on = (id, f) => { const el = $(id); if (el) el.onclick = f; };
   on('cap', async () => { try { await api.runtime.sendMessage({ type: 'captureTab', tabId: tab.id }); } catch (e) { /* it still starts */ } done(); });
   on('stop', async () => { await api.runtime.sendMessage({ type: 'stop' }).catch(() => {}); done(); });
-  on('pick', async () => { if (!canUse(tab)) return err(NOT_HERE); try { await send({ type: 'pick', tabId: tab.id }); done(); } catch (e) { err('Could not start the picker: ' + e.message); } });
-  on('all', async () => { if (!canUse(tab)) return err(NOT_HERE); $('all').textContent = 'Looking for photos…'; try { await send({ type: 'inspectAll', tabId: tab.id }); done(); } catch (e) { err('Could not read the photos on this page: ' + e.message); } });
   on('allow', async () => {
     // Asking has to happen straight from this click.
     try { if (await FC.allowDrive()) { await api.storage.local.set({ fcNeedsAllow: 0 }); return draw(); } } catch (e) { /* the menu can't ask here */ }
@@ -99,12 +80,10 @@ async function draw() {
   });
   on('pause', async () => { const p = (await api.storage.local.get('fcPause')).fcPause; if (p) await api.storage.local.remove('fcPause'); else await api.storage.local.set({ fcPause: Date.now() }); draw(); });
   for (const b of document.querySelectorAll('[data-go]')) b.onclick = () => open(b.dataset.go);
-  try {
-    const c = (await api.commands.getAll()).find(x => x.name === 'capture-page');
-    if (c && c.shortcut) { const t = $('tip'); t.append('Tip: '); c.shortcut.split('+').forEach((x, i) => { if (i) t.append('+'); const kb = document.createElement('kbd'); kb.className = 'kbd'; kb.textContent = x; t.append(kb); }); t.append(' captures straight away'); }
-  } catch (e) { /* none */ }
 }
 
+$('openFull').onclick = () => open('home');
+$('openIco').innerHTML = ic('ext', 18);
 $('themeBtn').onclick = () => ppTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
 // Never leave the panel blank: say what went wrong instead.
 ppTheme().then(draw).catch(e => err('PageProof could not load this panel: ' + (e && e.message || e) + '. Close it and open it again.'));

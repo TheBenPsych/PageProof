@@ -21,14 +21,14 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await sp.goto(url('popup.html')); await web.bringToFront(); await sp.waitForTimeout(300);
   await sp.evaluate(() => draw()); await sp.waitForTimeout(1500); // draw again now the website is the active tab
   const r = await sp.evaluate(() => ({
-    cap: (document.querySelector('#cap small') || {}).textContent || '', badge: (document.querySelector('#cap .msl') || {}).textContent || '',
-    tiles: [...document.querySelectorAll('.mtiles .mtile')].map(t => t.dataset.go), sw: !!document.querySelector('#keepon'),
-    thumbs: document.querySelectorAll('.mthumbs .mth img').length, more: (document.querySelector('.mth.more') || {}).textContent || '', panel: !!document.getElementById('panel'),
+    cap: (document.querySelector('#cap small') || {}).textContent || '', title: (document.querySelector('#cap') || {}).title || '',
+    rows: [...document.querySelectorAll('#nums .nrow')].map(t => t.dataset.go), sw: !!document.querySelector('.krow #keepon'),
+    tools: [...document.querySelectorAll('#tools .ntool')].map(t => t.dataset.go), photos: /Photos on this page/.test(document.body.textContent), panel: !!document.getElementById('panel'),
   }));
-  ok(/example-news\.com · An example story/.test(r.cap) && r.badge === 'e', 'Capture card names the page with a letter badge: ' + r.cap);
-  ok(r.tiles.join(',') === 'review,tocapture,keep', 'Three number tiles: new copies, to capture, searched today');
-  ok(r.sw, 'Keep searching is one line with a switch');
-  ok(r.thumbs === 4 && r.more === '+3', 'Photos on this page as 4 small pictures and +3');
+  ok(r.cap === 'example-news.com' && r.title === 'An example story', 'Capture card names the site (the page title is its tip): ' + r.cap);
+  ok(r.rows.join(',') === 'review,tocapture,keep', 'Three number rows: new copies, to capture, searched today');
+  ok(r.sw, 'Keep searching is one row with a switch');
+  ok(r.tools.join(',') === 'inspect,compare,markup,files,openfiles' && !r.photos, 'Five tool buttons took the place of Photos on this page');
   ok(!r.panel, 'The side panel is gone: no "Keep it open beside this page" button');
   await sp.click('#keepon'); await sp.waitForTimeout(900);
   ok(await sp.evaluate(async () => (await FC.keep()).on === false), 'The switch turns Keep searching off');
