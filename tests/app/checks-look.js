@@ -34,7 +34,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(tools.length >= 14 && !dead.length, 'Tools page lists every tool and each one opens (' + tools.length + ')' + (dead.length ? ' missing: ' + dead : ''));
   await shot('tools');
   await go('home'); await shot('home');
-  ok(await page.evaluate(() => document.querySelectorAll('#mostCopied a').length > 0), 'Home shows the most copied photos');
+  ok(await page.evaluate(() => document.querySelectorAll('#mostCopied .toprow').length > 0), 'Home shows the most copied photos');
 
   // ---- Copies found: rows
   await go('found'); await shot('found');

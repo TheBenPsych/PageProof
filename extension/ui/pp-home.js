@@ -44,9 +44,10 @@
   }
   function sinceCard(s) {
     const dot = { copy: 'var(--copy)', ok: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--bad)' };
-    return { lvl: 'info', id: 'jobSince', icon: 'check', title: 'Since you were last here (' + esc(when(s.from)) + ')',
-      sub: '<span style="display:flex;flex-direction:column;gap:3px;margin-top:4px">' + s.items.map(([k, t, href]) => `<a href="${href}" style="color:inherit;text-decoration:none"><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dot[k] || 'var(--faint)'};margin-right:8px"></i>${t}</a>`).join('') + '</span>',
-      btn2: { act: 'sinceok', label: 'OK' } };
+    const open = !!state.sinceOpen, n = s.items.length;
+    return { lvl: 'info', id: 'jobSince', icon: 'check', title: 'While you were away',
+      sub: `${n} ${n === 1 ? 'thing' : 'things'} happened since ${esc(when(s.from))}` + (open ? '<span class="hsince">' + s.items.map(([k, t, href]) => `<a href="${href}"><i style="background:${dot[k] || 'var(--faint)'}"></i>${t}</a>`).join('') + '</span>' : ''),
+      btn: { act: 'sinceshow', label: open ? 'Hide ▴' : 'Show ▾' }, btn2: { act: 'sinceok', label: 'OK' } };
   }
 
   // Clients falling behind: a ★ priority client not searched in 10 days (or switched off), and
@@ -93,6 +94,6 @@
   };
   const after = V.home.after;
   V.home.after = async function () { if (after) await after.apply(this, arguments); maybeSince().catch(e => console.warn('PageProof since you were last here:', e)); };
-  Object.assign(ACTS, { sinceok: async () => { const s = (await api.storage.local.get('ppSince')).ppSince; if (s) await api.storage.local.set({ ppSince: { ...s, seen: true }, ppLastHome: Date.now() }); render(true); } });
+  Object.assign(ACTS, { sinceshow: () => { state.sinceOpen = !state.sinceOpen; render(true); }, sinceok: async () => { state.sinceOpen = false; const s = (await api.storage.local.get('ppSince')).ppSince; if (s) await api.storage.local.set({ ppSince: { ...s, seen: true }, ppLastHome: Date.now() }); render(true); } });
   globalThis.PP_HOME = { buildSince, behind, maybeSince };
 })();

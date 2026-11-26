@@ -94,9 +94,9 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
 
   // Home: card + client finished note.
   await page.goto(url('app.html#home')); await page.waitForTimeout(1500);
-  const hm = await page.evaluate(() => ({ card: document.getElementById('homeFirst') && document.getElementById('homeFirst').textContent.replace(/\s+/g, ' '), note: document.getElementById('firstDone') && document.getElementById('firstDone').textContent }));
+  const hm = await page.evaluate(() => ({ card: document.getElementById('homeFirstTile') && document.getElementById('homeFirstTile').textContent.replace(/\s+/g, ' '), note: document.getElementById('firstDone') && document.getElementById('firstDone').textContent }));
   console.log(JSON.stringify(hm));
-  ok(hm.card && hm.card.includes('13 of 20') && hm.card.includes('7 to go'), 'Home: every photo searched once card');
+  ok(hm.card && hm.card.includes('13 of 20') && hm.card.includes('65%') && hm.card.includes('Every photo searched once'), 'Home: every photo searched once tile');
   ok(hm.note && hm.note.includes('C: every photo searched at least once'), 'Home: client finished note');
   await page.click('#firstDone [data-act="firstseen"]'); await page.waitForTimeout(300);
   await page.reload(); await page.waitForTimeout(1500);
