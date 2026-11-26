@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.64.1** (25 Nov 2026).
+Last updated: version **4.65.0** (25 Nov 2026).
 
 ---
 
@@ -198,6 +198,8 @@ Last updated: version **4.64.1** (25 Nov 2026).
 - **Since you were last here.** After 4 hours away (or the first visit of the day) Home lists new copies, clients finished, search sites that rested and anything that stopped. (4.45)
 - **Clients falling behind.** A ★ priority client not searched for 10 days, switched off, or with its folder missing, and a goal date that can't be met, show on Home. (4.45)
 - **One first-time setup.** A picture of how the photo folders should look, Google Drive and client folders inside setup, a check of each client folder (photos, year folders, registration numbers), and a "What this computer can do" step comparing Light, Normal and Strong. Skip photos for now if you only capture pages. (4.57)
+- **The calm look (Windows 11 style).** One font (Lexend), Windows 11 colours in light and a grey dark mode, 4 px buttons and 8 px cards, Windows tick boxes and switches, coloured menu icons with a cogwheel for Settings, page titles like "Copies found › Keep searching". (4.65)
+- **Status tiles at the top right.** Google Drive, Keep searching and Search sites show as three small tiles beside every page title, and turn red with a Fix it link when something stopped. (4.65)
 
 ## 9. Safety nets
 
@@ -355,3 +357,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.63.1 | 25 Nov | Fix: Social sites paced, rest after "too many requests" |
 | 4.64 | 25 Nov | Everything that was running carries on after an update, with a "Picked up after the update" note |
 | 4.64.1 | 25 Nov | Fix: Side panel removed (use the pop-up) |
+| 4.65 | 25 Nov | Calm look step 1: Lexend font, Windows 11 colours, status tiles at the top right |
