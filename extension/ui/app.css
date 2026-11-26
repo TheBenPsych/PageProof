@@ -463,7 +463,7 @@ h2{font-size:16px;font-weight:700;letter-spacing:-.01em}
 .topr{margin-left:auto;display:flex;align-items:center;gap:8px}
 .btn.tb{min-height:38px;padding:0 13px;font-size:13.5px}
 .btn.tb.icon{width:38px;padding:0}
-.btn.tb.go{background:var(--go);border-color:var(--go);color:#fff}
+.btn.tb.go{background:var(--go);border-color:var(--go);color:var(--on-ok,#fff)}
 .btn.tb.go:hover{filter:brightness(1.08)}
 .btn:disabled{opacity:.45;cursor:default}
 #themeBtn{order:0}
@@ -578,7 +578,7 @@ input.cpick{width:16px;height:16px;opacity:.35}
 .sname{display:flex;flex-wrap:wrap;gap:7px;align-items:center;min-width:0;flex:1 1 260px}
 .sbtns{display:flex;flex-wrap:wrap;gap:6px}
 .bulk{border-radius:14px}
-.bulk.sis{background:var(--bad);color:#fff}
+.bulk.sis{background:var(--bad);color:var(--on-bad,#fff)}
 .bulk .btn{background:var(--surface);color:var(--ink)}
 .hovcard{border-radius:14px;box-shadow:var(--pop)}
 
@@ -633,9 +633,9 @@ input.cpick{width:16px;height:16px;opacity:.35}
 /* Home: one coloured card (the count of new copies). Capture is green everywhere, so its card says so with its icon. */
 .start.hero,:root[data-theme="dark"] .start.hero{background:var(--surface);border-color:var(--line);color:var(--ink)}
 .start.hero span,:root[data-theme="dark"] .start.hero span{color:var(--muted)}
-.start.hero .ic,:root[data-theme="dark"] .start.hero .ic{background:var(--go);color:#fff}
+.start.hero .ic,:root[data-theme="dark"] .start.hero .ic{background:var(--go);color:var(--on-ok,#fff)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .start.hero{background:var(--surface);border-color:var(--line);color:var(--ink)}
-  :root:not([data-theme="light"]) .start.hero span{color:var(--muted)}:root:not([data-theme="light"]) .start.hero .ic{background:var(--go);color:#fff}}
+  :root:not([data-theme="light"]) .start.hero span{color:var(--muted)}:root:not([data-theme="light"]) .start.hero .ic{background:var(--go);color:var(--on-ok,#fff)}}
 .start{transition:border-color .15s,transform .15s,box-shadow .15s}
 .start:hover{border-color:var(--accent);transform:translateY(-1px)}
 /* Tabs: the dotted "has help" underline made every tab look like a link. */
@@ -719,7 +719,7 @@ td a.tag:hover{filter:brightness(.96)}
 .kindsel{border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:13.5px;padding:4px 6px;max-width:100%}
 .lrow{display:flex;gap:8px;align-items:center;font-size:13.5px}
 .lrow .lbox{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;font-size:12px;font-weight:800;flex-shrink:0;background:var(--sunk);color:var(--muted)}
-.lrow.y .lbox{background:var(--ok);color:#fff} .lrow.n .lbox{background:var(--bad-soft);color:var(--bad)} .lrow.n{color:var(--bad)}
+.lrow.y .lbox{background:var(--ok);color:var(--on-ok,#fff)} .lrow.n .lbox{background:var(--bad-soft);color:var(--bad)} .lrow.n{color:var(--bad)}
 dd q{quotes:"“" "”";font-style:italic}
 .rstep{display:flex;gap:10px;align-items:center;border-top:1px solid var(--line);padding-top:8px}
 .rstep input{width:18px;height:18px;accent-color:var(--ok);flex-shrink:0}
@@ -862,7 +862,7 @@ dd q{quotes:"“" "”";font-style:italic}
 .bigtabs button:hover{color:var(--ink);background:var(--sunk)}
 .bigtabs button.on{color:var(--accent);border-bottom-color:var(--accent)}
 .bigtabs .n{font-size:12.5px;font-weight:600;background:var(--sunk);border:1px solid var(--line);border-radius:99px;padding:0 8px;color:var(--muted);line-height:20px}
-.bigtabs button.on .n{background:var(--accent-btn,var(--accent));border-color:transparent;color:#fff}
+.bigtabs button.on .n{background:var(--accent-btn,var(--accent));border-color:transparent;color:var(--accent-ink,#fff)}
 .plat{display:inline-grid;place-items:center;flex:none;border-radius:6px;background:var(--pc,#6B7280);color:#fff;font-weight:700;letter-spacing:0;line-height:1;font-family:var(--f-body)}
 .plat:not([style*="width"]){width:20px;height:20px;font-size:9px}
 .cinfo .l1.soc .pkind{font-size:12.5px;color:var(--muted)}
@@ -994,7 +994,7 @@ table.accts tr.arow:hover{background:var(--sunk)}
 .statusline .s-warn .sdot{background:var(--warn)} .statusline .s-bad .sdot{background:var(--bad)} .statusline .s-info .sdot{background:var(--accent)}
 .statusline .s-bad{color:var(--bad);font-weight:600}
 .statusline .sfix{margin-left:2px;border:1px solid var(--line);background:var(--surface);color:var(--accent);border-radius:7px;padding:1px 8px;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none}
-.statusline .s-bad .sfix{background:var(--bad);border-color:var(--bad);color:#fff}
+.statusline .s-bad .sfix{background:var(--bad);border-color:var(--bad);color:var(--on-bad,#fff)}
 body.framed .statusline{position:static}
 
 .capgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;padding:16px 18px}
@@ -1057,7 +1057,7 @@ h2 .ahandle{font-size:13px}
 .st-alerts{display:flex;flex-direction:column;overflow:hidden}
 .st-alert{display:flex;gap:12px;align-items:flex-start;padding:12px 18px;border-bottom:1px solid var(--line);font-size:14px}
 .st-alert:last-child{border-bottom:0}
-.st-alert>b{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:13px;color:#fff;background:var(--warn)}
+.st-alert>b{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:13px;color:var(--on-warn,#fff);background:var(--warn)}
 .st-alert.bad>b{background:var(--bad)}
 .st-alert.warn{background:var(--warn-soft)} .st-alert.bad{background:var(--bad-soft)}
 @media (max-width:1000px){.st-two{grid-template-columns:1fr}.st-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -1072,7 +1072,7 @@ h2 .ahandle{font-size:13px}
 /* calmer menu numbers: soft blue for new copies, soft amber for captures, solid only when urgent */
 .pill-n.blue{background:var(--accent-soft);color:var(--accent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 30%,transparent)}
 .pill-n.amber{background:var(--warn-soft);color:var(--warn);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--warn) 30%,transparent)}
-.pill-n.amber.loud{background:var(--warn);color:#fff;box-shadow:none}
+.pill-n.amber.loud{background:var(--warn);color:var(--on-warn,#fff);box-shadow:none}
 :root[data-theme="dark"] .pill-n.blue{color:var(--accent)} :root[data-theme="dark"] .pill-n.amber{color:var(--warn)} :root[data-theme="dark"] .pill-n.amber.loud{color:#000}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .pill-n.blue{color:var(--accent)} :root:not([data-theme="light"]) .pill-n.amber{color:var(--warn)} :root:not([data-theme="light"]) .pill-n.amber.loud{color:#000}}
 /* dark mode depth: the menu is a shade darker than the cards, cards get a faint top edge */
@@ -1155,7 +1155,7 @@ h2 .ahandle{font-size:13px}
 .mpill.lo{background:var(--sunk);color:var(--muted);border-color:var(--line)}
 /* 8 client headings: initials badge, count chips, fold arrow on the right */
 .ghead.chead{font-size:13px;gap:10px}
-.cav{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:#fff;font-weight:700;font-size:11.5px;letter-spacing:.02em;flex-shrink:0}
+.cav{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--accent-ink,#fff);font-weight:700;font-size:11.5px;letter-spacing:.02em;flex-shrink:0}
 .cav.grey{background:var(--faint)}
 .gchip{font-size:12px;padding:1px 9px;border-radius:99px;background:var(--surface);border:1px solid var(--line);color:var(--muted);white-space:nowrap}
 .gfold{margin-left:auto;width:26px;height:26px;display:grid;place-items:center;border-radius:8px;color:var(--muted);transform:rotate(-90deg);transition:transform .15s}
@@ -1292,7 +1292,7 @@ tr.rowlink td.chev{color:var(--faint);font-size:18px;text-align:center} tr.rowli
 .sitebig{width:56px;height:56px;border-radius:14px;display:grid;place-items:center;color:#fff;font-family:var(--f-display);font-size:24px;font-weight:700;flex-shrink:0}
 .caphero .ct{flex:1 1 260px;min-width:0;display:flex;flex-direction:column;gap:2px}
 .caphero .ct b{font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.btn.go{background:var(--go,#15803D);color:#fff;border-color:transparent}
+.btn.go{background:var(--go,#15803D);color:var(--on-ok,#fff);border-color:transparent}
 .btn.go:hover{filter:brightness(1.08)}
 .btn.go.big{min-height:52px;padding:0 22px;font-size:16px;border-radius:12px}
 .csteps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
@@ -1364,7 +1364,7 @@ tr.rowlink td.chev{color:var(--faint);font-size:18px;text-align:center} tr.rowli
 .hsum.ok{background:var(--ok-soft,#E3F5EE);border-color:color-mix(in srgb,var(--ok) 35%,transparent)}
 .hsum.warn{background:var(--warn-soft,#FDF1DE);border-color:color-mix(in srgb,var(--warn) 35%,transparent)}
 .hsum.bad{background:var(--bad-soft,#FCE8EB);border-color:color-mix(in srgb,var(--bad) 35%,transparent)}
-.hsum .hsi{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;flex-shrink:0;color:#fff;background:var(--ok)}
+.hsum .hsi{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;flex-shrink:0;color:var(--on-ok,#fff);background:var(--ok)}
 .hsum.warn .hsi{background:var(--warn)} .hsum.bad .hsi{background:var(--bad)}
 .hsum>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .hsum b{font-size:19px;font-family:var(--f-display)}
@@ -1472,12 +1472,12 @@ tr.rowlink td.chev{color:var(--faint);font-size:18px;text-align:center} tr.rowli
 .clsh b{flex:1;min-width:0}
 .clk{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:11.5px;font-weight:800;flex:none;border:2px solid var(--line);color:var(--muted)}
 .clk.on{border-color:var(--accent);color:var(--accent)}
-.clk.y{background:var(--ok);border-color:var(--ok);color:#fff}
+.clk.y{background:var(--ok);border-color:var(--ok);color:var(--on-ok,#fff)}
 .clk.s{border-style:dashed}
 .clbody{padding:0 10px 10px 40px;display:flex;flex-direction:column;gap:6px}
 .clline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13.5px}
 .clline .cld{width:18px;height:18px;border-radius:5px;display:grid;place-items:center;font-size:11px;font-weight:800;flex:none;background:var(--sunk);color:var(--muted)}
-.clline.y .cld{background:var(--ok);color:#fff}
+.clline.y .cld{background:var(--ok);color:var(--on-ok,#fff)}
 .clline.n .cld{background:var(--bad-soft);color:var(--bad)}
 .clline .clt{flex:1;min-width:0}
 .clline .clbtns{flex:1 1 100%;display:flex;gap:6px;flex-wrap:wrap;padding-left:26px}

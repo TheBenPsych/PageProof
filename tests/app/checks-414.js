@@ -49,7 +49,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   // 3. Status line
   await page.waitForTimeout(1200);
   const sl = await page.evaluate(() => { const e = document.getElementById('statusLine'); return e && !e.hidden ? e.textContent : ''; });
-  ok(/Drive connected/.test(sl) && /Keep searching|Searching|Starting/.test(sl), 'Status line shows Drive and searching: ' + sl.replace(/\s+/g, ' '));
+  ok(/Google Drive\s*Connected/.test(sl) && /Keep searching|Searching|Starting/.test(sl), 'Status tiles show Drive and searching: ' + sl.replace(/\s+/g, ' '));
   await page.evaluate(() => chrome.storage.local.set({ fcDriveOffline: true })); await page.waitForTimeout(1600);
   ok(await page.evaluate(() => document.getElementById('statusLine').classList.contains('bad') && /Can't reach Google Drive/.test(document.getElementById('statusLine').textContent) && !!document.querySelector('#statusLine .sfix')), 'Status line turns red with Fix it');
   await page.evaluate(() => chrome.storage.local.remove('fcDriveOffline'));

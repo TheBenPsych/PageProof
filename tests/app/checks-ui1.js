@@ -15,14 +15,14 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     tiles: document.querySelectorAll('#homeTiles .htile').length,
     ring: !!document.querySelector('#homeFirstTile svg'),
     mains: document.querySelectorAll('#homeJobs .btn.primary').length,
-    status: !!document.querySelector('#side #statusLine'),
+    status: !!document.querySelector('.head #statusLine, .topr #statusLine') && !document.querySelector('#side #statusLine'),
     group: document.querySelectorAll('.top .tgroup button, .top .tgroup a').length,
     undoLabel: (document.querySelector('#undoBtn') || {}).getAttribute ? document.querySelector('#undoBtn').getAttribute('aria-label') : '',
   }));
   ok(r.tiles === 4, 'Home shows 4 number tiles (' + r.tiles + ')');
   ok(r.ring, 'The "searched once" tile has its ring');
   ok(r.mains <= 1, 'At most one big blue button in the job list (' + r.mains + ')');
-  ok(r.status, 'The status line sits inside the menu');
+  ok(r.status, 'The status tiles sit at the top right of the page, not in the menu');
   ok(r.group >= 2, 'Undo, help and colours are grouped in the top bar (' + r.group + ')');
   ok(r.undoLabel === 'Undo', 'The icon-only Undo button still has a name for screen readers');
   await ctx.close();

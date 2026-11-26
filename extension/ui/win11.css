@@ -1,0 +1,169 @@
+/* =====================================================================================
+   The calm look (Windows 11 style). Loaded LAST on every PageProof page, so it wins over the
+   older looks in app.css, page-look.css, tools-look.css and the tool pages' own files.
+   One font (Lexend), the Windows 11 colours in light and dark, 4 px controls and 8 px cards,
+   Windows buttons, tick boxes and switches, a menu like Windows Settings with coloured icons,
+   and the three status tiles at the top right.
+   Pages get their own calm layout step by step; this file is what they all share.
+   ===================================================================================== */
+@font-face{font-family:Lexend;font-style:normal;font-weight:100 900;font-display:swap;src:url(fonts/lexend-latin-ext.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:Lexend;font-style:normal;font-weight:100 900;font-display:swap;src:url(fonts/lexend-latin.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+
+/* ---------- colours: light ---------- */
+:root{
+  --bg:#F3F3F3; --surface:#FBFBFB; --sunk:#EDEDED; --line:#E5E5E5;
+  --ink:#1B1B1B; --strong:#000000; --muted:#4F4F4F; --faint:#616161; --link:#0F5AA8;
+  --accent:#005FB8; --accent-btn:#005FB8; --accent-ink:#FFFFFF; --accent-soft:#E6EEF7; --sel:#005FB8; --sel-ink:#FFFFFF;
+  --ok:#0F7B0F; --ok-soft:#DFF6DD; --warn:#9D5D00; --warn-soft:#FFF4CE; --bad:#C42B1C; --bad-soft:#FDE7E9;
+  --on-ok:#FFFFFF; --on-bad:#FFFFFF; --on-warn:#FFFFFF;
+  --copy:#005FB8; --copy-soft:#E6EEF7; --pill-ink:#FFFFFF; --go:#0F7B0F; --side:transparent; --hi:transparent;
+  --shadow:none; --pop:0 8px 32px rgba(0,0,0,.14);
+  --hover:rgba(0,0,0,.037); --selbg:rgba(0,0,0,.06); --r-card:8px; --r-ctl:4px;
+  --f-display:Lexend,"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif; --f-body:Lexend,"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+  color-scheme:light;
+}
+/* ---------- colours: dark ---------- */
+:root[data-theme="dark"]{
+  --bg:#202020; --surface:#2B2B2B; --sunk:#323232; --line:#3A3A3A;
+  --ink:#E8E8E8; --strong:#FFFFFF; --muted:#C2C2C2; --faint:#A6A6A6; --link:#8FD8FF;
+  --accent:#60CDFF; --accent-btn:#60CDFF; --accent-ink:#000000; --accent-soft:rgba(96,205,255,.14); --sel:#60CDFF; --sel-ink:#000000;
+  --ok:#6CCB5F; --ok-soft:rgba(108,203,95,.13); --warn:#FCE100; --warn-soft:rgba(252,225,0,.11); --bad:#FF99A4; --bad-soft:rgba(255,153,164,.13);
+  --on-ok:#000000; --on-bad:#000000; --on-warn:#000000;
+  --copy:#60CDFF; --copy-soft:rgba(96,205,255,.14); --pill-ink:#000000; --go:#6CCB5F;
+  --pop:0 8px 32px rgba(0,0,0,.5); --hover:rgba(255,255,255,.06); --selbg:rgba(255,255,255,.08);
+  color-scheme:dark;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#202020; --surface:#2B2B2B; --sunk:#323232; --line:#3A3A3A;
+  --ink:#E8E8E8; --strong:#FFFFFF; --muted:#C2C2C2; --faint:#A6A6A6; --link:#8FD8FF;
+  --accent:#60CDFF; --accent-btn:#60CDFF; --accent-ink:#000000; --accent-soft:rgba(96,205,255,.14); --sel:#60CDFF; --sel-ink:#000000;
+  --ok:#6CCB5F; --ok-soft:rgba(108,203,95,.13); --warn:#FCE100; --warn-soft:rgba(252,225,0,.11); --bad:#FF99A4; --bad-soft:rgba(255,153,164,.13);
+  --on-ok:#000000; --on-bad:#000000; --on-warn:#000000;
+  --copy:#60CDFF; --copy-soft:rgba(96,205,255,.14); --pill-ink:#000000; --go:#6CCB5F;
+  --pop:0 8px 32px rgba(0,0,0,.5); --hover:rgba(255,255,255,.06); --selbg:rgba(255,255,255,.08);
+  color-scheme:dark;
+}}
+
+/* the same colours under the names the tool pages and the search pages use (light and dark) */
+:root,:root[data-theme="light"],:root[data-theme="dark"]{
+  --p-bg:var(--bg); --p-surface:var(--surface); --p-sunk:var(--sunk); --p-ink:var(--ink); --p-muted:var(--muted); --p-faint:var(--faint); --p-line:var(--line);
+  --p-accent:var(--accent); --p-accent-btn:var(--accent-btn); --p-accent-soft:var(--accent-soft); --p-ok:var(--ok); --p-ok-soft:var(--ok-soft);
+  --p-warn:var(--warn); --p-warn-soft:var(--warn-soft); --p-bad:var(--bad); --p-bad-soft:var(--bad-soft); --p-go:var(--go); --p-hi:transparent; --p-shadow:none;
+  --t-surface:var(--surface); --t-sunk:var(--sunk); --t-ink:var(--ink); --t-muted:var(--muted); --t-line:var(--line); --t-accent:var(--accent); --t-accent-soft:var(--accent-soft);
+  --t-go:var(--go); --t-ok:var(--ok); --t-warn:var(--warn); --t-bad:var(--bad);
+}
+
+/* ---------- text: one font, calm sizes ---------- */
+html body{font-family:var(--f-body);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;color:var(--ink)}
+body :is(h1,h2,h3,h4,button,input,select,textarea,summary,th,td,label){font-family:var(--f-body)}
+body :is(.brand b,.stat b,.start b,.qstat b,.tool b,.gname,.cempty b,.firstbig,.dtitle,.bigtabs button,.hwlim b,.big4 b,#side #domain,#side .brand){font-family:var(--f-body)}
+body :is(h1,h2,h3){letter-spacing:0;color:var(--strong)}
+body h1{font-weight:600} body h2{font-weight:600} body h3{font-weight:600}
+a{color:var(--link)}
+.num,.stat b,.qstat b{font-variant-numeric:tabular-nums}
+/* Mica: the soft tint Windows 11 puts behind its windows */
+body{background:radial-gradient(1200px 700px at 15% -10%,rgba(0,95,184,.10),transparent 60%),radial-gradient(900px 600px at 95% 0%,rgba(120,80,200,.07),transparent 60%),var(--bg);background-attachment:fixed}
+:root[data-theme="dark"] body{background:radial-gradient(1200px 700px at 15% -10%,rgba(96,205,255,.08),transparent 60%),radial-gradient(900px 600px at 95% 0%,rgba(150,110,230,.07),transparent 60%),var(--bg);background-attachment:fixed}
+html.framed body{background:var(--bg)}
+iframe.tool{background:var(--bg)}
+
+/* ---------- the page title: "Copies found › All copies" ---------- */
+.head h1{font-size:28px;font-weight:600;line-height:1.2}
+.head h1 .bc{color:var(--faint);font-weight:400}
+.head h1 .bcs{color:var(--faint);font-weight:400;margin:0 12px;font-size:22px;position:relative;top:-2px}
+.head .eyebrow{display:none}
+.head{align-items:flex-start}
+.head .headact{align-items:center;row-gap:10px}
+.lede{color:var(--muted)}
+
+/* ---------- the menu, like Windows Settings ---------- */
+.side{background:transparent;border-right:0}
+.brand b{font-weight:600}
+.nav{min-height:38px;padding:6px 12px;border-radius:var(--r-ctl);position:relative}
+.nav:hover{background:var(--hover)}
+.nav.on{background:var(--selbg)}
+.nav .t b{font-size:14.5px;font-weight:400}
+.nav.on .t b{font-weight:600;color:var(--strong)}
+.nav.on::before{content:"";position:absolute;left:0;top:50%;width:3px;height:16px;margin-top:-8px;border-radius:2px;background:var(--accent)}
+.nav svg{width:20px;height:20px}
+.side a.nav[href="#home"] svg{color:#E8743B}
+.side a.nav[href="#found"] svg{color:#2D8CF0}
+.side a.nav[href="#clients"] svg{color:#16A394}
+.side a.nav[href="#library"] svg{color:#8B5CF6}
+.side a.nav[href="#tools"] svg{color:#D9822B}
+.side a.nav[href="#settings"] svg{color:#7A8594}
+:root[data-theme="dark"] .side a.nav[href="#settings"] svg{color:#AEB6C2}
+.subs{border-left:0;margin:2px 0 6px 22px;padding-left:12px}
+.subs a{border-radius:var(--r-ctl);padding:0 10px;position:relative;min-height:32px;font-size:14px;color:var(--muted)}
+.subs a:hover{background:var(--hover)}
+.subs a.on{background:var(--selbg);color:var(--strong);font-weight:600}
+.subs a.on::before{content:"";position:absolute;left:0;top:50%;width:3px;height:14px;margin-top:-7px;border-radius:2px;background:var(--accent)}
+.nav .pill-n,.pill-n.blue,.pill-n.amber{background:var(--accent);color:var(--accent-ink);box-shadow:none;font-weight:600}
+.pill-n.amber.loud{background:var(--warn);color:var(--on-warn)}
+:root[data-theme="dark"] .pill-n.blue,:root[data-theme="dark"] .pill-n.amber{color:var(--accent-ink)}
+
+/* ---------- the top bar ---------- */
+.top{background:transparent;border-bottom:0;backdrop-filter:none}
+.top .search{background:var(--surface);border:1px solid var(--line);border-bottom-color:color-mix(in srgb,var(--ink) 25%,var(--line));border-radius:var(--r-ctl);color:var(--faint)}
+.top .search:focus-within{border-bottom-color:var(--accent);box-shadow:inset 0 -1px 0 var(--accent)}
+
+/* ---------- status tiles, top right ---------- */
+.stiles{display:flex;flex-wrap:wrap;gap:8px 28px;align-items:center;margin-right:12px}
+.stiles[hidden]{display:none}
+.stiles .stile{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;white-space:nowrap}
+.stiles .sico{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:14px;font-weight:700;color:#fff;background:#6E6E6E;flex:none;line-height:1}
+.stiles .s-ok .sico{background:#0F7B0F} .stiles .s-run .sico{background:#005FB8;font-size:10px} .stiles .s-warn .sico{background:#9D5D00} .stiles .s-bad .sico{background:#C42B1C}
+.stiles .stx{display:block;min-width:0}
+.stiles .stx>b{display:block;font-size:14px;font-weight:600;line-height:1.2;color:var(--strong)}
+.stiles .stx>span{display:block;font-size:13px;color:var(--faint);line-height:1.3}
+.stiles .s-bad .stx>span{color:var(--bad);font-weight:600}
+.stiles .sfix{border:0;background:none;padding:0;margin-left:4px;color:var(--link);font:inherit;font-weight:600;text-decoration:none;cursor:pointer}
+.stiles .sfix:hover{text-decoration:underline}
+.top .topr .stiles{margin-right:16px}
+@media (max-width:1100px){.stiles .stx>span{display:none}.stiles{gap:6px 16px}}
+
+/* ---------- cards ---------- */
+.card,.start,.htile{border-radius:var(--r-card);box-shadow:none;border:1px solid var(--line);background:var(--surface)}
+.banner{border-radius:var(--r-card)}
+
+/* ---------- buttons: Windows standard and accent ---------- */
+.btn{border-radius:var(--r-ctl);background:var(--surface);border:1px solid var(--line);border-bottom-color:color-mix(in srgb,var(--ink) 18%,var(--line));font-weight:400;font-size:14px;box-shadow:none;color:var(--ink)}
+.btn:hover{background:color-mix(in srgb,var(--surface) 92%,var(--ink));border-color:var(--line);border-bottom-color:color-mix(in srgb,var(--ink) 18%,var(--line))}
+.btn.primary,.btn.primary:hover{background:var(--accent-btn);border-color:var(--accent-btn);color:var(--accent-ink);font-weight:600}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--link)}
+.btn.ghost:hover{background:var(--hover)}
+.btn.sm{border-radius:var(--r-ctl)} .btn.big{border-radius:var(--r-ctl)}
+.btn.stolen,:root[data-theme="dark"] .btn.stolen{background:var(--surface);color:var(--bad);border:1px solid var(--line);border-bottom-color:color-mix(in srgb,var(--ink) 18%,var(--line));font-weight:600}
+.btn.licensed,:root[data-theme="dark"] .btn.licensed{background:var(--surface);color:var(--ok);border:1px solid var(--line);border-bottom-color:color-mix(in srgb,var(--ink) 18%,var(--line));font-weight:600}
+.btn.stolen:hover,:root[data-theme="dark"] .btn.stolen:hover{background:var(--bad-soft)} .btn.licensed:hover,:root[data-theme="dark"] .btn.licensed:hover{background:var(--ok-soft)}
+/* Capture in Windows blue, not green (Ben's pick) */
+.btn.tb.go,.btn.go{background:var(--accent-btn);border-color:var(--accent-btn);color:var(--accent-ink);font-weight:600}
+.btn.go.big{border-radius:var(--r-ctl)}
+.ddb,.qf,.seg,.seg button,.tag,.chip,.bigtabs,.bigtabs button,.mpill{border-radius:var(--r-ctl)}
+.qf{font-weight:400;font-size:14px}
+.tag{font-size:12.5px;font-weight:600}
+.seg button.on,.bigtabs button.on{box-shadow:none;border:1px solid var(--line);color:var(--strong)}
+.bigtabs .n{border-radius:var(--r-ctl)}
+:focus-visible{border-radius:var(--r-ctl)}
+
+/* ---------- tabs: a short accent bar under the chosen one ---------- */
+.tabs button{border-bottom-color:transparent;position:relative;font-size:15px;color:var(--muted)}
+.tabs button.on{border-bottom-color:transparent;color:var(--strong);font-weight:600}
+.tabs button.on::after{content:"";position:absolute;left:50%;bottom:4px;width:16px;height:3px;margin-left:-8px;border-radius:2px;background:var(--accent)}
+
+/* ---------- Windows tick boxes, switches and boxes you type in ---------- */
+input[type=checkbox]:not(.switch input):not([hidden]){appearance:none;-webkit-appearance:none;width:20px;height:20px;border:1px solid color-mix(in srgb,var(--ink) 45%,transparent);border-radius:4px;background:var(--surface);display:inline-grid;place-items:center;cursor:pointer;margin:0;flex:none;vertical-align:middle;opacity:1}
+input[type=checkbox]:not(.switch input):checked{background:var(--accent);border-color:var(--accent)}
+input[type=checkbox]:not(.switch input):checked::after{content:"";width:10px;height:5px;border-left:2px solid var(--accent-ink);border-bottom:2px solid var(--accent-ink);transform:rotate(-45deg) translate(1px,-1px)}
+input[type=checkbox]:not(.switch input):disabled{opacity:.4;cursor:default}
+input.cpick{opacity:1}
+.switch{width:40px;height:20px}
+.switch span{background:transparent;border:1px solid color-mix(in srgb,var(--ink) 55%,transparent);border-radius:10px}
+.switch span::after{left:3px;top:3px;width:12px;height:12px;background:color-mix(in srgb,var(--ink) 65%,transparent);box-shadow:none}
+.switch input:checked + span{background:var(--accent);border-color:var(--accent)}
+.switch input:checked + span::after{background:var(--accent-ink);transform:translateX(20px)}
+:is(input[type=text],input[type=search],input[type=number],input[type=url],input[type=email],input[type=date],input:not([type]),select,textarea):not(#ppSearch){border-radius:var(--r-ctl)}
+.toast{border-radius:var(--r-card);background:var(--surface);color:var(--ink);border:1px solid var(--line);box-shadow:var(--pop)}

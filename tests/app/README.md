@@ -49,3 +49,4 @@ npx playwright install chromium
 node run.js
 ```
 | `checks-steady.js` | Copies found and One at a time stay put while you look: new copies wait behind "N new copies came in", the row at the top of the screen stays at the same place, a row a background check changed stays until you click, your own answers still take rows off, and One at a time keeps the copy on screen until you answer, skip or press Next copy |
+| `checks-calm1.js` | The calm look, step 1: every page loads the shared look last, Lexend for text, titles and buttons, the Windows 11 colours in light and dark (blue buttons with black words in dark), 4 px controls and 8 px cards, the cogwheel and coloured menu icons, "Settings › Hidden and approved sites" titles, the three status tiles at the top right (in the top bar on tool pages), Windows tick boxes, and the tool pages using the same colours and font |

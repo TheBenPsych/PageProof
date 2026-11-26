@@ -30,7 +30,7 @@ html.framed #side .brand{display:none}
 #side .pitem{color:var(--t-ink)}
 #side .pitem:hover{background:var(--t-sunk)}
 #side .pitem.on{background:var(--t-accent-soft);outline-color:var(--t-accent)}
-#side .cnt{background:var(--t-accent);color:#fff}
+#side .cnt{background:var(--t-accent);color:var(--accent-ink,#fff)}
 :root[data-theme="dark"] #side .cnt{color:#04121C}
 #side .cnt.z{background:var(--t-line);color:var(--t-muted)}
 #side .tr{border-top-color:var(--t-line)}
@@ -90,7 +90,7 @@ button{border-radius:10px}
 @keyframes pfspin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){#proof li i{animation:none}}
 #side #saveBox{display:flex;flex-direction:column;gap:8px;padding:10px 12px;background:var(--t-sunk);border-radius:12px}
-#side h3 .stepn{display:inline-grid;place-items:center;width:20px;height:20px;margin-right:6px;border-radius:50%;background:var(--t-accent);color:#fff;font-size:12px;letter-spacing:0}
+#side h3 .stepn{display:inline-grid;place-items:center;width:20px;height:20px;margin-right:6px;border-radius:50%;background:var(--t-accent);color:var(--accent-ink,#fff);font-size:12px;letter-spacing:0}
 :root[data-theme="dark"] #side h3 .stepn{color:#04121C}
 #side #caseBox h3,#side #saveBox h3{text-transform:none;letter-spacing:0;font-size:14px;color:var(--t-ink);display:flex;align-items:center}
 body.with-side #content{background:var(--t-sunk)}
