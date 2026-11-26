@@ -39,7 +39,7 @@ async function setPicture(k, blob, name, src) {
   slot.querySelector('.nm').title = (src || name || '') + '\nSHA-256 ' + P[k].sha;
   scoreInfo = null; CH = null; spots = []; renderSpots(); $('score').hidden = true;
   if (nearby) renderNearby();
-  if (P.A && P.B) start(); else setStatus(k === 'A' ? 'Now add the copy (box 2).' : 'Now add the original (box 1).');
+  if (P.A && P.B) start(); else setStatus(k === 'A' ? 'Now add the copy.' : 'Now add the original.');
 }
 for (const k of ['A', 'B']) {
   const slot = $('slot' + k), input = slot.querySelector('input');
@@ -386,7 +386,7 @@ function renderSpots() {
 $('nearBtn').querySelector('input').onchange = async e => {
   const files = [...e.target.files]; e.target.value = '';
   if (!files.length) return;
-  if (!P.B) return setStatus('Add the copy first (box 2), then check nearby shots.', true);
+  if (!P.B) return setStatus('Add the copy first, then check nearby shots.', true);
   $('nearBtn').classList.add('busy');
   nearby = [];
   for (let i = 0; i < files.length; i++) {
@@ -421,7 +421,7 @@ function renderNearby() {
     const pc = document.createElement('b'); pc.textContent = r.bad ? 'not a picture' : Math.round(r.lines * 100) + '%';
     const use = document.createElement('button'); use.className = 'pickbtn';
     const cur = P.A && P.A.name === r.name;
-    use.textContent = cur ? 'In box 1' : 'Use'; use.disabled = cur || r.bad;
+    use.textContent = cur ? 'In use' : 'Use'; use.disabled = cur || r.bad;
     use.onclick = async () => { await setPicture('A', r.blob, r.name); setTimeout(() => { if (!$('auto').disabled) $('auto').click(); }, 200); };
     row.append(nm, pc, use); box.append(row);
   });
@@ -687,7 +687,7 @@ $('sVid').onclick = async () => {
       if (rec && rec.a && rec.b) {
         await setPicture('A', rec.a.blob, rec.a.name);
         await setPicture('B', rec.b.blob, rec.b.name, rec.b.src);
-        setStatus('Your picture is in box 1 and the one found online in box 2. Lining them up...');
+        setStatus('Your picture is the original and the one found online is the copy. Lining them up...');
         setTimeout(() => { if (!$('auto').disabled) $('auto').click(); }, 300);
       }
     } catch (e) { /* start empty */ }
@@ -696,7 +696,7 @@ $('sVid').onclick = async () => {
     try {
       const rec = await PP_DB.get('compare');
       if (rec && rec.blob) await setPicture('B', rec.blob, rec.name, rec.src);
-      setStatus('The picture from the Inspector is in box 2 (the copy). Now add your client\'s original in box 1.');
+      setStatus('The picture from Inspect is the copy. Now add your client\'s original.');
     } catch (e) { /* start empty */ }
   }
 })();
