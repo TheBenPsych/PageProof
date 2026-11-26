@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.91.0** (26 Nov 2026).
+Last updated: version **4.91.1** (26 Nov 2026).
 
 ---
 
@@ -184,6 +184,7 @@ Last updated: version **4.91.0** (26 Nov 2026).
 - **Legal portal form shows what you copied.** Each line's Copy turns into Copied, and the top says "3 of 10 lines copied". Drop-down lines are marked. (4.89)
 - **Not finished shows the step.** A chip says which of the 5 claim steps a copy is on, and Continue opens it. Change answer is in the ··· menu. (4.90)
 - **Sweep questions fold away.** "N sites could be swept for more of your clients' photos" in one line, Look at them to see each. (4.90)
+- **"Worth a look" says why.** The yellow tag names its sign (new site, .info ending, odd name, copycat name); a hidden owner alone and popular sites never get it. (4.91.1)
 
 ## 6. Social media accounts
 
@@ -421,3 +422,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.89 | 26 Nov | Finish this claim in the Windows 11 look, portal form counts copied lines |
 | 4.90 | 26 Nov | Not finished rows show the step and Continue, sweep questions fold into one line |
 | 4.91 | 26 Nov | Capture page: blue Save, one row of four, timestamp bar, Fit the window / Real size |
+| 4.91.1 | 26 Nov | Fix: "Worth a look" much rarer, and says why |
