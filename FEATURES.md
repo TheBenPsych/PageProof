@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.76.0** (26 Nov 2026).
+Last updated: version **4.77.0** (26 Nov 2026).
 
 ---
 
@@ -113,6 +113,8 @@ Last updated: version **4.76.0** (26 Nov 2026).
 - **One at a time: Websites, Social media or All.** A switch at the top picks which copies to go through; the choice is remembered. (4.56)
 - **Searches run in their own minimized window.** All search tabs open in one minimized "PageProof searching" window instead of pinned tabs in yours; Keep searching › Where searches run switches back to pinned tabs. (4.61)
 - **Calm Clients and photos, Registrations inside.** Tiles, command bar, one line per client (Done by and Registration columns, switched-off clients at the bottom), floating bar for ticked clients and photos, Registrations panel (Not registered / Applied / Registered lately, one number box per folder, Copy for the registrar, opens from a copy's Claim tab on that folder), client page with folder number lights, filters, sort, picture size, photos grouped by folder and a photo panel. (4.76)
+- **Calm Skipped photos.** Four reason cards that filter, find box, group by client or flat, sort, Download list (CSV), Try all again, tick boxes with a floating bar, a photo panel (what to do, Copy folder path, Take off this list with Undo) and an "N skipped" chip on each client. (4.77)
+- **TIFF and HEIC photos are searched.** PageProof reads them in memory with its own readers (read only, nothing is saved or changed in Drive). Files over the size limit are left out. (4.77)
 
 ## 5. Review the copies found
 
@@ -381,3 +383,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.74 | 26 Nov | Calm look step 10: Home with number-first tiles, chips, Clients board, photo panel |
 | 4.75 | 26 Nov | Calm look step 11: pop-up with blue Capture, number rows, five tool buttons, bottom bar |
 | 4.76 | 26 Nov | Calm look step 12: Clients and photos with Registrations inside, photo panel, filters |
+| 4.77 | 26 Nov | Calm look step 13: Skipped photos; TIFF and HEIC photos are read and searched (read only) |
