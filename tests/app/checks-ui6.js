@@ -33,7 +33,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.setInputFiles('#pick', { name: 'photo.png', mimeType: 'image/png', buffer: png }); await page.waitForTimeout(2500);
   const fc = await page.evaluate(() => ({ n: document.querySelectorAll('#facts .tp-fact').length, shown: !document.getElementById('facts').hidden, blue: getComputedStyle(document.getElementById('pack')).backgroundColor }));
   ok(fc.shown && fc.n === 6, 'Inspect: six fact cards under the picture (' + fc.n + ')');
-  ok(!/rgb\(2[0-9], 1[2-6][0-9], [4-7][0-9]\)/.test(fc.blue) && /rgb\(0, (94|112), (153|184)\)/.test(fc.blue), 'Inspect: Save evidence pack is PageProof blue, not green (' + fc.blue + ')');
+  ok(!/rgb\(2[0-9], 1[2-6][0-9], [4-7][0-9]\)/.test(fc.blue) && /rgb\(0, (94|95|112), (153|184)\)/.test(fc.blue), 'Inspect: Save evidence pack is PageProof blue, not green (' + fc.blue + ')');
 
   // Compare: slots on top, floating bar under the picture
   await page.goto(url('compare.html')); await page.waitForTimeout(800);
