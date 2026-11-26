@@ -869,10 +869,11 @@ V.setup.noAutoRedraw = true;
 // =====================================================================================
 const TOUR = [
   ['home', 'Home', 'Your jobs for today, most urgent first, each with one button. When nothing needs you, it says All done.'],
-  ['found', 'Copies found', 'Everything PageProof has found for your clients. The number shows new ones. Keep searching lives here too.'],
-  ['clients', 'Clients', 'Pick which clients you search for, star the ones that matter most, and flag photos.'],
-  ['library', 'Evidence', 'Every capture and evidence report, stolen copies that still need a capture, and the photo tools.'],
-  ['settings', 'Settings', 'Your name, pop-ups, hidden sites, Is everything working, and how to keep PageProof beside every page.'],
+  ['found', 'Copies found', 'Everything PageProof has found for your clients. The number shows new ones. Keep searching, Watching and Site owners live here too.'],
+  ['clients', 'Clients', 'Pick which clients you search for, star the ones that matter most, flag photos, and see registrations and skipped photos.'],
+  ['library', 'Evidence', 'Every capture and evidence report, an overview of your captures, and the weekly summary.'],
+  ['tools', 'Tools', 'Inspect a photo, compare two photos, mark up a copy, convert files and verify an evidence pack.'],
+  ['settings', 'Settings', 'Your name and the look, how searching runs, site lists, backups and team, Health, and Help.'],
 ]
 function drawTour() {
   document.querySelectorAll('.tourring,.tourtip').forEach(x => x.remove());

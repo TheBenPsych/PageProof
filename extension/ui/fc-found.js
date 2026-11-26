@@ -546,7 +546,7 @@ function signals(c) {
   if (c.use === 'shop') s.push(['ok', 'shop', 'Selling something: a shop page, product listing or ad', 'Selling it']);
   return s;
 }
-const knownTag = c => c.known ? '<span class="tag bad" style="font-size:11.5px" title="This exact page is on your list of links stolen before (Settings › Hidden and approved sites › Stolen before links)">Stolen before</span>' : '';
+const knownTag = c => c.known ? '<span class="tag bad" style="font-size:11.5px" title="This exact page is on your list of links stolen before (Settings › Site lists › Stolen before links)">Stolen before</span>' : '';
 const spamTag = c => !c.spam ? '' : c.spam[0] === FC.GONE_WHY ? `<span class="tag grey" style="font-size:11.5px" title="This website no longer exists: its address leads nowhere">Site gone</span>` : `<span class="tag grey" style="font-size:11.5px" title="${esc('Looks like a spam blog: ' + c.spam.join(', '))}">Spam blog</span>`;
 const sigIcons = c => { const s = signals(c); return knownTag(c) + spamTag(c) + (s.length ? `<span class="sig">${s.map(([col, i, t, w]) => `<span class="tag ${col}" title="${esc(t)}">${ic(i, 13)}<span>${esc(w || t)}</span></span>`).join('')}</span>` : ''); };
 // Before a copy is marked Stolen: the kind of site (once per site) and the rules that apply.
@@ -721,10 +721,10 @@ async function drawer(list) {
       <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
       ${c.clientName ? `<button class="lookup" style="text-align:left;cursor:pointer" data-act="approvesite" data-v="client"><span style="color:var(--ok);display:inline-flex">${ic('check', 20)}</span><span><b>Approved for ${esc(c.clientName)} only</b><br><span class="muted" style="font-size:12.5px">${esc(FC.baseOf(c.site))} may use this client's photos. Other clients' photos there still show as new.</span></span></button>` : ''}
       <button class="lookup" style="text-align:left;cursor:pointer" data-act="approvesite" data-v="all"><span style="color:var(--ok);display:inline-flex">${ic('check', 20)}</span><span><b>Approved for every client</b><br><span class="muted" style="font-size:12.5px">${esc(FC.baseOf(c.site))} may use any client's photos (a partner, a wire service, your own site).</span></span></button>
-      <span class="faint" style="font-size:12.5px">Copies on an approved site are marked Licensed by themselves, now and in every later search. Change it in Settings › Hidden and approved sites.</span></div></details>
+      <span class="faint" style="font-size:12.5px">Copies on an approved site are marked Licensed by themselves, now and in every later search. Change it in Settings › Site lists.</span></div></details>
     <details class="hidebox" id="hidebox"><summary><b>Don't want results from this site?</b> <span class="muted" style="font-size:13px">Hide it</span></summary>
       <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">${hideChoices(c).map(([v, l, d]) => `<button class="lookup" style="text-align:left;cursor:pointer" data-act="hidesite" data-v="${esc(v)}"><span style="color:var(--bad);display:inline-flex">${ic('ban', 20)}</span><span><b>${esc(l)}</b><br><span class="muted" style="font-size:12.5px">${esc(d)}</span></span></button>`).join('')}
-      <span class="faint" style="font-size:12.5px">Hidden sites never show again in any search. Bring them back from Settings › Hidden and approved sites.</span></div></details>
+      <span class="faint" style="font-size:12.5px">Hidden sites never show again in any search. Bring them back from Settings › Site lists.</span></div></details>
   </div>`}
   </div>
   <div class="dacts dfoot">
@@ -1094,7 +1094,7 @@ V.found = async () => {
         <div class="kitem"><span class="tag bad">${ic('warn', 13)}</span><div><span><b>Suspicious site</b> (red) or <b>Worth a look</b> (yellow): young site, hidden owner, odd ending like .xyz, or a name copycat sites use.</span></div></div>
         <div class="kitem"><span class="tag copy">${ic('nocredit', 13)}</span><div><span><b>Credit removed</b>: your client's photo has a copyright line in its hidden data. Their copy doesn't.</span></div></div>
         <div class="kitem"><span class="tag bad">${ic('repeat', 13)}</span><div><span><b>Repeat offender</b>: you already marked copies on this site, or another site of the same owner, as Stolen, or the site is on your stolen before list.</span></div></div>
-        <div class="kitem"><span class="tag bad">Stolen before</span><div><span><b>Stolen before</b>: this exact page is on your list of links stolen before (Settings › Hidden and approved sites).</span></div></div>
+        <div class="kitem"><span class="tag bad">Stolen before</span><div><span><b>Stolen before</b>: this exact page is on your list of links stolen before (Settings › Site lists).</span></div></div>
         <div class="kitem"><span class="tag ok">${ic('shop', 13)}</span><div><span><b>Selling something</b>: a shop page, product listing or ad.</span></div></div>
         <div class="kitem"><span class="tag warn">${ic('maybe', 13)}</span><div><span><b>Maybe</b>: the checker is not sure it is the same photo.</span></div></div>
         <div class="kitem"><span class="tag ok">Statutory</span><div><span><b>Damages column</b>: Statutory (registered), Register by a date (no number yet, window still open), Actual only (window closed). Empty when the file name has no date.</span></div></div>

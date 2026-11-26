@@ -16,7 +16,7 @@ const PP_MENU = [
   { id: 'tools', label: 'Tools', href: 'tools', icon: 'tools',
     subs: [['All tools', 'tools'], ['Inspect a photo', 'inspect'], ['Compare two photos', 'compare'], ['Mark up a copy', 'markup'], ['Convert files', 'files'], ['Verify a pack', 'verify']] },
   { id: 'settings', label: 'Settings', href: 'settings',
-    subs: [['Settings', 'settings'], ['Is everything working?', 'health'], ['How PageProof is doing', 'stats'], ['Hidden and approved sites', 'hidden'], ['In your browser', 'browser'], ['Help and tutorial', 'help']] },
+    subs: [['General', 'settings'], ['Searching', 'ssearch'], ['Site lists', 'hidden'], ['Backups and team', 'backups'], ['Health', 'health'], ['Help and about', 'help']] },
 ];
 // 4.14: the menu went from 9 items to 5. Every older page still has its address and lights up the
 // item it now lives under.
@@ -35,7 +35,7 @@ const PP_CRUMBS = {
   who: 'Who\'s behind this site', keep: 'Keep searching', connect: 'Connect your photos', weekly: 'Evidence › Weekly summary', tocapture: 'Evidence › All evidence',
   inspect: 'Tools › Inspect a photo', compare: 'Tools › Compare two photos', markup: 'Tools › Mark up a copy', files: 'Tools › Convert files',
   openfiles: 'Tools › Open odd files', library: 'Evidence › All evidence', verify: 'Tools › Verify a pack', browser: 'Toolbar', settings: 'Settings',
-  hidden: 'Settings › Hidden and approved sites', computer: 'Settings › Your computer', whatsnew: 'Settings › What\'s new', health: 'Settings › Is everything working?', stats: 'Settings › How PageProof is doing', skipped: 'Skipped photos', setup: 'First-time setup', help: 'Help and tutorial'
+  hidden: 'Settings › Site lists', computer: 'Settings › Searching', whatsnew: 'Settings › Help and about › What\'s new', health: 'Settings › Health', stats: 'Settings › Health › Stats', skipped: 'Skipped photos', setup: 'First-time setup', help: 'Settings › Help and about'
 };
 const PP_BADGES = {};
 const PP_STATUS = { html: '', bad: false };   // the last status line drawn (4.40: it sits in the menu)
