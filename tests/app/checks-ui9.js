@@ -32,20 +32,20 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await rs.waitForTimeout(1200);
   const r = await rs.evaluate(() => ({
     wide: document.getElementById('main').getBoundingClientRect().width,
-    sq: document.querySelectorAll('.res-strip .sq button').length, same: document.querySelectorAll('.res-strip .sq .same').length,
-    tiles: document.querySelectorAll('.pg-tiles.four .pg-tile').length, left: (document.querySelectorAll('.pg-tiles .pg-tile')[3] || {}).textContent || '',
-    engs: document.querySelectorAll('.res-engs .res-eng').length, finds: document.querySelectorAll('.res-fgrid .res-find').length,
-    feed: [...document.querySelectorAll('.res-feed .e')].map(e => e.textContent),
-    cols: getComputedStyle(document.querySelector('.res-grid')).gridTemplateColumns.split(' ').length,
+    sq: document.querySelectorAll('.nstrip .nfp').length, same: document.querySelectorAll('.nstrip .nfp.s-same').length,
+    tiles: document.querySelectorAll('#progCard .nnum').length, left: (document.querySelector('#numTime') || {}).textContent || '',
+    engs: document.querySelectorAll('.nengs .neng').length, finds: document.querySelectorAll('.nfinds .nfind').length,
+    feed: [...document.querySelectorAll('.nfeed .nev')].map(e => e.textContent),
+    cols: getComputedStyle(document.querySelector('.nresgrid')).gridTemplateColumns.split(' ').length,
   }));
   ok(r.wide > 1300, 'Wider page on a big screen (' + Math.round(r.wide) + 'px)');
   ok(r.sq === 20 && r.same === 1, 'A square for every photo, coloured by what it found');
-  ok(r.tiles === 4 && /left/.test(r.left), 'A fourth tile says about how long is left: ' + r.left);
+  ok(r.tiles === 3 && /left/.test(r.left), 'A third number says about how long is left: ' + r.left);
   ok(r.engs === 3, 'One card per search site for the picked photo');
   ok(r.finds === 2, 'The copies it found show as small pictures (' + r.finds + ')');
-  ok(r.feed.length >= 5 && r.feed.some(t => /sent to Copies found/.test(t)), 'What\'s happening lists the search, newest first');
-  ok(r.cols === 3, 'Three columns: photos, the picked photo, What\'s happening');
-  await rs.click('.res-strip .sq button:nth-child(4)'); await rs.waitForTimeout(400);
+  ok(r.feed.length >= 5 && r.feed.some(t => /sent to Copies found/i.test(t)), 'What\'s happening lists the search, newest first');
+  ok(r.cols === 2, 'Two columns under the photos: the picked photo, What\'s happening');
+  await rs.click('.nstrip .nfp:nth-child(4)'); await rs.waitForTimeout(400);
   ok(await rs.evaluate(() => /photo3\.jpg/.test(document.querySelector('#selcard h2').textContent)), 'Clicking a square opens that photo');
   // A blocked picture is shown as a grey box straight away on the next refresh (no flash).
   await rs.evaluate(() => { R.sel = 1; renderResults(); document.getElementById('thrown').open = true; renderResults(); });

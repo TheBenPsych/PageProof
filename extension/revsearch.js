@@ -237,50 +237,129 @@ function ring(done, total, size) {
 const engLights = lights => h('div', { class: 'pg-eng', role: 'list', 'aria-label': 'Search sites' }, lights.map(([e, c, note]) =>
   h('span', { class: 'e', role: 'listitem', title: note || (c === 'ok' ? 'Working' : '') }, h('i', { class: c === 'ok' ? '' : c }), ENGINES[e].short, note ? h('small', { text: note }) : null)));
 
+// ---- calm look (batch 6): icons and small builders for New search and Search results.
+// The icons are fixed drawings from this file; text from web pages still only goes in as text.
+const NIC = {
+  add: '<path d="M8 3v10M3 8h10"/>',
+  photo: '<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><circle cx="5.5" cy="6.3" r="1.3"/><path d="m2 12 3.8-3.6 2.7 2.4 2.2-1.8L14 12"/>',
+  folder: '<path d="M1.5 4.5a1 1 0 0 1 1-1h3.3l1.4 1.5h6.3a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/>',
+  link: '<path d="M6.5 9.5 9.5 6.5M7 4.5l1.2-1.2a2.6 2.6 0 0 1 3.7 3.7L10.7 8.2M9 11.5l-1.2 1.2a2.6 2.6 0 0 1-3.7-3.7L5.3 7.8"/>',
+  clear: '<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/>',
+  search: '<circle cx="7" cy="7" r="4.5"/><path d="M10.4 10.4 14 14"/>',
+  x: '<path d="M4 4l8 8M12 4l-8 8"/>',
+  tabs: '<rect x="1.5" y="4.5" width="13" height="9" rx="1.5"/><path d="M1.5 7.5h13M4 2.5h8"/>',
+  check: '<path d="M3 8.5 6.5 12 13 4.5"/>',
+  copies: '<rect x="2" y="4.5" width="8" height="9" rx="1"/><path d="M5 4.5V3a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-3"/>',
+  stop: '<rect x="4" y="4" width="8" height="8" rx="1"/>',
+  again: '<path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v2.6h2.6"/>',
+  pdf: '<path d="M4 1.5h5.5L12.5 4.5v10h-8.5z"/><path d="M9.5 1.5v3h3M6 9h4.5M6 11.5h4.5"/>',
+  sheet: '<rect x="2" y="2.5" width="12" height="11" rx="1"/><path d="M2 6h12M2 9.5h12M6 2.5v11"/>',
+  review: '<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>',
+  chev: '<path d="m6 3.5 4.5 4.5L6 12.5"/>',
+  dn: '<path d="M4 6l4 4 4-4"/>',
+  clock: '<circle cx="8" cy="8" r="6.2"/><path d="M8 4.6V8l2.4 1.6"/>',
+  open: '<path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5M12 9.5v3a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3"/>',
+  compare: '<rect x="1.5" y="3" width="6" height="10" rx="1"/><rect x="8.5" y="3" width="6" height="10" rx="1"/>',
+  info: '<circle cx="8" cy="8" r="6.2"/><path d="M8 7.2v4M8 4.8v.1"/>',
+  pin: '<path d="M6 2.5h4l-.6 4 2.1 2H4.5l2.1-2zM8 8.5v5"/>',
+  play: '<path d="M5 3.2v9.6L12.6 8z"/>',
+};
+function ni(name, z = 16) {
+  const t = document.createElement('template');
+  t.innerHTML = `<svg viewBox="0 0 16 16" width="${+z}" height="${+z}" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${NIC[name] || ''}</svg>`;
+  return t.content.firstChild;
+}
+const nbtn = (icon, text, cls, props) => h('button', { class: 'nbtn ' + (cls || ''), ...(props || {}) }, icon ? ni(icon) : null, text);
+const nsq = (color, icon, z = 36) => h('span', { class: 'ksq', style: `--c:${color};width:${z}px;height:${z}px` }, ni(icon));
+const NENG = { google: ['G', 'g'], yandex: ['Y', 'y'], bing: ['B', 'b'] };
+const nbadge = (e, big) => h('span', { class: 'keng ' + NENG[e][1] + (big ? ' big' : ''), 'aria-hidden': 'true', text: NENG[e][0] });
+const kn1 = (title, sub) => h('span', { class: 'kn1' }, h('b', {}, title), sub != null ? h('span', {}, sub) : null);
+const nhead = (crumb, title, ...right) => h('div', { class: 'nhead' }, h('h1', {}, h('span', { class: 'bc', text: crumb + ' ›' }), ' ' + title), h('span', { class: 'sp' }), ...right);
+const nthumb = (src, cls) => src ? h('img', { class: cls || '', src, alt: '' }) : h('span', { class: 'nnoimg ' + (cls || '') }, ni('photo', 22));
+const SETUP = { link: false };
+
 let setupN = 0;     // only the newest drawing goes on screen
 async function renderSetup(busy) {
   plain(true);
   const me = ++setupN;
   const s = await getSettings();
+  let recentJobs = [];
+  try { recentJobs = (await RS_DB.all('jobs')).filter(j => !(j.kind === 'keep' && j.pics.length === 1)).sort((a, b) => b.created.localeCompare(a.created)).slice(0, 3); } catch (e) { /* none yet */ }
   if (me !== setupN) return;
   const save = () => setSettings(s).then(() => renderSetup());
   const n = draft.length, nEng = Object.values(s.engines).filter(Boolean).length;
   const secs = Math.round(n * (SPEED[s.speed].gap[0] + SPEED[s.speed].gap[1]) / 2000 / SPEED[s.speed].per + 15);
-  const notes = draftNotes.length ? h('div', { class: 'howbox', style: 'max-width:none' }, draftNotes.map(t => h('div', { text: t }))) : null;
-  const sh = (num, title, done) => h('div', { class: 'sh' }, h('em', { text: done ? '✓' : num }), h('h2', { text: title }));
-  const step1 = h('section', { class: 'pg-card pg-step' + (n ? ' done' : ''), 'aria-label': 'Step 1: pick photos' }, sh('1', busy ? 'Getting your pictures ready…' : n ? plural(n, 'photo') + ' picked' : 'Pick photos', n),
-    n ? h('div', { class: 'pg-thumbs' }, draft.map((p, i) => h('div', { class: 't', title: p.name + ' · ' + p.w + ' × ' + p.h },
-      h('img', { src: p.thumb, alt: '' }), h('span', { text: i + 1 }),
-      h('button', { title: 'Take this picture out', 'aria-label': 'Take ' + p.name + ' out', text: '✕', onclick: () => { draft.splice(i, 1); renderSetup(); } })))) : null,
-    h('div', { class: 'pg-drop' },
-      h('button', { class: 'pg-btn' + (n ? '' : ' primary'), disabled: n >= MAX_PICS, text: n ? '＋ Add more pictures' : '📁 Add pictures', onclick: () => $('filePick').click() }),
-      h('button', { class: 'pg-btn sm', text: '📂 From my clients\' photos', onclick: e => goApp('clients', e) }),
-      h('span', { text: 'Or drag pictures or a whole folder onto this page, or paste pictures or links (Ctrl+V). Up to ' + MAX_PICS + ' at once.' })));
-  const step2 = h('section', { class: 'pg-card pg-step' + (nEng ? ' done' : ''), 'aria-label': 'Step 2: search on' }, sh('2', 'Search on', nEng),
-    Object.entries(ENGINES).map(([k, e]) => h('label', { class: 'pg-tick' + (s.engines[k] ? ' on' : '') },
-      h('input', { type: 'checkbox', checked: s.engines[k], onchange: ev => { s.engines[k] = ev.target.checked; save(); } }), fav(k), h('span', {}, h('b', { text: e.name }), h('small', { text: e.what })))));
-  const why = !n ? 'Add at least one picture first.' : !nEng ? 'Tick at least one search site in step 2.' : '';
-  const go = h('button', { class: 'pg-btn primary big', disabled: !!why, title: why, text: '🔎 Search ' + (n ? plural(n, 'photo') : 'photos'), onclick: async () => {
+  const notes = draftNotes.length ? h('div', { class: 'kbar info nnotes', role: 'status' }, h('span', { class: 'nbi' }, ni('info', 20)), h('div', {}, draftNotes.map(t => h('span', { text: t }))),
+    h('button', { class: 'kx', title: 'Close', 'aria-label': 'Close', onclick: () => { draftNotes = []; renderSetup(); } }, ni('x', 12))) : null;
+  const pick = () => $('filePick').click();
+  const addLink = async input => {
+    const u = input.value.trim();
+    if (!/^https?:\/\//i.test(u)) { input.focus(); return; }
+    SETUP.link = false;
+    try { await addToDraft([await fileFromUrl(u)]); } catch (err) { draftNotes = ['Could not get a picture from ' + u.slice(0, 80) + ' (' + err.message + ')']; renderSetup(); }
+  };
+  const cmd = big => [
+    nbtn('add', 'Add photos', (n ? '' : 'acc') + (big ? ' big' : ''), { disabled: n >= MAX_PICS, id: 'addPhotos', onclick: pick }),
+    nbtn('folder', 'From my clients\' photos', big ? 'big' : '', { onclick: e => goApp('clients', e) }),
+    nbtn('link', 'Paste a link', big ? 'big' : '', { id: 'pasteLink', disabled: n >= MAX_PICS, onclick: () => { SETUP.link = !SETUP.link; renderSetup().then(() => { const i = $('linkIn'); if (i) i.focus(); }); } })];
+  const linkRow = SETUP.link ? h('form', { class: 'nlinkrow', onsubmit: e => { e.preventDefault(); addLink($('linkIn')); } },
+    h('input', { type: 'url', id: 'linkIn', placeholder: 'https://… the address of a picture', 'aria-label': 'Address of a picture' }),
+    nbtn('add', 'Add', 'acc', { type: 'submit' }), nbtn('', 'Cancel', 'ghost', { type: 'button', onclick: () => { SETUP.link = false; renderSetup(); } })) : null;
+  const photos = n || busy
+    ? h('section', { class: 'card npcard', 'aria-label': 'Photos' },
+      h('div', { class: 'nph' }, h('h2', {}, busy ? 'Getting your pictures ready…' : 'Photos', ' ', h('span', { class: 'kfaint', text: n + ' of ' + MAX_PICS })), h('span', { class: 'sp' }),
+        h('div', { class: 'ncmd' }, cmd(false), h('span', { class: 'cmdsep' }), nbtn('clear', 'Clear all', 'ghost', { id: 'clearAll', disabled: !n, onclick: () => { draft.length = 0; draftNotes = []; renderSetup(); } }))),
+      linkRow,
+      h('div', { class: 'ngrid', id: 'draftGrid' }, draft.map((p, i) => h('figure', { class: 'nt', title: p.name + ' · ' + p.w + ' × ' + p.h },
+        h('div', { class: 'ni' }, h('img', { src: p.thumb, alt: '' }), h('span', { class: 'nbn', text: i + 1 }),
+          h('button', { class: 'nx', title: 'Take this photo out', 'aria-label': 'Take ' + p.name + ' out', onclick: () => { draft.splice(i, 1); renderSetup(); } }, ni('x', 12))),
+        h('figcaption', {}, h('b', { text: p.name }), h('span', { text: p.w.toLocaleString() + ' × ' + p.h.toLocaleString() })))),
+        n < MAX_PICS ? h('button', { class: 'nt nadd', onclick: pick }, h('span', {}, ni('add', 28)), 'Add more') : null),
+      h('div', { class: 'ndropline' }, ni('photo'), h('span', { text: 'Drop more photos or a whole folder anywhere on this page, or paste them with Ctrl+V.' })))
+    : h('section', { class: 'card npcard isempty', 'aria-label': 'Photos' },
+      h('div', { class: 'nph' }, h('h2', {}, 'Photos ', h('span', { class: 'kfaint', text: '0 of ' + MAX_PICS }))),
+      h('div', { class: 'ndrop' }, h('span', { class: 'nbigic' }, ni('photo', 56)),
+        h('h3', { text: 'Drop photos or a folder here' }), h('p', { class: 'kmuted', text: 'Up to ' + MAX_PICS + ' photos at once. JPG, PNG, HEIC, TIFF and AVIF.' }),
+        h('div', { class: 'nbtns' }, cmd(true)), linkRow,
+        h('p', { class: 'kfaint', text: 'You can also paste pictures or links with Ctrl+V.' })));
+  const ENG_WHAT = { google: 'Full search of every photo. Finds exact matches.', yandex: 'Finds sites with this picture. Good at faces and crops.', bing: 'Finds pages with this picture. Good at news and shop sites.' };
+  const sites = h('section', { class: 'card nset', id: 'searchOn', 'aria-label': 'Search on' }, h('h2', { class: 'kh2' }, 'Search on ', h('span', { class: 'kfaint', text: nEng + ' of 3' })),
+    Object.entries(ENGINES).map(([k, e]) => h('label', { class: 'nsr' }, nbadge(k, true), kn1(e.name, ENG_WHAT[k]),
+      h('span', { class: 'wswl', text: s.engines[k] ? 'On' : 'Off' }),
+      h('span', { class: 'nsw' }, h('input', { type: 'checkbox', checked: s.engines[k], 'aria-label': e.name, onchange: ev => { s.engines[k] = ev.target.checked; save(); } }), h('i')))));
+  const SP = { careful: 'One photo at a time on each site, longer pauses. Slowest, safest.', normal: '2 at a time on each site, short pauses. Fewest robot checks for the speed.', quick: '3 at a time on each site. More likely to get a robot check.' };
+  const speed = h('section', { class: 'card nset', id: 'speedCard', role: 'radiogroup', 'aria-label': 'Speed' }, h('h2', { class: 'kh2', text: 'Speed' }),
+    Object.entries(SPEED).map(([k, v]) => h('label', { class: 'nrad' + (s.speed === k ? ' on' : '') },
+      h('input', { type: 'radio', name: 'speed', value: k, checked: s.speed === k, onchange: () => { s.speed = k; save(); } }), h('span', { class: 'wrad' }, h('i')),
+      h('span', { class: 'kn1' }, h('b', {}, v.label, k === 'normal' ? h('span', { class: 'ktag', text: 'Best for most' }) : null), h('span', { text: SP[k] })))));
+  const why = !n ? 'Add at least one photo first.' : !nEng ? 'Turn on at least one search site.' : '';
+  const go = nbtn('search', 'Search ' + (n ? plural(n, 'photo') : 'photos'), 'acc huge', { id: 'goSearch', disabled: !!why, title: why, onclick: async () => {
     go.disabled = true;
     const job = await startJob(draft.slice());
-    if (job) { draft.length = 0; draftNotes = ['Search started. You can add more pictures for another search here.']; renderSetup(); }
+    if (job) { draft.length = 0; draftNotes = ['Search started. You can add more photos for another search here.']; renderSetup(); }
     else go.disabled = false;
   } });
-  const step3 = h('section', { class: 'pg-card pg-step', 'aria-label': 'Step 3: speed and start' }, sh('3', 'Speed and start'),
-    h('div', { class: 'pg-seg', role: 'radiogroup', 'aria-label': 'Speed' }, Object.entries(SPEED).map(([k, v]) => h('button', { role: 'radio', 'aria-checked': String(s.speed === k), class: s.speed === k ? 'on' : '', text: v.label, title: v.hint, onclick: () => { s.speed = k; save(); } }))),
-    h('p', { class: 'pg-faint', style: 'margin:0', text: SPEED[s.speed].hint }),
-    h('div', { style: 'flex:1' }),
-    go,
-    why ? h('p', { class: 'pg-why', text: why }) : h('p', { class: 'pg-faint', style: 'margin:0;text-align:center', text: 'About ' + (secs < 90 ? secs + ' seconds' : Math.round(secs / 60) + ' minutes') + ' for ' + plural(n, 'photo') + ' on ' + plural(nEng, 'site') }));
-  $('main').replaceChildren(...[
-    pgHead('New search', 'Search a few photos right now on Google Lens, Yandex and Bing. For your clients\' photos all day, use Keep searching.'),
-    notes,
-    h('div', { class: 'pg-steps' }, step1, step2, step3),
-    h('details', { class: 'pg-thrown' }, h('summary', { text: 'What happens when you press Search' }), h('div', { class: 'in' }, h('ol', { style: 'margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;font-size:14px' },
-      h('li', { text: 'The results show right here in PageProof. The search tabs open as small pinned tabs at the left of the tab bar and close by themselves when done.' }),
-      h('li', { text: 'The photos are searched a few at a time, with short pauses, in your own browser. That keeps "are you a robot" checks away.' }),
-      h('li', { text: 'Every copy found goes to Copies found with a % match.' })),
-      h('a', { href: 'https://github.com/TheBenPsych/PageProof/blob/main/TUTORIAL.md#16-search-many-pictures-at-once-reverse-image-search', target: '_blank', text: '❔ How this works' })))].filter(Boolean));
+  const start = h('section', { class: 'card nstart' }, go,
+    h('p', { class: 'kmuted nwhy' + (why ? ' pg-why' : ''), text: why || 'About ' + (secs < 90 ? secs + ' seconds' : Math.round(secs / 60) + ' minutes') + ' for ' + plural(n, 'photo') + ' on ' + plural(nEng, 'site') + '. The results show right here.' }));
+  const how = h('section', { class: 'card nhow nhowstrip', 'aria-label': 'What happens when you press Search' }, h('h2', { class: 'kh2', text: 'What happens when you press Search' }),
+    h('div', { class: 'nsteps' }, [['tabs', '#005FB8', 'Small search tabs open', 'Out of your way, a few at a time with short pauses. They close by themselves when done.'], ['compare', '#8764B8', 'Each picture is checked', 'Every picture found is laid over yours, detail for detail.'], ['copies', '#0F7B0F', 'Copies go to Copies found', 'Same photo or Maybe, each with its % match.']]
+      .map(([ic, c, b, t]) => h('div', { class: 'nstep' }, nsq(c, ic), kn1(b, t)))),
+    h('a', { class: 'nhowlink', href: 'https://github.com/TheBenPsych/PageProof/blob/main/TUTORIAL.md#16-search-many-pictures-at-once-reverse-image-search', target: '_blank', text: 'How this works' }));
+  const KIND = { keep: 'Keep searching', fifty: 'Today\'s 50' };
+  const recent = recentJobs.length ? h('section', { class: 'card nrecent', id: 'recentCard', 'aria-label': 'Recent searches' },
+    h('h2', { class: 'kh2' }, 'Recent searches', h('a', { href: appUrl('searches'), onclick: e => goApp('searches', e), text: 'All searches ›' })),
+    recentJobs.map(j => {
+      let found = 0;
+      for (const p of j.pics) for (const l of p.links || []) if (!RS_LISTS.isHidden(l.site, l.url) && ['same', 'maybe'].includes(verdict(l))) found++;
+      const d = new Date(j.created), running = j.bg && !j.finished;
+      const open = () => goResults(j.id);
+      return h('div', { class: 'nrr', role: 'button', tabindex: 0, title: 'Open this search', onclick: open, onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } } },
+        h('span', { class: 'nstack', 'aria-hidden': 'true' }, j.pics.filter(p => p.thumb).slice(0, 3).map(p => h('img', { src: p.thumb, alt: '' }))),
+        kn1(plural(j.pics.length, 'photo') + (KIND[j.kind] ? ' · ' + KIND[j.kind] : ''), (d.toDateString() === new Date().toDateString() ? 'Today' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })) + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })),
+        h('span', { class: 'ktag' + (running || found ? ' acc' : ''), text: running ? 'Running' : found ? plural(found, 'copy', 'copies') + ' found' : 'Nothing found' }), ni('chev', 14));
+    })) : null;
+  $('main').replaceChildren(h('div', { class: 'nnew' }, nhead('Copies found', 'New search'), notes,
+    h('div', { class: 'ngridtop' }, h('div', { class: 'kstack' }, photos, how, recent), h('div', { class: 'kstack nright' }, sites, speed, start))));
 }
 
 function setupDropAndPaste(onFiles) {
@@ -1407,26 +1486,19 @@ function searchPace(done, total) {
   const per = done ? (Date.now() - first) / done : 0;
   return { first, per, left: done && done < total ? per * (total - done) : 0, took: ends.length ? Math.max(...ends) - first : 0 };
 }
-function timeTile(busy, done, total) {
-  const pc = searchPace(done, total);
-  if (busy && pc && pc.left) return h('div', { class: 'pg-tile' }, h('b', { text: fmtDur(pc.left) }), h('span', { text: 'about this long left (≈ ' + fmtDur(pc.per) + ' a photo)' }));
-  if (!busy && pc && pc.took && done >= total) return h('div', { class: 'pg-tile grey' }, h('b', { text: fmtDur(pc.took) }), h('span', { text: 'start to finish' }));
-  return null;
-}
 function sqState(q, kept) {
-  if (picBusy(q)) return ['go', 'searching'];
-  if (!picDone(q)) return ['wait', 'waiting'];
+  if (picBusy(q)) return ['go', 'Searching'];
+  if (!picDone(q)) return ['wait', 'Waiting'];
   const n = sameCount(q);
-  if (n) return ['same', plural(n, 'same photo', 'same photo') + (kept > n ? ', ' + (kept - n) + ' maybe' : '')];
+  if (n) return ['same', n + ' same' + (kept > n ? ' · ' + (kept - n) + ' maybe' : '')];
   if (kept) return ['maybe', kept + ' maybe'];
-  if (job.engines.some(e => byYou(q.runs[e]))) return ['bad', 'not finished: stopped by you'];
-  if (job.engines.some(e => ['skip', 'fail'].includes(q.runs[e].state))) return ['bad', 'skipped on a search site'];
-  return ['nothing', 'nothing found'];
+  if (job.engines.some(e => byYou(q.runs[e]))) return ['bad', 'Stopped by you'];
+  if (job.engines.some(e => ['skip', 'fail'].includes(q.runs[e].state))) return ['bad', 'Skipped'];
+  return ['none', 'No copies'];
 }
-function pickPhoto(i, fromList) {
+function pickPhoto(i) {
   R.sel = i; renderResults(); scoreAll();
   const d = $('selcard'); if (d && d.scrollIntoView) d.scrollIntoView({ block: 'nearest' });
-  if (!fromList) { const row = document.querySelector('.res-list .pg-row[data-i="' + i + '"]'); if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' }); }
 }
 // The photo's facts from Your photos (client, folder, how often searched, copies). Read once per
 // photo, and again when that photo finishes (its counts change).
@@ -1442,29 +1514,30 @@ function loadFacts(p) {
 }
 // What's happening: the search so far, newest first, from the times saved with each photo and site.
 function feedCard(busy, done, total) {
-  const ev = [[Date.parse(job.created), 'Search started, ' + plural(total, 'photo'), '']];
+  const ev = [[Date.parse(job.created), 'Search started', plural(total, 'photo') + ' on ' + plural(job.engines.length, 'site'), 'acc']];
   for (const q of job.pics) {
     const n = 'photo ' + (q.i + 1);
-    if (q.t0) ev.push([q.t0, 'Searching ' + n, '']);
+    if (q.t0) ev.push([q.t0, 'Searching ' + n, q.name, '']);
     for (const e of job.engines) {
       const r = q.runs[e];
       if (!r.at) continue;
-      if (r.state === 'done') ev.push([r.at, ENGINES[e].short + ': ' + plural(q.links.filter(l => l.engines.includes(e)).length, 'link') + ' for ' + n, '']);
-      else if (byYou(r)) ev.push([r.at, ENGINES[e].short + ' stopped by you on ' + n, '']);
-      else if (['skip', 'fail'].includes(r.state)) ev.push([r.at, ENGINES[e].short + ' skipped ' + n, 'warn']);
+      if (r.state === 'done') ev.push([r.at, ENGINES[e].short + ': ' + plural(q.links.filter(l => l.engines.includes(e)).length, 'link') + ' for ' + n, '', '']);
+      else if (byYou(r)) ev.push([r.at, ENGINES[e].short + ' stopped by you on ' + n, '', '']);
+      else if (['skip', 'fail'].includes(r.state)) ev.push([r.at, ENGINES[e].short + ' skipped ' + n, r.why || '', 'warn']);
     }
     if (q.t1) {
       const vis = visibleLinks(q, { raw: true, withHidden: false });
       const k = vis.filter(l => ['same', 'maybe'].includes(verdict(l))), ns = k.filter(isSame).length, pend = vis.filter(l => verdict(l) === 'pending').length;
-      ev.push([q.t1 + 1, pend && !k.length ? 'Photo ' + (q.i + 1) + ': checking ' + plural(pend, 'picture') + ' found' : k.length ? 'Photo ' + (q.i + 1) + ': ' + (ns ? ns + ' same' + (k.length > ns ? ', ' : '') : '') + (k.length > ns ? (k.length - ns) + ' maybe' : '') + ' sent to Copies found' : 'Photo ' + (q.i + 1) + ': nothing found', k.length ? 'hit' : '']);
+      ev.push([q.t1 + 1, pend && !k.length ? 'Photo ' + (q.i + 1) + ': checking ' + plural(pend, 'picture') + ' found' : k.length ? 'Photo ' + (q.i + 1) + ': ' + (ns ? ns + ' same' + (k.length > ns ? ', ' : '') : '') + (k.length > ns ? (k.length - ns) + ' maybe' : '') : 'Photo ' + (q.i + 1) + ': nothing found',
+        k.length ? 'Sent to Copies found' : pend ? '' : 'Every site searched', k.length ? 'hit' : '']);
     }
   }
   ev.sort((a, b) => b[0] - a[0]);
   const pc = searchPace(done, total);
-  return h('section', { class: 'pg-card res-feed', 'aria-label': 'What\'s happening' }, h('h3', { text: 'What\'s happening' }),
-    h('div', { class: 'ev' }, ev.slice(0, 16).map(([t, x, c]) => h('div', { class: 'e ' + c }, h('span', { text: clock(t) }), h('div', { text: x })))),
-    h('div', { class: 'foot' }, busy && pc && pc.left ? [h('b', { text: 'About ' + fmtDur(pc.left) + ' left' }), h('span', { text: '≈ ' + fmtDur(pc.per) + ' a photo' + (job.bg ? ' · runs in the pinned tab, you can close this page' : '') })]
-      : !busy && pc && pc.took ? [h('b', { text: 'Finished in ' + fmtDur(pc.took) })] : busy ? [h('span', { text: 'The time left shows once the first photo is done.' })] : []));
+  const foot = busy && pc && pc.left ? 'About ' + fmtDur(pc.left) + ' left · ' + fmtDur(pc.per) + ' a photo' : !busy && pc && pc.took ? 'Finished in ' + fmtDur(pc.took) : busy ? 'The time left shows once the first photo is done.' : '';
+  return h('section', { class: 'card nfeed', 'aria-label': 'What\'s happening' }, h('h2', { class: 'kh2', text: 'What\'s happening' }),
+    h('div', { class: 'ntl' }, ev.slice(0, 14).map(([t, a, b, c]) => h('div', { class: 'nev ' + c }, h('span', { class: 'nt1', text: clock(t) }), h('i'), kn1(a, b || null)))),
+    foot ? h('p', { class: 'kfoot', text: foot }) : null);
 }
 
 function renderResults() {
@@ -1473,66 +1546,73 @@ function renderResults() {
   const busy = R.running || (R.watch && !job.finished);
   const total = job.pics.length, done = job.pics.filter(picDone).length, nBusy = job.pics.filter(picBusy).length;
   const when = new Date(job.created);
-  const whenTxt = when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const whenTxt = (when.toDateString() === new Date().toDateString() ? '' : when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ') + when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   const left = job.pics.filter(p => job.engines.some(e => ['wait', 'skip', 'fail'].includes(p.runs[e].state))).length;
   const keptOf = q => visibleLinks(q, { raw: true, withHidden: false }).filter(l => ['same', 'maybe'].includes(verdict(l))).length;
   const outOf = q => visibleLinks(q, { raw: true, withHidden: false }).filter(l => ['no', 'cant'].includes(verdict(l))).length;
   const totalKept = job.pics.reduce((a, q) => a + keptOf(q), 0), totalOut = job.pics.reduce((a, q) => a + outOf(q), 0);
   const allIn = !R.running && job.pics.every(q => q.ingested || !job.engines.some(e => q.runs[e].state === 'done'));
-  // ---- heading and its buttons
-  const acts = busy
-    ? [h('button', { class: 'pg-btn stop', text: '⏹ Stop and keep results so far', onclick: () => {
-        if (R.watch) { api.runtime.sendMessage({ type: 'ppBgStop', job: job.id }).catch(() => {}); banner([h('b', { text: 'Stopping… ' }), 'The searches already running finish their page, then it stops.'], 'info'); return; }
-        R.stop = true; job.stoppedAt = new Date().toISOString(); for (const t of [...R.tasks.values()]) finishTask(t, 'skip', STOPPED);
-      } })]
-    : [left ? h('button', { class: 'pg-btn', text: '🔁 Search the rest (' + left + ')', onclick: () => {
-        for (const p of job.pics) for (const e of job.engines) if (['skip', 'fail'].includes(p.runs[e].state)) p.runs[e].state = 'wait';
-        // A pinned-tab search: back into the pinned tab's line, and this page watches it again.
-        if (job.bg && !BG) { delete job.finished; saveJob(true).then(() => bgQueue(job.id)).then(() => watch()); return; }
-        runJob();
-      } }) : null,
-      h('button', { class: 'pg-btn', text: '📄 PDF report', onclick: savePdf }), h('button', { class: 'pg-btn', text: '📊 Spreadsheet', onclick: saveCsv })];
-  const head = pgHead(busy ? 'Searching ' + plural(total, 'photo') : plural(total, 'photo') + ' searched', whenTxt + ' · ' + (busy ? done + ' done · ' + nBusy + ' searching · ' + (total - done - nBusy) + ' waiting' : plural(totalKept, 'copy', 'copies') + ' found' + (job.pics.some(checking) ? ' · still checking matches…' : '')),
-    h('div', { class: 'pg-actions' }, acts.filter(Boolean)));
-  const bgNote = busy && job.bg ? h('p', { class: 'pg-faint', style: 'margin:0' }, job.started ? 'This search runs in the small pinned PageProof tab at the left of your tab bar. You can close this page and keep working.'
-    : 'Waiting for the small pinned PageProof tab to start this search (it runs one big search at a time). ', job.started ? null : h('button', { class: 'pg-btn sm', text: '▶ Start it now', onclick: () => api.runtime.sendMessage({ type: 'fcBgStart' }).catch(() => {}) })) : null;
-  // ---- search site lights
+  const stillChecking = job.pics.some(checking);
+  // ---- the title and its buttons
+  const stop = () => {
+    if (R.watch) { api.runtime.sendMessage({ type: 'ppBgStop', job: job.id }).catch(() => {}); banner([h('b', { text: 'Stopping… ' }), 'The searches already running finish their page, then it stops.'], 'info'); return; }
+    R.stop = true; job.stoppedAt = new Date().toISOString(); for (const t of [...R.tasks.values()]) finishTask(t, 'skip', STOPPED);
+  };
+  const rest = () => {
+    for (const p of job.pics) for (const e of job.engines) if (['skip', 'fail'].includes(p.runs[e].state)) p.runs[e].state = 'wait';
+    // A pinned-tab search: back into the pinned tab's line, and this page watches it again.
+    if (job.bg && !BG) { delete job.finished; saveJob(true).then(() => bgQueue(job.id)).then(() => watch()); return; }
+    runJob();
+  };
+  const notYet = busy ? 'Ready when the search is done' : '';
+  const head = nhead('All searches', busy ? 'Searching ' + plural(total, 'photo') : plural(total, 'photo') + ' searched',
+    h('div', { class: 'ncmd' },
+      h('a', { class: 'nbtn acc', id: 'reviewBtn', href: appUrl('review'), onclick: e => goApp('review', e) }, ni('review'), 'Review new copies'),
+      h('a', { class: 'nbtn', href: appUrl('found'), onclick: e => goApp('found', e) }, ni('copies'), 'Copies found'),
+      h('span', { class: 'cmdsep' }),
+      nbtn('pdf', 'PDF report', '', { id: 'pdfBtn', disabled: busy, title: notYet, onclick: savePdf }), nbtn('sheet', 'Spreadsheet', '', { id: 'csvBtn', disabled: busy, title: notYet, onclick: saveCsv }),
+      busy || left ? h('span', { class: 'cmdsep' }) : null,
+      busy ? nbtn('stop', 'Stop', 'stop', { id: 'stopBtn', title: 'Stop and keep the results so far', onclick: stop }) : left ? nbtn('again', 'Search the rest (' + left + ')', '', { id: 'restBtn', onclick: rest }) : null));
+  // ---- info bars
+  const bars = [];
+  if (busy && job.bg && !R.barOff) bars.push(h('div', { class: 'kbar info', id: 'bgBar', role: 'status' }, h('span', { class: 'nbi' }, ni('pin', 20)),
+    job.started ? h('div', {}, h('b', { text: 'This search runs in the small pinned PageProof tab' }), h('span', { text: 'You can close this page and keep working. Started ' + whenTxt + '.' }))
+      : h('div', {}, h('b', { text: 'Waiting for the small pinned PageProof tab to start this search' }), h('span', { text: 'It runs one big search at a time.' })),
+    h('span', { class: 'sp' }), job.started ? null : nbtn('play', 'Start it now', '', { onclick: () => api.runtime.sendMessage({ type: 'fcBgStart' }).catch(() => {}) }),
+    h('button', { class: 'kx', title: 'Close', 'aria-label': 'Close', onclick: () => { R.barOff = true; renderResults(); } }, ni('x', 12))));
+  if (EASE.on && (R.running || R.scoring)) bars.push(h('div', { class: 'kbar warn ease', role: 'status' }, h('span', { class: 'nbi' }, ni('info', 20)),
+    h('div', {}, h('b', { text: 'PageProof slowed down' }), h('span', { text: EASE.why + ', so it does one photo check and one search tab at a time. Full speed again when the computer calms down.' }))));
+  // ---- one progress card: ring, numbers, search site lights
+  const pc = searchPace(done, total);
   const lights = job.engines.map(e => {
-    if (R.gaveUp[e]) return [e, 'bad', 'skipped'];
-    if (R.paused[e]) return [e, 'warn', 'robot check'];
-    if (job.pics.some(p => p.runs[e].state === 'captcha')) return [e, 'warn', 'robot check'];
-    if (job.pics.every(p => !['wait', 'go', 'captcha'].includes(p.runs[e].state))) return [e, job.pics.some(p => ['skip', 'fail'].includes(p.runs[e].state)) ? 'warn' : 'ok', job.pics.some(p => ['skip', 'fail'].includes(p.runs[e].state)) ? 'some skipped' : 'done'];
-    return [e, 'ok', job.pics.some(p => p.runs[e].state === 'go') ? 'searching' : 'waiting'];
+    const skipped = job.pics.some(p => ['skip', 'fail'].includes(p.runs[e].state));
+    if (R.gaveUp[e]) return [e, 'bad', 'Skipped'];
+    if (R.paused[e] || job.pics.some(p => p.runs[e].state === 'captcha')) return [e, 'warn', 'Robot check'];
+    if (job.pics.every(p => !['wait', 'go', 'captcha'].includes(p.runs[e].state))) return [e, skipped ? 'warn' : 'ok', skipped ? 'Some skipped' : 'Done'];
+    return job.pics.some(p => p.runs[e].state === 'go') ? [e, 'go', 'Searching'] : [e, 'wait', 'Waiting'];
   });
-  const tiles = h('div', { class: 'pg-tiles' },
-    h('div', { class: 'pg-tile' + (done >= total ? ' ok' : '') }, h('b', { text: done + ' of ' + total }), h('span', { text: 'photos done' })),
-    h('div', { class: 'pg-tile' + (totalKept ? ' bad' : '') }, h('b', { text: totalKept }), h('span', { text: 'Same photo or Maybe, sent to Copies found' })),
-    h('div', { class: 'pg-tile grey' }, h('b', { text: totalOut }), h('span', { text: 'thrown out by the checker' })),
-    timeTile(busy, done, total));
-  if (tiles.children.length === 4) tiles.classList.add('four');
-  // ---- a square for every photo: the whole search at a glance (Batch 9, idea 1)
-  const strip = total > 1 ? h('section', { class: 'pg-card res-strip', 'aria-label': 'Every photo in this search' },
-    h('div', { class: 'sq' }, job.pics.map(q => { const c = sqState(q, keptOf(q)); return h('button', { class: c[0] + (q.i === R.sel ? ' on' : ''), title: (q.i + 1) + '. ' + q.name + ': ' + c[1], 'aria-label': (q.i + 1) + '. ' + c[1], onclick: () => pickPhoto(q.i) }); })),
-    h('div', { class: 'key' }, [['nothing', 'Done, nothing'], ['same', 'Same photo'], ['maybe', 'Maybe'], ['go', 'Searching'], ['bad', 'Skipped'], ['wait', 'Waiting']].map(([c, t]) => h('span', {}, h('i', { class: c }), t)), h('span', { class: 'sp', text: 'Click a square to open that photo' }))) : null;
-  const sum = h('section', { class: 'pg-card', style: 'display:flex;gap:12px;align-items:center;flex-wrap:wrap' },
-    h('div', { style: 'flex:1 1 300px;min-width:0;display:flex;flex-direction:column;gap:6px' }, engLights(lights),
-      h('span', { class: 'pg-faint', text: allIn ? 'The copies are in Copies found, with each photo\'s client. Review them there: Stolen, Licensed or Remove.' : 'Each photo\'s copies go to Copies found as soon as that photo is searched and checked.' }),
-      EASE.on && (R.running || R.scoring) ? h('span', { class: 'pg-faint ease', text: EASE.why + ', so PageProof slowed down to one photo check and one search tab. Full speed again when the computer calms down.' }) : null),
-    h('a', { class: 'pg-btn primary', href: appUrl('review'), onclick: e => goApp('review', e), text: 'Review new copies' }),
-    h('a', { class: 'pg-btn', href: appUrl('found'), onclick: e => goApp('found', e), text: 'Copies found' }));
-  // ---- one row per photo
-  const dot = st => st === 'done' ? 'done' : st === 'go' ? 'go' : st === 'captcha' ? 'warn' : ['skip', 'fail'].includes(st) ? 'bad' : '';
-  const list = h('section', { class: 'pg-card pg-list res-list', 'aria-label': 'Photos in this search' }, job.pics.map(p => {
-    const n = sameCount(p), nNew = p.links.filter(l => l.isNew && isSame(l) && !RS_LISTS.isHidden(l.site, l.url)).length, k = keptOf(p);
-    const chip = picDone(p) ? h('span', { class: 'pg-chip' + (k ? ' bad' : ''), title: 'Links that show the same photo, or maybe', text: k ? (n + ' same' + (k > n ? ' · ' + (k - n) + ' maybe' : '') + (nNew ? ' · ' + nNew + ' new' : '')) + (checking(p) ? '…' : '') : checking(p) ? 'Checking…' : 'None' })
-      : runList(p).some(r => r.state === 'captcha') ? h('span', { class: 'pg-chip warn', text: 'Check!' })
-      : picBusy(p) ? h('span', { class: 'pg-chip ok', text: 'Searching' }) : h('span', { class: 'pg-chip', text: 'Waiting' });
-    return h('button', { class: 'pg-row' + (p.i === R.sel ? ' on' : ''), 'aria-pressed': String(p.i === R.sel), 'data-i': p.i, onclick: () => pickPhoto(p.i, true) },
-      h('img', { class: 'th', src: p.thumb, alt: '' }),
-      h('div', { class: 't' }, h('b', { text: (p.i + 1) + '. ' + p.name }), h('small', { text: statusLine(p) })),
-      h('span', { class: 'pg-dots', 'aria-label': 'Search sites' }, job.engines.map(e => h('span', { title: ENGINES[e].short + ': ' + (p.runs[e].state || '') }, h('b', { class: dot(p.runs[e].state) }), ENGINES[e].short[0]))),
-      h('span', { class: 'chips' }, chip));
-  }));
+  const f = total ? done / total : 0, rr = 34, cc = 2 * Math.PI * rr;
+  const ringEl = h('div', { class: 'nring', role: 'img', 'aria-label': done + ' of ' + total + ' photos done' });
+  ringEl.innerHTML = `<svg width="84" height="84" viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="${rr}" fill="none" stroke="var(--sunk)" stroke-width="8"/><circle cx="42" cy="42" r="${rr}" fill="none" stroke="var(--accent)" stroke-width="8" stroke-linecap="round" stroke-dasharray="${(cc * f).toFixed(1)} ${cc.toFixed(1)}" transform="rotate(-90 42 42)"/></svg><b>${Math.round(f * 100)}%</b>`;
+  const num = (c, ic, n, label, id) => h('div', { class: 'nnum', id }, nsq(c, ic), h('span', { class: 'kn1' }, h('b', { class: 'num', text: n }), h('span', { text: label })));
+  const prog = h('section', { class: 'card nprog', id: 'progCard', 'aria-label': 'How far the search is' }, ringEl,
+    h('div', { class: 'kn1 nbig' }, h('b', { text: done + ' of ' + total + ' photos done' }),
+      h('span', { text: busy ? nBusy + ' searching · ' + (total - done - nBusy) + ' waiting' : whenTxt + (stillChecking ? ' · still checking matches…' : allIn ? ' · the copies are in Copies found' : '') })),
+    num('#C42B1C', 'copies', totalKept.toLocaleString(), 'sent to Copies found', 'numKept'),
+    num('#6E6E6E', 'clear', totalOut.toLocaleString(), 'thrown out by the checker', 'numOut'),
+    busy && pc && pc.left ? num('#8764B8', 'clock', fmtDur(pc.left), 'left · ' + fmtDur(pc.per) + ' a photo', 'numTime')
+      : !busy && pc && pc.took && done >= total ? num('#8764B8', 'clock', fmtDur(pc.took), 'start to finish', 'numTime') : null,
+    h('div', { class: 'nlights', role: 'list', 'aria-label': 'Search sites' }, lights.map(([e, c, t]) => h('div', { class: 'nlight', role: 'listitem' }, nbadge(e), kn1(ENGINES[e].short, t), h('i', { class: c })))));
+  // ---- every photo in the search, as real pictures
+  const used = new Set(job.pics.map(q => sqState(q, keptOf(q))[0]));
+  const film = h('section', { class: 'card nfilm', 'aria-label': 'Photos in this search' },
+    h('div', { class: 'nfh' }, h('h2', { class: 'kh2', text: 'Photos in this search' }), h('span', { class: 'sp' }),
+      [['same', 'Same photo'], ['maybe', 'Maybe'], ['none', 'No copies'], ['go', 'Searching'], ['wait', 'Waiting'], ['bad', 'Skipped']].filter(([k]) => k !== 'bad' || used.has('bad')).map(([k, t]) => h('span', { class: 'nkey' }, h('i', { class: 's-' + k }), t))),
+    h('div', { class: 'nstrip' }, job.pics.map(q => {
+      const [k, t] = sqState(q, keptOf(q)), cap = runList(q).some(r => r.state === 'captcha');
+      return h('button', { class: 'nfp s-' + k + (q.i === R.sel ? ' on' : ''), 'data-i': q.i, 'aria-pressed': String(q.i === R.sel), title: (q.i + 1) + '. ' + q.name + ': ' + t + ' · ' + statusLine(q), onclick: () => pickPhoto(q.i) },
+        nthumb(q.thumb), h('span', { class: 'nfn', text: q.i + 1 }), h('span', { class: 'nfs' }, h('i'), cap ? 'Robot check' : t + (picDone(q) && checking(q) ? '…' : '')));
+    })));
   // ---- the picked photo
   const p = job.pics[R.sel];
   const all = visibleLinks(p, { raw: true, withHidden: false });
@@ -1544,63 +1624,64 @@ function renderResults() {
   const tabBtn = e => {
     const r = p.runs[e];
     if (!r || (!r.tabId && !r.pageUrl)) return null;
-    return h('button', { class: 'pg-btn sm', onclick: async () => {
+    return nbtn('open', 'Open tab', 'sm', { title: 'Open the ' + ENGINES[e].short + ' search for this photo', onclick: async () => {
       try { if (r.tabId) { await api.tabs.update(r.tabId, { active: true }); return; } } catch (err) { /* closed */ }
       if (r.pageUrl) openTab(r.pageUrl);
-    } }, fav(e), ' ' + ENGINES[e].short + ' tab');
+    } });
   };
   const stoppedE = job.engines.filter(e => byYou(p.runs[e])).map(e => ENGINES[e].short);
   const problems = job.engines.map(e => p.runs[e]).filter(r => r.why && r.state !== 'done' && !byYou(r)).map(r => r.why);
   if (stoppedE.length) problems.unshift('You stopped this search, so ' + stoppedE.join(' and ') + ' did not search this photo. ' + (job.engines.some(e => p.runs[e].state === 'done') ? 'The links the other sites found are still checked. ' : '') + 'Press "Search the rest" to search it on ' + stoppedE.join(' and ') + ' too.');
+  const good = kept && !searching && !nPend;
   const state = searching ? 'Searching… ' + statusLine(p)
     : stoppedE.length && !kept && !nPend ? 'Not finished: stopped by you'
     : nPend ? (stoppedE.length ? 'Stopped by you. ' : '') + 'Checking ' + plural(nPend, 'picture') + ' found against yours…'
-      : kept ? plural(kept, 'copy', 'copies') + ' of this photo ' + (p.ingested ? 'added to' : 'going to') + ' Copies found (' + nSame + ' same photo, ' + nMaybe + ' maybe)'
+      : kept ? plural(kept, 'copy', 'copies') + ' ' + (p.ingested ? 'sent to' : 'going to') + ' Copies found'
         : 'No copies found for this photo';
   const wasOpen = $('thrown') ? $('thrown').open : false;
   let facts = R.facts.get(p.i);
   if (!facts || (facts.t1 !== p.t1 && !facts.loading)) { loadFacts(p); facts = R.facts.get(p.i); }
-  const fact = (k, v) => v || v === 0 ? [h('span', { text: k }), h('b', { text: String(v) })] : [];
-  const sel = h('section', { class: 'pg-card res-sel', id: 'selcard' },
-    h('div', { class: 'res-photo' }, h('img', { src: p.thumb, alt: '' }), h('div', { class: 'res-pinfo' },
-      h('h2', { text: (p.i + 1) + '. ' + p.name, style: 'overflow-wrap:anywhere' }),
-      h('span', { class: 'pg-muted', style: 'font-size:14px' }, h('b', { style: kept && !searching && !nPend ? 'color:var(--p-ok)' : '', text: state })),
-      h('div', { class: 'res-facts' }, ...fact('Client', facts && facts.client), ...fact('Your file', p.w + ' × ' + p.h + (p.size ? ' · ' + Math.round(p.size / 1024) + ' KB' : '')),
-        ...fact('Folder', facts && facts.path), ...fact('Searched', facts && facts.searches ? plural(facts.searches, 'time') + (facts.last ? ' · last ' + facts.last : '') : null),
-        ...fact('In Copies found', facts && facts.copies ? plural(facts.copies, 'copy', 'copies') + (facts.stolen ? ' (' + facts.stolen + ' Stolen)' : '') : null)),
-      h('div', { class: 'pg-actions' }, job.engines.map(tabBtn)))),
-    problems.length ? h('p', { class: 'note', style: 'margin:0', text: [...new Set(problems)].join(' ') }) : null,
-    // ---- one card per search site (idea 4)
-    h('div', { class: 'res-engs' }, job.engines.map(e => {
+  const fact = (k, v) => v || v === 0 ? [h('dt', { text: k }), h('dd', { text: String(v) })] : [];
+  const keptLinks = all.filter(l => ['same', 'maybe'].includes(verdict(l))).sort((a, b) => linkScore(b) - linkScore(a));
+  const sel = h('section', { class: 'card nsel', id: 'selcard' },
+    h('div', { class: 'nsh' }, nthumb(p.thumb, 'nbigp'), h('div', { class: 'kn1 nsm' },
+      h('h2', { text: (p.i + 1) + '. ' + p.name }),
+      h('span', { class: 'nok' + (good ? ' ok' : '') }, good ? ni('check') : null, state, good ? h('span', { class: 'kfaint', text: ' · ' + nSame + ' same photo, ' + nMaybe + ' maybe' }) : null),
+      h('dl', { class: 'nfacts' }, ...fact('Client', facts && facts.client), ...fact('Your file', p.w.toLocaleString() + ' × ' + p.h.toLocaleString() + (p.size ? ' · ' + Math.round(p.size / 1024).toLocaleString() + ' KB' : '')),
+        ...fact('Folder', facts && facts.path), ...fact('Searched before', facts && facts.searches ? plural(facts.searches, 'time') + (facts.last ? ' · last ' + facts.last : '') : null),
+        ...fact('In Copies found', facts && facts.copies ? plural(facts.copies, 'copy', 'copies') + (facts.stolen ? ' · ' + facts.stolen + ' Stolen' : '') : null)))),
+    problems.length ? h('p', { class: 'nproblem', text: [...new Set(problems)].join(' ') }) : null,
+    // ---- one small card per search site
+    h('div', { class: 'nengs' }, job.engines.map(e => {
       const mine = all.filter(l => l.engines.includes(e)), r = p.runs[e];
       const ns = mine.filter(l => verdict(l) === 'same').length, nm = mine.filter(l => verdict(l) === 'maybe').length, no = mine.filter(l => ['no', 'cant'].includes(verdict(l))).length;
-      const st = byYou(r) ? 'stopped by you' : { done: 'done', go: 'searching', captcha: 'robot check', wait: 'waiting', skip: 'skipped', fail: 'failed' }[r.state] || r.state;
-      return h('div', { class: 'res-eng' }, h('b', {}, fav(e), ' ' + ENGINES[e].short, h('span', { class: 'pg-chip' + (r.state === 'done' ? ' ok' : ['skip', 'fail', 'captcha'].includes(r.state) ? ' warn' : ''), text: st })),
-        h('span', { text: plural(mine.length, 'link') + ' found · ' + (ns + nm) + ' kept' }),
-        h('div', { class: 'res-bar' }, h('b', { style: 'flex:' + ns }), h('em', { style: 'flex:' + nm }), h('u', { style: 'flex:' + (no || (mine.length ? 0 : 1)) })),
-        h('small', { text: ns + ' same · ' + nm + ' maybe · ' + no + ' thrown out' }));
+      const st = byYou(r) ? 'Stopped by you' : { done: '', go: 'Searching', captcha: 'Robot check', wait: 'Waiting', skip: 'Skipped', fail: 'Failed' }[r.state] || '';
+      return h('div', { class: 'neng', title: ns + ' same · ' + nm + ' maybe · ' + no + ' thrown out' }, nbadge(e),
+        kn1(h('span', {}, ENGINES[e].short, st ? h('span', { class: 'ktag' + (['skip', 'fail', 'captcha'].includes(r.state) ? ' warn' : ''), text: st }) : null), r.state === 'done' ? mine.length + ' found · ' + (ns + nm) + ' kept' : mine.length ? mine.length + ' found so far' : 'Nothing yet'),
+        tabBtn(e),
+        h('span', { class: 'nbar' }, h('b', { style: 'flex:' + ns }), h('em', { style: 'flex:' + nm }), h('u', { style: 'flex:' + (no || (mine.length ? 0 : 1)) })));
     })),
-    // ---- the copies it found, as small pictures (idea 5)
-    kept ? h('div', { class: 'res-finds' }, h('div', { class: 'res-fh' }, h('b', { text: 'Copies it found (' + kept + ')' }),
-      h('a', { href: appUrl('found'), onclick: e => goApp('found', e), text: 'Review them in Copies found →' })),
-      h('div', { class: 'res-fgrid' }, all.filter(l => ['same', 'maybe'].includes(verdict(l))).sort((a, b) => linkScore(b) - linkScore(a)).slice(0, 12).map(l => {
+    // ---- the copies it found
+    kept ? h('div', { class: 'nfindsbox' }, h('h2', { class: 'kh2' }, 'Copies it found ', h('span', { class: 'kfaint', text: kept }),
+      h('a', { href: appUrl('found'), onclick: e => goApp('found', e), text: 'Review them in Copies found ›' })),
+      h('div', { class: 'nfinds' }, keptLinks.slice(0, 12).map(l => {
         const v = verdict(l);
-        return h('a', { class: 'res-find', href: l.url, target: '_blank', rel: 'noreferrer', title: l.title || l.url },
-          thumbOf(l, '', 'ph'),
-          h('div', {}, h('b', { text: l.site }), h('small', { text: l.title || l.url }),
-            h('span', { class: 'pg-chip ' + (v === 'same' ? 'bad' : 'warn'), text: (v === 'same' ? 'Same' : 'Maybe') + (typeof l.pct === 'number' ? ' ' + Math.round(l.pct) + '%' : '') })));
-      }))) : null,
-    h('details', { class: 'pg-thrown thrown', id: 'thrown', open: wasOpen },
-      h('summary', {}, h('span', { text: 'Thrown out' }), h('span', { class: 'pg-chip', text: out.length }), out.length ? h('span', { class: 'pg-faint', text: 'Different photo ' + nNo + ' · Can\'t check ' + (out.length - nNo) }) : null),
-      h('div', { class: 'in' }, h('p', { class: 'pg-faint', style: 'margin:0', text: 'These were not added to Copies found. If one really is your photo, press "＋ It is a copy" and it goes there.' }),
-        out.length ? h('div', { class: 'list' }, h('div', { class: 'site' }, out.map(l => rowFor(p, l)))) : h('div', { class: 'none', text: searching || nPend ? 'Nothing thrown out yet.' : 'Nothing was thrown out for this photo.' }))));
+        return h('a', { class: 'nfind', href: l.url, target: '_blank', rel: 'noreferrer', title: l.title || l.url },
+          thumbOf(l, '', 'ph'), kn1(l.site, l.title || l.url),
+          h('span', { class: 'ktag ' + (v === 'same' ? 'bad' : 'warn'), text: (v === 'same' ? 'Same photo' : 'Maybe') + (typeof l.pct === 'number' ? ' · ' + Math.round(l.pct) + '%' : '') }));
+      })),
+      keptLinks.length > 12 ? h('p', { class: 'kfaint', style: 'margin:10px 0 0', text: 'And ' + (keptLinks.length - 12) + ' more in Copies found.' }) : null) : null,
+    // ---- thrown out, folded
+    h('details', { class: 'nthrown', id: 'thrown', open: wasOpen },
+      h('summary', { class: 'nexp' }, nsq('#6E6E6E', 'clear', 32),
+        h('span', { class: 'kn1' }, h('b', {}, 'Thrown out ', h('span', { class: 'kfaint', text: out.length })), h('span', { text: (out.length ? 'Different photo ' + nNo + ' · Can\'t check ' + (out.length - nNo) + '. ' : '') + 'Not added to Copies found. Open to rescue one with "It is a copy".' })), ni('dn', 14)),
+      h('div', { class: 'in' }, out.length ? h('div', { class: 'list' }, h('div', { class: 'site' }, out.map(l => rowFor(p, l)))) : h('div', { class: 'none', text: searching || nPend ? 'Nothing thrown out yet.' : 'Nothing was thrown out for this photo.' }))));
   const feed = feedCard(busy, done, total);
-  // The page redraws every few seconds while a search runs: keep where the photo list (and the
-  // thrown-out list) were scrolled to, so scrolling isn't thrown back to the top.
-  const oldList = document.querySelector('.res-list'), oldIn = document.querySelector('#thrown .list');
-  const keepTop = oldList ? oldList.scrollTop : 0, keepIn = oldIn ? oldIn.scrollTop : 0, pageY = window.scrollY;
-  $('main').replaceChildren(...[head, bgNote, tiles, strip, sum, h('div', { class: 'res-grid' }, list, sel, feed)].filter(Boolean));
-  if (keepTop) list.scrollTop = keepTop;
+  // The page redraws every few seconds while a search runs: keep where the thrown-out list was
+  // scrolled to, so scrolling isn't thrown back to the top.
+  const oldIn = document.querySelector('#thrown .list');
+  const keepIn = oldIn ? oldIn.scrollTop : 0, pageY = window.scrollY;
+  $('main').replaceChildren(h('div', { class: 'nnew nres' }, head, bars, prog, total > 1 ? film : null, h('div', { class: 'nresgrid' }, sel, feed)));
   const newIn = document.querySelector('#thrown .list'); if (newIn && keepIn) newIn.scrollTop = keepIn;
   if (window.scrollY !== pageY) window.scrollTo(0, pageY);
 }
