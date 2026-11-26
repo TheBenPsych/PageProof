@@ -19,7 +19,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.goto(url('app.html#capture?how=1')); await page.waitForTimeout(1500);
   ok(await page.evaluate(() => document.querySelectorAll('#ovHow .cpsteps > div').length === 3 && !!document.querySelector('#ovHow .cplast')), 'Overview › How to capture: three picture steps and the last-tab card');
   await page.goto(url('app.html#weekly')); await page.waitForTimeout(1500);
-  ok(await page.evaluate(() => document.querySelectorAll('.wtiles .wtile').length === 6 && /last week/.test(document.querySelector('.wtiles').textContent)), 'Weekly: six tiles, each compared with last week');
+  ok(await page.evaluate(() => document.querySelectorAll('#wkTiles .wk-t').length === 6 && /last week/.test(document.querySelector('#wkTiles').textContent)), 'Weekly: six tiles, each compared with last week');
   await page.goto(url('verify.html')); await page.waitForTimeout(800);
   ok(await page.evaluate(() => document.body.classList.contains('plain') && !document.querySelector('header') && /Verify a pack/.test(document.querySelector('.pg-head h1').textContent)), 'Verify a pack: normal page heading, no old header');
   await ctx.close();
