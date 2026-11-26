@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.90.0** (26 Nov 2026).
+Last updated: version **4.91.0** (26 Nov 2026).
 
 ---
 
@@ -32,6 +32,7 @@ Last updated: version **4.90.0** (26 Nov 2026).
 - **Collected by** name remembered; case number and notes start empty each time so they never carry over by mistake. (2.9)
 - **Needs a capture list:** copies marked Stolen that don't have an evidence pack yet. (4.14)
 - **TikTok slideshows in a capture.** A capture of a TikTok photo post lists every picture's link in post-pictures.txt (the files are in images/). (4.33)
+- **Fit the window or Real size.** The capture page preview fits the window or shows the capture at its real size, with the size in pixels. (4.91)
 
 ## 2. Prove it (the evidence pack)
 
@@ -65,6 +66,7 @@ Last updated: version **4.90.0** (26 Nov 2026).
 - **Help and about.** The version with Copy version, the five newest changes, Tutorial, Take the tour, Checking a pack, Run setup again and Keyboard keys. (4.86)
 - **Health.** One page with three tabs: Right now (every light, with what needs you first on top), Stats, and Space used (what takes room and Free up space). (4.87)
 - **Stats.** A tab of Health: tiles with trends, a card per search site, speed bars, the checker test ring, a week grid for Keep searching, and "What is this?" on every card. (4.88)
+- **No timestamp, said plainly.** If no timestamp service answers, an amber bar says so and folds what each service said underneath. (4.91)
 
 ## 3. Look closer at pictures
 
@@ -418,3 +420,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.88.1 | 26 Nov | Fix: Old page names ("Hidden and approved sites", "Is everything working", "How PageProof is doing") replaced in hints, the tour and the tutorial; the tour gained a Tools stop. |
 | 4.89 | 26 Nov | Finish this claim in the Windows 11 look, portal form counts copied lines |
 | 4.90 | 26 Nov | Not finished rows show the step and Continue, sweep questions fold into one line |
+| 4.91 | 26 Nov | Capture page: blue Save, one row of four, timestamp bar, Fit the window / Real size |
