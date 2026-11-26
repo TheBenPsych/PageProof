@@ -80,7 +80,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.evaluate(() => chrome.storage.local.set({ fcRest: {} }));
   await page.goto(url('app.html#credit')); await page.waitForTimeout(1500);
   const cp = await page.evaluate(() => document.body.innerText);
-  ok(/Credit search/.test(cp) && /Harbor Times/.test(cp) && /show none of their photos/.test(cp) && /Another story/.test(cp), 'the Credit search page shows clients, wordings and pages with no match' + '');
+  ok(/Credit search/.test(cp) && /Harbor Times/.test(cp) && /Credit but no photo/.test(cp) && /Another story/.test(cp) && /Last searches/.test(cp), 'the Credit search page shows what it did and the pages with no match' + '');
+  await page.goto(url('app.html#credit?tab=clients')); await page.waitForTimeout(1200);
 
   // Search now runs on the Credit search page itself, with its own progress (Ben, 2026-11-25)
   await page.evaluate(async () => { const s = await PP_WATCH.creditState(); s.seen = {}; s.done = {}; s.nomatch = []; await FC.meta.set('creditState', s); await chrome.storage.local.remove('fcCreditRun'); });
@@ -89,13 +90,24 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.click('button[data-act="creditnow"][data-v="Harbor Times"]');
   let mid = '';
   for (let i = 0; i < 40 && !mid; i++) { await page.waitForTimeout(100); const t = await page.evaluate(() => (document.getElementById('creditrun') || {}).innerText || ''); if (/Searching Harbor Times/i.test(t)) mid = t; }
-  ok(/wordings searched/i.test(mid) && /%/.test(mid), 'Search now shows its progress at the top of the Credit search page: ' + mid.replace(/\s+/g, ' ').slice(0, 120));
+  ok(/wordings searched/i.test(mid) && /%/.test(mid) && /credit\b(?!\?tab=clients)/.test(await page.evaluate(() => location.hash)), 'Search now shows its progress at the top of the Credit search page: ' + mid.replace(/\s+/g, ' ').slice(0, 120));
   let fin = '';
   for (let i = 0; i < 60 && !fin; i++) { await page.waitForTimeout(500); const t = await page.evaluate(() => (document.getElementById('creditrun') || {}).innerText || ''); if (/finished/i.test(t)) fin = t; }
   const ksTabs = await page.evaluate(async () => (await chrome.tabs.query({})).filter(t => /runner\.html/.test(t.url || '')).length);
   const c1 = hits.filter(h => /^\/credited-1\/?$/.test(h)).length, c2 = hits.filter(h => /^\/credited-2/.test(h)).length;
-  ok(/Google listed 6, Bing listed 6/.test(fin) && /6 found by both \(read once\)/.test(fin), 'Google and Bing both searched; links both found (a Bing redirect, a trailing slash, a #) are merged: ' + (fin.match(/Google listed[^;]*/) || [''])[0]);
-  ok(/finished/i.test(fin) && /3 of 3/.test(fin) && /2 of 2/.test(fin) && /already in Copies found/.test(fin) && ksTabs === 0 && c1 === 1 && c2 === 1, 'it finishes there with counts (3 wordings, 2 pages read once each, the known copy noted), no Keep searching tab needed: ' + fin.replace(/\s+/g, ' ').slice(0, 220));
+  ok(/Google listed 6/.test(fin) && /Bing listed 6/.test(fin) && /6 found by both \(read once\)/.test(fin), 'Google and Bing both searched; links both found (a Bing redirect, a trailing slash, a #) are merged: ' + (fin.match(/Google listed \d+/) || [''])[0]);
+  ok(/finished/i.test(fin) && /3 of 3 wordings/.test(fin) && /2 of 2 new pages read/.test(fin) && /already in Copies found/.test(fin) && ksTabs === 0 && c1 === 1 && c2 === 1, 'it finishes there with counts (3 wordings, 2 pages read once each, the known copy noted), no Keep searching tab needed: ' + fin.replace(/\s+/g, ' ').slice(0, 220));
+
+  // Stop (calm look): the wording in hand is finished, then it ends; the pages it listed wait for later.
+  await page.evaluate(async () => { const s = await PP_WATCH.creditState(); s.seen = {}; s.done = {}; s.nomatch = []; s.queue = []; await FC.meta.set('creditState', s); await chrome.storage.local.remove('fcCreditRun'); });
+  const stp = await page.evaluate(async () => { const p = PP_WATCH.creditRun('Harbor Times'); for (let i = 0; i < 200 && !(PP_WATCH.live() && PP_WATCH.live().now); i++) await new Promise(r => setTimeout(r, 10)); await PP_WATCH.creditStop(); const r = await p; const s = await PP_WATCH.creditState(); return { why: r.why, wDone: r.wDone, words: r.words, read: r.read, left: r.left, q: s.queue.length, end: !!r.end }; });
+  ok(stp.why === 'stopped' && stp.end && stp.wDone === 1 && stp.words === 3 && stp.read === 0 && stp.left >= 1 && stp.q === stp.left, 'Stop ends a Search now after the wording in hand; the pages it listed stay in line: ' + JSON.stringify(stp));
+  const again = await page.evaluate(async () => { const p = PP_WATCH.creditRun('Harbor Times'); const r = await p; return { why: r.why, wDone: r.wDone, read: r.read }; });
+  ok(again.why !== 'stopped' && again.wDone === 3 && again.read >= 1, 'the next Search now is not stopped by the old Stop: ' + JSON.stringify(again));
+  const ws = await page.evaluate(async () => { const s = await PP_WATCH.creditState(); const st = PP_WATCH.wordStats(s, 30); return { keys: Object.keys(st).length, pages: Object.values(st).reduce((a, o) => a + o.pages, 0), q: [PP_WATCH.quoteWord(' Harbus/Harbor Times '), PP_WATCH.quoteWord('“Photo: {name}”'), PP_WATCH.quoteWord('  ')] }; });
+  ok(ws.keys >= 1 && ws.pages >= 2 && ws.q.join('|') === '"Harbus/Harbor Times"|"Photo: {name}"|', 'each wording counts what its pages turned out to be; typed wordings get their quotes: ' + JSON.stringify(ws));
+  const us = await page.evaluate(async () => { const c = await PP_WATCH.creditCfg(); c.usual = ['"Photo courtesy of {name}"']; await PP_WATCH.setCreditCfg(c); const c2 = await PP_WATCH.creditCfg(); const w = PP_WATCH.wordsFor(c2, 'Harbor Times'); c2.usual = []; await PP_WATCH.setCreditCfg(c2); return { w, back: PP_WATCH.wordsFor(await PP_WATCH.creditCfg(), 'Harbor Times').length }; });
+  ok(us.w.join() === '"Photo courtesy of Harbor Times"' && us.back === 3, 'the usual wordings can be changed for every client at once, and put back: ' + us.w.join());
 
   // ---- 2 Watching
   const wl = await page.evaluate(async () => (await PP_WATCH.watchList()).map(x => x.key + ':' + x.stolen));
@@ -121,7 +133,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
 
   // ---- Progress and stats for the extra searches (Ben: "We need stats for almost everything")
   const sx = await page.evaluate(async () => { await PP_STATS.flush(); const D = await ntStatsDays(1); return { c: D.c, t: Object.keys(D.t) }; });
-  ok(sx.c['credit.search'] >= 3 && sx.c['credit.page'] >= 2 && sx.c['credit.none'] >= 1 && sx.c['credit.known'] >= 1 && sx.c['credit.now'] === 1 && sx.t.includes('credit.step') && sx.c['watch.check'] >= 1 && sx.c['watch.post'] >= 1 && sx.c['watch.pic'] >= 1,
+  ok(sx.c['credit.search'] >= 3 && sx.c['credit.page'] >= 2 && sx.c['credit.none'] >= 1 && sx.c['credit.known'] >= 1 && sx.c['credit.now'] === 3 && sx.c['credit.stopped'] === 1 && sx.t.includes('credit.step') && sx.c['watch.check'] >= 1 && sx.c['watch.post'] >= 1 && sx.c['watch.pic'] >= 1,
     'Credit search and Watching count what they did and how long it took: ' + JSON.stringify(Object.fromEntries(Object.entries(sx.c).filter(([k]) => /^(credit|watch|sweep)\./.test(k)))));
   await page.evaluate(() => { location.hash = '#keep'; }); await page.waitForTimeout(2000);
   const kx = await page.evaluate(() => document.body.innerText + ' ' + [...document.querySelectorAll('#keepExtras .kxr')].map(a => a.title).join(' '));
