@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.79.0** (26 Nov 2026).
+Last updated: version **4.80.0** (26 Nov 2026).
 
 ---
 
@@ -52,6 +52,7 @@ Last updated: version **4.79.0** (26 Nov 2026).
 - **Calm All evidence.** Captures and Evidence reports tabs, picture cards by week and month or a list, badges for what is missing, quick filters, a details panel per capture, Group: Case number, Match ID copy, Download list for both tabs, Show in Downloads. (4.78)
 - **Waiting for a capture.** Stolen copies with no evidence pack show in a bar and a filter in All evidence, on Copies found › Not finished and on Home, with how long the oldest has waited. (4.78)
 - **Evidence Overview.** Tiles, captures per week, Needs you, newest captures, where captures come from, most captured sites and cases, how captures went, how often each trusted time service answered, where the packs are. How to capture sits behind one button. (4.79)
+- **Calm Weekly summary.** Week picker, six tiles with arrows against the week before, the last 8 weeks as a chart, By client table you can sort, clients not searched, first searches, evidence reports with case tags, and a PDF that shows the same as the screen. (4.80)
 
 ## 3. Look closer at pictures
 
@@ -389,3 +390,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.77 | 26 Nov | Calm look step 13: Skipped photos; TIFF and HEIC photos are read and searched (read only) |
 | 4.78 | 26 Nov | Calm look step 14: All evidence (tabs, badges, quick filters, details panel, group by case number); Needs a capture folded into it |
 | 4.79 | 26 Nov | Calm look step 15: Capture a page becomes Evidence › Overview (tiles, weekly chart, Needs you, newest captures, sources, time services) |
+| 4.80 | 26 Nov | Calm look step 16: Weekly summary (week picker, six tiles, 8 week chart, sortable By client, PDF that matches the screen) |
