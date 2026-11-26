@@ -21,7 +21,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(L.big.checks === 6 && L.big.tabs === 3 && L.big.dl === 10, 'Very strong computer (16 cores, 32 GB): 6 checks, still only 3 search tabs');
   ok(L.handPicked.checks === 1, 'Strong picked by hand on a 2-core computer still leaves a core free (1 check)');
   const txt = await page.textContent('main');
-  ok(/downloaded at once/.test(txt) && /safe search speed/.test(txt), 'Settings › Your computer shows downloads at once and that the search sites are never asked faster');
+  ok(/downloaded at once/.test(txt) && /safe search speed/.test(txt), 'Settings › Searching › This computer shows downloads at once and that the search sites are never asked faster');
 
   // 2. Busy check answers in plain words (here the computer is fine or the reason is given).
   const busy = await page.evaluate(async () => { const st = {}; const a = await ppBusy(st); const b = await ppBusy(st); return typeof a === 'string' && typeof b === 'string' && !!st.cpu; });

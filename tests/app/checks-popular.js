@@ -35,7 +35,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     const bad = rows().map(r => r.site);
     state.fBad = false; state.fRisk = 'sus'; render(true); await new Promise(r => setTimeout(r, 500));
     const sus = rows().map(r => r.site);
-    state.fRisk = 'Any'; location.hash = '#settings'; await new Promise(r => setTimeout(r, 900));
+    state.fRisk = 'Any'; location.hash = '#hidden'; await new Promise(r => setTimeout(r, 900));
     const set = document.body.textContent;
     location.hash = '#stats'; await new Promise(r => setTimeout(r, 1500));
     const stats = /Copies by site popularity/.test(document.body.textContent);
@@ -53,7 +53,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(v.qf.some(t => /Big sites \(top 10K\)\s*2/.test(t)) && v.qf.some(t => /Known bad sites\s*3/.test(t)), 'quick filters Big sites and Known bad sites with counts: ' + v.qf.join(' / '));
   ok(v.top.length === 2 && v.top.includes('bignews.example') && v.top.includes('midsite.example'), 'Top 10K filter shows only the big sites: ' + v.top.join(', '));
   ok(v.bad.length === 3 && v.sus.includes('piratemovies.example') && v.sus.includes('login-bank.example'), 'Known bad filter, and they count as Suspicious: ' + v.bad.join(', ') + ' / ' + v.sus.join(', '));
-  ok(v.set, 'Settings › Lists shows both lists');
+  ok(v.set, 'Settings › Site lists shows both lists');
   ok(v.stats, 'Stats page has the Copies by site popularity card');
   if (process.env.SHOT) { await page.setViewportSize({ width: 1300, height: 760 }); await page.waitForTimeout(500); await page.screenshot({ path: process.env.SHOT }); }
   await ctx.close();

@@ -106,12 +106,11 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(await page.evaluate(() => { const p = document.getElementById('bkPreview'); return !!p && /Now/.test(p.textContent) && /After restoring/.test(p.textContent) && /Before a restore/.test(p.textContent); }), 'Look at it shows now vs after restoring and the safety copy note');
 
   // Settings cards, health lights, setup step, moving page
-  await page.goto(url('app.html#settings')); await page.waitForTimeout(1200);
-  ok(await page.evaluate(() => !!document.getElementById('setBackups') && !!document.getElementById('setTeam')), 'Settings has Backups and Team lists cards');
+  ok(await page.evaluate(() => !!document.getElementById('sxHero') && !!document.querySelector('#sxTeam a[href="#team"]') && !!document.getElementById('sxBkFolder')), 'Backups and team has the backup card, the Team lists row and the backup folder row');
   await page.goto(url('app.html#health')); await page.waitForTimeout(2500);
   ok(await page.evaluate(() => /Backup to Google Drive/.test(document.body.textContent) && /Team lists/.test(document.body.textContent)), 'Is everything working shows backup and team lights');
   await page.goto(url('app.html#moving')); await page.waitForTimeout(1000);
-  ok(await page.evaluate(() => (document.body.textContent.match(/Step \d of 3/g) || []).length === 3), 'Moving to a new computer has 3 steps');
+  ok(await page.evaluate(() => location.hash === '#backups' && document.getElementById('sxMoving').open && document.querySelectorAll('#sxMoving .sx-steps > li').length === 3), 'Moving to a new computer opens as a fold on Backups and team, with 3 steps');
   await page.evaluate(() => { state.setup = 2; location.hash = 'setup'; }); await page.waitForTimeout(1500);
   ok(await page.evaluate(() => /Step 3 of \d+/.test(document.body.textContent) && /Back up and share/.test(document.body.textContent) && !!document.querySelector('[data-act="teamcopy"]') && document.querySelectorAll('.dmenu').length >= 2), 'setup step 3 is Back up and share with the team guide and pictures');
 

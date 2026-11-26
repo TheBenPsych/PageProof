@@ -23,7 +23,6 @@ Object.assign(state, { bkList: null, bkBusy: false, bkPick: null, bkPreview: nul
   document.head.append(s);
 })();
 
-const SYNC_TAG = { ok: 'ok', warn: 'warn', bad: 'bad', grey: 'grey' };
 const kb = n => n > 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1000)) + ' KB';
 const dmenu = (items, hl) => `<span class="dmenu" aria-hidden="true">${items.map(i => i === '-' ? '<span class="sep"></span>' : `<span class="${i === hl ? 'hl' : ''}">${i}</span>`).join('')}</span>`;
 const pickErr = e => {
@@ -73,43 +72,7 @@ const bkFolderRow = st => st === 'granted' ? `<span class="tag ok">${ic('check',
   : st === 'prompt' ? `<span class="tag warn">Needs one click</span><button class="btn primary" data-act="bkallow">Allow</button>`
   : st === 'offline' ? `<span class="tag bad">Google Drive isn't answering</span><button class="btn" data-act="bkretry">Try again</button><button class="btn" data-act="bkpick">Pick the folder again</button>`
   : `<button class="btn primary" data-act="bkpick">${ic('files', 16)} Pick My Drive</button><span class="faint" style="font-size:13px">In the window, click <b>Google Drive</b>, then <b>My Drive</b>, then <b>Select Folder</b>. PageProof makes a PageProof Backup folder inside it.</span>`;
-V.backups = async () => {
-  if (!PP_SYNC.supported) return `${head('Settings', 'Backups', '')}<section class="card pad">Backups to Google Drive work in Chrome and Edge.</section>`;
-  const st = await PP_SYNC.state('bk');
-  const [col, txt] = await PP_SYNC.backupLook();
-  const bk = (await api.storage.local.get('ppBk')).ppBk;
-  const P = state.bkPreview, N = state.bkNow;
-  const rowsHtml = state.bkList == null ? `<p class="muted" style="margin:0">${st === 'granted' ? 'Looking for backups…' : 'Pick the backup folder first.'}</p>`
-    : !state.bkList.length ? '<p class="muted" style="margin:0">No backups in the folder yet.</p>'
-    : `<div class="scroll"><table><thead><tr><th>Saved</th><th>Size</th><th></th></tr></thead><tbody>${state.bkList.map(b => `<tr><td><b>${esc(new Date(b.modified || b.day).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }))}</b>${b.before ? ' <span class="tag grey">Before a restore</span>' : ''}</td><td class="num">${kb(b.size)}</td><td style="text-align:right"><button class="btn" style="min-height:32px;font-size:13px" data-act="bklook" data-v="${esc(b.name)}">Look at it</button></td></tr>`).join('')}</tbody></table></div>`;
-  const C = [['copies', 'Copies found'], ['stolen', 'Marked Stolen'], ['hidden', 'Hidden sites and accounts'], ['allowed', 'Approved sites and accounts'], ['rejected', 'Rejected links'], ['clients', 'Clients'], ['captures', 'Captures in the log']];
-  const preview = !P ? '' : `<section class="card pad" id="bkPreview" style="display:flex;flex-direction:column;gap:12px;border-color:var(--accent)">
-    <h2>Restore the backup from ${esc(fmtDate(P.saved))}?</h2>
-    ${P.by ? `<span class="muted" style="font-size:13.5px">Made by ${esc(P.by)}'s PageProof ${esc(P.version || '')}.</span>` : ''}
-    <div class="scroll"><table><thead><tr><th></th><th class="num">Now</th><th class="num">After restoring</th></tr></thead><tbody>${C.map(([k, l]) => { const a = N ? N[k] : 0, b = (P.counts || {})[k] || 0; return `<tr><td>${l}</td><td class="num">${(a || 0).toLocaleString()}</td><td class="num"${a !== b ? ' style="font-weight:700"' : ''}>${b.toLocaleString()}</td></tr>`; }).join('')}</tbody></table></div>
-    <div class="banner info" style="padding:10px 12px"><span style="flex:1;font-size:14px">${N && (N.copies || N.hidden || N.captures) ? 'Your data right now is saved first as a <b>"Before a restore"</b> backup, so you can go back to it from this list.' : 'There is nothing in PageProof on this computer yet, so nothing is lost.'} Your photos link and Keep searching stay as they are. Preview pictures come back by themselves.</span></div>
-    <div class="row" style="gap:8px"><button class="btn primary" data-act="bkrestore" ${state.bkBusy ? 'disabled' : ''}>${state.bkBusy ? 'Restoring…' : 'Restore'}</button><button class="btn" data-act="bkcancel">Cancel</button></div></section>`;
-  return `${head('Settings', 'Backups', 'Once a day (Monday to Friday, 8 to 6) PageProof saves a copy of your work to your own Google Drive. Only you can see it. The last ' + PP_SYNC.KEEP + ' are kept.', `<button class="btn primary" data-act="bknow" ${st === 'granted' && !state.bkBusy ? '' : 'disabled title="Pick the backup folder first"'}>${state.bkBusy === 'now' ? 'Backing up…' : 'Back up now'}</button>`)}
-  ${preview}
-  <div class="grid g2">
-    <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>Your backup</h2>
-      <div class="row" style="gap:10px"><span class="tag ${SYNC_TAG[col]}">${col === 'ok' ? 'Backed up' : col === 'bad' ? 'Needs you' : col === 'grey' ? 'Off' : 'Not yet'}</span><span style="font-size:14px">${esc(txt)}</span></div>
-      ${bk ? `<span class="faint" style="font-size:13px">${kb(bk.size)} · ${(bk.counts.copies || 0).toLocaleString()} copies · ${(bk.counts.hidden || 0).toLocaleString()} hidden sites</span>` : ''}
-      <div class="row" style="gap:8px">${bkFolderRow(st)}</div>
-      <span class="faint" style="font-size:12.5px">Holds your answers, copies found, hidden and approved sites and accounts, rejected links, clients, settings and capture log. Evidence packs you saved stay where you saved them.</span></section>
-    <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>New computer?</h2>
-      <p class="muted" style="margin:0;font-size:14px">Three guided steps: back up here, install PageProof there, then restore.</p>
-      <a class="btn" style="align-self:flex-start" href="#moving">Moving to a new computer</a></section>
-  </div>
-  <section class="card pad" style="display:flex;flex-direction:column;gap:12px"><h2>Restore a backup</h2>${rowsHtml}</section>`;
-};
-V.backups.noAutoRedraw = true;
-V.backups.after = async () => {
-  if (state.bkList != null || state.bkListing) return;
-  state.bkListing = true;
-  try { state.bkList = (await PP_SYNC.list()) || null; if (state.bkList && state.shown === 'backups') render(true); }
-  finally { state.bkListing = false; }
-};
+// Backups and team, and Moving to a new computer, are drawn in ui/pp-settings.js (calm look).
 
 // ---------------------------------------------------------------- Settings › Team lists
 V.team = async () => {
@@ -137,43 +100,6 @@ V.team = async () => {
   <section class="card pad" style="display:flex;flex-direction:column;gap:14px"><h2>${st === 'none' ? 'Set it up' : 'How it was set up'}</h2>${teamGuide(st)}</section>`;
 };
 V.team.noAutoRedraw = true;
-
-// ---------------------------------------------------------------- Moving to a new computer
-V.moving = async () => {
-  const bk = (await api.storage.local.get('ppBk')).ppBk;
-  const st = PP_SYNC.supported ? await PP_SYNC.state('bk') : 'none';
-  const today = bk && PP_SYNC.workDaysSince(bk.at) === 0 && new Date(bk.at).toDateString() === new Date().toDateString();
-  const step = (n, title, done, body) => `<section class="card pad" style="display:flex;flex-direction:column;gap:10px"><div class="row" style="gap:10px"><span class="eyebrow" style="margin:0">Step ${n} of 3</span>${done ? `<span class="tag ok" style="margin-left:auto">${ic('check', 13, 3)} Done</span>` : ''}</div><h2>${title}</h2>${body}</section>`;
-  return `${head('Settings', 'Moving to a new computer', 'Do step 1 on your old computer, then steps 2 and 3 on the new one. Nothing gets left behind.')}
-  ${step(1, 'On the old computer: back up now', today, `<p class="muted" style="margin:0;font-size:14px">${today ? 'Backed up today at ' + new Date(bk.at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) + '. You\'re ready.' : 'Saves everything to your own Google Drive.'}</p>
-    ${st === 'granted' ? `<button class="btn${today ? '' : ' primary'}" style="align-self:flex-start" data-act="bknow">Back up now</button>` : `<a class="btn primary" style="align-self:flex-start" href="#backups">Set up backups first</a>`}`)}
-  ${step(2, 'On the new computer: install PageProof', false, `<ol style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px">
-      <li>Install <b>Google Drive for desktop</b> (<a href="https://www.google.com/drive/download/" target="_blank" rel="noopener">google.com/drive/download</a>) and sign in with your work account.</li>
-      <li>Ask your team lead for the newest <b>PageProof.zip</b>. Unzip it into <span class="gpath">Documents\\PageProof\\Install</span>.</li>
-      <li>Open <span class="gpath">edge://extensions</span> (or <span class="gpath">chrome://extensions</span>), turn on <b>Developer mode</b>, press <b>Load unpacked</b> and pick the <b>Install</b> folder.</li>
-      <li>PageProof opens first-time setup by itself.</li></ol>`)}
-  ${step(3, 'On the new computer: bring your work back', false, `<ol style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px">
-      <li>In first-time setup, step 3 (<b>Back up and share</b>), press <b>Pick My Drive</b>. PageProof finds your backups.</li>
-      <li>Press <b>Bring it back</b> next to the newest one and check the numbers, then <b>Restore</b>.</li>
-      <li>Pick your photos folder again in <b>Connect your photos</b> (your ticked folders come back with the backup), and the <b>PageProof Team</b> folder if your team shares lists.</li></ol>
-    <a class="btn" style="align-self:flex-start" href="#backups">Open Backups</a>`)}`;
-};
-
-// ---------------------------------------------------------------- Settings cards
-{
-  const old = V.settings, oldAfter = V.settings.after;
-  V.settings = async () => {
-    const html = await old();
-    if (!PP_SYNC.supported) return html;
-    const [col, txt] = await PP_SYNC.backupLook();
-    const ts = await PP_SYNC.state('team'), t = (await api.storage.local.get('ppTeam')).ppTeam || {};
-    const cards = sLine('Backups', esc(txt), `<span class="tag ${SYNC_TAG[col]}">${col === 'ok' ? 'Backed up' : col === 'bad' ? 'Needs you' : 'Not yet'}</span><a class="btn" href="#backups">Backups and restore</a><a class="btn ghost" href="#moving">Moving computer</a>`, 'setBackups') +
-      sLine('Team lists', ts === 'granted' ? teamPeopleText(t) + (t.nDisagree ? ` <b style="color:var(--warn)">The team disagrees on ${t.nDisagree}.</b>` : '') : 'Share hidden and approved sites and accounts with your team.',
-        `<span class="tag ${ts === 'granted' ? 'ok' : ts === 'offline' ? 'bad' : ts === 'prompt' ? 'warn' : 'grey'}">${ts === 'granted' ? 'Sharing' : ts === 'offline' ? 'Drive isn\'t answering' : ts === 'prompt' ? 'Needs one click' : 'Not set up'}</span><a class="btn" href="#team">${ts === 'none' ? 'Set it up' : 'Open team lists'}</a>`, 'setTeam');
-    return html.replace('<!--sync-->', cards);
-  };
-  V.settings.after = oldAfter;
-}
 
 // ---------------------------------------------------------------- first-time setup: Back up and share
 SETUP.splice(2, 0, async () => {
