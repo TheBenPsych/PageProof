@@ -39,7 +39,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
 
   // 2. Home: What to do now
   await go('home'); await page.waitForTimeout(800); await shot('414-home');
-  const h = await page.evaluate(() => ({ jobs: [...document.querySelectorAll('#homeJobs .job')].map(j => j.className + ' ' + j.textContent.replace(/\s+/g, ' ').slice(0, 80)), newBtn: !!document.querySelector('#jobNew a[href="#review"]'), cap: !!document.querySelector('#jobCapture a[href="#tocapture"]') }));
+  const h = await page.evaluate(() => ({ jobs: [...document.querySelectorAll('#homeJobs .job')].map(j => j.className + ' ' + j.textContent.replace(/\s+/g, ' ').slice(0, 80)), newBtn: !!document.querySelector('#jobNew a[href="#review"]'), cap: !!document.querySelector('#jobCapture a[href="#found?filter=Not%20finished"]') }));
   console.log(JSON.stringify(h.jobs));
   ok(h.newBtn, 'Home lists new copies to answer with Start');
   ok(h.cap, 'Home lists stolen copies that need a capture');
@@ -73,17 +73,19 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(await page.evaluate(() => [...document.querySelectorAll('.altn')].some(t => /\+2 addresses/.test(t.textContent))), 'Row shows "+2 addresses"');
   await page.fill('#ppSearch', ''); await page.waitForTimeout(500);
 
-  // 5. Needs a capture
-  await go('tocapture'); await shot('414-tocapture');
-  const before = await page.evaluate(() => document.querySelectorAll('#capList .caprow').length);
-  ok(before > 0 && await page.evaluate(id => !!document.querySelector(`.caprow[data-id="${CSS.escape(id)}"] [data-act="capturecopy"]`), m.id), 'Needs a capture lists stolen copies with Capture (' + before + ')');
+  // 5. Waiting for a capture (what is left of Needs a capture): a filter in All evidence
+  const WAIT = 'library?filter=Waiting%20for%20a%20capture';
+  await go(WAIT); await page.waitForTimeout(600); await shot('414-tocapture');
+  const before = await page.evaluate(() => document.querySelectorAll('#evWaiting .evwr').length);
+  ok(before > 0 && await page.evaluate(id => !!document.querySelector(`.evwr[data-id="${CSS.escape(id)}"] [data-act="capturecopy"]`), m.id), 'Waiting for a capture lists stolen copies with Capture now (' + before + ')');
   // a saved pack of the same page (phone address) counts as captured
   await page.evaluate(async () => { const { log = [] } = await chrome.storage.local.get('log'); log.push({ id: 'cap-414', captureId: 'PP-TEST414', time: new Date().toISOString(), url: 'https://m.dupe-news.com/2024/story-9?fbclid=1', title: 'Dupe', saves: [{ at: new Date().toISOString(), caseRef: 'CASE-414', file: 'x.zip' }] }); await chrome.storage.local.set({ log }); });
-  await go('home'); await go('tocapture');
-  ok(await page.evaluate(id => !document.querySelector(`.caprow[data-id="${CSS.escape(id)}"]`), m.id), 'A saved pack of the same page takes it off the list');
-  const first = await page.evaluate(() => document.querySelector('#capList .caprow').dataset.id);
-  await page.click(`#capList .caprow [data-act="capdone"]`); await page.waitForTimeout(900);
-  ok(await page.evaluate(id => !document.querySelector(`.caprow[data-id="${CSS.escape(id)}"]`), first), 'Already captured takes it off the list');
+  await go('home'); await go(WAIT); await page.waitForTimeout(600);
+  ok(await page.evaluate(id => !document.querySelector(`.evwr[data-id="${CSS.escape(id)}"]`), m.id), 'A saved pack of the same page takes it off the list');
+  const first = await page.evaluate(() => document.querySelector('#evWaiting .evwr').dataset.id);
+  await page.click(`#evWaiting .evwr [data-act="capdone"]`); await page.waitForTimeout(900);
+  ok(await page.evaluate(id => !document.querySelector(`.evwr[data-id="${CSS.escape(id)}"]`), first), 'Captured another way takes it off the list');
+  await page.evaluate(() => { state.evF = 'all'; });
 
   // 6. Library cards with a picture, list switch, one blue button last
   await page.evaluate(async () => {
@@ -93,13 +95,13 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     await PP_DB.put({ id: 'cap-414', url: 'https://m.dupe-news.com/2024/story-9', main: { tiles: [{ src }] }, sections: [] });
   });
   await go('library'); await page.waitForTimeout(1500); await shot('414-library');
-  const lib = await page.evaluate(() => ({ cards: document.querySelectorAll('.capcard').length, img: !!document.querySelector('.capcard [data-capthumb="cap-414"] img'), caseNo: /CASE-414/.test(document.getElementById('capGrid').textContent),
-    prim: document.querySelectorAll('.head .headact .btn.primary').length, last: (document.querySelector('.head .headact').lastElementChild || {}).className }));
+  const lib = await page.evaluate(() => ({ cards: document.querySelectorAll('#capGrid .evc').length, img: !!document.querySelector('.evc [data-capthumb="cap-414"] img'), caseNo: /CASE-414/.test(document.getElementById('capGrid').textContent),
+    prim: document.querySelectorAll('.head .headact .btn.primary').length }));
   ok(lib.cards >= 1 && lib.img && lib.caseNo, 'Evidence library shows picture cards with the case number');
-  ok(lib.prim === 1 && /primary/.test(lib.last), 'Page header has one blue main button, last');
+  ok(lib.prim === 0, 'All evidence has no blue button in its header (Capture a page sits in the top bar)');
   ok(await page.evaluate(async () => !!(await PP_DB.get('thumb-cap-414'))), 'The card picture is kept after the capture is cleared');
   await page.click('[data-act="libview"][data-v="list"]'); await page.waitForTimeout(800);
-  ok(await page.evaluate(() => !!document.querySelector('.card table') && !document.getElementById('capGrid')), 'List switch shows the table');
+  ok(await page.evaluate(() => !!document.querySelector('#evList .evr') && !document.getElementById('capGrid')), 'List switch shows the list');
   await page.click('[data-act="libview"][data-v="cards"]'); await page.waitForTimeout(500);
   // every page with buttons in its header has at most one blue one
   const multi = [];

@@ -10,9 +10,11 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const page = await ctx.newPage(); await page.setViewportSize({ width: 1400, height: 900 });
   page.on('pageerror', e => { fails++; console.log('PAGEERROR', String(e).slice(0, 300)); });
   await page.goto(url('app.html#help')); await page.waitForTimeout(1000); await seed(page);
-  await page.goto(url('app.html#tocapture')); await page.waitForTimeout(2500);
-  const t = await page.evaluate(() => ({ oldest: !!document.querySelector('.headact [data-act="capturecopy"]'), first: (document.querySelector('.headact [data-act="capturecopy"]') || {}).dataset.v === (document.querySelector('#capList .caprow') || { dataset: {} }).dataset.id, rows: document.querySelectorAll('#capList .caprow').length, solid: document.querySelectorAll('#capList .btn.primary').length, ages: document.querySelectorAll('#capList .agechip').length }));
-  ok(t.oldest && t.first, '"Capture the oldest" opens the top (oldest) copy');
+  await page.goto(url('app.html#tocapture')); await page.waitForTimeout(3000);   // the old address lands on All evidence, Waiting for a capture
+  const t = await page.evaluate(() => ({ hash: location.hash, rows: document.querySelectorAll('#evWaiting .evwr').length, firstId: (document.querySelector('#evWaiting .evwr') || { dataset: {} }).dataset.id, solid: document.querySelectorAll('#evWaiting .btn.primary').length, ages: document.querySelectorAll('#evWaiting .evwd').length }));
+  await page.evaluate(() => ACTS.evfilter('all')); await page.waitForTimeout(800);
+  const o = await page.evaluate(() => (document.querySelector('#evWaitBar [data-act="capturecopy"]') || { dataset: {} }).dataset.v);
+  ok(t.hash === '#library' && o && o === t.firstId, '"Capture the oldest" opens the top (oldest) copy');
   ok(t.rows > 1 && t.solid === 1 && t.ages === t.rows, 'Only the top row has a solid Capture button; every row says how long it has waited');
   await page.goto(url('app.html#capture')); await page.waitForTimeout(1500);
   ok(await page.evaluate(() => document.querySelectorAll('.csteps .cstep').length === 4 && !!document.querySelector('.caphero')), 'Capture a page: last-tab card and four picture steps');

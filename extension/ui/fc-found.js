@@ -1052,6 +1052,7 @@ V.found = async () => {
   ${await driveBanner()}
   ${socAskBanner(everyTab.filter(visible))}
   ${FCD.unhid && FCD.unhid.length ? `<div class="banner info" role="status"><div style="flex:1 1 260px;min-width:0"><b>${esc(FCD.unhid.join(', '))} ${FCD.unhid.length === 1 ? 'shows' : 'show'} again</b><div style="font-size:13px">A whole social site can no longer be hidden, only its accounts. Its posts are back on the Social media tab. Hide the accounts you don't want from there.</div></div><button class="btn sm" data-act="unhidok">Got it</button></div>` : ''}
+  ${state.fFilter === 'Not finished' && typeof evWaitBar === 'function' ? await evWaitBar() : ''}
   <section class="card found-card">
     <div class="toolbar tidy">
       <div class="tabs ansbar" role="tablist" aria-label="Status">${['New', 'Check later', 'Not finished', 'Stolen', 'Licensed', 'Removed', 'All'].map(f => `<button role="tab" aria-selected="${state.fFilter === f}" class="${state.fFilter === f ? 'on' : ''}" data-act="ffilter" data-v="${f}"${f === 'All' ? ' title="Every copy except the removed ones"' : f === 'Not finished' ? ' title="Stolen copies whose claim steps are not done yet"' : ''}>${state.fFilter === f ? '<i class="tick" aria-hidden="true">✓</i>' : ''}${f} <span>${cnt(f)}</span></button>`).join('')}${['Still online', 'Back online', 'Gone'].includes(state.fFilter) ? `<button role="tab" aria-selected="true" class="on" data-act="ffilter" data-v="${state.fFilter}"><i class="tick" aria-hidden="true">✓</i>${state.fFilter} <span>${cnt(state.fFilter)}</span></button>` : ''}</div>

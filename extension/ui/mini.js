@@ -56,7 +56,7 @@ async function draw() {
       : `<button class="mcap" id="cap"${canUse(tab) ? '' : ' disabled data-why="This tab is a browser page (like a new tab or settings), not a website. Open the website you want to capture, then press Capture."'}${title ? ` title="${esc(title)}"` : ''}><span class="cico" aria-hidden="true">${ic('capture', 22)}</span><span class="mct"><b>Capture this page</b><small>${site ? esc(site.replace(/^www\./, '')) : 'Open a website first'}</small></span>${keys && canUse(tab) ? `<span class="kc">${esc(keys)}</span>` : ''}</button>`}
     ${drive.done ? `<div class="nrows" id="nums">
       ${row('review', 'i-new', 'eye', 'New copies', nNew)}
-      ${row('tocapture', 'i-cap', 'capture', 'To capture', nStolen)}
+      ${row('found?filter=Not%20finished', 'i-cap', 'capture', 'To capture', nStolen)}
       ${row('keep', 'i-srch', 'find', 'Searched today', today.searched)}</div>` : ''}
     <div class="ntools" id="tools">${TOOLS.map(t => `<button class="ntool" data-go="${t[0]}" title="${t[2]}" aria-label="${t[2]}"><span class="ti"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${t[3]}</svg></span><span class="tl">${t[1]}</span></button>`).join('')}</div>
     <div class="msec">
