@@ -53,13 +53,13 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(await rs.evaluate(() => { BAD_THUMBS.size; renderResults(); return BAD_THUMBS.size >= 1 && !document.querySelector('img[src="https://blocked.example/x.jpg"]'); }), 'A blocked picture is not tried again on every refresh');
 
   await rs.goto(url('revsearch.html?view=past')); await rs.waitForTimeout(1200);
-  const a = await rs.evaluate(() => ({ tiles: document.querySelectorAll('.pg-tiles.four .pg-tile').length, days: document.querySelectorAll('.pg-day').length,
-    fold: (document.querySelector('.pg-row.fold') || {}).textContent || '', rows: document.querySelectorAll('.pg-row.past').length, thumbs: !!document.querySelector('.pg-thumbs') }));
+  const a = await rs.evaluate(() => ({ tiles: document.querySelectorAll('#pastTiles .atile').length, days: document.querySelectorAll('.aday').length,
+    fold: (document.querySelector('.arow.afold') || {}).textContent || '', rows: document.querySelectorAll('.arow:not(.ahead)').length + document.querySelectorAll('.arun').length, thumbs: !!document.querySelector('.athumbs') }));
   ok(a.tiles === 4, 'All searches: this week in numbers');
   ok(a.days >= 1 && a.thumbs, 'All searches: day headings and small pictures');
   ok(/4 one-photo searches/.test(a.fold) && a.rows === 2, 'Keep searching\'s one-photo searches fold into one line');
-  await rs.click('.pg-row.fold'); await rs.waitForTimeout(500);
-  ok(await rs.evaluate(() => document.querySelectorAll('.pg-row.inner').length === 4), 'Clicking the folded line shows each search');
+  await rs.click('.arow.afold .awhat'); await rs.waitForTimeout(500);
+  ok(await rs.evaluate(() => document.querySelectorAll('.agrid .agt').length === 4), 'Clicking the folded line shows each search');
   await ctx.close();
   console.log(fails ? fails + ' FAILED' : 'ALL PASSED'); process.exit(fails ? 1 : 0);
 })().catch(e => { console.log('ERR', e); process.exit(1); });

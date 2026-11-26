@@ -15,7 +15,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(n.steps >= 4 && n.go && n.side === 'none', 'New search: photos, search sites, speed and the Search button, no inner side panel');
   ok(/at least one photo/.test(n.why), 'The Search button says why it cannot start yet (' + n.why + ')');
   await page.goto(url('revsearch.html?view=past')); await page.waitForTimeout(1000);
-  ok(await page.evaluate(() => /No searches yet/.test(document.body.textContent) && !!document.querySelector('.pg-empty a.pg-btn')), 'All searches, empty: a Start a new search button');
+  ok(await page.evaluate(() => /No searches yet/.test(document.body.textContent) && !!document.querySelector('.aempty a#pastStart')), 'All searches, empty: a Start a new search button');
   await page.goto(url('app.html#help')); await page.waitForTimeout(1000); await seed(page);
   await page.evaluate(async () => {
     const mk = (id, fin) => ({ id, created: new Date().toISOString(), kind: 'fifty', engines: ['google', 'yandex', 'bing'], finished: fin,
@@ -25,7 +25,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     await chrome.storage.local.set({ fcStatus: { beat: Date.now(), state: 'running', text: 'Searching', current: { name: 'photo9.jpg', sub: 'Client A', thumb: '' } }, fcRest: { bing: Date.now() + 1800000 } });
   });
   const rs = await ctx.newPage(); await rs.goto(url('revsearch.html?view=past')); await rs.waitForTimeout(1200);
-  ok(await rs.evaluate(() => document.querySelectorAll('.pg-list .pg-row .pg-ring').length === 1), 'All searches: one row per search, with a ring');
+  ok(await rs.evaluate(() => document.querySelectorAll('#pastList .arow[data-job]').length === 1 && document.querySelectorAll('#pastList .arow[data-job] .ksq').length === 1), 'All searches: one row per search, with its kind icon');
   await rs.goto(url('revsearch.html?job=j1')); await rs.waitForTimeout(1500);
   const r = await rs.evaluate(() => ({ tiles: document.querySelectorAll('#progCard .nnum').length, rows: document.querySelectorAll('.nstrip .nfp').length, dots: document.querySelectorAll('.nlights .nlight').length, lights: [...document.querySelectorAll('.nlights .nlight')].map(e => e.textContent).join('|'), thrown: !!document.querySelector('details#thrown') && !document.querySelector('details#thrown').open }));
   ok(r.tiles >= 2 && r.rows === 3 && r.dots === 3, 'Search results: numbers on one card, one picture per photo, 3 search site lights (' + r.tiles + '/' + r.rows + '/' + r.dots + ')');
