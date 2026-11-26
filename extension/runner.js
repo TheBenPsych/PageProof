@@ -166,7 +166,12 @@ async function chores() {
     // 4.43: weak Maybes nobody answered in 30 days put themselves away (once a day).
     if (typeof FC_RULES !== 'undefined' && now - (m.weak || 0) > 20 * 3600000) { await FC_RULES.tidyWeak(); ch.weak = now; }
     // 4.43: a sweep of a Stolen site, one small step at a time (about 20 seconds at most).
-    if (typeof FC_RULES !== 'undefined') await FC_RULES.sweepStep().catch(e => console.warn('PageProof sweep:', e));
+    // Sweeps share one slot of minutes an hour with Credit search and Watching (PP_WATCH.slotOK).
+    if (typeof FC_RULES !== 'undefined' && (typeof PP_WATCH === 'undefined' || await PP_WATCH.slotOK('sweep'))) {
+      const sw0 = Date.now();
+      const did = await FC_RULES.sweepStep().catch(e => { console.warn('PageProof sweep:', e); return false; });
+      if (did && typeof PP_WATCH !== 'undefined') await PP_WATCH.slotAdd('sweep', Date.now() - sw0);
+    }
     // New tools (Ben's picks): a credit line search and the watch list, one small step at a time,
     // only while Keep searching is on and in your hours. Not waited for: a slow Google page must never
     // hold up the Keep searching tab (PP_WATCH.step skips itself while the last one is still going).

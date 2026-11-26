@@ -373,29 +373,97 @@ const PP_WATCH = (() => {
   }
 
   // ================================================================ 2. Watch list
-  const MIN_STOLEN = 2, PER_CHECK = 30, SEEN_MAX = 500;
+  const MIN_STOLEN = 2, SEEN_MAX = 500;
+  // Turns (Ben's picks 16, 17, 20): how often a watched site or account is checked, how many new
+  // posts one check reads and how many pictures of each post.
+  const TURN_DAYS = { w: 7, m: 30, q: 91 }, TURN_POSTS = { w: 30, m: 15, q: 10 }, TURN_PICS = { w: 6, m: 1, q: 1 };
+  const TURN_NAME = { w: 'Every week', m: 'Every month', q: 'Every 3 months' };
+  const PER_CHECK = TURN_POSTS.w;
+  const agoWords = (t, now) => { const d = Math.max(0, Math.round((now - Date.parse(t)) / DAY)); return d < 1 ? 'today' : d === 1 ? 'yesterday' : d < 14 ? d + ' days ago' : Math.round(d / 7) + ' weeks ago'; };
+  // Which turn, and why, in plain words. Moves down by itself after checks with nothing new,
+  // and back to every week as soon as watching finds a copy.
+  function turnOf(it, now = Date.now()) {
+    if (it.by === 'hand') return ['w', 'Added by you: always weekly'];
+    if (it.lastFound && now - Date.parse(it.lastFound) < 61 * DAY) return ['w', 'Found a copy ' + agoWords(it.lastFound, now)];
+    const e = it.empty || 0;
+    if (e >= 6) return ['q', 'Nothing new 6 times'];
+    if (e >= 3) return ['m', 'Nothing new ' + e + ' times'];
+    if (it.by === 'list') return ['q', 'From your stolen before list'];
+    if (!it.recent) return ['q', 'No Stolen copy in the last 6 months'];
+    if (it.recent >= 3) return ['w', it.recent + ' Stolen in the last 6 months'];
+    if (!it.added || now - Date.parse(it.added) < 30 * DAY) return ['w', 'New: weekly for its first month'];
+    return ['m', 'Only ' + it.recent + ' Stolen lately'];
+  }
   async function watchState() { return (await FC.meta.get('watch')) || { items: {} }; }
   async function putWatch(w) { await FC.meta.set('watch', w); FC.touch('watch'); }
+  // Sites and accounts on the stolen before list with 2 or more links (Ben's pick 22). Only
+  // watched after you say yes, and then every 3 months, behind everything else.
+  let LISTC = null, LIST_AT = 0;
+  function listGroups() {
+    if (typeof RS_STOLEN === 'undefined' || typeof RS_SITE === 'undefined') return [];
+    const items = RS_STOLEN.items || [];
+    if (LISTC && LISTC.src === items && LISTC.n === items.length) return LISTC.out;
+    const m = new Map(), S = typeof PP_SOCIAL !== 'undefined' ? PP_SOCIAL : null;
+    for (const u of items) {
+      const site = RS_SITE.of(u);
+      if (!site) continue;
+      let e;
+      if (S && S.isSocial(site)) {
+        const a = S.fromUrl(u);
+        if (!a || !a.key || !a.url) continue;
+        e = m.get('a:' + a.key) || { key: 'a:' + a.key, kind: 'acct', base: '', url: a.url, label: a.handle || a.key, plat: (S.platform(site) || {}).name || '', links: 0 };
+      } else {
+        const base = FC.baseOf(site);
+        e = m.get('s:' + base) || { key: 's:' + base, kind: 'site', base, url: 'https://' + base, label: base, plat: '', links: 0 };
+      }
+      e.links++; m.set(e.key, e);
+    }
+    const out = [...m.values()].filter(e => e.links >= MIN_STOLEN);
+    LISTC = { src: items, n: items.length, out };
+    return out;
+  }
+  async function listLoad() {
+    if (typeof RS_STOLEN === 'undefined' || Date.now() - LIST_AT < 600000) return;
+    LIST_AT = Date.now();
+    try { await RS_STOLEN.load(); } catch (e) { /* the browser's copy */ }
+  }
+  // How many stolen before sites and accounts could be watched and are not yet.
+  async function listCount() {
+    await listLoad();
+    const have = new Set((await watchList()).map(x => x.key));
+    return listGroups().filter(e => !have.has(e.key)).length;
+  }
+  async function watchCfg() { const w = await watchState(); return { list: w.list === true, listNo: w.list === 'no', avg: w.avg || 0 }; }
+  async function setWatchList(v) { const w = await watchState(); w.list = v === true ? true : v === 'no' ? 'no' : false; await putWatch(w); }
   // Sites and accounts with 2 or more Stolen copies, plus the ones you added by hand.
   async function watchList(copies) {
     const w = await watchState();
-    const auto = new Map();
+    const auto = new Map(), now = Date.now();
     for (const c of copies || await FC.allCopies()) {
       if (c.status !== 'stolen') continue;
       const soc = typeof PP_SOCIAL !== 'undefined' && PP_SOCIAL.isSocial(c.site);
       if (soc && !(c.acct && c.acct.key && c.acct.url)) continue;
       const key = soc ? 'a:' + c.acct.key : 's:' + FC.baseOf(c.site);
-      const e = auto.get(key) || { key, kind: soc ? 'acct' : 'site', base: soc ? '' : FC.baseOf(c.site), url: soc ? c.acct.url : 'https://' + FC.baseOf(c.site), label: soc ? (c.acct.handle || c.acct.key) : FC.baseOf(c.site), plat: soc ? (PP_SOCIAL.platform(c.site) || {}).name || '' : '', stolen: 0 };
-      e.stolen++; auto.set(key, e);
+      const e = auto.get(key) || { key, kind: soc ? 'acct' : 'site', base: soc ? '' : FC.baseOf(c.site), url: soc ? c.acct.url : 'https://' + FC.baseOf(c.site), label: soc ? (c.acct.handle || c.acct.key) : FC.baseOf(c.site), plat: soc ? (PP_SOCIAL.platform(c.site) || {}).name || '' : '', stolen: 0, recent: 0, clients: [] };
+      e.stolen++;
+      if (!c.answered || now - Date.parse(c.answered) < 183 * DAY) e.recent++;
+      if (c.client && !e.clients.includes(c.client)) e.clients.push(c.client);
+      auto.set(key, e);
     }
-    const out = [];
-    for (const e of auto.values()) if (e.stolen >= MIN_STOLEN) out.push({ ...e, by: 'auto', ...(w.items[e.key] || {}), stolen: e.stolen });
-    for (const it of Object.values(w.items)) if (it.by === 'hand' && !out.some(o => o.key === it.key)) out.push({ stolen: 0, ...(auto.get(it.key) || {}), ...it });
-    return out.sort((a, b) => (a.off ? 1 : 0) - (b.off ? 1 : 0) || b.stolen - a.stolen || a.label.localeCompare(b.label));
+    const out = [], have = new Set();
+    for (const e of auto.values()) if (e.stolen >= MIN_STOLEN) { out.push({ ...e, by: 'auto', ...(w.items[e.key] || {}), stolen: e.stolen, recent: e.recent, clients: e.clients }); have.add(e.key); }
+    for (const it of Object.values(w.items)) if (it.by === 'hand' && !have.has(it.key)) { out.push({ stolen: 0, recent: 0, clients: [], ...(auto.get(it.key) || {}), ...it }); have.add(it.key); }
+    if (w.list === true) {
+      await listLoad();
+      for (const e of listGroups()) if (!have.has(e.key)) out.push({ stolen: 0, recent: 0, clients: [], ...(auto.get(e.key) || {}), ...e, ...(w.items[e.key] || {}), by: 'list', links: e.links });
+    }
+    for (const it of out) { const [t, why] = turnOf(it, now); it.turn = t; it.why = why; }
+    return out.sort((a, b) => (a.off ? 1 : 0) - (b.off ? 1 : 0) || b.stolen - a.stolen || (b.links || 0) - (a.links || 0) || a.label.localeCompare(b.label));
   }
   async function saveItem(it) {
     const w = await watchState();
-    const keep = ['key', 'kind', 'base', 'url', 'label', 'plat', 'by', 'off', 'last', 'seen', 'checks', 'found', 'feed', 'pend', 'newPosts', 'err', 'due'];
+    const keep = ['key', 'kind', 'base', 'url', 'label', 'plat', 'by', 'off', 'last', 'seen', 'checks', 'found', 'feed', 'pend', 'newPosts', 'err', 'due', 'added', 'empty', 'lastFound', 'hist', 'cf', 'cp', 't0', 'cur', 'ms', 'ct', 'lite'];
+    if (!it.added) it.added = new Date().toISOString();
     w.items[it.key] = Object.fromEntries(keep.filter(k => it[k] !== undefined).map(k => [k, it[k]]));
     await putWatch(w);
   }
@@ -419,8 +487,56 @@ const PP_WATCH = (() => {
     const it = (await watchList()).find(x => x.key === key) || (await watchState()).items[key];
     if (it) await saveItem({ ...it, off: !!off });
   }
-  async function watchNow(key) { const it = (await watchList()).find(x => x.key === key); if (it) await saveItem({ ...it, due: true }); }
+  async function watchNow(key) { const it = (await watchList()).find(x => x.key === key); if (it) await saveItem({ ...it, due: true, off: false }); }
   async function watchDrop(key) { const w = await watchState(); delete w.items[key]; await putWatch(w); }
+  // Stop the check that is running (Ben's pick 3): the posts it has not looked at yet are not
+  // marked as seen, so the next check reads them.
+  async function watchStop(key) {
+    await api.storage.local.set({ fcWatchStop: { key, at: Date.now() } });   // for a step that is in the middle of its 15 seconds
+    const it = (await watchState()).items[key];
+    if (it && it.pend && it.pend.length) { stopCheck(it); await saveItem(it); }
+  }
+  function stopCheck(it) {
+    const left = new Set(it.pend.map(postKey));
+    it.seen = (it.seen || []).filter(k => !left.has(k));
+    endCheck(it, true); stat('watch.stopped');
+  }
+
+  // ---- The shared slot (Ben's picks 18, 19, 21, 23). Sweeps, Credit search and Watching take
+  // turns in one slot of at most 12 minutes an hour (6 on a Light computer), and Watching has its
+  // own share per computer. While Google or Bing rest after a robot check Watching may use as
+  // much again, because it never asks them anything. At most 5 social accounts an hour.
+  const SLOT_MAX = { Light: 6, Normal: 12, Strong: 12 }, WATCH_MAX = { Light: 3, Normal: 6, Strong: 12 }, ACCTS_HOUR = 5;
+  const hourNow = () => Math.floor(Date.now() / 3600000);
+  async function slot() {
+    const s = (await api.storage.local.get('ppSlot').catch(() => ({}))).ppSlot || {};
+    return s.h === hourNow() ? s : { h: hourNow(), sweep: 0, credit: 0, watch: 0, accts: 0 };
+  }
+  async function slotAdd(kind, ms, accts) {
+    const s = await slot();
+    s[kind] = (s[kind] || 0) + Math.max(0, ms || 0);
+    if (accts) s.accts = (s.accts || 0) + accts;
+    await api.storage.local.set({ ppSlot: s }).catch(() => {});
+  }
+  async function slotInfo() {
+    let level = 'Normal';
+    try { if (typeof ppHardware === 'function') level = (await ppHardware()).level || 'Normal'; } catch (e) { /* Normal */ }
+    const st = await api.storage.local.get(['ppWatchCap', 'fcRest']).catch(() => ({}));
+    const max = SLOT_MAX[level] || 12, auto = WATCH_MAX[level] || 6;
+    const own = [3, 6, 12].includes(st.ppWatchCap) ? st.ppWatchCap : 0;
+    const resting = Object.values(st.fcRest || {}).some(t => t > Date.now());
+    return { level, max, auto, own, watchMax: Math.min(own || auto, max), resting, used: await slot(), acctsHour: ACCTS_HOUR };
+  }
+  async function setWatchCap(n) { if ([3, 6, 12].includes(n)) await api.storage.local.set({ ppWatchCap: n }); else await api.storage.local.remove('ppWatchCap'); }
+  async function slotOK(kind) {
+    const i = await slotInfo(), u = i.used, M = 60000;
+    const all = (u.sweep || 0) + (u.credit || 0) + (u.watch || 0);
+    if (kind === 'watch') {
+      if ((u.watch || 0) < i.watchMax * M && all < i.max * M) return true;
+      return i.resting && (u.watch || 0) < i.watchMax * 2 * M;
+    }
+    return all < i.max * M;
+  }
 
   // A site's news feed: from its home page, else the usual addresses.
   const FEEDS = ['/feed/', '/rss', '/feed.xml', '/rss.xml', '/atom.xml', '/index.xml'];
@@ -490,20 +606,40 @@ const PP_WATCH = (() => {
     return { posts: (res.items || []).map(item => ({ page: PP_REPOST.postUrlOf(p, item, own, null) || '', imgs: item.imgs.map(i => i.src).filter(u => /^https?:/.test(u)).slice(0, 6) })).filter(x => x.imgs.length) };
   }
   const postKey = p => p.page || (p.imgs[0] || '').split('?')[0];
+  // The end of one check: its line in the history (the last 5), the turn counters.
+  function endCheck(it, stopped) {
+    const cf = it.cf || 0;
+    it.last = new Date().toISOString();
+    it.hist = [[it.last, it.newPosts || 0, cf, it.cp || 0, stopped ? 1 : 0], ...(it.hist || [])].slice(0, 5);
+    if (cf) { it.empty = 0; it.lastFound = it.last; } else if (!stopped) it.empty = (it.empty || 0) + 1;
+    it.ct = it.ms || 0;
+    delete it.cf; delete it.cp; delete it.t0; delete it.cur; delete it.ms; delete it.lite;
+    it.pend = [];
+  }
+  async function noteAvg(ms) { if (!(ms > 0)) return; const w = await watchState(); w.avg = w.avg ? Math.round(w.avg * 0.8 + ms * 0.2) : Math.round(ms); await putWatch(w); }
   // One small step: the next watched site or account that is due, a few posts at a time.
+  // Order: a check already started, then Check now, then whoever is longest past its turn,
+  // weekly ones before monthly ones before 3-monthly ones.
   async function watchStep(opts = {}) {
     const items = (await watchList()).filter(x => !x.off);
-    let it = items.find(x => x.pend && x.pend.length) || items.find(x => x.due) || items.filter(x => Date.now() - Date.parse(x.last || 0) >= WEEK).sort((a, b) => Date.parse(a.last || 0) - Date.parse(b.last || 0))[0];
+    const now = Date.now(), rank = { w: 0, m: 1, q: 2 };
+    const acctsFull = !opts.fast && ((await slot()).accts || 0) >= ACCTS_HOUR;
+    const late = x => now - Date.parse(x.last || 0) - TURN_DAYS[x.turn] * DAY;
+    let it = items.find(x => x.pend && x.pend.length) || items.find(x => x.due)
+      || items.filter(x => late(x) >= 0 && !(acctsFull && x.kind === 'acct')).sort((a, b) => rank[a.turn] - rank[b.turn] || late(b) - late(a))[0];
     if (!it) return false;
     it = { ...it, seen: it.seen || [] };
-    const t0 = Date.now();
+    const t0 = Date.now(), turn = it.due ? 'w' : it.turn || 'w';
+    const spent = () => { it.ms = (it.ms || 0) + (Date.now() - t0); };
     // Start of a check: the new posts since last time.
     if (!it.pend || !it.pend.length) {
       let posts = [];
+      it.t0 = t0; it.cf = 0; it.cp = 0; it.ms = 0;
       if (it.kind === 'acct') {
         const r = await accountPosts(it);
         if (!r) return false;
-        if (r.wall) { stat('watch.wall'); it.err = 'asked to log in'; it.last = new Date().toISOString(); it.due = false; await saveItem(it); return true; }
+        await slotAdd('watch', 0, 1);
+        if (r.wall) { stat('watch.wall'); it.err = 'asked to log in'; it.newPosts = 0; it.due = false; it.checks = (it.checks || 0) + 1; endCheck(it, true); await saveItem(it); return true; }
         posts = r.posts;
       } else {
         const home = (globalThis.PP_WATCH_HOME || (b => 'https://' + b))(it.base);   // tests point it at a local server
@@ -512,50 +648,66 @@ const PP_WATCH = (() => {
         if (!posts.length) posts = await sitemapPages(home);
       }
       const seen = new Set(it.seen);
-      const fresh = posts.filter(p => postKey(p) && !seen.has(postKey(p))).slice(0, PER_CHECK);
+      const fresh = posts.filter(p => postKey(p) && !seen.has(postKey(p))).slice(0, TURN_POSTS[turn]);
       it.pend = fresh; it.newPosts = fresh.length; it.err = posts.length ? '' : 'no posts found';
       it.seen = [...it.seen, ...fresh.map(postKey)].slice(-SEEN_MAX);
       it.checks = (it.checks || 0) + 1; it.due = false;
-      if (!fresh.length) it.last = new Date().toISOString();
+      it.lite = turn !== 'w';
+      spent();
+      if (!fresh.length) { const ms = it.ms; endCheck(it); await noteAvg(ms); }
       await saveItem(it);
       stat('watch.check');
       return true;
     }
-    // Then the pictures of those posts, about 15 seconds at a time.
+    // Stopped by you: the posts not looked at yet are read by the next check.
+    const stopFlag = (await api.storage.local.get('fcWatchStop').catch(() => ({}))).fcWatchStop;
+    if (stopFlag) await api.storage.local.remove('fcWatchStop').catch(() => {});
+    if (stopFlag && stopFlag.key === it.key && Date.now() - stopFlag.at < 120000) { stopCheck(it); await saveItem(it); return true; }
+    // Then the pictures of those posts, about 15 seconds at a time. A quiet turn (monthly,
+    // 3-monthly) only looks at the main picture of each post.
     const list = await looks();
+    const pics = it.lite ? TURN_PICS.m : TURN_PICS.w;
     while (it.pend.length && Date.now() - t0 < 15000) {
       const p = it.pend.shift();
       stat('watch.post');
+      it.cur = p.page || it.url;
       let imgs = p.imgs || [];
       if (!imgs.length && p.page && it.kind === 'site') { try { imgs = FC_RULES.pagePics(await get(p.page, 'text', 12000), p.page).map(x => x.img); } catch (e) { imgs = []; } }
-      for (const img of imgs.slice(0, 6)) {
+      for (const img of imgs.slice(0, pics)) {
         const r = await checkPic(img, list, '');
-        stat('watch.pic');
-        if (r.hit && await FC_RULES.addFound(r.hit.photo, p.page || it.url, img, hostOf(p.page || it.url) || it.base, r.hit.dist, { by: 'the watch list (' + it.label + ')', tag: { via: 'watch' } })) { it.found = (it.found || 0) + 1; stat('watch.found'); break; }
+        stat('watch.pic'); it.cp = (it.cp || 0) + 1;
+        if (r.hit && await FC_RULES.addFound(r.hit.photo, p.page || it.url, img, hostOf(p.page || it.url) || it.base, r.hit.dist, { by: 'the watch list (' + it.label + ')', tag: { via: 'watch' } })) { it.found = (it.found || 0) + 1; it.cf = (it.cf || 0) + 1; stat('watch.found'); break; }
         if (!opts.fast) await new Promise(r2 => setTimeout(r2, 800));
       }
     }
-    if (!it.pend.length) it.last = new Date().toISOString();
+    spent();
+    if (!it.pend.length) { const ms = it.ms; endCheck(it); await noteAvg(ms); }
     await saveItem(it);
     return true;
   }
 
-  // Runs from Keep searching's housekeeping (only while it is on and in your hours).
+  // Runs from Keep searching's housekeeping (only while it is on and in your hours). Each kind
+  // only when the shared slot of this hour still has room.
   let busy = false;
   async function step() {
     if (busy) return false;
     busy = true;
     try {
-      let t = Date.now();
-      const a = await creditStep().catch(e => { console.warn('PageProof credit search:', e); return false; });
-      if (a) PP_STATS_T('credit.step', t);
+      let t = Date.now(), a = false, b = false;
+      if (await slotOK('credit')) {
+        a = await creditStep().catch(e => { console.warn('PageProof credit search:', e); return false; });
+        if (a) { PP_STATS_T('credit.step', t); await slotAdd('credit', Date.now() - t); }
+      }
       t = Date.now();
-      const b = await watchStep().catch(e => { console.warn('PageProof watch list:', e); return false; });
-      if (b) PP_STATS_T('watch.step', t);
+      // Check now (and a check already started by it) is never held back by the slot.
+      if (await slotOK('watch') || (await watchList()).some(x => !x.off && x.due)) {
+        b = await watchStep().catch(e => { console.warn('PageProof watch list:', e); return false; });
+        if (b) { PP_STATS_T('watch.step', t); await slotAdd('watch', Date.now() - t); }
+      } else stat('watch.capped');
       return a || b;
     } finally { busy = false; }
   }
 
-  return { DEFAULT_WORDS, usualWords, quoteWord, wordStats, creditStop, ENGINES, ENG_NAME, creditRun, resumeRun, runInfo, runActive, live: () => RUN, creditCfg, setCreditCfg, creditState, wordsFor, creditStep, creditNow, readResultsInTab, readFeed, findFeed, watchList, watchAdd, watchOff, watchNow, watchDrop, watchStep, step, nearest, looks, dropLooks: () => { LOOKS = null; } };
+  return { DEFAULT_WORDS, usualWords, quoteWord, wordStats, creditStop, ENGINES, ENG_NAME, creditRun, resumeRun, runInfo, runActive, live: () => RUN, creditCfg, setCreditCfg, creditState, wordsFor, creditStep, creditNow, readResultsInTab, readFeed, findFeed, watchList, watchAdd, watchOff, watchNow, watchDrop, watchStop, watchStep, watchCfg, setWatchList, listCount, turnOf, TURN_DAYS, TURN_POSTS, TURN_NAME, slot, slotAdd, slotInfo, slotOK, setWatchCap, step, nearest, looks, dropLooks: () => { LOOKS = null; } };
 })();
 if (typeof module !== 'undefined') module.exports = PP_WATCH;
