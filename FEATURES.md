@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.88.1** (26 Nov 2026).
+Last updated: version **4.89.0** (26 Nov 2026).
 
 ---
 
@@ -178,6 +178,8 @@ Last updated: version **4.88.1** (26 Nov 2026).
 - **Calm Credit search in three tabs.** Overview (live search card with Stop, search site lights and the next weekly search, four tiles, Last searches in columns, Wordings that find copies over 30 days, How it works in 3 steps), Clients (find, All / On / Off / Own wordings, sort, wording chips, a panel per client to add and remove wordings and see what each found, Change the usual wordings for every client at once) and Credit but no photo (find, client box, sort, Open page, Look closer in Inspect a photo, Take off). The tab stays open after a reload. (4.71)
 - **Calm Watching with turns.** Tabs All / Websites / Social accounts / Not watching, Checking now card with Stop, Needs a look, four tiles, Turns card (every week, month or 3 months, with the reason on every row; down after 3 and 6 empty checks, back to weekly on a find), This hour on this PC (one shared slot for sweeps, Credit search and Watching: 12 minutes an hour, 6 on a Light computer; Watching 3, 6 or 12, changeable; uses the time Google or Bing rest; 5 social accounts an hour), lighter checks for quiet turns (15 or 10 posts, main picture only), opt-in watching of stolen before list sites with 2 or more links every 3 months, find, sort, a ⋯ menu, and a panel per site with its last 5 checks. (4.72)
 - **Calm Site owners under Copies found.** Tabs Owners / Look up a site, list with Sites, Copies, New and Stolen columns, find, kinds, sort, owner header with four clickable tiles, Why they're one owner with proof, Their sites table, What their sites say grouped, Clients they copied, Copy owner details, sites read lately on the Look up tab. (4.73)
+- **Finish this claim in the Settings look.** Step N of 5 card with one bar, steps as fold rows with a tag (Next step, Done, Skipped, To do), checks as rows with a round tick, Part 2 locked until Part 1 is done. (4.89)
+- **Legal portal form shows what you copied.** Each line's Copy turns into Copied, and the top says "3 of 10 lines copied". Drop-down lines are marked. (4.89)
 
 ## 6. Social media accounts
 
@@ -412,3 +414,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.87 | 26 Nov | Settings redrawn in the calm look (part 3): Health with Right now, Stats and Space used. |
 | 4.88 | 26 Nov | Settings redrawn in the calm look (part 4): Stats charts. |
 | 4.88.1 | 26 Nov | Fix: Old page names ("Hidden and approved sites", "Is everything working", "How PageProof is doing") replaced in hints, the tour and the tutorial; the tour gained a Tools stop. |
+| 4.89 | 26 Nov | Finish this claim in the Windows 11 look, portal form counts copied lines |
