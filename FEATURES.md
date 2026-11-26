@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.65.0** (25 Nov 2026).
+Last updated: version **4.66.0** (25 Nov 2026).
 
 ---
 
@@ -150,6 +150,8 @@ Last updated: version **4.65.0** (25 Nov 2026).
 - **Known bad sites.** Free lists of piracy, scam, phishing and malware sites (The Block List Project, URLhaus, OpenPhish), downloaded by themselves and looked up offline. Red tag, counts as Suspicious, "Known bad sites" quick filter. A top 10K site is only flagged by the piracy list. (4.60)
 - **Stopping a photo clears its matches.** Unanswered matches of a stopped photo move to Removed (tagged "Photo stopped"); Stolen and Licensed stay; Undo or Search again brings them back. (4.62)
 - **Finish this claim.** Pressing Stolen opens the claim steps in the copy panel: good case first (right photo, on their page, viable owner), then capture, evidence report and legal portal boxes, then Sent to legal. "Not a viable entity" closes the claim with nothing captured. Unfinished claims wait in the Not finished tab. (4.63)
+- **Calm All copies list.** One command bar (Group, Filters, Sort, Download, Columns), the column names once above the list (click Match or Found to sort), copies as cards, a tick box that picks every copy showing, a blue dot on copies found since your last visit. (4.66)
+- **Calm copy panel.** Three tabs (This copy, Claim, The site), the two pictures named "Your client's" and "Theirs", a line of facts under them, and a left edge you can drag to make the panel wider (remembered on this computer). (4.66)
 
 ## 6. Social media accounts
 
@@ -358,3 +360,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.64 | 25 Nov | Everything that was running carries on after an update, with a "Picked up after the update" note |
 | 4.64.1 | 25 Nov | Fix: Side panel removed (use the pop-up) |
 | 4.65 | 25 Nov | Calm look step 1: Lexend font, Windows 11 colours, status tiles at the top right |
+| 4.66 | 25 Nov | Calm look step 2: All copies list and the copy panel |
