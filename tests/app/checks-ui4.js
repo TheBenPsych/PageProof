@@ -19,8 +19,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const p = await page.evaluate(() => ({ head: !!document.querySelector('.clhead select[data-act="phclient"]'), av: !!document.querySelector('.clhead .cav'), corner: document.querySelectorAll('.pcard .ptile .cflags .flagbtn').length, cards: document.querySelectorAll('.pcard').length, dots: document.querySelectorAll('.pcard .tdots .td').length }));
   ok(p.head && p.av, 'Photos page: the heading is the client, with a badge and a switch');
   ok(p.cards > 0 && p.corner === p.cards * 2 && p.dots >= p.cards, 'Photos: ⚑ and ★ on each picture\'s corner, tags as dots');
-  await page.goto(url('app.html#owners')); await page.waitForTimeout(2000);
-  ok(await page.evaluate(() => document.querySelectorAll('.whyticks li').length > 0 && document.querySelectorAll('.sitechip .sl').length > 0), 'Site owners: green ticks and letter badges on their sites');
+  await page.goto(url('app.html#owners')); await page.waitForSelector('#ownerSites', { timeout: 60000 });
+  ok(await page.evaluate(() => document.querySelectorAll('#ownerWhy .owhy .okc').length > 0 && document.querySelectorAll('#ownerSites .osr .osl').length > 0), 'Site owners: green ticks and letter badges on their sites');
   await ctx.close();
   console.log(fails ? fails + ' FAILED' : 'ALL PASSED'); process.exit(fails ? 1 : 0);
 })().catch(e => { console.log('ERR', e); process.exit(1); });
