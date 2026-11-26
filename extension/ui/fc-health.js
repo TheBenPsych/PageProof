@@ -275,26 +275,7 @@ V.health = async () => {
     <p class="muted" style="margin:0;font-size:14px">This is exactly what was copied. Paste it into a message. It has numbers and settings only: no photo names, client names, sites or folder paths.</p>
     <textarea readonly style="width:100%;min-height:260px;font-family:var(--mono,monospace);font-size:12.5px;border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--sunk);color:var(--ink)">${esc(state.support)}</textarea></section>` : ''}`;
 };
-// ---------------------------------------------------------------- Skipped photos
-V.skipped = async () => {
-  const all = await FC.skipped();
-  const kinds = {}; for (const x of all) kinds[x[3]] = (kinds[x[3]] || 0) + 1;
-  const rows = all.filter(x => state.skTab === 'All' || x[3] === state.skTab);
-  const page = rows.slice(0, state.skMore);
-  const canRetry = all.some(x => x[3] !== 'type');
-  return `${head('Find copies', 'Skipped photos', 'Photos PageProof could not search, and why. They are tried again by themselves every 3 months.', `<a class="btn" href="#clients">Clients and photos</a>${canRetry ? `<button class="btn primary" data-act="skretry" data-v="">Try them all again</button>` : ''}`)}
-  ${await driveBanner()}
-  ${!all.length ? `<section class="card pad" style="text-align:center;padding:48px 22px"><span class="okcircle" aria-hidden="true">${ic('check', 28, 3)}</span><h2>No skipped photos</h2><p class="muted" style="margin:8px 0 0">Every photo PageProof has tried so far could be opened and searched.</p></section>` : `
-  <section class="card" style="overflow:hidden">
-    <div class="toolbar"><div class="tabs" role="tablist">${[['All', 'All', all.length], ...Object.keys(FC.SKIP_LABEL).filter(k => kinds[k]).map(k => [k, FC.SKIP_LABEL[k], kinds[k]])].map(([k, l, n]) => `<button role="tab" class="${state.skTab === k ? 'on' : ''}" aria-selected="${state.skTab === k}" data-act="sktab" data-v="${k}">${l} <span>${n.toLocaleString()}</span></button>`).join('')}</div></div>
-    ${state.skTab !== 'All' ? `<div style="padding:12px 18px;border-bottom:1px solid var(--line);background:var(--sunk);font-size:14px">${esc(FC.SKIP_WHY[state.skTab])}</div>` : ''}
-    <div class="scroll"><table><thead><tr><th>Photo</th><th>Client</th><th>Why</th><th>When</th><th></th></tr></thead><tbody>
-      ${page.map(([id, name, client, kind, at]) => `<tr><td><b style="overflow-wrap:anywhere">${esc(name)}</b><div class="faint mono" style="font-size:12px;overflow-wrap:anywhere">${esc(String(id).replace(/^d:\+?/, '').split('/').slice(0, -1).join(' › '))}</div></td><td>${esc(client || 'Client unknown')}</td><td><span class="tag ${kind === 'type' ? 'grey' : 'warn'}" title="${esc(FC.SKIP_WHY[kind] || '')}">${esc(FC.SKIP_LABEL[kind] || kind)}</span></td><td class="muted" style="white-space:nowrap">${esc(fmtDate(at))}</td><td style="text-align:right">${kind === 'type' ? '' : `<button class="btn" style="min-height:32px;font-size:13px" data-act="skretry" data-v="${esc(id)}">Try again</button>`}</td></tr>`).join('')}
-    </tbody></table></div>
-    <div class="row faint" style="padding:10px 18px;border-top:1px solid var(--line);font-size:12.5px;gap:12px"><span>Showing ${page.length.toLocaleString()} of ${rows.length.toLocaleString()}${all.length >= 5000 ? ' (the newest 5,000 are kept)' : ''}.</span>${rows.length > page.length ? '<button class="btn" style="min-height:30px;font-size:13px;margin-left:auto" data-act="skmore">Show more</button>' : ''}</div>
-  </section>`}`;
-};
-V.skipped.guard = async () => ((await FC.drive()).done ? null : 'connect');
+// Skipped photos moved to ui/pp-skipped.js (calm look step 13).
 
 Object.assign(ACTS, {
   stfailok: async () => { if (typeof PP_GUARD !== 'undefined') await PP_GUARD.clearFail(); state.storage = null; render(true); },
@@ -318,7 +299,4 @@ Object.assign(ACTS, {
     const b = view.querySelector('textarea'); if (b) b.scrollIntoView({ block: 'center', behavior: 'smooth' });
   },
   engretry: async v => { await FC.retryEngine(v); toast(FC.ENGINE_NAME[v] + ' is tried again with the next photo.'); render(true); },
-  sktab: v => { state.skTab = v; state.skMore = 100; render(true); },
-  skmore: () => { state.skMore += 200; render(true); },
-  skretry: async v => { const n = await FC.retrySkipped(v ? [v] : null); toast(n ? plural(n, 'photo goes', 'photos go') + ' to the front of the line.' : 'Nothing to try again.'); render(true); },
 });

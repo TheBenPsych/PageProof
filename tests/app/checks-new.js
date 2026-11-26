@@ -19,7 +19,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     const mk = async (p, bytes) => { let d = root; const parts = p.rel.split('/'); for (const x of parts.slice(0, -1)) d = await d.getDirectoryHandle(x, { create: true }); const fh = await d.getFileHandle(parts.at(-1), { create: true }); const w = await fh.createWritable(); if (bytes) await w.write(bytes); await w.close(); };
     await mk(ps[1], null); await mk(ps[2], new Uint8Array([1, 2, 3, 4, 5]));
     const c = new OffscreenCanvas(300, 200); c.getContext('2d').fillRect(0, 0, 50, 50); await mk(ps[3], await c.convertToBlob({ type: 'image/jpeg' }));
-    const tiff = { ...ps[0], id: ps[0].id + '.tif', name: 'x.tif', rel: ps[0].rel + '.tif' }; await FC.DB.put('photos', tiff);
+    const tiff = { ...ps[0], id: ps[0].id + '.tif', name: 'x.tif', rel: ps[0].rel + '.tif' }; await FC.DB.put('photos', tiff); await mk(tiff, new Uint8Array(4000));   // a TIFF PageProof's own reader can't make sense of
     const out = [];
     for (const p of [ps[0], ps[1], ps[2], ps[3], tiff]) { const r = await FC.readPhoto(p); out.push(r.error ? (await FC.DB.get('photos', p.id)).skip : 'ok'); }
     const list = await FC.skipped();
@@ -30,9 +30,9 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   });
   console.log(JSON.stringify(sk));
   ok(sk.out.join() === 'gone,empty,broken,ok,type' && sk.list === 4, 'Skipped: each reason is recognised and listed');
-  ok(sk.plan.due === false && sk.n === 1 && sk.retry === 1 && sk.left === 3 && sk.planRetry.tier === 0, 'Skipped: TIFF never retried, Try again puts a photo at the front');
-  await page.goto(url('app.html#skipped')); await page.waitForTimeout(900);
-  ok(await page.evaluate(() => document.querySelectorAll('.scroll tbody tr').length) === 3, 'Skipped photos page lists them');
+  ok(sk.plan.due === false && sk.n === 1 && sk.retry === 1 && sk.left === 3 && sk.planRetry.tier === 0, 'Skipped: a TIFF that can\'t be read is not retried, Try again puts a photo at the front');
+  await page.goto(url('app.html#skipped')); await page.waitForTimeout(1500);
+  ok(await page.evaluate(() => document.querySelectorAll('#skipList .skr').length) === 3, 'Skipped photos page lists them');
 
   // ---- broken engine
   const en = await page.evaluate(async () => {

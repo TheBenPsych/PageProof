@@ -96,7 +96,7 @@ V.clients = async () => {
   const list = clients.filter(tabs[state.cTab]).filter(c => !q || c.name.toLowerCase().includes(q))
     .sort((a, b) => (off(a) - off(b)) || (state.cSort === 'new' ? (nNew[b.name] || 0) - (nNew[a.name] || 0) : state.cSort === 'photos' ? (b.photos || 0) - (a.photos || 0) : (b.priority - a.priority)) || a.name.localeCompare(b.name));
   const sc = await FC.meta.get('scan');
-  const nSkipped = (await FC.skipped()).length;
+  const skAll = await FC.skipped(), nSkipped = skAll.length, skBy = {}; for (const x of skAll) skBy[x[2] || ''] = (skBy[x[2] || ''] || 0) + 1;
   const F1 = ((await FC.coverage().catch(() => null)) || {}).first || {}, once = (F1.clients || {});
   const spC = await FC.speed();
   const rateC = firstPerDay(await FC.keep(), await ppHardware(), F1.week || 0, spC, (await api.storage.local.get('fcLadder')).fcLadder || null);
@@ -122,7 +122,7 @@ V.clients = async () => {
   const row = c => { const [d, t] = once[c.name] || [0, 0], pct = t ? Math.floor(d / t * 100) : 0, o = !off(c), x = per[c.name] || {}, sel = state.cPicked.includes(c.name);
     return `<div class="clr2${o ? '' : ' off'}${sel ? ' sel' : ''}" data-act="cphotos" data-v="${esc(c.name)}" data-name="${esc(c.name)}" title="Open ${esc(c.name)}'s photos">
       <input type="checkbox" data-act="cpick" data-v="${esc(c.name)}" ${sel ? 'checked' : ''} aria-label="Pick ${esc(c.name)}">
-      <span class="cname">${clAv(c.name, 32)}<a href="#photos" data-act="cphotos" data-v="${esc(c.name)}"><b>${esc(c.name)}</b></a><button class="cpri${c.priority ? ' on' : ''}" data-act="cstar" data-v="${esc(c.name)}" aria-pressed="${!!c.priority}" aria-label="Priority client" title="${c.priority ? 'Priority client: searched right after High priority photos' : 'Make a priority client'}">${c.priority ? CLI.starf : CLI.star}</button>${c.extra ? '<span class="ktag">Own folder</span>' : ''}</span>
+      <span class="cname">${clAv(c.name, 32)}<a href="#photos" data-act="cphotos" data-v="${esc(c.name)}"><b>${esc(c.name)}</b></a><button class="cpri${c.priority ? ' on' : ''}" data-act="cstar" data-v="${esc(c.name)}" aria-pressed="${!!c.priority}" aria-label="Priority client" title="${c.priority ? 'Priority client: searched right after High priority photos' : 'Make a priority client'}">${c.priority ? CLI.starf : CLI.star}</button>${c.extra ? '<span class="ktag">Own folder</span>' : ''}${skBy[c.name] ? `<a class="skchip" href="#skipped?client=${encodeURIComponent(c.name)}" data-act="cskip" data-v="${esc(c.name)}" title="Photos PageProof could not search. See why.">${skBy[c.name].toLocaleString()} skipped ›</a>` : ''}</span>
       <span class="r num">${(c.photos || 0).toLocaleString()}</span>
       ${t ? `<span class="clbar" title="${d.toLocaleString()} of ${t.toLocaleString()} photos searched at least once"><span class="cbar"><i style="width:${pct}%"></i></span><b class="num">${pct}%</b></span>` : '<span class="kfaint">Not counted yet</span>'}
       <span class="kfaint num cdone">${!o ? 'Paused' : t ? esc(String(doneBy[c.name] || '').replace('~ ', '')) : ''}</span>

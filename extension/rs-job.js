@@ -8,7 +8,12 @@ const RS_JOB = (() => {
   // One photo, ready to search: a smaller copy for the search sites, a thumbnail, a fingerprint.
   async function prepare(file, extra) {
     let bmp;
-    try { bmp = await createImageBitmap(file); } catch (e) { return { error: (file.name || 'A photo') + ' could not be opened (HEIC and TIFF photos need converting to JPG first, with Open files › Convert files)' }; }
+    try { bmp = await createImageBitmap(file); } catch (e) {
+      // TIFF and HEIC: read here, in memory only (pp-rawpic.js). Nothing is written anywhere.
+      const raw = typeof PP_RAW !== 'undefined' && PP_RAW.is(file.name);
+      if (raw) { try { bmp = await PP_RAW.bitmap(file); } catch (e2) { bmp = null; } }
+      if (!bmp) return { error: (file.name || 'A photo') + ' could not be opened' + (raw ? ' (this TIFF or HEIC photo is too big, or an unusual kind)' : ''), raw: raw ? 1 : 0 };
+    }
     const w = bmp.width, hgt = bmp.height;
     // The search sites always get a fresh copy drawn from the pixels: it carries none of the
     // photo's hidden data (camera, GPS, copyright notes, names), and never the file itself.
