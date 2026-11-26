@@ -145,12 +145,13 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(/Extra searches/.test(rep) && /Credit search: \d+ searches \(Google \d+, Bing \d+\)/.test(rep), 'the stats file for Claude has the extra searches too');
 
   // ---- 3 Registrations
-  await page.goto(url('app.html#regs')); await page.waitForTimeout(2000);
-  const rg = await page.evaluate(() => document.body.innerText);
-  ok(/Not registered \(1\)/.test(rg) && /Applied, no VA yet \(1\)/.test(rg) && /a\.jpg/.test(rg), 'Registrations: one photo with no number, one with only an application number');
-  await page.fill('input[data-act="regset"]', 'VA 2-500-001'); await page.press('input[data-act="regset"]', 'Tab'); await page.waitForTimeout(1200);
-  const rg2 = await page.evaluate(() => document.body.innerText);
-  ok(/Not registered \(0\)/.test(rg2) && /Registered lately \(1\)/.test(rg2), 'typing the VA number moves it to Registered lately');
+  await page.goto(url('app.html#regs')); await page.waitForSelector('#regPanel', { timeout: 60000 }); await page.waitForTimeout(800);
+  const rgT = () => page.$$eval('#regPanel .rgtabs button', b => b.map(x => x.textContent.replace(/\s+/g, ' ').trim()).join(' | '));
+  const rg = await rgT();
+  ok(/Not registered 1/.test(rg) && /Applied, no VA yet 1/.test(rg) && /a\.jpg/.test(await page.textContent('#regPanel')), 'Registrations (inside Clients and photos): one photo with no number, one with only an application number: ' + rg);
+  await page.fill('#regPanel .rgin input', 'VA 2-500-001'); await page.click('#regPanel [data-act="regsave"]'); await page.waitForTimeout(1500);
+  const rg2 = await rgT();
+  ok(/Not registered 0/.test(rg2) && /Registered lately 1/.test(rg2), 'typing the VA number moves it to Registered lately: ' + rg2);
 
   // ---- 5 Find the company
   const lk = await page.evaluate(async base => { globalThis.PP_LOOKUP_HOME = () => base; const f = await FC.lookup('newsblog-example.com', ''); return { names: f.names, from: f.nameFrom, terms: f.terms }; }, base);

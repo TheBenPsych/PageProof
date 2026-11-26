@@ -10,7 +10,7 @@ const PP_MENU = [
   { id: 'home', label: 'Home', href: 'home' },
   { id: 'find', label: 'Copies found', href: 'found', badgeKey: 'newCopies', icon: 'copies',
     subs: [['All copies', 'found'], ['One at a time', 'review'], ['Keep searching', 'keep'], ['New search', 'search'], ['All searches', 'searches'], ['Credit search', 'credit'], ['Watching', 'watching'], ['Site owners', 'owners']] },
-  { id: 'clients', label: 'Clients', href: 'clients', icon: 'people', subs: [['Clients and photos', 'clients'], ['Registrations', 'regs'], ['Skipped photos', 'skipped']] },
+  { id: 'clients', label: 'Clients', href: 'clients', icon: 'people', subs: [['Clients and photos', 'clients'], ['Skipped photos', 'skipped']] },
   { id: 'library', label: 'Evidence', href: 'library', badgeKey: 'toCapture',
     subs: [['All evidence', 'library'], ['Needs a capture', 'tocapture'], ['Capture a page', 'capture'], ['Verify a pack', 'verify'], ['Weekly summary', 'weekly']] },
   { id: 'tools', label: 'Tools', href: 'tools', icon: 'tools',
@@ -22,7 +22,7 @@ const PP_MENU = [
 // item it now lives under.
 const PP_ROUTES = {
   home: ['home'], search: ['find', 'search'], searches: ['find', 'searches'], results: ['find', 'searches'], found: ['find', 'found'], review: ['find', 'review'], keep: ['find', 'keep'], connect: ['find', 'found'], credit: ['find', 'credit'], watching: ['find', 'watching'],
-  clients: ['clients', 'clients'], photos: ['clients', 'clients'], owners: ['find', 'owners'], who: ['find', 'owners'], skipped: ['clients', 'skipped'], regs: ['clients', 'regs'],
+  clients: ['clients', 'clients'], photos: ['clients', 'clients'], owners: ['find', 'owners'], who: ['find', 'owners'], skipped: ['clients', 'skipped'], regs: ['clients', 'clients'],
   library: ['library', 'library'], tocapture: ['library', 'tocapture'], capture: ['library', 'capture'], verify: ['library', 'verify'], weekly: ['library', 'weekly'],
   tools: ['tools', 'tools'], inspect: ['tools', 'inspect'], compare: ['tools', 'compare'], markup: ['tools', 'markup'], files: ['tools', 'files'], openfiles: ['tools', 'files'],
   settings: ['settings', 'settings'], health: ['settings', 'health'], stats: ['settings', 'stats'], hidden: ['settings', 'hidden'], browser: ['settings', 'browser'], setup: ['settings', 'browser'], help: ['settings', 'help'],

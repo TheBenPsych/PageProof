@@ -53,10 +53,10 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const Y = await page.evaluate(() => [...document.querySelectorAll('button[data-act="phyear"]')].map(b => b.dataset.v).filter(Boolean));
   console.log('folders', Y.join(', '));
   await page.click(`button[data-act="phyear"][data-v="${Y[0]}"]`); await page.waitForTimeout(500);
-  const f1 = await page.evaluate(y => ({ cards: document.querySelectorAll('.pcard').length, txt: (document.querySelector('.pgrid').previousElementSibling || {}).textContent, all2026: [...document.querySelectorAll('.pcard .faint')].every(s => s.textContent.startsWith(y)) }), Y[0]);
+  const f1 = await page.evaluate(y => ({ cards: document.querySelectorAll('.pcard').length, txt: (document.querySelector('.clshowing') || {}).textContent, all2026: [...document.querySelectorAll('.clgh b')].every(s => s.textContent.startsWith(y)) && document.querySelectorAll('.clgh b').length > 0 }), Y[0]);
   ok(f1.cards > 0 && f1.all2026, 'Photos: clicking a year shows only that year (' + f1.txt + ')');
   await page.click(`button[data-act="phyear"][data-v="${Y[1]}"]`); await page.waitForTimeout(500);
-  ok(await page.evaluate(y => [...document.querySelectorAll('.pcard .faint')].every(s => s.textContent.startsWith(y)) && document.querySelectorAll('.pcard').length > 0, Y[1]), 'Photos: clicking a quarter shows only ' + Y[1]);
+  ok(await page.evaluate(y => [...document.querySelectorAll('.clgh b')].every(s => s.textContent.replace(' · ', ' ') === y) && document.querySelectorAll('.clgh b').length === 1 && document.querySelectorAll('.pcard').length > 0, Y[1]), 'Photos: clicking a quarter shows only ' + Y[1]);
   // flag then check it shows (cache refreshed) and backup has it
   await page.click('.pcard .flagbtn'); await page.waitForTimeout(600);
   ok(await page.evaluate(() => !!document.querySelector('.pcard .flagbtn.on.hi')), 'Photos: flag shows straight away');

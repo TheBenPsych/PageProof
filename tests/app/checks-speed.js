@@ -157,10 +157,10 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.click('#ladderBox [data-act="keepladder"]'); await page.waitForTimeout(600);
   ok(await page.evaluate(async () => (await FC.keep()).ladder) === false && /Off/.test(await page.textContent('#ladderBox')), 'the ladder can be switched off');
   await page.goto(url('app.html#clients')); await page.waitForTimeout(1800);
-  const cp = await page.evaluate(() => ({ head: (document.getElementById('clientSpeed') || {}).textContent || '', by: [...document.querySelectorAll('.cdone')].map(e => e.textContent) }));
+  const cp = await page.evaluate(() => ({ head: ((document.getElementById('clientSpeed') || {}).title || '') + ' | ' + ((document.getElementById('clientSpeed') || {}).textContent || ''), by: [...document.querySelectorAll('.cdone')].map(e => e.textContent.trim()).filter(x => x && x !== 'Done' && x !== 'Paused') }));
   console.log(JSON.stringify(cp));
-  ok(/2 photos a day this week/.test(cp.head) && /Every photo searched once/.test(cp.head), 'Clients and photos shows this week\'s speed and when every photo is searched once');
-  ok(cp.by.length === 1 && /^done by /.test(cp.by[0]), 'each client not finished shows its done-by date');
+  ok(/2 photos a day this week/.test(cp.head) && /Searched once/.test(cp.head) && /Every photo by about /.test(cp.head), 'Clients and photos shows this week\'s speed and when every photo is searched once');
+  ok(cp.by.length === 1 && /[A-Z][a-z]{2} \d/.test(cp.by[0]), 'each client not finished shows its done-by date');
   for (const dark of [true]) {
     await page.emulateMedia({ colorScheme: dark ? 'dark' : 'light' });
     await page.goto(url('app.html#keep')); await page.waitForTimeout(1500);
