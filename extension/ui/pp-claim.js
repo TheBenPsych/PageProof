@@ -62,57 +62,79 @@ function clRowTag(c) {
   return `<span class="tag warn" title="The claim steps are not finished yet">Not finished${cl.at ? ': ' + esc(cl.at) : ''}</span>`;
 }
 
-// The steps card in the details panel.
+// The steps card in the details panel, in the Windows 11 Settings look (calm look batch 19):
+// a header card with one progress bar, then each step as a row that folds open. Inside an open
+// step, each check is its own row: a round mark, the question, and its buttons on the right.
+const CL_P = {
+  photo: '<rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1"/><circle cx="5.6" cy="6.3" r="1.2"/><path d="m1.8 11.4 3.4-3 2.6 2.2 2.4-2 4 3"/>',
+  owner: '<path d="M2.5 14V3h6.5v11M9 6.8h4.5V14M1.5 14h13M4.6 5.6h2.3M4.6 8.2h2.3M4.6 10.8h2.3M11 9.3h.9M11 11.8h.9"/>',
+  capture: '<path d="M1.8 5.2h3.1l1.2-1.9h3.8l1.2 1.9h3.1v8H1.8z"/><circle cx="8" cy="9" r="2.4"/>',
+  report: '<path d="M4 1.8h5.5L12.5 5v9.2H4z"/><path d="M9.5 1.8V5h3M6 8h4.5M6 10.5h4.5"/>',
+  portal: '<path d="M14 2 7.2 8.8M14 2 9.6 14 7.2 8.8 2 6.4z"/>',
+  lock: '<rect x="3.2" y="7" width="9.6" height="7" rx="1"/><path d="M5.3 7V5.1a2.7 2.7 0 0 1 5.4 0V7"/>',
+  flag: '<path d="M3 14V2.5M3 3h8.5l-1.8 2.5L11.5 8H3"/>',
+  check: '<path d="m4.6 8.3 2.2 2.1 4.6-4.8"/>', dash: '<path d="M5 8h6"/>', warn: '<path d="M8 2 14.5 13.5h-13z"/><path d="M8 6.5v3.2M8 11.6v.2"/>',
+  chevd: '<path d="M3.5 6 8 10.5 12.5 6"/>', ext: '<path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5M12 9.5v4H2.5V4h4"/>',
+};
+const clSvg = (n, z = 20) => `<svg viewBox="0 0 16 16" width="${z}" height="${z}" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${CL_P[n] || ''}</svg>`;
+const CL_ICON = { good: 'photo', owner: 'owner', capture: 'capture', report: 'report', portal: 'portal' };
+const CL_SUB = { good: 'Same photo, on their page, and the firm can pursue it', owner: 'Find the company behind the site, then say if it is viable', capture: 'Their page, saved with the address and time on top', report: 'The PDF with both photos, the match and the page details', portal: 'Copy each line into the firm\'s Add Infringement form' };
 async function clCard(c, ctx) {
   await claimsReady;
   const cl = clOf(c);
   if (cl.sent || cl.closed) {
-    return `<section class="clcard done" id="claimsteps"><div class="clhead"><b>${cl.sent ? `${ic('check', 16)} Sent to legal ${esc(shortDate(cl.sent))}${cl.by ? ' by ' + esc(cl.by) : ''}` : 'Claim closed: not a viable entity'}</b><button class="btn ghost sm" data-act="clreopen" style="margin-left:auto">Open the steps again</button></div></section>`;
+    return `<section class="clcard cs done" id="claimsteps"><div class="cshero"><span class="cshi ok">${clSvg('check', 22)}</span><span class="sx-tt"><b>${cl.sent ? `Sent to legal ${esc(shortDate(cl.sent))}${cl.by ? ' by ' + esc(cl.by) : ''}` : 'Claim closed: not a viable entity'}</b><span>${cl.sent ? 'This claim is finished' : 'No actively registered company was found behind this site'}</span></span><button class="btn" data-act="clreopen">Open the steps again</button></div></section>`;
   }
   const r = clSteps(c, ctx), soc = isSoc(c);
   const base = FC.baseOf(c.site);
-  const mark = x => x.done ? `<span class="clk y" aria-hidden="true">${ic('check', 14, 3)}</span>` : x.skip ? '<span class="clk s" aria-hidden="true">–</span>' : `<span class="clk${x === r.cur ? ' on' : ''}" aria-hidden="true">${r.s.indexOf(x) + 1}</span>`;
-  const line = (ok, txt, btn) => `<div class="clline ${ok === true ? 'y' : ok === false ? 'n' : ''}"><span class="cld" aria-hidden="true">${ok === true ? '✓' : ok === false ? '!' : '·'}</span><span class="clt">${txt}</span>${btn ? `<span class="clbtns">${btn}</span>` : ''}</div>`;
-  const skipBtn = x => x.k === 'portal' ? '' : `<button class="btn ghost sm" data-act="clskip" data-v="${x.k}">Skip this step</button>`;
+  // one check inside a step: ok true = done, false = a problem, null = still to do
+  const chk = (ok, t, sub, btns) => `<div class="csck${ok === true ? ' y' : ok === false ? ' n' : ''}"><span class="csm" aria-hidden="true">${ok === true ? clSvg('check', 14) : ok === false ? clSvg('warn', 13) : ''}</span><span class="cstt"><b>${t}</b>${sub ? `<span>${sub}</span>` : ''}</span>${btns ? `<span class="csbtns">${btns}</span>` : ''}</div>`;
   const body = async x => {
     if (x.k === 'good') return [
-      line(x.same || null, x.exact ? `Same photo: ${c.pct}% lines up` : x.same ? 'You checked: it\'s the same photo' : 'Is it the same photo? Compare them closely.', x.same ? '' : `<button class="btn sm" data-act="compare">${ic('layers', 14)} Compare</button><button class="btn sm primary" data-act="clyes" data-v="same">Yes, same photo</button>`),
-      line(x.onPage || null, x.onPage ? (clOf(c).onPage === 'yes' ? 'You checked: it\'s on their page' : soc ? 'The post\'s own picture matches' : 'PageProof found the photo on their page') : soc ? 'Not sure the photo is in the post yet' : !c.pf ? 'Reading their page…' : !c.pf.ok ? 'Their page could not be read. Look for yourself.' : 'The photo was not found in their page\'s code. Look for yourself.', x.onPage ? '' : `<a class="btn sm" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer">Open their page ${ic('ext', 12)}</a><button class="btn sm primary" data-act="clyes" data-v="onPage">Yes, it's there</button>`),
-      line(x.rulesOk ? true : x.stop ? false : null, x.stop ? 'A firm rule says stop. See the Claim tab.' : x.rulesOk ? 'Firm rules: OK to pursue' : 'Kind of site: ' + kindSelect(c, ctx.kind), x.stop ? '<button class="btn sm" data-act="dtab" data-v="claim">See why</button>' : ''),
-      line(x.reg ? true : null, x.reg ? 'Registration ' + esc(x.reg) : 'No registration number found yet', x.reg ? '' : `<a class="btn ghost sm" href="#clients?reg=none&folder=${encodeURIComponent(String(c.photo || '').replace(/^d:/, '').replace(/\/[^/]*$/, ''))}">Registrations</a>`),
+      chk(x.same || null, x.exact ? `Same photo: ${c.pct}% lines up` : x.same ? 'You checked: it\'s the same photo' : 'Is it the same photo?', x.same ? '' : 'Compare them closely first', x.same ? '' : `<button class="btn" data-act="compare">${ic('layers', 15)} Compare</button><button class="btn primary" data-act="clyes" data-v="same">Yes, same photo</button>`),
+      chk(x.onPage || null, x.onPage ? (clOf(c).onPage === 'yes' ? 'You checked: it\'s on their page' : soc ? 'The post\'s own picture matches' : 'PageProof found the photo on their page') : soc ? 'Is the photo in the post?' : 'Is it on their page?', x.onPage ? '' : soc ? 'Not sure yet. Look for yourself' : !c.pf ? 'Reading their page…' : !c.pf.ok ? 'Their page could not be read. Look for yourself' : 'Not found in their page\'s code. Look for yourself', x.onPage ? '' : `<a class="btn" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer">${soc ? 'Open the post' : 'Open their page'} ${clSvg('ext', 14)}</a><button class="btn primary" data-act="clyes" data-v="onPage">Yes, it's there</button>`),
+      chk(x.rulesOk ? true : x.stop ? false : null, x.stop ? 'A firm rule says stop' : x.rulesOk ? 'Firm rules: OK to pursue' : 'What kind of site is it?', x.stop ? 'See the Claim tab for why' : x.rulesOk ? '' : 'The firm\'s rules depend on it', x.stop ? '<button class="btn" data-act="dtab" data-v="claim">See why</button>' : x.rulesOk ? '' : kindSelect(c, ctx.kind)),
+      chk(x.reg ? true : null, x.reg ? 'Registration ' + esc(x.reg) : 'Registration number', x.reg ? '' : 'None found in Drive yet. Not needed to go on', x.reg ? '' : `<a class="btn" href="#clients?reg=none&folder=${encodeURIComponent(String(c.photo || '').replace(/^d:/, '').replace(/\/[^/]*$/, ''))}">Registrations</a>`),
     ].join('');
     if (x.k === 'owner') {
-      if (soc) return line(!!c.acct, c.acct ? 'Posted by ' + esc(c.acct.handle) : 'The account isn\'t known yet.', c.acct ? '' : '<button class="btn sm" data-act="dtab" data-v="acct">Set the account</button>');
+      if (soc) return chk(!!c.acct, c.acct ? 'Posted by ' + esc(c.acct.handle) : 'Who posted it?', c.acct ? '' : 'The account isn\'t known yet', c.acct ? '' : '<button class="btn" data-act="dtab" data-v="acct">Set the account</button>');
       const f = ctx.f || {}, e = x.ent;
       const names = [...new Set([e.entity, ...(f.names || []), f.fbCompany].filter(Boolean))].slice(0, 4);
-      return `${e.entity ? line(x.done ? true : null, 'Company: <b>' + esc(e.entity) + '</b>' + (e.state ? ', ' + esc(e.state) : '') + (e.regStatus ? ' · registry says ' + esc(e.regStatus) : '')) : ''}
-        ${!e.entity && names.length ? `<div class="clnames">${names.map(n => `<span class="clname"><b>${esc(n)}</b><button class="btn ghost sm" data-act="entuse" data-v="${esc(base)}|${esc(n)}|${IS_CO.test(n.trim()) ? 'Company name' : 'Seller name (DBA)'}">Use this name</button></span>`).join('')}</div>` : ''}
-        ${!e.entity && !names.length ? line(null, f.site ? 'No company name found on the site.' : 'Read the site to find the names it goes by.') : ''}
-        <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn sm" data-act="gowho" data-v="${esc(c.id)}">${ic('owner', 14)} Find the company</button><button class="btn sm${x.done ? ' primary' : ''}" data-act="entstatus" data-v="${esc(base)}|Seemingly viable">Seemingly viable</button><button class="btn sm" data-act="clnotviable">Not a viable entity</button></div>
-        <span class="faint" style="font-size:12px">Find the company has the full checklist: brand, then company, then active in the state registry.</span>`;
+      return (e.entity ? chk(x.done ? true : null, 'Company: ' + esc(e.entity), [e.state, e.regStatus ? 'registry says ' + e.regStatus : ''].filter(Boolean).map(esc).join(' · '), '')
+        : names.length ? names.map(n => chk(null, esc(n), 'A name the site goes by', `<button class="btn" data-act="entuse" data-v="${esc(base)}|${esc(n)}|${IS_CO.test(n.trim()) ? 'Company name' : 'Seller name (DBA)'}">Use this name</button>`)).join('')
+        : chk(null, f.site ? 'No company name found on the site' : 'Which company is it?', f.site ? '' : 'Read the site to find the names it goes by', ''))
+        + chk(null, 'Find the company', 'The full checklist: brand, then company, then active in the state registry', `<button class="btn" data-act="gowho" data-v="${esc(c.id)}">${ic('owner', 15)} Find the company</button>`)
+        + chk(x.done ? true : null, x.done ? 'Seemingly viable' : 'Is it a viable company?', x.done ? 'You marked it' : 'An active company you can claim against', x.done ? '' : `<button class="btn" data-act="clnotviable">Not a viable entity</button><button class="btn primary" data-act="entstatus" data-v="${esc(base)}|Seemingly viable">Seemingly viable</button>`);
     }
-    if (x.k === 'capture') return line(x.done || null, x.done ? 'Page captured ' + esc(shortDate(ctx.capturedAt)) : 'Saves their page with the address and time on top and 3 trusted timestamps.', x.done ? '<button class="btn ghost sm" data-act="capturecopy">Capture again</button>' : `<button class="btn sm primary" data-act="capturecopy">${ic('capture', 14)} Capture now</button>`);
-    if (x.k === 'report') return line(x.done || null, x.done ? 'Evidence report saved' : 'The PDF with both photos, the match and the page details. Saving the capture makes it too.', x.done ? '<button class="btn ghost sm" data-act="evidence">Make it again</button>' : `<button class="btn sm primary" data-act="clreport">${ic('doc', 14)} Make the report</button>`);
+    if (x.k === 'capture') return chk(x.done || null, x.done ? 'Page captured ' + esc(shortDate(ctx.capturedAt)) : 'Save their page as evidence', x.done ? '' : 'About a minute. Address, time and 3 trusted timestamps on top', x.done ? '<button class="btn" data-act="capturecopy">Capture again</button>' : `<button class="btn primary" data-act="capturecopy">${ic('capture', 15)} Capture now</button>`);
+    if (x.k === 'report') return chk(x.done || null, x.done ? 'Evidence report saved' : 'Save the evidence report', x.done ? '' : 'Saving the capture makes it too', x.done ? '<button class="btn" data-act="evidence">Make it again</button>' : `<button class="btn primary" data-act="clreport">${ic('doc', 15)} Make the report</button>`);
     if (x.k === 'portal') return typeof ppPortalCard === 'function' ? await ppPortalCard(c, ctx.p, ctx.reg) : '';
     return '';
   };
-  let h = '';
-  for (const x of r.s) {
+  const step = async x => {
     const locked = x.part === 2 && !r.part1;
-    if (x.part === 1 && x === r.s[0]) h += '<div class="clpart">Part 1 · Is it a good case?</div>';
-    if (x.part === 2 && x === r.s[2]) h += `<div class="clpart">Part 2 · Build the case${r.part1 ? '' : ' <span class="faint">(after Part 1, so no time is spent on a weak case)</span>'}</div>`;
-    const open = x === r.cur || state.clOpenStep === c.id + ':' + x.k;
-    h += `<div class="clstep${x.done ? ' y' : ''}${x.skip ? ' s' : ''}${open ? ' on' : ''}${locked ? ' lock' : ''}" data-step="${x.k}">
-      <button class="clsh" data-act="clstep" data-v="${x.k}"${locked ? ' disabled' : ''}>${mark(x)}<b>${esc(x.title)}</b>${x.skip ? '<span class="tag grey">Skipped</span>' : ''}${x.k === 'owner' && x.ent && x.ent.status && x.ent.status !== 'Not checked yet' ? `<span class="tag ${x.done ? 'ok' : 'bad'}">${esc(x.ent.status)}</span>` : ''}</button>
-      ${open && !locked ? `<div class="clbody">${await body(x)}${x.skip ? '<button class="btn ghost sm" data-act="clunskip" data-v="' + x.k + '">Do this step after all</button>' : !x.done ? `<div class="row" style="justify-content:flex-end">${skipBtn(x)}</div>` : ''}</div>` : ''}
-    </div>`;
-  }
+    const open = !locked && (x === r.cur || state.clOpenStep === c.id + ':' + x.k);
+    const owner = x.k === 'owner' && x.ent && x.ent.status && x.ent.status !== 'Not checked yet' ? x.ent.status : '';
+    const [say, cls] = x.done ? ['Done', 'ok'] : x.skip ? ['Skipped', 'grey'] : locked ? ['Opens after Part 1', ''] : x === r.cur ? ['Next step', 'acc'] : owner ? [owner, 'bad'] : ['To do', ''];
+    const icon = x.done ? `<span class="csdone">${clSvg('check', 15)}</span>` : x.skip ? `<span class="csskip">${clSvg('dash', 15)}</span>` : clSvg(locked ? 'lock' : CL_ICON[x.k]);
+    const sub = x.done ? (owner || 'Done') : x.skip ? 'You skipped this step' : CL_SUB[x.k];
+    const head = `<span class="sx-ic">${icon}</span><span class="sx-tt"><b>${esc(x.title)}</b><span>${esc(sub)}</span></span><span class="sx-ctl">${cls ? `<span class="sx-tag ${cls === 'acc' ? 'csacc' : cls}">${cls === 'ok' ? clSvg('check', 13) : ''}${esc(say)}</span>` : `<span class="cssay">${esc(say)}</span>`}<span class="sx-chev">${clSvg('chevd', 16)}</span></span>`;
+    const cls2 = `clstep${x.done ? ' y' : ''}${x.skip ? ' s' : ''}${open ? ' on' : ''}${locked ? ' lock' : ''}${x === r.cur ? ' cur' : ''}`;
+    if (locked) return `<div class="${cls2}" data-step="${x.k}"><div class="sx-row">${head}</div></div>`;
+    const foot = x.skip ? `<div class="csfoot"><button class="btn" data-act="clunskip" data-v="${x.k}">Do this step after all</button></div>` : !x.done && x.k !== 'portal' ? `<div class="csfoot"><button class="btn ghost" data-act="clskip" data-v="${x.k}">Skip this step</button></div>` : '';
+    return `<div class="${cls2}" data-step="${x.k}"><button class="sx-row cshead" data-act="clstep" data-v="${x.k}" aria-expanded="${open}">${head}</button>${open ? `<div class="sx-fold csfold">${await body(x)}${foot}</div>` : ''}</div>`;
+  };
+  let p1 = '', p2 = '';
+  for (const x of r.s) { if (x.part === 1) p1 += await step(x); else p2 += await step(x); }
+  const nDone = r.s.filter(x => x.done || x.skip).length, pct = Math.round(nDone / r.s.length * 100);
   const notViable = r.s[1].notViable;
-  return `<section class="clcard" id="claimsteps" aria-label="Finish this claim">
-    <div class="clhead"><b>Finish this claim</b><span class="tag ${r.ready ? 'ok' : 'warn'}" style="margin-left:auto">${r.n} of 4 done</span></div>
-    <div class="clbar" aria-hidden="true">${r.s.map(x => `<i class="${x.done || x.skip ? 'y' : x === r.cur ? 'on' : ''}"></i>`).join('')}</div>
+  return `<section class="clcard cs" id="claimsteps" aria-label="Finish this claim">
+    <div class="cshero"><span class="cshi">${clSvg('flag', 22)}</span><span class="sx-tt"><b>Finish this claim</b><span>Step ${r.s.indexOf(r.cur) + 1} of ${r.s.length}: ${esc(r.cur.title)}</span></span><span class="csn">${nDone} of ${r.s.length} steps done</span>
+      <div class="csbar" role="progressbar" aria-label="Steps done" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${Math.max(pct, 2)}%"></i></div></div>
     ${notViable ? `<div class="banner bad" style="padding:10px 12px"><span style="flex:1">This site is marked <b>Not a viable entity</b>. Close the claim, or change the status above if that's wrong.</span><button class="btn sm" data-act="clnotviable">Close the claim</button></div>` : ''}
-    ${h}</section>`;
+    <div class="sx-group"><h3 class="clpart">Part 1: Is it a good case?</h3><div class="sx-stack">${p1}</div></div>
+    <div class="sx-group"><h3 class="clpart">Part 2: Build the case${r.part1 ? '' : '<em>Opens when Part 1 is done</em>'}</h3><div class="sx-stack">${p2}</div></div>
+  </section>`;
 }
 // The buttons pinned at the bottom of the panel while a claim is open.
 function clFoot(c, ctx) {
