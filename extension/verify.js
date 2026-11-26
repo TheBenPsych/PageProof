@@ -35,16 +35,17 @@ async function checkFiles(files, zipBytes) {
   }
 
   // Timestamps
-  const tsRows = [];
+  const tsRows = [], tsList = [];
   let tsGood = 0, tsBad = 0;
   const tsFiles = [...files.keys()].filter(n => n.endsWith('.tsr'));
   for (const n of tsFiles) {
     const service = n.replace(/^.*\//, '').replace(/\.tsr$/, '').replace(/^fingerprints\.sha256$/, 'timestamp');
     try {
       const r = await PP_TSVERIFY(files.get(n), fp);
+      tsList.push({ service, ok: !!r.ok, time: r.time || '', signer: r.signer || '', issuer: r.issuer || '', problem: r.problem || '' });
       if (r.ok) { tsGood++; tsRows.push(['ok', service + ': signed ' + r.time + ' by "' + r.signer + '" (certificate issued by "' + r.issuer + '")']); }
       else { tsBad++; tsRows.push(['no', service + ': ' + r.problem + (r.time ? ' (receipt time ' + r.time + ')' : '')]); }
-    } catch (e) { tsBad++; tsRows.push(['no', service + ': the receipt could not be read (' + e.message + ')']); }
+    } catch (e) { tsBad++; tsRows.push(['no', service + ': the receipt could not be read (' + e.message + ')']); tsList.push({ service, ok: false, time: '', signer: '', issuer: '', problem: 'The receipt could not be read (' + e.message + ').' }); }
   }
 
   // Files in the zip that the fingerprint list doesn't cover
@@ -62,6 +63,11 @@ async function checkFiles(files, zipBytes) {
   // Details from the record
   const det = files.get('capture-details.txt') ? new TextDecoder().decode(files.get('capture-details.txt')) : '';
   const pick = label => { const m = new RegExp('^' + label + ':\\s*(.+)$', 'm').exec(det); return m ? m[1].trim() : ''; };
+
+  // The same answers as plain values, for the page in the PageProof app (ui/verify-calm.js).
+  globalThis.PP_VERIFIED = { rows, changed, missing, ts: tsList, tsGood, tsBad, extras, zipHash, folder: !zipBytes,
+    saved: logMatch ? { at: logMatch.s.at, collector: logMatch.s.collector || '', id: logMatch.e.id } : null,
+    url: pick('Web address'), captured: pick('Captured UTC'), captureId: pick('Capture ID'), caseRef: pick('Case / ref'), collector: pick('Collected by'), archived: pick('Archived copy') };
 
   // Verdict
   out.textContent = '';
@@ -113,6 +119,7 @@ async function checkFiles(files, zipBytes) {
 
 async function checkFile(name, bytes) {
   const h = await hex(bytes);
+  globalThis.PP_VERIFIED_FILE = { name, hash: h, checked: !!lastPack, hit: lastPack ? (lastPack.find(x => x.hash === h) || {}).file || '' : '' };
   out.textContent = '';
   out.append(el('h2', null, 'Fingerprint of ' + name));
   out.append(el('p', null, h));

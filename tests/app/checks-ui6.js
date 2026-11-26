@@ -52,13 +52,10 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.goto(url('convert.html')); await page.waitForTimeout(800);
   ok(await page.evaluate(() => getComputedStyle(document.querySelector('.tp-drop .can')).display === 'grid' && document.querySelectorAll('.tp-drop .can span').length >= 6), 'Convert: what it can do is a grid of tiles');
 
-  // Tools page: coloured groups and Used lately
-  await page.goto(url('app.html#inspect')); await page.waitForTimeout(1200);
-  await page.goto(url('app.html#compare')); await page.waitForTimeout(1200);
+  // Tools page: the six real tools (Opened lately is checked in checks-calm17.js)
   await page.goto(url('app.html#tools')); await page.waitForTimeout(1200);
-  const tl = await page.evaluate(() => ({ used: [...document.querySelectorAll('.toolrecent .tused b')].map(b => b.textContent), groups: [...document.querySelectorAll('.toolsec')].map(s => s.className) }));
-  ok(tl.used[0] === 'Compare two photos' && tl.used[1] === 'Inspect a photo', 'Tools: Used lately shows the last tools, newest first: ' + tl.used.join(', '));
-  ok(['blue', 'purple', 'green'].every(c => tl.groups.some(g => g.includes(c))), 'Tools: each group has its own colour');
+  const tl = await page.evaluate(() => [...document.querySelectorAll('#tlTiles .tn-tile')].map(a => a.dataset.tool));
+  ok(tl.join() === 'inspect,compare,markup,files,openfiles,verify', 'Tools: the six tools: ' + tl.join(', '));
   await ctx.close();
   console.log(fails ? fails + ' FAILED' : 'ALL PASSED'); process.exit(fails ? 1 : 0);
 })().catch(e => { console.log('ERR', e); process.exit(1); });

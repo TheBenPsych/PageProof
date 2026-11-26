@@ -13,6 +13,8 @@ async function standaloneChecker() {
   html = html.replace('<link rel="icon" href="icons/icon32.png">', () => '<link rel="icon" href="' + iconUrl + '">');
   html = html.replace('src="icons/icon48.png"', () => 'src="' + iconUrl + '"');
   html = html.replace(/<a class="link" href="(log|markup)\.html"[^>]*>[^<]*<\/a>/g, '');
+  // The pack's own copy keeps its plain look: the app-only look (calm) is left out of it.
+  html = html.replace(/<link rel="stylesheet" href="ui\/calm-[a-z]+\.css">\n?/g, '').replace(/ *<script src="ui\/(tool-kit|verify-calm)\.js"><\/script>\n?/g, '');
   const themeJs = await inline('theme.js');
   html = html.replace('<script src="theme.js"></script>', () => '<script>window.PP_STANDALONE = true;</script>\n' + themeJs);
   for (const f of ['unzip.js', 'tsverify.js', 'verify.js']) { const js = await inline(f); html = html.replace('<script src="' + f + '"></script>', () => js); }

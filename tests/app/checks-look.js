@@ -29,9 +29,9 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const menu = await page.evaluate(() => [...document.querySelectorAll('#side a')].map(a => a.textContent.trim()).join(' | '));
   ok(/Copies found/.test(menu) && /Clients/.test(menu) && /Evidence/.test(menu) && /Settings/.test(menu), 'Menu has the new short list');
   await go('tools');
-  const tools = await page.evaluate(() => [...document.querySelectorAll('a.tool')].map(a => a.getAttribute('href')));
+  const tools = await page.evaluate(() => [...document.querySelectorAll('a.tn-tile')].map(a => a.getAttribute('href')));
   const dead = await page.evaluate(hs => hs.filter(h => !V[h.slice(1)] && !PP_ROUTES[h.slice(1)]), tools);
-  ok(tools.length >= 14 && !dead.length, 'Tools page lists every tool and each one opens (' + tools.length + ')' + (dead.length ? ' missing: ' + dead : ''));
+  ok(tools.length === 6 && !dead.length, 'Tools page lists every tool and each one opens (' + tools.length + ')' + (dead.length ? ' missing: ' + dead : ''));
   await shot('tools');
   await go('home'); await shot('home');
   ok(await page.evaluate(() => document.querySelectorAll('#mostCopied .toprow').length > 0), 'Home shows the most copied photos');

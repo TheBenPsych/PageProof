@@ -1,0 +1,98 @@
+/* The tool pages in the calm look (step 17): Verify a pack, Inspect a photo, Compare two photos,
+   Mark up a copy, Convert files. Loaded after win11.css (colours, Lexend) and calm-search.css
+   (cards, .nbtn buttons, .ksq squares, .kh2, .kn1, .ktag, the page title .nhead). */
+.tn{gap:20px;--okbig:#0F7B0F}
+:root[data-theme="dark"] .tn{--okbig:#2F8F2F}
+.tn .mono{font-family:Consolas,"Cascadia Mono",ui-monospace,monospace;font-size:13.5px;overflow-wrap:anywhere}
+.tn .nhead a.bc{color:var(--faint);font-weight:400;text-decoration:none}
+.tn .nhead a.bc:hover{color:var(--accent)}
+.tn-ib{width:34px;height:34px;display:inline-grid;place-items:center;border-radius:4px;border:1px solid transparent;background:none;color:var(--muted);cursor:pointer;vertical-align:middle}
+.tn-ib:hover{background:var(--hover);color:var(--ink)}
+.tn-ib.done{color:var(--ok)}
+.tn-ib:focus-visible,.tn summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tn-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}
+.tn-two.one{grid-template-columns:minmax(0,1fr)}
+.ktiles2{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px}
+.kt2{display:flex;align-items:center;gap:18px;padding:16px 24px}
+.kt2>span{display:flex;flex-direction:column;min-width:0}
+.kt2 b{font-size:28px;font-weight:600;line-height:1.15;color:var(--ink)}
+.kt2 .l{font-size:15px;color:var(--ink)}
+.kt2 .s{font-size:13.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* the line under the title: what is open, and the buttons */
+.tn-cmd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 0 16px;border-bottom:1px solid var(--line)}
+.tn-fchip{display:flex;align-items:center;gap:12px;min-width:0;max-width:100%}
+.tn-fchip img{width:52px;height:36px;object-fit:cover;border-radius:4px;border:1px solid var(--line);flex:none}
+.tn-fchip .kn1 b{font-size:15.5px}
+
+/* the big drop card of a tool with nothing open */
+.tn-drop{display:flex;align-items:center;gap:24px;padding:26px 30px;border:1.5px dashed color-mix(in srgb,var(--accent) 45%,var(--line))!important;background:color-mix(in srgb,var(--accent-soft) 45%,var(--surface))!important}
+.tn-drop.big{flex-direction:column;text-align:center;padding:56px 30px;gap:18px}
+body.over .tn-drop{border-color:var(--accent)!important;background:var(--accent-soft)!important}
+.tn-dt{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0}
+.tn-dt b{font-size:20px;font-weight:600;color:var(--ink)}
+.tn-dt span{color:var(--muted);font-size:15px;max-width:980px}
+.tn-drop.big .tn-dt{align-items:center;flex:none}
+.tn-db{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+
+/* Opened lately, and "what this tool reads" */
+.tn-recent,.tn-what{padding:20px 24px;display:flex;flex-direction:column}
+.tn-recent .kh2{margin-bottom:8px}
+.tn-rr{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.tn-rr:last-child{border-bottom:0}
+.tn-rr img{width:56px;height:40px;object-fit:cover;border-radius:4px}
+.tn-rr .ksq{margin-left:8px}
+.tn-rr .kn1>span{display:flex;align-items:center;gap:7px}
+.tn-dot{width:8px;height:8px;border-radius:50%;background:var(--c);flex:none}
+.tn-wr{display:grid;grid-template-columns:20px minmax(0,1fr);gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.tn-wr:last-child{border-bottom:0}
+.tn-wr>svg{color:var(--accent)}
+
+/* folds */
+.tn-exp{padding:0}
+.tn-exp>summary{list-style:none;cursor:pointer}
+.tn-exp>summary::-webkit-details-marker{display:none}
+.tn-fold{display:grid;grid-template-columns:20px minmax(0,1fr) 16px;gap:14px;align-items:center;padding:13px 22px}
+.tn-fold>svg{color:var(--muted)}
+.tn-fold>svg:last-child{color:var(--faint);transition:transform .15s}
+.tn-exp[open]>.tn-fold>svg:last-child{transform:rotate(180deg)}
+.tn-expb{padding:0 22px 16px 56px}
+.tn-note{display:flex;align-items:center;gap:8px;margin:0}
+
+/* ---------- Verify a pack ---------- */
+body.vcalm #main>.pg-head,body.vcalm #main>.pg-card,body.vcalm #out{display:none!important}
+body.vcalm #main.vmain{max-width:none;padding:22px 32px 48px 28px!important;gap:0!important;margin:0}
+.tn-ans{display:flex;align-items:center;gap:22px;padding:22px 28px;border-radius:8px;border:1px solid transparent}
+.tn-ans .ksq{border-radius:50%}
+.tn-ans>div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.tn-ans b{font-size:24px;font-weight:600;overflow-wrap:anywhere}
+.tn-ans span{color:var(--ink);font-size:15.5px}
+.tn-ans.good{background:var(--ok-soft);border-color:color-mix(in srgb,var(--ok) 30%,transparent)}.tn-ans.good b{color:var(--ok)}
+.tn-ans.warn{background:var(--warn-soft);border-color:color-mix(in srgb,var(--warn) 30%,transparent)}.tn-ans.warn b{color:var(--warn)}
+.tn-ans.bad{background:var(--bad-soft);border-color:color-mix(in srgb,var(--bad) 30%,transparent)}.tn-ans.bad b{color:var(--bad)}
+.tn-ans.info{background:var(--accent-soft)}.tn-ans.info b{color:var(--ink)}.tn-ans.info .ksq{background:var(--accent)}
+.tn-two.v{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}
+.tn-about,.tn-tsl{padding:20px 24px}
+.tn-lr{display:grid;grid-template-columns:140px minmax(0,1fr);gap:16px;padding:11px 0;border-bottom:1px solid var(--line);font-size:14.5px;align-items:center}
+.tn-lr:last-child{border-bottom:0}
+.tn-lr .l{color:var(--muted)}
+.tn-lr .v{font-weight:500;overflow-wrap:anywhere;color:var(--ink)}
+.tn-tr{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:14px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+.tn-tr:last-child{border-bottom:0}
+.tn-tr .ksq{border-radius:50%}
+.tn-tr.bad .kn1>span{white-space:normal;color:var(--bad)}
+.tn-fl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.tn-fl li{display:grid;grid-template-columns:16px minmax(0,1fr);gap:10px;align-items:center;padding:6px 0;font-size:14px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.tn-fl li:last-child{border-bottom:0}
+.tn-fl li.ok svg{color:var(--ok)}.tn-fl li.no svg{color:var(--bad)}.tn-fl li.no{color:var(--bad);font-weight:600}.tn-fl li.info svg{color:var(--accent)}
+.tn-busy{display:flex;align-items:center;gap:16px;padding:22px 26px}
+.tn-spin{width:28px;height:28px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--accent);animation:tnspin .9s linear infinite;flex:none}
+@keyframes tnspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.tn-spin{animation:none}}
+
+@media (max-width:1500px){.ktiles2{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:1100px){.tn-two,.tn-two.v{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:700px){.ktiles2{grid-template-columns:minmax(0,1fr)}.tn-lr{grid-template-columns:minmax(0,1fr);gap:2px}.tn-ans{flex-direction:column;align-items:flex-start}body.vcalm #main.vmain{padding:16px!important}}
+.tn-fl li::before{content:none!important;display:none!important}
+.tn details.tn-exp{margin:0;width:auto}
+body.vcalm #content{padding:0;margin:0}
