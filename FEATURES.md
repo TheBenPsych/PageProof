@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.77.0** (26 Nov 2026).
+Last updated: version **4.78.0** (26 Nov 2026).
 
 ---
 
@@ -49,6 +49,8 @@ Last updated: version **4.77.0** (26 Nov 2026).
 - **Clock check:** warns if this computer's clock is off compared with the timestamp services. (4.15)
 - Guides: VERIFYING.md (how anyone checks a pack), TUTORIAL.md, and a Word install guide for the team.
 - **Never short on timestamps.** A timestamp service that doesn't answer is asked again twice, then GlobalSign or Entrust stand in, so every pack gets three trusted timestamps. (4.41)
+- **Calm All evidence.** Captures and Evidence reports tabs, picture cards by week and month or a list, badges for what is missing, quick filters, a details panel per capture, Group: Case number, Match ID copy, Download list for both tabs, Show in Downloads. (4.78)
+- **Waiting for a capture.** Stolen copies with no evidence pack show in a bar and a filter in All evidence, on Copies found › Not finished and on Home, with how long the oldest has waited. (4.78)
 
 ## 3. Look closer at pictures
 
@@ -384,3 +386,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.75 | 26 Nov | Calm look step 11: pop-up with blue Capture, number rows, five tool buttons, bottom bar |
 | 4.76 | 26 Nov | Calm look step 12: Clients and photos with Registrations inside, photo panel, filters |
 | 4.77 | 26 Nov | Calm look step 13: Skipped photos; TIFF and HEIC photos are read and searched (read only) |
+| 4.78 | 26 Nov | Calm look step 14: All evidence (tabs, badges, quick filters, details panel, group by case number); Needs a capture folded into it |
