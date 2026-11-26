@@ -24,6 +24,12 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
       brand: getComputedStyle(document.querySelector('#side .brand')).display, blank: document.querySelectorAll('#side a[target=_blank]').length,
       drop: !!document.querySelector('.tp-drop'),
     }));
+    if (f === 'inspect') {   // Inspect has the calm look (checks-calm17b.js): its own title and drop card
+      const c = await page.evaluate(() => ({ h1: document.querySelector('#iRoot .nhead').textContent, old: !!document.getElementById('tpHead').offsetParent || !!document.getElementById('side').offsetParent, drop: !!document.getElementById('iPick').offsetParent }));
+      ok(/Inspect a photo/.test(c.h1) && !c.old && r.blank === 0, f + ': calm page title, no second logo or link list');
+      ok(c.drop, f + ': starts with the drop card');
+      continue;
+    }
     ok(r.h1.trim() === h1 && r.acts >= 1 && r.brand === 'none' && r.blank === 0, f + ': page heading "' + r.h1 + '" with ' + r.acts + ' buttons on the right, no second logo or link list');
     ok(r.drop, f + ': starts with the shared drop card');
   }
@@ -31,8 +37,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   // Inspect: plain sentence + six fact cards after adding a picture
   await page.goto(url('inspect.html')); await page.waitForTimeout(800);
   await page.setInputFiles('#pick', { name: 'photo.png', mimeType: 'image/png', buffer: png }); await page.waitForTimeout(2500);
-  const fc = await page.evaluate(() => ({ n: document.querySelectorAll('#facts .tp-fact').length, shown: !document.getElementById('facts').hidden, blue: getComputedStyle(document.getElementById('pack')).backgroundColor }));
-  ok(fc.shown && fc.n === 6, 'Inspect: six fact cards under the picture (' + fc.n + ')');
+  const fc = await page.evaluate(() => ({ n: document.querySelectorAll('#iFacts .tn-fr').length, shown: !!document.getElementById('iFacts').offsetParent, blue: getComputedStyle(document.getElementById('iBtnPack')).backgroundColor }));
+  ok(fc.shown && fc.n >= 6, 'Inspect: the facts as label rows beside the picture (' + fc.n + ')');
   ok(!/rgb\(2[0-9], 1[2-6][0-9], [4-7][0-9]\)/.test(fc.blue) && /rgb\(0, (94|95|112), (153|184)\)/.test(fc.blue), 'Inspect: Save evidence pack is PageProof blue, not green (' + fc.blue + ')');
 
   // Compare: slots on top, floating bar under the picture
