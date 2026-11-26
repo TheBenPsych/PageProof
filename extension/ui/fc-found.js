@@ -39,7 +39,9 @@ function regSync(p, regs) {
 let FCD_GEN = 0, FCD_P = null;
 function dropFC() { FCD_GEN++; FCD_STALE = true; }
 function loadFC() {
-  if (FCD && !FCD_STALE) return Promise.resolve(FCD);
+  // While a read is under way, wait for it: FCD is still the old list until that read lands
+  // (answering fast on a big library could otherwise draw the copy you just answered again).
+  if (FCD && !FCD_STALE && !FCD_P) return Promise.resolve(FCD);
   if (!FCD_P) FCD_P = (async () => {
     try {
       for (;;) {
@@ -1873,81 +1875,119 @@ function reviewQueue(k) {
   return FCD.copies.filter(c => c.status === 'new' && visible(c) && rvKindOk(c, k))
     .sort((a, b) => (!!a.skipped - !!b.skipped) || (a.skipped || '').localeCompare(b.skipped || '') || (b.repeat > 0) - (a.repeat > 0) || (b.match === 'same') - (a.match === 'same') || (b.pct || 0) - (a.pct || 0));
 }
+// Calm look: the small Windows-style icons of One at a time.
+const rvSvg = (d, n = 18) => `<svg viewBox="0 0 16 16" width="${n}" height="${n}" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const RVI = {
+  st: rvSvg('<path d="M8 1.5 13.5 3.5v4c0 3.4-2.4 5.9-5.5 7-3.1-1.1-5.5-3.6-5.5-7v-4z"/><path d="M6 6l4 4M10 6l-4 4"/>', 22),
+  li: rvSvg('<circle cx="8" cy="8" r="6.2"/><path d="M5.3 8.2 7.2 10 10.8 6.3"/>', 22),
+  rm: rvSvg('<path d="M2.5 4.2h11M6.3 4.2V2.6h3.4v1.6M4 4.2l.7 9.3h6.6l.7-9.3"/>', 22),
+  cl: rvSvg('<circle cx="8" cy="8" r="6.2"/><path d="M8 4.6V8l2.4 1.6"/>', 22),
+  sk: rvSvg('<path d="M2.5 8h10M9 4.5 12.5 8 9 11.5"/>', 22),
+  zoom: rvSvg('<path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9"/>'),
+  rep: rvSvg('<path d="M8 1.8 14.5 13.5h-13z"/><path d="M8 6.3v3.4M8 11.6v.2"/>'),
+  side: rvSvg('<rect x="1.5" y="3" width="5.5" height="10" rx="1"/><rect x="9" y="3" width="5.5" height="10" rx="1"/>', 17),
+  swipe: rvSvg('<rect x="1.5" y="3" width="13" height="10" rx="1"/><path d="M8 1.5v13"/>', 17),
+  search: rvSvg('<circle cx="7" cy="7" r="4.5"/><path d="M10.4 10.4 14 14"/>', 17),
+  eye: rvSvg('<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>', 17),
+  shield: rvSvg('<path d="M8 1.5 13.5 3.5v4c0 3.4-2.4 5.9-5.5 7-3.1-1.1-5.5-3.6-5.5-7v-4z"/><path d="M5.6 8 7.3 9.6 10.5 6.4"/>', 17),
+  globe: rvSvg('<circle cx="8" cy="8" r="6.2"/><path d="M1.8 8h12.4M8 1.8c1.8 2 2.6 4 2.6 6.2S9.8 12.2 8 14.2C6.2 12.2 5.4 10.2 5.4 8S6.2 3.8 8 1.8z"/>', 17),
+  page: rvSvg('<rect x="2" y="2.5" width="12" height="11" rx="1.2"/><path d="M2 5.5h12"/>', 16),
+  pic: rvSvg('<rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1.2"/><circle cx="5.5" cy="6.3" r="1.2"/><path d="M14.2 10.5 10.5 7l-6 6.2"/>', 16),
+  copy: rvSvg('<rect x="5" y="5" width="8.5" height="8.5" rx="1"/><path d="M11 5V3.2a.7.7 0 0 0-.7-.7H3.2a.7.7 0 0 0-.7.7v7.1c0 .4.3.7.7.7H5"/>', 16),
+  user: rvSvg('<circle cx="8" cy="5.5" r="2.8"/><path d="M2.8 14c.6-2.7 2.7-4.2 5.2-4.2s4.6 1.5 5.2 4.2"/>', 17),
+  dn: '<svg class="dn" viewBox="0 0 10 10" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2.5 4 5 6.5 7.5 4"/></svg>',
+};
 V.review = async () => {
+  // A newer redraw may start while this one waits (big libraries take seconds). This one is then
+  // thrown away, so it must not change which copy is held on screen (it could bring back a copy
+  // you just skipped).
+  const me = RENDER_N, live = () => me === RENDER_N;
   await loadFC();
   if (!state.rvKind) { const pr = await api.storage.local.get('fcRvKind').catch(() => ({})); state.rvKind = RV_KINDS.some(([v]) => v === pr.fcRvKind) ? pr.fcRvKind : 'all'; }
   if (routeArg('kind')) { setRvKind(routeArg('kind')); history.replaceState(null, '', '#review'); }
   const Q = reviewQueue();
   const kindN = Object.fromEntries(RV_KINDS.map(([v]) => [v, v === state.rvKind ? Q.length : reviewQueue(v).length]));
-  const kinds = `<div class="seg rvkind" role="radiogroup" aria-label="Which copies to go through">${RV_KINDS.map(([k, l]) => `<button role="radio" aria-checked="${state.rvKind === k}" class="${state.rvKind === k ? 'on' : ''}" data-act="rvkind" data-v="${k}">${l} <span class="num">${kindN[k].toLocaleString()}</span></button>`).join('')}</div>`;
-  const hd = head('Copies found', 'One at a time', 'PageProof found these and checked each one against your client\'s photo. Decide what each one is. Anything marked stolen is watched every week.', `<a class="btn" href="#found">All copies found</a>`);
-  const tabs = `<div class="seg" role="tablist" aria-label="Show">${[['review', `To review (${Q.length})`], ['sites', 'By site and company']].map(([k, l]) => `<button role="tab" aria-selected="${state.rvTab === k}" class="${state.rvTab === k ? 'on' : ''}" data-act="rvtab" data-v="${k}">${l}</button>`).join('')}</div>${kinds}`;
+  // Calm look (batch 4): a short title line, one control line, a picture card with the answers
+  // and a side card with the site, the match, the links and Their page / About this copy.
+  const hd = head('Copies found', 'One at a time', '', '').replace('<div class="head">', '<div class="head rvhead">');
+  const utabs = `<div class="utabs" role="tablist" aria-label="Show">${[['review', 'To review', Q.length], ['sites', 'By site and company', null]].map(([k, l, n]) => `<button role="tab" aria-selected="${state.rvTab === k}" class="${state.rvTab === k ? 'on' : ''}" data-act="rvtab" data-v="${k}">${l}${n == null ? '' : ` <span class="num">${n.toLocaleString()}</span>`}</button>`).join('')}</div>`;
+  const kinds = `<div class="wseg rvkind" role="radiogroup" aria-label="Which copies to go through">${RV_KINDS.map(([k, l]) => `<button role="radio" aria-checked="${state.rvKind === k}" class="${state.rvKind === k ? 'on' : ''}" data-act="rvkind" data-v="${k}">${l} <span class="num">${kindN[k].toLocaleString()}</span></button>`).join('')}</div>`;
+  const hue = s => { let h = 0; for (const ch of String(s || '')) h = (h * 31 + ch.charCodeAt(0)) % 360; return h; };
+  const ini = s => String(s || '').replace(/^www\./, '').replace(/[^a-z0-9]/gi, '').slice(0, 2).toUpperCase() || '?';
   if (state.rvTab === 'sites') {
     const by = new Map();
     for (const c of Q) { const o = FCD.ownerOf.get(c.site); const k = o && o.real ? o.key : FC.baseOf(c.site); if (!by.has(k)) by.set(k, { o: o && o.real ? o : null, name: o && o.real ? o.name : FC.baseOf(c.site), xs: [] }); by.get(k).xs.push(c); }
-    const cards = [...by.values()].sort((a, b) => b.xs.length - a.xs.length).map(g => `<section class="card pad" style="display:flex;flex-direction:column;gap:10px"><div class="row"><h2>${esc(g.name)}</h2><span class="tag grey">${plural(new Set(g.xs.map(x => x.site)).size, 'site')}</span>${g.o ? `<span class="faint" style="font-size:12.5px">${esc(g.o.kind)}</span>` : ''}</div>
-      <p class="muted" style="margin:0;font-size:14px;overflow-wrap:anywhere">${esc([...new Set(g.xs.map(x => x.site))].slice(0, 6).join(', '))}${new Set(g.xs.map(x => x.site)).size > 6 ? '…' : ''}</p>
-      <div class="row"><span class="tag copy">${plural(g.xs.length, 'new copy', 'new copies')}</span><button class="btn sm" style="margin-left:auto" data-act="rvall" data-v="${esc(g.xs.map(x => x.id).join('\n'))}">Mark all stolen</button></div></section>`).join('');
-    return `${hd}${tabs}<div class="grid g2">${cards || '<p class="muted">Nothing waiting for you.</p>'}</div>`;
+    const rows = [...by.values()].sort((a, b) => b.xs.length - a.xs.length).map(g => {
+      const sites = [...new Set(g.xs.map(x => x.site))];
+      const sub = g.o || sites.length > 1 || sites[0] !== g.name ? `<span>${g.o && g.o.kind ? esc(g.o.kind) + ' · ' : ''}${sites.length > 1 ? sites.length + ' sites: ' : ''}${esc(sites.slice(0, 4).join(', '))}${sites.length > 4 ? '…' : ''}</span>` : '';
+      return `<div class="srow"><span class="sav" style="--h:${hue(g.name)}" aria-hidden="true">${esc(ini(g.name))}</span><span class="sname"><b>${esc(g.name)}</b>${sub}</span><span class="scount"><b class="num">${g.xs.length.toLocaleString()}</b> new ${g.xs.length === 1 ? 'copy' : 'copies'}</span><button class="btn" data-act="rvall" data-v="${esc(g.xs.map(x => x.id).join('\n'))}">Mark all stolen</button></div>`;
+    }).join('');
+    return `${hd}<div class="rvn"><div class="rvn-ctl rvtop">${utabs}${kinds}</div>${rows ? `<section class="card slist"><div class="shd"><span>Site or company</span><span>New copies</span><span></span></div>${rows}</section>` : '<p class="muted">Nothing waiting for you.</p>'}</div>`;
   }
   // 4.60: the copy on screen stays on screen until you answer it, skip it or switch. New copies
   // that sort ahead of it wait their turn, and a copy that a background check changed while you
   // looked stays, with a note.
   const held = state.rvHold ? FCD.copies.find(x => x.id === state.rvHold && rvKindOk(x, state.rvKind)) : null;
   const heldOut = held && !Q.includes(held) && !USER_DONE.has(held.id) && !PEND.has(held.id) ? held : null;
-  if (!Q.length && !heldOut) return `${hd}${tabs}<section class="card pad" style="text-align:center;padding:48px 22px;display:flex;flex-direction:column;align-items:center;gap:12px"><span class="tag ok" style="font-size:14px;padding:6px 14px">${ic('check', 16, 3)} All new copies reviewed</span><h2>Nothing left to review${state.rvKind === 'all' ? '' : ' in ' + (state.rvKind === 'web' ? 'Websites' : 'Social media')}</h2>${state.rvKind !== 'all' && kindN.all ? `<p class="muted" style="margin:0">${plural(kindN.all, 'new copy', 'new copies')} still waiting in ${state.rvKind === 'web' ? 'Social media' : 'Websites'}. <button class="btn sm" data-act="rvkind" data-v="all">Show all</button></p>` : ''}<p class="muted" style="margin:0;max-width:52ch">The ones you marked as stolen are checked every week to see they are still online. Save their evidence reports from All copies found.</p><div class="row" style="justify-content:center">${HIST.length ? `<button class="btn" data-act="undo">↶ Undo: ${esc(HIST[HIST.length - 1].label)}</button>` : ''}<a class="btn primary" href="#found">All copies found</a></div></section>`;
+  if (!Q.length && !heldOut) return `${hd}<div class="rvn"><div class="rvn-ctl rvtop">${utabs}${kinds}</div><section class="card pad" style="text-align:center;padding:48px 22px;display:flex;flex-direction:column;align-items:center;gap:12px"><span class="tag ok" style="font-size:14px;padding:6px 14px">${ic('check', 16, 3)} All new copies reviewed</span><h2>Nothing left to review${state.rvKind === 'all' ? '' : ' in ' + (state.rvKind === 'web' ? 'Websites' : 'Social media')}</h2>${state.rvKind !== 'all' && kindN.all ? `<p class="muted" style="margin:0">${plural(kindN.all, 'new copy', 'new copies')} still waiting in ${state.rvKind === 'web' ? 'Social media' : 'Websites'}. <button class="btn sm" data-act="rvkind" data-v="all">Show all</button></p>` : ''}<p class="muted" style="margin:0;max-width:52ch">The ones you marked as stolen wait in Not finished until their claim steps are done.</p><div class="row" style="justify-content:center">${HIST.length ? `<button class="btn" data-act="undo">↶ Undo: ${esc(HIST[HIST.length - 1].label)}</button>` : ''}<a class="btn primary" href="#found">All copies</a></div></section></div>`;
   state.qi = Math.min(state.qi, Q.length - 1);
   const c = heldOut || (held && Q.includes(held) ? held : Q[0]);
-  state.rvHold = c.id;
+  if (live()) state.rvHold = c.id;
   const p = FCD.photos.get(c.photo);
   const o = FCD.ownerOf.get(c.site);
   const id = p && p.hash ? await PP_EVIDENCE.matchId(p.hash, c.url) : '';
-  state.rvCurrent = c.id;
+  if (!live()) return '';
+  state.rvHold = c.id; state.rvCurrent = c.id;
+  const soc = isSoc(c), what = soc ? 'account' : 'site';
+  const ptag = (cls, label, w, h) => `<span class="ptag ${cls}">${label}${w ? `<em class="num">${w} × ${h}</em>` : ''}</span>`;
+  const zoom = `<button class="zoom" data-act="rvcompare" title="See them bigger, side by side" aria-label="See the pictures bigger">${RVI.zoom}</button>`;
   const pics = state.cmpMode === 'swipe'
-    ? `<div class="swipe" id="swipe" style="--cut:${state.cut}%"><img data-our="${esc(c.photo)}" src="${oursImg(p)}" alt="Your client's photo"><img class="top-img" src="${theirImg(c)}" alt="Their copy" referrerpolicy="no-referrer"><div class="handle"></div><span class="l1">Your client's</span><span class="l2">Their copy</span></div>
-      <input type="range" min="0" max="100" value="${state.cut}" id="cut" aria-label="Slide between your client's photo and their copy">`
-    : `<div class="pair"><div class="frame ours"><img data-our="${esc(c.photo)}" src="${oursImg(p)}" alt="Your client's photo" style="object-fit:contain"><span class="lab">Your client's</span></div><div class="frame theirs"><img src="${theirImg(c)}" alt="Their copy" referrerpolicy="no-referrer" style="object-fit:contain"><span class="lab">Their copy</span></div></div>`;
+    ? `<div class="rvn-pics one"><div class="pic"><div class="swipe" id="swipe" style="--cut:${state.cut}%"><img data-our="${esc(c.photo)}" src="${oursImg(p)}" alt="Your client's photo"><img class="top-img" src="${theirImg(c)}" alt="Their copy" referrerpolicy="no-referrer"><div class="handle"></div><span class="l1">Your client's</span><span class="l2">Their copy</span></div></div>
+      <input type="range" min="0" max="100" value="${state.cut}" id="cut" aria-label="Slide between your client's photo and their copy"></div>`
+    : `<div class="rvn-pics pair"><figure><div class="pic"><img data-our="${esc(c.photo)}" src="${oursImg(p)}" alt="Your client's photo">${ptag('o', "Your client's photo", p && p.w, p && p.h)}${zoom}</div></figure><figure><div class="pic"><img src="${theirImg(c)}" alt="Their copy" referrerpolicy="no-referrer">${ptag('t', 'Their copy', c.w, c.h)}${zoom}</div></figure></div>`;
   // How far along you are: counted from the most copies this visit has seen waiting.
   state.rvStart = Math.max(state.rvStart || 0, Q.length);
   const at = state.rvStart - Q.length + 1;
-  return `${hd}
-  <div class="rvtop">${tabs}
-    <div class="rvprog" aria-label="Review progress"><div class="bar"><i style="width:${Math.max(2, (at - 1) / state.rvStart * 100)}%"></i></div><b class="num">${at.toLocaleString()} of ${state.rvStart.toLocaleString()}</b>${c.skipped ? '<span class="faint">skipped before</span>' : ''}${heldOut ? `<span class="tag warn" title="A check that ran in the background changed this copy while you were looking at it. It stays here until you move on.">Now ${heldOut.status === 'new' ? 'hidden by a filter' : esc((STATUS[heldOut.status] || ['changed'])[0])}</span><button class="btn sm" data-act="rvnext">Next copy</button>` : ''}</div>
-    <button class="btn" data-act="undo"${HIST.length ? ` title="Undo: ${esc(HIST[HIST.length - 1].label)}"` : ' disabled data-why="Nothing to undo yet. After you answer a copy, Undo puts it back."'}>${ic('undo', 16)} Undo <span class="kbd">U</span></button>
-    <div class="seg" role="radiogroup" aria-label="View">${[['side', 'Side by side'], ['swipe', 'Swipe']].map(([k, l]) => `<button role="radio" aria-checked="${state.cmpMode === k}" class="${state.cmpMode === k ? 'on' : ''}" data-act="cmode" data-v="${k}">${l}</button>`).join('')}</div></div>
-  <div class="split rv">
-    <section class="card pad review-cap" style="flex:3 1 560px;display:flex;flex-direction:column;gap:14px" aria-label="Your client's photo and their copy">
-      <div class="rvstage">${pics}</div>
-      <div class="rvsite"><div class="l1">${isSoc(c) ? `${platBadge(c, 26)}<h2>${c.acct ? acctHtml(c.acct) : '<span style="color:var(--warn)">Account not found yet</span>'}</h2><span class="muted">${esc(postWord(c))}</span>` : `<h2>${esc(c.site)}</h2>`}<span class="tag ${c.match === 'same' ? 'bad' : 'warn'}">${c.match === 'same' ? 'Same photo' : 'Maybe'}${c.pct >= 0 && c.pct != null ? ' · ' + c.pct + '% lines up' : ''}</span>${knownTag(c)}${spamTag(c)}${repeatTag(c)}${flagWords(c)}</div>
-        <a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" title="Open this page in a new tab"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>
-        <div class="l3">${esc(c.photoName)} · ${esc(c.clientName || 'Client unknown')} · ${esc(FC.USE[c.use][0])} · found ${shortDate(c.firstSeen).toLowerCase()}</div></div>
-      ${c.repeat ? `<div class="banner warn" style="padding:8px 12px;font-size:13.5px"><span><b>${isSoc(c) ? 'Known account.' : 'Repeat offender.'}</b> You already marked ${plural(c.repeat, 'copy', 'copies')} ${isSoc(c) ? 'by' : 'on'} ${esc(c.repeatWho)} as Stolen. These come first.</span></div>` : ''}
-      <div class="rvans" role="group" aria-label="Your answer">
-        <button class="stolen" data-act="rverdict" data-v="stolen"><b>Stolen</b><span class="kbd">Y</span></button>
-        <button class="licensed" data-act="rverdict" data-v="licensed" title="OK for ${esc(c.clientName || 'this client')} only"><b>Licensed</b><span class="kbd">L</span></button>
-        <button data-act="rverdict" data-v="removed" title="Not wanted: hide it"><b>Remove</b><span class="kbd">N</span></button>
-        <button class="later" data-act="rverdict" data-v="later" title="Not sure yet: move it to Check later in All copies found"><b>Check later</b><span class="kbd">C</span></button>
-        <button data-act="rverdict" data-v="skip" title="Show it again at the end of this list"><b>Skip</b><span class="kbd">→</span></button>
-      </div>
-      <div class="row rvmore"><button class="btn" data-act="rvcompare">${ic('layers', 16)} Compare</button><button class="btn" data-act="evidence" data-v="${esc(c.id)}">${ic('doc', 16)} Evidence report</button><button class="btn" data-act="rvcapture">${ic('capture', 16)} Capture</button>${stopBtn(c)}
-        ${isSoc(c) && !c.acct ? `<a class="btn" href="#found?open=${encodeURIComponent(c.id)}">${ic('who', 16)} Set the account</a>` : ''}
-        <details class="rvok"${isSoc(c) && !c.acct ? ' hidden' : ''}><summary class="btn">${ic('check', 16)} Approve ${isSoc(c) ? 'account' : 'site'}</summary><div class="tmenu">${c.clientName ? `<button data-act="rvapprove" data-v="client"><b>For ${esc(c.clientName)} only</b><span>${esc(FC.baseOf(c.site))} may use this client's photos</span></button>` : ''}<button data-act="rvapprove" data-v="all"><b>For every client</b><span>${esc(FC.baseOf(c.site))} may use any photo</span></button></div></details>
-        <details class="rvok"><summary class="btn">${ic('ban', 16)} Hide ${isSoc(c) ? 'account' : 'site'}</summary><div class="tmenu">${hideChoices(c).map(([v, l, d]) => `<button data-act="rvhide" data-v="${esc(v)}"><b>${esc(l)}</b><span>${esc(d)}</span></button>`).join('')}</div></details></div>
-    </section>
-    <aside class="card pad" style="flex:2 1 340px;display:flex;flex-direction:column;gap:16px" aria-label="About this copy">
-      ${isSoc(c) ? postCard(c) : pageBoxHtml(c)}
-      <dl class="facts">
-        <dt>Your client's photo</dt><dd>${esc(c.photoName)}<br><span class="muted">${p && p.w ? p.w + ' × ' + p.h + ' · ' : ''}${esc(c.clientName || 'Client unknown')}</span></dd>
-        <dt>Their copy</dt><dd>${c.w ? c.w + ' × ' + c.h : 'Size not known'} · ${esc(FC.USE[c.use][0])}</dd>
-        <dt>Found by</dt><dd>${esc(c.by || 'a search')} · ${shortDate(c.firstSeen)}</dd>
-        <dt>History</dt><dd>${c.times > 1 ? 'Seen ' + c.times + ' times, last ' + shortDate(c.lastSeen) : 'First time seen'}</dd>
-        <dt>Site check</dt><dd>${RISK[c.risk.level][0]}${c.risk.why.length ? ' · ' + esc(c.risk.why.join(', ')) : ''}</dd>
-        ${o && o.real ? `<dt>Company</dt><dd>${esc(o.name)}${o.sites.length > 1 ? `<br><span class="muted" style="font-size:13px">${Q.filter(x => o.sites.includes(x.site)).length} new copies on their sites. Use "By site and company" to mark them all at once.</span>` : ''}</dd>` : ''}
-        ${id ? `<dt>Match ID</dt><dd class="mono">${id}</dd>` : ''}
-      </dl>
-    </aside>
-  </div>
-  <p class="faint" style="font-size:13px;margin:0">Keys: <span class="kbd">Y</span> stolen <span class="kbd">L</span> licensed <span class="kbd">N</span> remove <span class="kbd">C</span> check later <span class="kbd">→</span> skip <span class="kbd">U</span> undo <span class="kbd">S</span> switch view <span class="kbd">?</span> all keys</p>`;
+  const ctl = `<div class="rvn-ctl rvtop">${utabs}${kinds}
+    <div class="rvn-prog rvprog" aria-label="Review progress"><span><b class="num">${at.toLocaleString()} of ${state.rvStart.toLocaleString()}</b></span><div class="bar"><i style="width:${Math.max(2, (at - 1) / state.rvStart * 100)}%"></i></div>${c.skipped ? '<span class="faint">skipped before</span>' : ''}${heldOut ? `<span class="tag warn" title="A check that ran in the background changed this copy while you were looking at it. It stays here until you move on.">Now ${heldOut.status === 'new' ? 'hidden by a filter' : esc((STATUS[heldOut.status] || ['changed'])[0])}</span><button class="btn sm" data-act="rvnext">Next copy</button>` : ''}</div>
+    <span class="sp"></span>
+    <button class="btn" data-act="undo"${HIST.length ? ` title="Undo: ${esc(HIST[HIST.length - 1].label)}"` : ' disabled data-why="Nothing to undo yet. After you answer a copy, Undo puts it back."'}>${ic('undo', 16)} Undo <span class="kb">U</span></button>
+    <div class="wseg vseg" role="radiogroup" aria-label="View">${[['side', 'Side by side', RVI.side], ['swipe', 'Swipe', RVI.swipe]].map(([k, l, i]) => `<button role="radio" aria-checked="${state.cmpMode === k}" class="${state.cmpMode === k ? 'on' : ''}" data-act="cmode" data-v="${k}">${i} ${l}</button>`).join('')}</div></div>`;
+  const rep = c.repeat ? `<div class="infobar">${RVI.rep}<b>${soc ? 'Known account' : 'Stolen before'}</b><span>You marked ${plural(c.repeat, 'copy', 'copies')} ${soc ? 'by' : 'on'} ${esc(c.repeatWho)} as Stolen, so its copies come first.</span></div>` : '';
+  const ans = `<div class="rvn-ans" role="group" aria-label="Your answer">
+      <button class="a-st" data-act="rverdict" data-v="stolen">${RVI.st}<span>Stolen</span><span class="kb">Y</span></button>
+      <button class="a-li" data-act="rverdict" data-v="licensed" title="OK for ${esc(c.clientName || 'this client')} only">${RVI.li}<span>Licensed</span><span class="kb">L</span></button>
+      <button data-act="rverdict" data-v="removed" title="Not wanted: hide it">${RVI.rm}<span>Remove</span><span class="kb">N</span></button>
+      <button class="a-cl" data-act="rverdict" data-v="later" title="Not sure yet: move it to Check later in All copies">${RVI.cl}<span>Check later</span><span class="kb">C</span></button>
+      <button data-act="rverdict" data-v="skip" title="Show it again at the end of this list">${RVI.sk}<span>Skip</span><span class="kb">→</span></button>
+    </div>`;
+  const cmd = `<div class="rvn-cmd"><button class="btn c1" data-act="rvcompare">${ic('layers', 18)} Compare</button><button class="btn c2" data-act="evidence" data-v="${esc(c.id)}">${ic('doc', 18)} Evidence report</button><button class="btn c3" data-act="rvcapture">${ic('capture', 18)} Capture</button>
+      ${soc && !c.acct ? `<a class="btn" href="#found?open=${encodeURIComponent(c.id)}">${ic('who', 18)} Set the account</a>` : ''}<span class="sp"></span>
+      <details class="rvok"${soc && !c.acct ? ' hidden' : ''}><summary class="btn c4">${ic('check', 18)} Approve ${what} ${RVI.dn}</summary><div class="tmenu">${c.clientName ? `<button data-act="rvapprove" data-v="client"><b>For ${esc(c.clientName)} only</b><span>${esc(FC.baseOf(c.site))} may use this client's photos</span></button>` : ''}<button data-act="rvapprove" data-v="all"><b>For every client</b><span>${esc(FC.baseOf(c.site))} may use any photo</span></button></div></details>
+      <details class="rvok"><summary class="btn c5">${ic('ban', 18)} Hide ${what} ${RVI.dn}</summary><div class="tmenu">${hideChoices(c).map(([v, l, d]) => `<button data-act="rvhide" data-v="${esc(v)}"><b>${esc(l)}</b><span>${esc(d)}</span></button>`).join('')}</div></details>
+      ${stopBtn(c) ? `<details class="rvok rvdots"><summary class="btn icn" title="More" aria-label="More choices">${ic('dots', 18)}</summary><div class="tmenu right">${stopBtn(c).replace('class="btn"', 'class="mrow"')}</div></details>` : ''}</div>`;
+  // The side card: who, how well it matches, whose photo, the links, then Their page / About this copy.
+  const badge = soc ? `<span class="sbadge plat" style="--pc:${platOf(c).color}">${esc(platOf(c).short)}</span>` : `<span class="sbadge" style="--h:${hue(c.site)}" aria-hidden="true">${esc(ini(c.site))}</span>`;
+  const who = soc
+    ? `<div class="sn"><h2>${c.acct ? acctHtml(c.acct) : '<span style="color:var(--warn)">Account not found yet</span>'}</h2><span class="hdl">${esc(postWord(c))} · found ${shortDate(c.firstSeen).replace(/^(Today|Yesterday)/, m => m.toLowerCase())}</span></div>`
+    : `<div class="sn"><h2>${esc(c.site)}</h2><span class="hdl">${esc(FC.USE[c.use][0])} · found ${shortDate(c.firstSeen).replace(/^(Today|Yesterday)/, m => m.toLowerCase())}</span></div>`;
+  const tags = knownTag(c) + spamTag(c) + repeatTag(c) + flagWords(c);
+  const hasPct = c.pct >= 0 && c.pct != null;
+  const match = `<div class="mbox ${c.match === 'same' ? 'same' : 'maybe'}">${hasPct ? `<div class="mn"><b class="num">${c.pct}%</b><span>lines up</span></div><div class="mbar"><i style="width:${c.pct}%"></i></div>` : '<div class="mbar none"></div>'}<span class="mpill">${c.match === 'same' ? 'Same photo' : 'Maybe the same'}</span></div>`;
+  const chips = `<div class="cchips"><span class="cchip"><span class="cav" style="--h:${hue(c.clientName)}" aria-hidden="true">${esc(ini(String(c.clientName || '?').split(/\s+/).map(w => w[0]).join('')))}</span>${esc(c.clientName || 'Client unknown')}</span><span class="cchip plain">${RVI.pic} ${esc(c.photoName)}</span></div>`;
+  const short = u => esc(String(u || '').replace(/^https?:\/\/(www\.)?/, ''));
+  const link = (icon, label, u) => /^https?:/i.test(u || '') ? `<div class="ul"><span class="ulab">${icon} ${label}</span><a class="curl" href="${safeUrl(u)}" target="_blank" rel="noreferrer" title="Open in a new tab"><span>${short(u)}</span>${ic('ext', 14)}</a><button class="ib" data-act="copytext" data-v="${esc(u)}" title="Copy this address" aria-label="Copy the ${label.toLowerCase()} address">${RVI.copy}</button></div>` : '';
+  const links = `<div class="ulinks">${link(RVI.page, soc ? 'Post' : 'Page', (c.rp && c.rp.post) || c.url)}${link(RVI.pic, 'Picture', (picLink(c) || {}).url || c.img)}</div>`;
+  const row = (icon, k, v) => `<div class="fr"><span class="fi" aria-hidden="true">${icon}</span><span class="fk">${k}</span><span class="fv">${v}</span></div>`;
+  const about = state.rvSide === 'about';
+  const facts = `<div class="rfacts">${soc && c.acct ? row(RVI.user, 'Account', acctHtml(c.acct)) : ''}${row(RVI.search, 'Found by', esc(c.by || 'a search') + ' · ' + shortDate(c.firstSeen))}${row(RVI.eye, 'Seen', c.times > 1 ? c.times + ' times, last ' + shortDate(c.lastSeen) : 'Once')}${row(RVI.shield, 'Site check', RISK[c.risk.level][0] + (c.risk.why.length ? ' · ' + esc(c.risk.why.join(', ')) : ''))}${soc ? '' : row(RVI.globe, 'Country', c.country ? esc(c.country) : 'Not known')}${id ? row(ic('capture', 17), 'Match ID', `<span class="mono">${id}</span>`) : ''}${o && o.real ? row(RVI.user, 'Company', esc(o.name) + (o.sites.length > 1 ? `<span class="fsub">${Q.filter(x => o.sites.includes(x.site)).length} new copies on their sites. Use "By site and company" to mark them all at once.</span>` : '')) : ''}</div>`;
+  const side = `<aside class="card rvn-side" aria-label="About this copy"><div class="sin">
+      <div class="rvn-site rvsite">${badge}<div class="sm">${who}${tags ? `<div class="stags">${tags}</div>` : ''}</div></div>
+      ${match}${chips}${links}
+      <div class="stabs" role="tablist"><button role="tab" aria-selected="${!about}" class="${about ? '' : 'on'}" data-act="rvside" data-v="page">${soc ? 'The post' : 'Their page'}</button><button role="tab" aria-selected="${about}" class="${about ? 'on' : ''}" data-act="rvside" data-v="about">About this copy</button></div>
+      <div class="tpane${about ? ' det' : ''}">${about ? facts : (soc ? postCard(c) : pageBoxHtml(c))}</div>
+    </div></aside>`;
+  return `${hd}<div class="rvn">${ctl}<div class="rvn-body split rv"><section class="card rvn-main review-cap" aria-label="Your client's photo and their copy">${pics}${rep}${ans}${cmd}</section>${side}</div></div>`;
 };
 V.review.guard = V.found.guard;
 V.review.after = () => {
@@ -1959,6 +1999,7 @@ V.review.after = () => {
 };
 Object.assign(ACTS, {
   rvtab: v => { state.rvTab = v; render(true); },
+  rvside: v => { state.rvSide = v === 'about' ? 'about' : 'page'; render(true); },
   rvkind: v => { setRvKind(v); state.rvHold = ''; render(true); },
   rvnext: () => { state.rvHold = ''; render(true); },
   cmode: v => { state.cmpMode = v; render(true); },

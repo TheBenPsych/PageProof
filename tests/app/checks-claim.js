@@ -61,7 +61,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   // One at a time: Stolen opens the same steps, Finish later goes back.
   await page.goto(url('app.html#review')); await page.waitForTimeout(1500);
   const id3 = await page.evaluate(() => state.rvCurrent);
-  await page.locator('.rvans [data-v="stolen"]').click(); await page.waitForTimeout(1800);
+  await page.locator('.rvn-ans [data-v="stolen"]').click(); await page.waitForTimeout(1800);
   ok(await page.evaluate(id => location.hash.startsWith('#found') && state.open === id && !!document.getElementById('claimsteps'), id3), 'One at a time: Stolen opens the claim steps');
   await page.locator('.dfoot [data-act="cllater"]').click(); await page.waitForTimeout(1500);
   ok(await page.evaluate(() => location.hash === '#review'), 'Finish later goes back to One at a time');

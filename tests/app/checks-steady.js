@@ -75,7 +75,7 @@ const addTop = (page, n, tag) => page.evaluate(async ([n, tag]) => {
   await page.click('[data-act="rvnext"]'); await page.waitForTimeout(1000);
   const nx = await page.evaluate(() => state.rvCurrent);
   ok(nx !== cur, 'Next copy moves on');
-  await page.locator('.rvans [data-v="skip"]').click(); await page.waitForTimeout(1000);
+  await page.locator('.rvn-ans [data-v="skip"]').click(); await page.waitForTimeout(1000);
   ok(await page.evaluate(() => state.rvCurrent) !== nx, 'Skip moves on to another copy');
   await ctx.close(); console.log(fails ? fails + ' FAILED' : 'ALL PASSED'); process.exit(fails ? 1 : 0);
 })();

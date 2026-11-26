@@ -14,9 +14,9 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const tabN = f => page.evaluate(f => { const b = [...document.querySelectorAll('[data-act="ffilter"]')].find(x => x.dataset.v === f); return b ? +b.querySelector('span').textContent : -1; }, f);
   // One at a time: the button and the C key.
   await page.goto(url('app.html#review')); await page.waitForTimeout(1500);
-  ok(await page.locator('.rvans [data-v="later"]').count() === 1, 'One at a time has a Check later button');
+  ok(await page.locator('.rvn-ans [data-v="later"]').count() === 1, 'One at a time has a Check later button');
   let id = await page.evaluate(() => state.rvCurrent);
-  await page.locator('.rvans [data-v="later"]').click(); await page.waitForTimeout(900);
+  await page.locator('.rvn-ans [data-v="later"]').click(); await page.waitForTimeout(900);
   ok(await st(id) === 'later', 'Check later saves the copy as later');
   ok(await page.evaluate(id => state.rvCurrent !== id && !reviewQueue().some(c => c.id === id), id), 'It leaves the To review list and the next copy shows');
   await page.keyboard.press('u'); await page.waitForTimeout(900);

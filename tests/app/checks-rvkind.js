@@ -24,7 +24,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const soc = () => page.evaluate(() => { const c = FCD.copies.find(x => x.id === state.rvCurrent); return c && isSoc(c); });
   await page.locator('.rvkind [data-v="social"]').click(); await page.waitForTimeout(800);
   ok(await soc() === true && new RegExp(n.soc + '$').test((await page.textContent('.rvprog b')).trim()), 'Social media: only social copies, counted right');
-  await page.locator('.rvans [data-v="skip"]').click(); await page.waitForTimeout(800);
+  await page.locator('.rvn-ans [data-v="skip"]').click(); await page.waitForTimeout(800);
   ok(await soc() === true, 'After an answer the next copy is still social');
   await page.locator('.rvkind [data-v="web"]').click(); await page.waitForTimeout(800);
   ok(await soc() === false, 'Websites: only website copies');

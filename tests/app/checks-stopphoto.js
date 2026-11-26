@@ -78,7 +78,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(await page.evaluate(async n => (await FC.DB.by('photos', 'client', n)).filter(p => p.stopped).length === 1, c.client), 'Bulk Stop searching stops the picked photo');
   // One at a time
   await page.goto(url('app.html#review')); await page.waitForTimeout(1500);
-  ok(await page.locator('.rvmore [data-act="stopphoto"]').count() === 1, 'One at a time has the button too');
+  ok(await page.locator('.rvn-cmd [data-act="stopphoto"]').count() === 1, 'One at a time has the button too');
   console.log(fails ? fails + ' FAILED' : 'ALL PASSED');
   await ctx.close(); process.exit(fails ? 1 : 0);
 })();
