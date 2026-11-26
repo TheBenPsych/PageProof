@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.81.0** (26 Nov 2026).
+Last updated: version **4.82.0** (26 Nov 2026).
 
 ---
 
@@ -55,6 +55,7 @@ Last updated: version **4.81.0** (26 Nov 2026).
 - **Calm Weekly summary.** Week picker, six tiles with arrows against the week before, the last 8 weeks as a chart, By client table you can sort, clients not searched, first searches, evidence reports with case tags, and a PDF that shows the same as the screen. (4.80)
 - **Calm All tools.** Six real tools, one box that takes any file and opens the right tool, and Opened lately with Open again (kept only on this computer). (4.81)
 - **Calm Verify a pack.** In the Tools menu: one big answer, four tiles, capture details and timestamps as rows, file names in a fold. The checker inside each pack is unchanged. (4.81)
+- **Calm Inspect a photo.** The file on one line with its buttons, the picture on the left, yes or no chips and one row per fact on the right. Save evidence pack asks for the case details first, and Copy the details copies every row. (4.82)
 
 ## 3. Look closer at pictures
 
@@ -394,3 +395,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.79 | 26 Nov | Calm look step 15: Capture a page becomes Evidence › Overview (tiles, weekly chart, Needs you, newest captures, sources, time services) |
 | 4.80 | 26 Nov | Calm look step 16: Weekly summary (week picker, six tiles, 8 week chart, sortable By client, PDF that matches the screen) |
 | 4.81 | 26 Nov | Calm look step 17, part 1: All tools (six tools, drop any file, Opened lately) and Verify a pack in the Tools menu |
+| 4.82 | 26 Nov | Calm look step 17, part 2: Inspect a photo (file on one line, picture left, answers right, case details asked when saving a pack) |

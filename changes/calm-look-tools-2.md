@@ -1,5 +1,0 @@
-type: new
-title: The calm look, step 17: Inspect a photo
-news: Tools › Inspect a photo has the new look. The file sits on one line with its buttons, the picture is on the left, and on the right is What the file says with five yes or no chips (creator, copyright notice, camera and date, place, Content Credentials) and one row per fact, with Not saved where the file has nothing. Save evidence pack now opens Case details first so the case number isn't forgotten, press it again to save. Copy the details is new and copies every row with the whole fingerprint. Save as PDF, Copy the picture and Download the original file moved under More. What Inspect reads and what goes into the pack have not changed.
-timeline: Calm look step 17, part 2: Inspect a photo (file on one line, picture left, answers right, case details asked when saving a pack)
-feature 2: **Calm Inspect a photo.** The file on one line with its buttons, the picture on the left, yes or no chips and one row per fact on the right. Save evidence pack asks for the case details first, and Copy the details copies every row.
