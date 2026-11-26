@@ -1634,13 +1634,19 @@ const FC = (() => {
   function riskOf(c, facts) {
     const why = [], site = c.site || '';
     if (BAD_END.test(site)) why.push('Ends in .' + site.split('.').pop());
-    if ((site.match(/-/g) || []).length >= 2 || /\d{2,}/.test(site.replace(/\.[a-z]+$/, ''))) why.push('Odd name');
+    // 4.92 (Ben: "used too often"): real outlets like news18.com or a station's 1027 name are fine.
+    if ((site.match(/-/g) || []).length >= 3 || /\d{5,}/.test(site.replace(/\.[a-z]+$/, ''))) why.push('Odd name');
     if (/(viral|trend|buzz|news24|daily24|wallpaper|free-?photo|hdwall|clip-?art)/.test(site)) why.push('Name used by copycat sites');
     if (facts && facts.created && ageDays(facts.created) < 365) why.push('Site is ' + Math.max(1, Math.round(ageDays(facts.created) / 30)) + ' months old');
     if (facts && facts.domainHidden) why.push('Owner hidden');
     const strong = why.filter(w => /Ends in|months old|copycat/.test(w)).length;
-    return { level: strong >= 1 && why.length >= 2 ? 'sus' : why.length ? 'watch' : 'ok', why };
+    // 4.92: most owner records are private now (privacy laws), big newspapers too, so a hidden
+    // owner only adds to another sign and never makes a site yellow on its own.
+    const counted = why.filter(w => w !== 'Owner hidden').length;
+    return { level: strong >= 1 && why.length >= 2 ? 'sus' : counted ? 'watch' : 'ok', why };
   }
+  // 4.92: the signs in a few words, for the row tag ("Worth a look: new site, .xyz ending").
+  const riskShort = why => (why || []).map(w => /^Ends in (\S+)/.test(w) ? w.replace(/^Ends in (\S+)/, '$1 ending') : /months old/.test(w) ? 'new site' : w === 'Odd name' ? 'odd name' : /copycat/.test(w) ? 'copycat name' : w === 'Owner hidden' ? 'owner hidden' : w.toLowerCase()).join(', ');
   // 4.24: spam blog farms. Throwaway sites with a made-up name (serecoun.blog, adfomusto.blog) that
   // put each copy on a random-looking address of their own (ass4c61.serecoun.blog). Only signs
   // PageProof can see in the links; nothing is answered by itself. Returns Map copy id -> reasons.
@@ -2748,6 +2754,6 @@ const FC = (() => {
   return { skipTakeOff, skipPutBack, rawOnce, claimed, claimReset, SET_ASIDE, DB, meta, open, touch, pics, dropDotMatches, checkerRemove, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, inHours, quietOK, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, unpicked, forced, setPicked, pickInside, SCAN, applyPendingFlags, missingPicks, movedNote, followMoves, watchFolders, newFolders, newFoldersSeen, goalPlan, workMinutes, exifDate, heatShoot, coolShoot, burstSibling, wakeBurst, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setStopped, setClients, logWeek, week, weekKey, firstNotes, searchedOnce, dayLog, speed, ladder, LADDER, alikeFrames, mixYears, mixLine,
-    isPool, shownCountries, setShownCountries, SHOWN_START, ownerFor, pathOf, logReport, USE, useOf, riskOf, spamMarks, goneLoad, checkGone, GONE_WHY, randomLabel, countryOf, COUNTRY, countryFromDoc, siteCountry, fillCountries, baseOf, groupOf, facts, lookup, owners,
+    isPool, shownCountries, setShownCountries, SHOWN_START, ownerFor, pathOf, logReport, USE, useOf, riskOf, riskShort, spamMarks, goneLoad, checkGone, GONE_WHY, randomLabel, countryOf, COUNTRY, countryFromDoc, siteCountry, fillCountries, baseOf, groupOf, facts, lookup, owners,
     backupSoon, backupCopiesSoon, writeSettings, writeCopies, readBackup, restore, restoreCopies, settingsSnapshot, monthsOld, newness, yearOf, quarterOf, dayOf };
 })();

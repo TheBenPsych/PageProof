@@ -80,7 +80,9 @@ async function readFC() {
   if (typeof PP_BAD !== 'undefined') await PP_BAD.prepare(copies.filter(c => !isSoc(c)).map(c => c.site)).catch(() => {});
   const popR = typeof PP_POP !== 'undefined' ? await PP_POP.ranks(copies.filter(c => !isSoc(c)).map(c => c.site)).catch(() => new Map()) : new Map();
   for (const c of copies) { c.pop = !isSoc(c) && popR.has(c.site) ? popR.get(c.site) : null; c.popL = typeof PP_POP !== 'undefined' ? PP_POP.level(c.pop) : -1; c.bad = !isSoc(c) && typeof PP_BAD !== 'undefined' ? PP_BAD.of(c.site, c.pop) : null;
-    if (c.bad) { c.risk = { ...c.risk, level: 'sus', why: [c.bad.label, ...(c.risk.why || []).filter(w => w !== c.bad.label)] }; } }
+    if (c.bad) { c.risk = { ...c.risk, level: 'sus', why: [c.bad.label, ...(c.risk.why || []).filter(w => w !== c.bad.label)] }; }
+    // 4.92: a site in the top 100,000 of the popularity list is never "Worth a look".
+    else if (c.risk.level === 'watch' && c.pop && c.pop <= 100000) c.risk = { ...c.risk, level: 'ok' }; }
   const ownerList = await FC.owners([...new Set(copies.filter(c => c.status !== 'removed').map(c => c.site))]);
   const ownerOf = new Map();
   for (const o of ownerList) for (const s of o.sites) ownerOf.set(s, o);
@@ -540,7 +542,7 @@ function signals(c) {
   else if (coverWait(c)) s.push(['warn', 'maybe', COVER_WAIT, 'Checking the post']);
   if (c.match === 'maybe') s.push(['warn', 'maybe', 'Maybe the same photo. Look closely.', 'Maybe the same']);
   if (c.risk.level === 'sus') s.push(['bad', 'warn', 'Suspicious site' + (c.risk.why.length ? ': ' + c.risk.why.join(', ') : ''), 'Suspicious site']);
-  else if (c.risk.level === 'watch') s.push(['warn', 'warn', 'Worth a look' + (c.risk.why.length ? ': ' + c.risk.why.join(', ') : ''), 'Worth a look']);
+  else if (c.risk.level === 'watch') s.push(['warn', 'warn', 'Worth a look' + (c.risk.why.length ? ': ' + c.risk.why.join(', ') : ''), 'Worth a look' + (c.risk.why.length ? ': ' + FC.riskShort(c.risk.why) : '')]);
   if (c.credit === 'removed') s.push(['copy', 'nocredit', 'Credit removed: your client\'s photo has a copyright line in its hidden data and their copy does not', 'Credit removed']);
   if (c.repeat && c.status === 'new' && !isSoc(c)) s.push(['bad', 'repeat', `Repeat offender: you already marked ${c.repeat} ${c.repeat === 1 ? 'copy' : 'copies'} on ${c.repeatWho} as Stolen`, 'Stolen before']);
   if (c.use === 'shop') s.push(['ok', 'shop', 'Selling something: a shop page, product listing or ad', 'Selling it']);
@@ -770,7 +772,7 @@ const flagWords = c => {
   if (linkCardOf(c)) f.push(['bad', 'Only in a link preview', LINK_CARD(c)]);
   else if (notInPost(c)) f.push(['bad', 'Not seen in the post', NOT_IN_POST(c)]);
   if (c.risk.level === 'sus') f.push(['bad', 'Suspicious site', c.risk.why.join(', ')]);
-  if (c.risk.level === 'watch') f.push(['warn', 'Worth a look', c.risk.why.join(', ')]);
+  if (c.risk.level === 'watch') f.push(['warn', 'Worth a look' + (c.risk.why.length ? ': ' + FC.riskShort(c.risk.why) : ''), c.risk.why.join(', ')]);
   if (c.credit === 'removed') f.push(['copy', 'Credit removed', 'Your client\'s photo has a copyright line in its hidden data and their copy does not']);
   if (c.use === 'shop') f.push(['ok', 'Selling something', 'A shop page, product listing or ad']);
   return f.map(([col, t, why]) => `<span class="tag ${col}" title="${esc(why)}">${t}</span>`).join('');
@@ -1091,7 +1093,7 @@ V.found = async () => {
       ${chip('Copied onto their site', live.filter(c => c.use === 'copied').length, state.fUse === 'copied', 'qtoggle', 'copied')}
       ${chip('Shown from another site', live.filter(c => c.use === 'embedded').length, state.fUse === 'embedded', 'qtoggle', 'embedded')}</div>
       <details class="keyfold"><summary>What do the icons mean?</summary><section class="key" aria-label="What the icons mean">
-        <div class="kitem"><span class="tag bad">${ic('warn', 13)}</span><div><span><b>Suspicious site</b> (red) or <b>Worth a look</b> (yellow): young site, hidden owner, odd ending like .xyz, or a name copycat sites use.</span></div></div>
+        <div class="kitem"><span class="tag bad">${ic('warn', 13)}</span><div><span><b>Worth a look</b> (yellow): one sign, such as a site under a year old, an odd ending like .xyz, a name copycat sites use, or an odd name. <b>Suspicious site</b> (red): two or more signs, or on a known bad site list. A hidden owner only counts next to another sign, and popular sites (top 100,000) are never yellow.</span></div></div>
         <div class="kitem"><span class="tag copy">${ic('nocredit', 13)}</span><div><span><b>Credit removed</b>: your client's photo has a copyright line in its hidden data. Their copy doesn't.</span></div></div>
         <div class="kitem"><span class="tag bad">${ic('repeat', 13)}</span><div><span><b>Repeat offender</b>: you already marked copies on this site, or another site of the same owner, as Stolen, or the site is on your stolen before list.</span></div></div>
         <div class="kitem"><span class="tag bad">Stolen before</span><div><span><b>Stolen before</b>: this exact page is on your list of links stolen before (Settings › Site lists).</span></div></div>
