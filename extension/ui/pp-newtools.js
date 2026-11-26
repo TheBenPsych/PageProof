@@ -126,28 +126,50 @@ const NT_PORTAL = [
   ['archive', 'Archive URL', 'None made'], ['caseNo', 'Agency Case #', 'Not on a saved capture yet'], ['damages', 'Damages', 'Publish date not known'],
   ['images', 'Infringing Image Url', 'No picture link'], ['note', 'Note', ''],
 ];
+// The legal portal's Add Infringement form as Windows 11 rows (calm look batch 19):
+// label | value | Copy. A copied line shows "Copied" and the count at the top goes up.
+const NT_CP = '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="8.5" height="8.5" rx="1"/><path d="M3 10.5V2.5h8"/></svg>';
+const NT_OK = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.6 8.3 2.2 2.1 4.6-4.8"/></svg>';
+const ntCopiedKeys = id => { if (!NT.copied || NT.copied.id !== id) NT.copied = { id, keys: new Set() }; return NT.copied.keys; };
+const ntCopyMark = done => done ? `<span class="sx-tag ok">${NT_OK}Copied</span>` : `<span class="btn sm pcbtn">${NT_CP} Copy</span>`;
+const ntCopyCount = (n, all) => `${n} of ${all} lines copied. Copy a line, then paste it into the same box in the portal.`;
 async function ppPortalCard(c, p, reg) {
   if (!c || c.status !== 'stolen') return '';
   const v = await ntPortalValues(c, p, reg);
   NT.portal = { id: c.id, v };
+  const got = ntCopiedKeys(c.id);
   const DROP = { discMethod: 1, infType: 1, use: 1, ads: 1, sells: 1, damages: 1 };
-  const sub = k => k === 'ads' && v.adsWhy ? `<small class="faint">${esc(v.adsWhy)}</small>` : k === 'sells' && v.sellsWhy ? `<small class="faint">${esc(v.sellsWhy)}</small>` : k === 'damages' && v.damagesWhy ? `<small class="faint">${esc(v.damagesWhy)}</small>` : k === 'discMethod' ? `<small class="faint">${esc(NT_METHOD(c))}</small>` : '';
-  const row = (k, label, empty, val, i) => `<button class="prow${val ? '' : ' empty'}" data-act="pcopy" data-v="${k}${i != null ? '|' + i : ''}" title="${val ? (DROP[k] ? 'Pick this in the drop-down: ' : 'Copy ') + esc(val) : esc(empty)}"${val ? '' : ' disabled'}><span class="pk">${esc(label)}${i != null ? ' ' + (i + 1) : ''}</span><span class="pv">${DROP[k] && val ? '<span class="pick">Pick</span> ' : ''}${esc(val || empty || 'Not known')}${DROP[k] && val ? sub(k) : ''}</span><span class="pc" aria-hidden="true">⧉</span></button>`;
-  const rows = NT_PORTAL.map(([k, label, empty]) => k === 'images' ? (v.images.length ? v.images.map((u, i) => row(k, label, empty, u, i)).join('') : row(k, label + ' 1', empty, '')) : row(k, label, empty, v[k])).join('');
-  return `<section class="dsec" id="portalcard"><div class="dsh">Add Infringement (legal portal)</div>
-    <p class="faint" style="margin:0;font-size:12.5px">The portal's form, in its order. Click a line to copy it, then paste it into the same box in the portal. Lines marked <span class="pick">Pick</span> are drop-downs: choose exactly that.</p>
-    <div class="ptl">${rows}</div>
-    <div class="pchk"><span class="faint">After you pick the artwork, the portal should show</span> <b>Certificate # ${esc(v.cert || '—')}</b> · <b>Application # ${esc(v.app || '—')}</b>${!v.cert && !v.app ? ' <span class="tag warn">No number found in Drive</span>' : ''}</div>
-    <div class="row" style="gap:8px;flex-wrap:wrap"><span class="faint" style="font-size:12.5px">Infringement Files › Upload Screengrab:</span>${v.screengrab ? `<button class="btn ghost sm" data-act="pcopy" data-v="screengrab">${esc(v.screengrab)} ⧉</button><span class="faint" style="font-size:12px">in Downloads › PageProof</span>` : '<span class="tag warn">Capture the page first</span>'}</div>
-    <div class="row" style="gap:6px"><button class="btn primary sm" data-act="pcopyall">Copy all</button></div></section>`;
+  const sub = k => k === 'ads' && v.adsWhy ? `<small>${esc(v.adsWhy)}</small>` : k === 'sells' && v.sellsWhy ? `<small>${esc(v.sellsWhy)}</small>` : k === 'damages' && v.damagesWhy ? `<small>${esc(v.damagesWhy)}</small>` : k === 'discMethod' ? `<small>${esc(NT_METHOD(c))}</small>` : '';
+  const row = (k, label, empty, val, i) => { const key = k + (i != null ? '|' + i : ''); return `<button class="prow${val ? '' : ' empty'}" data-act="pcopy" data-v="${key}" title="${val ? (DROP[k] ? 'Pick this in the drop-down: ' : 'Copy ') + esc(val) : esc(empty)}"${val ? '' : ' disabled'}><span class="pk">${esc(label)}${i != null ? ' ' + (i + 1) : ''}</span><span class="pv">${DROP[k] && val ? '<span class="pick">Drop-down</span>' : ''}${esc(val || empty || 'Not known')}${DROP[k] && val ? sub(k) : ''}</span><span class="pc">${val ? ntCopyMark(got.has(key)) : ''}</span></button>`; };
+  const list = NT_PORTAL.flatMap(([k, label, empty]) => k === 'images' ? (v.images.length ? v.images.map((u, i) => [k, label, empty, u, i]) : [[k, label + ' 1', empty, '']]) : [[k, label, empty, v[k]]]);
+  const all = list.filter(x => x[3]).length;
+  const n = list.filter(x => x[3] && got.has(x[0] + (x[4] != null ? '|' + x[4] : ''))).length;
+  return `<section class="pform" id="portalcard">
+    <div class="phead"><span class="sx-tt"><b>Add Infringement form</b><span class="pcount">${ntCopyCount(n, all)}</span></span><button class="btn" data-act="pcopyall">${NT_CP} Copy all</button></div>
+    <div class="ptl">${list.map(x => row(...x)).join('')}</div>
+    <div class="pnote"><span class="pk">Certificate / Application</span><span class="pv">After you pick the artwork, the portal should show <b>Certificate # ${esc(v.cert || '—')}</b> · <b>Application # ${esc(v.app || '—')}</b></span><span class="pc">${!v.cert && !v.app ? '<span class="sx-tag warn">No number in Drive</span>' : ''}</span></div>
+    <div class="pnote"><span class="pk">Upload Screengrab</span><span class="pv">${v.screengrab ? `${esc(v.screengrab)} <small>in Downloads › PageProof</small>` : 'Under Infringement Files in the portal'}</span><span class="pc">${v.screengrab ? `<button class="btn sm" data-act="pcopy" data-v="screengrab">${NT_CP} Copy name</button>` : '<span class="sx-tag warn">Capture the page first</span>'}</span></div>
+  </section>`;
 }
 Object.assign(ACTS, {
-  pcopy: v => {
+  pcopy: (v, el) => {
     if (!NT.portal) return;
     const [k, i] = String(v).split('|');
     const val = k === 'images' ? NT.portal.v.images[+i || 0] : NT.portal.v[k];
     const label = k === 'screengrab' ? 'File name' : ((NT_PORTAL.find(f => f[0] === k) || [])[1] || 'It');
-    if (val) ntCopy(val, label + ' copied');
+    if (!val) return;
+    ntCopy(val, label + ' copied');
+    if (k === 'screengrab') return;
+    const got = ntCopiedKeys(NT.portal.id);
+    got.add(String(v));
+    // Show it in place, no redraw, so the panel doesn't jump.
+    const card = document.getElementById('portalcard');
+    if (!card) return;
+    const pc = el && el.querySelector && el.querySelector('.pc');
+    if (pc) pc.innerHTML = ntCopyMark(true);
+    const rows = [...card.querySelectorAll('.ptl .prow:not(.empty)')];
+    const cnt = card.querySelector('.pcount');
+    if (cnt) cnt.textContent = ntCopyCount(rows.filter(r => got.has(r.dataset.v)).length, rows.length);
   },
   pcopyall: () => {
     if (!NT.portal) return;

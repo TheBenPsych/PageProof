@@ -2186,3 +2186,59 @@ a.sx-link:hover{text-decoration:underline}
 .ss span.ss-spark{display:block}
 @media (max-width:1300px){.ss-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:1100px){.ss-grid{grid-template-columns:minmax(0,1fr)}.ss-steps{flex-direction:column}.ss-arr{transform:rotate(90deg)}.ss-mini3{grid-template-columns:minmax(0,1fr)}.ss-kv{grid-template-columns:repeat(2,minmax(0,1fr))}.ss-rr{grid-template-columns:minmax(120px,40%) 1fr 60px}.ss-rr>small{display:none}.ss-prow{grid-template-columns:minmax(120px,38%) 1fr 44px}.ss-prow>small{display:none}.ss-test,.ss-cov{flex-wrap:wrap}.ss-what{margin-left:0}.ss-ibt{white-space:normal}.ss-ib{flex-wrap:wrap}}
+
+/* Calm look batch 19: Finish this claim in the Windows 11 Settings look (pp-claim.js clCard).
+   Scoped to #claimsteps.cs so the Clients pages' own .cl* classes stay as they are. */
+#claimsteps.cs{border:0;box-shadow:none;background:none;padding:0;border-radius:0;gap:22px}
+#claimsteps.cs .cshero{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:6px 16px;padding:18px 20px;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+#claimsteps.cs.done .cshero{grid-template-columns:auto minmax(0,1fr) auto}
+#claimsteps.cs .cshi{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
+#claimsteps.cs .cshi.ok{background:var(--ok-soft);color:var(--ok)}
+#claimsteps.cs .cshero .sx-tt>b{font-weight:600;font-size:17px}
+#claimsteps.cs .csn{font-size:13.5px;color:var(--muted);white-space:nowrap}
+#claimsteps.cs .csbar{grid-column:1/-1;height:4px;border-radius:2px;background:var(--sunk);overflow:hidden;margin-top:8px}
+#claimsteps.cs .csbar i{display:block;height:100%;background:var(--accent);border-radius:2px}
+#claimsteps.cs .sx-group h3.clpart{text-transform:none;letter-spacing:0;font-size:15px;font-weight:600;color:var(--ink);margin:0 0 10px 2px}
+#claimsteps.cs .clstep{border:0;background:none;border-radius:0}
+#claimsteps.cs .clstep .sx-row{min-height:66px;padding:10px 18px}
+#claimsteps.cs .clstep.on>.sx-row{border-bottom-left-radius:0;border-bottom-right-radius:0}
+#claimsteps.cs .clstep.on .sx-chev{transform:rotate(180deg)}
+#claimsteps.cs .clstep.cur>.sx-row{box-shadow:inset 3px 0 0 var(--accent)}
+#claimsteps.cs .clstep.lock{opacity:.55}
+#claimsteps.cs .clstep.lock .sx-chev{visibility:hidden}
+#claimsteps.cs .clstep.s .sx-tt>b{color:var(--muted)}
+#claimsteps.cs .csdone{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--ok);color:var(--on-ok,#fff)}
+#claimsteps.cs .csskip{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;border:1.5px solid var(--line);color:var(--muted)}
+#claimsteps.cs .csdone svg,#claimsteps.cs .csskip svg{width:15px;height:15px}
+#claimsteps.cs .sx-tag.csacc{background:var(--accent-soft);color:var(--accent)}
+#claimsteps.cs .cssay{font-size:13.5px;color:var(--muted)}
+#claimsteps.cs .csfold{padding:0;display:flex;flex-direction:column;color:var(--ink)}
+#claimsteps.cs .csck{display:flex;align-items:center;gap:14px;flex-wrap:wrap;min-height:62px;padding:10px 18px 10px 58px;border-top:1px solid var(--line);position:relative}
+#claimsteps.cs .csck:first-child{border-top:0}
+#claimsteps.cs .csm{position:absolute;left:18px;top:50%;margin-top:-11px;width:22px;height:22px;border-radius:50%;border:1.5px solid color-mix(in srgb,var(--ink) 35%,var(--line));display:grid;place-items:center}
+#claimsteps.cs .csck.y .csm{background:var(--ok);border-color:var(--ok);color:var(--on-ok,#fff)}
+#claimsteps.cs .csck.n .csm{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
+#claimsteps.cs .cstt{display:flex;flex-direction:column;gap:2px;flex:1 1 220px;min-width:0}
+#claimsteps.cs .cstt>b{font-weight:400;font-size:14.5px;overflow-wrap:anywhere}
+#claimsteps.cs .cstt>span{font-size:13px;color:var(--muted)}
+#claimsteps.cs .csbtns{display:flex;gap:8px;flex-wrap:wrap;flex:none}
+#claimsteps.cs .csbtns .btn{min-height:32px}
+#claimsteps.cs .csfoot{display:flex;justify-content:flex-end;padding:10px 18px;border-top:1px solid var(--line)}
+#claimsteps.cs .csfold>.pform{border-top:1px solid var(--line)}
+#claimsteps.cs .csfold>.pform:first-child{border-top:0}
+/* The Add Infringement form rows (pp-newtools.js ppPortalCard) */
+.pform{display:flex;flex-direction:column}
+.pform .phead{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 18px}
+.pform .phead .sx-tt>b{font-weight:600;font-size:14.5px}
+.pform .ptl{display:flex;flex-direction:column}
+.pform .ptl .prow,.pform .pnote{display:grid;grid-template-columns:160px minmax(0,1fr) auto;gap:14px;align-items:center;min-height:46px;padding:8px 18px;border:0;border-top:1px solid var(--line);background:none;color:var(--ink);font:inherit;font-size:14px;text-align:left;width:100%}
+.pform .ptl .prow{cursor:pointer}
+.pform .ptl .prow:hover:not([disabled]){background:color-mix(in srgb,var(--surface) 60%,var(--sunk))}
+.pform .ptl .prow .pk,.pform .pnote .pk{color:var(--muted);font-weight:400;font-size:13.5px;display:flex;flex-direction:column;gap:2px}
+.pform .ptl .pick{display:block;background:none;padding:0;margin:0;font-size:12px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--faint)}
+.pform .pv{overflow-wrap:anywhere;white-space:pre-wrap}
+.pform .pv small{display:block;font-size:12.5px;color:var(--muted);margin-top:2px}
+.pform .pc{color:inherit;visibility:visible}
+.pform .pcbtn{pointer-events:none;gap:6px}
+.pform .pnote{background:var(--sunk);font-size:13.5px}
+@media (max-width:560px){.pform .ptl .prow,.pform .pnote{grid-template-columns:minmax(0,1fr) auto}.pform .ptl .prow .pk,.pform .pnote .pk{grid-column:1/-1}}
