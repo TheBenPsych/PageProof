@@ -62,7 +62,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   });
   await page.goto(url('app.html#stats')); await page.waitForTimeout(2500);
   const txt = await page.textContent('#view');
-  ok(/How PageProof is doing/.test(txt) && /Checker test/.test(txt) && /From search to copy/.test(txt) && /Each search site/.test(txt) && /Links thrown out/.test(txt) && /Problems by website/.test(txt), 'The page shows its sections');
+  ok(/Health/.test(txt) && /Checker test/.test(txt) && /From search to copy/.test(txt) && /Each search site/.test(txt) && /Links thrown out/.test(txt) && /Problems by website/.test(txt), 'The page shows its sections');
   ok(/Keep searching: on time and pauses/.test(txt) && /Google Drive speed/.test(txt) && /Photos covered/.test(txt) && /Computer strain/.test(txt) && /Post check, account reader/.test(txt) && /Save stats for Claude/.test(txt), 'and the rest of them');
   ok(/of Bing's links could not be checked in the last 3 days/.test(txt), 'A red alert says most of Bing\'s links could not be checked');
   ok(await page.$('.st-alert.bad') !== null, 'It shows in red at the top');
@@ -85,7 +85,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(file.j, 'Its second half is the full numbers, readable by a program');
   ok(!file.names.length && !file.photos.length && !file.links.length && !/Ben Tester|Shared drives|Registered images/.test(file.t), 'No client names, photo names, links, your name or folder paths in it');
   ok(file.scrubbed === 'site of [name] and [name]', 'Anything that looks like a client name or your name is blanked (' + file.scrubbed + ')');
-  await page.click('.headact [data-act="stsave"]'); await page.waitForTimeout(2500);
+  await page.click('.sx-hpivot [data-act="stsave"]'); await page.waitForTimeout(2500);
   const saved = await page.evaluate(async () => { const d = await RS_DOCS.dir(); const s = await d.getDirectoryHandle('stats'); const out = []; for await (const [n] of s.entries()) out.push(n); return out; });
   ok(saved.some(n => /^pageproof-stats-\d{4}-\d\d-\d\d-\d{4}\.txt$/.test(n)), 'Save stats for Claude saves into Documents › PageProof › stats (' + saved.join(', ') + ')');
 

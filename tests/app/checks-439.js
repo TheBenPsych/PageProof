@@ -27,7 +27,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   });
   ok(f.a && f.a.n === 1 && f.a.quota, 'a failed save is written down (outside the full storage), and a full storage is recognised');
   ok(f.alert && f.alert[0] === 'bad' && /full/.test(f.alert[2]), 'a failed save becomes a red "looks off" line (shown on Home): ' + (f.alert && f.alert[1]));
-  await page.goto(url('app.html#health')); await page.waitForTimeout(3500);
+  await page.goto(url('app.html#health?tab=space')); await page.waitForTimeout(3500);
   const h = await page.evaluate(() => ({ g: (document.getElementById('stGuard') || {}).textContent || '', fail: !!document.getElementById('stFail') }));
   ok(/no size limit/.test(h.g) && h.fail, 'Is everything working shows the storage line and the failed save: ' + h.g.replace(/\s+/g, ' '));
   await page.evaluate(() => PP_GUARD.clearFail());

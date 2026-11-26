@@ -1,4 +1,4 @@
-// Settings › Is everything working? (green and red lights, Copy details for support)
+// Settings › Health (green and red lights, Copy details for support, space used)
 // and Find copies › Skipped photos (photos that could not be searched, and why).
 Object.assign(state, { skTab: 'All', skMore: 100, support: '' });
 const agoText = t => {
@@ -68,12 +68,6 @@ async function healthLights() {
   L.push(['ok', 'PageProof version', 'You have ' + VERSION + '. New versions come from your team lead.']);
   return L;
 }
-const LIGHT = { ok: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--bad)', grey: 'var(--faint)' };
-// UI overhaul batch 7: the lights as tiles in three groups.
-const H_SITES = t => /^(Google Lens|Yandex|Bing|Signed in)/.test(t);
-const H_SEARCH = t => /^(Keep searching|Last photo searched|Skipped photos|Stats)$/.test(t);
-const HGROUPS = [['Your computer', t => !H_SITES(t) && !H_SEARCH(t)], ['Searching', H_SEARCH], ['Search sites', H_SITES]];
-
 // ---------------------------------------------------------------- Copy details for support
 // Numbers and settings only. Never a photo's name, a client's name, a site or a folder path.
 async function supportDetails() {
@@ -144,23 +138,6 @@ function timeSlowest(t) {
   if (d != null && d > c * t.checks) return 'On this computer the internet is the slow part: the checker waits for pictures to download.';
   return 'Downloads and photo checks keep pace with each other on this computer.';
 }
-async function timeCard() {
-  const t = await timeSums();
-  const row = (label, k, what) => { const a = t && t.avg(k); return `<div class="row" style="gap:12px;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:nowrap"><span style="flex:1">${label}</span><b>${a == null ? '–' : msText(a) + ' ' + what}</b><span class="faint" style="width:110px;text-align:right">${t ? t.sum[k][0].toLocaleString() + ' times' : ''}</span></div>`; };
-  return `<section class="card pad" style="display:flex;flex-direction:column;gap:4px">
-    <div class="row"><h2>Where the time goes</h2><span class="tag ${t && t.fast === false ? 'warn' : 'ok'}" style="margin-left:auto">${!t || t.fast == null ? 'Not measured yet' : t.fast ? 'Fast checker on' : 'Fast checker off'}</span></div>
-    <p class="muted" style="margin:0 0 6px;font-size:13.5px">How long each step of a search takes on this computer, over the last 7 days.${t ? ' ' + timeSlowest(t) : ' It fills in after the next search.'}</p>
-    ${row('Search sites (one photo on one site)', 'search', 'each')}
-    ${row('Downloading a found picture', 'dl', 'each')}
-    ${row('Checking a found picture against your photo', 'check', 'each')}
-    ${row('Waiting for a free checker', 'wait', 'each')}
-    <div class="row" style="gap:12px;padding:10px 0;flex-wrap:nowrap"><span style="flex:1">Links on your hidden sites, skipped without downloading</span><b>${t ? t.sum.skipped.toLocaleString() : '–'}</b><span style="width:110px"></span></div>
-    <div class="row" style="gap:12px;padding:10px 0;border-top:1px solid var(--line);flex-wrap:nowrap"><span style="flex:1">Times a search slowed down because the computer was busy</span><b>${t ? t.sum.eased.toLocaleString() : '–'}</b><span style="width:110px"></span></div>
-    <div class="row" style="gap:12px;padding:10px 0;border-top:1px solid var(--line);flex-wrap:nowrap"><span style="flex:1">Graphics card (lines up real copies faster)</span><b>${!t || t.gpu == null ? 'Not used yet' : t.gpu ? 'In use' : 'Not available on this computer'}</b><span style="width:110px"></span></div>
-    ${t && t.fast === false ? '<p class="muted" style="margin:4px 0 0;font-size:13.5px">The fast checker could not start in this browser, so the slower one is used. Results are the same.</p>' : ''}
-  </section>`;
-}
-
 // ---------------------------------------------------------------- how much room PageProof takes
 // Measured only when this page is open (it reads every stored picture's size, which takes a
 // moment on a big list). Copies marked Stolen are never offered for clearing.
@@ -194,37 +171,7 @@ async function ppStorage() {
   const guard = typeof PP_GUARD !== 'undefined' ? { u: await PP_GUARD.usage().catch(() => ({})), fail: await PP_GUARD.lastFail().catch(() => null) } : { u: {}, fail: null };
   return { guard, kept, pages, prev, caps, ans, old, used, quota: est.quota || 0, sizes: { kept: kept.bytes, pages: pages.bytes, prev: prev.bytes, caps: caps.bytes, rest: Math.max(0, used - known) }, at: Date.now() };
 }
-function storageCard() {
-  const s = state.storage;
-  if (!s) {
-    if (!state.storageBusy) { state.storageBusy = true; ppStorage().then(r => { state.storage = r; }, e => { state.storage = { error: e.message || String(e) }; }).then(() => { state.storageBusy = false; if (state.shown === 'health') render(true); }); }
-    return `<section class="card pad" id="storage"><div class="row"><h2>Space PageProof is using</h2></div><div class="scanbar" style="margin-top:10px"><span class="spin"></span>Measuring…</div></section>`;
-  }
-  if (s.error) return `<section class="card pad" id="storage"><h2>Space PageProof is using</h2><p class="muted" style="margin:8px 0 0">Could not measure it right now (${esc(s.error)}).</p></section>`;
-  const pick = state.stPick || (state.stPick = {});
-  const opts = [
-    ['ans', 'Kept pictures for copies you answered Licensed or Removed', s.ans.kept.length + s.ans.pages.length, s.ans.bytes, 'Their copy and the picture of their page. The answer itself and the link stay in your list.'],
-    ['old', 'Pictures of their pages older than 3 months', s.old.pages.length, s.old.bytes, 'Only for copies you have not answered yet. PageProof can take the picture again when you open the copy.'],
-    ['caps', 'Captures from before today that are still held in the browser', s.caps.old.length, s.caps.oldBytes, 'The evidence packs you saved are files on your computer. They are not touched.'],
-  ];
-  const chosen = opts.filter(o => pick[o[0]] && o[2]);
-  const total = chosen.reduce((a, o) => a + o[3], 0);
-  const pct = s.quota ? Math.min(100, s.used / s.quota * 100) : 0;
-  return `<section class="card pad" id="storage" style="display:flex;flex-direction:column;gap:14px">
-    <div class="row"><h2>Space PageProof is using</h2><span class="tag ${pct > 80 ? 'warn' : 'ok'}" style="margin-left:auto">${pct > 80 ? 'Getting full' : 'Plenty of room'}</span></div>
-    <div><div class="row" style="align-items:baseline;gap:8px"><b style="font-size:26px;letter-spacing:-.02em">${sizeText(s.used)}</b>${s.quota ? `<span class="muted">used of the ${sizeText(s.quota)} your browser allows on this computer</span>` : ''}</div>
-      ${(() => { const g = s.guard || { u: {} }, unl = (api.runtime.getManifest().permissions || []).includes('unlimitedStorage');
-        return `<p class="muted" style="margin:6px 0 0;font-size:13.5px" id="stGuard">Settings and lists: ${g.u.local != null ? sizeText(g.u.local) : 'not known'} · ${unl ? 'no size limit' : 'limit 10 MB'} · ${g.u.persisted ? 'kept safe from the browser\'s clean-up' : 'the browser may clear it when the disk is full'}</p>${g.fail ? `<div class="banner bad" role="alert" style="margin-top:8px" id="stFail"><div style="flex:1 1 260px;min-width:0"><b>Some changes could not be saved</b> <span style="font-size:13.5px">${g.fail.n} times, last ${esc(new Date(g.fail.at).toLocaleString())}${g.fail.quota ? '. The browser storage was full.' : '.'} ${esc(g.fail.msg || '')}</span></div><button class="btn" data-act="stfailok">I've seen it</button></div>` : ''}`; })()}
-      <div class="stbar" role="img" aria-label="What the space is used for">${STORE_PARTS.map(([k, l, c]) => s.sizes[k] ? `<i style="flex:${Math.max(s.sizes[k], s.used / 150)} 0 0;background:${c}" title="${l}: ${sizeText(s.sizes[k])}"></i>` : '').join('')}</div></div>
-    <div class="stlist">${STORE_PARTS.map(([k, l, c]) => `<div><i style="background:${c}"></i><span>${l}${{ kept: ' (' + s.kept.n.toLocaleString() + ')', pages: ' (' + s.pages.n.toLocaleString() + ')', prev: ' (' + s.prev.n.toLocaleString() + ')', caps: ' (' + s.caps.n + ' of the 10 most recent)' }[k] || ''}</span><b>${sizeText(s.sizes[k])}</b></div>`).join('')}</div>
-    <div style="border-top:1px solid var(--line);padding-top:14px;display:flex;flex-direction:column;gap:10px">
-      <h3 style="margin:0;font-size:15px">Free up space</h3>
-      ${opts.map(([k, l, n, b, why]) => `<label class="stopt${n ? '' : ' none'}"><input type="checkbox" data-act="stpick" data-v="${k}"${pick[k] && n ? ' checked' : ''}${n ? '' : ' disabled data-why="There is nothing of this kind to clear right now."'}><span><b>${l}</b><small>${n ? n.toLocaleString() + (n === 1 ? ' item, ' : ' items, ') + sizeText(b) + '. ' : 'Nothing to clear. '}${why}</small></span></label>`).join('')}
-      <div class="row" style="gap:12px"><button class="btn primary" data-act="stfree"${chosen.length ? '' : ' disabled data-why="Tick at least one kind of saved data above first."'}>${chosen.length ? 'Free up ' + sizeText(total) : 'Tick what to clear'}</button>
-        <span class="muted" style="font-size:13.5px;display:inline-flex;align-items:center;gap:6px">${ic('check', 16)} Copies you marked Stolen are never deleted here.</span></div>
-    </div>
-  </section>`;
-}
+// The Space used tab itself is drawn in ui/pp-settings.js (sxSpace).
 
 // ---------------------------------------------------------------- signed in to the sites?
 // Facebook, Instagram and X hide many posts and pictures from anyone who is not signed in.
@@ -259,22 +206,7 @@ async function signInLights() {
   return out;
 }
 
-// ---------------------------------------------------------------- the page
-V.health = async () => {
-  const lights = await healthLights();
-  const bad = lights.filter(l => l[0] === 'bad').length, warn = lights.filter(l => l[0] === 'warn').length;
-  return `${head('Settings', 'Is everything working?', 'A quick look at every part of PageProof. Green is fine, yellow needs a look, red is stopped.', `<button class="btn" data-act="healthagain">${ic('refresh', 18)} Check again</button><button class="btn primary" data-act="supportcopy">${ic('doc', 18)} Copy details for support</button>`)}
-  ${(() => { const first = lights.find(l => l[0] === 'bad' && l[3]) || lights.find(l => l[0] === 'warn' && l[3]);
-    return `<div class="hsum ${bad ? 'bad' : warn ? 'warn' : 'ok'}" role="status"><span class="hsi">${ic(bad || warn ? 'warn' : 'check', 26, 2.4)}</span><div><b>${bad ? plural(bad, 'thing has', 'things have') + ' stopped' : warn ? plural(warn, 'thing needs', 'things need') + ' a look' : 'Everything is working'}</b><span>${bad && warn ? `and ${warn} more ${warn === 1 ? 'needs' : 'need'} a look. ` : ''}${first ? esc(first[1]) + ': ' + esc(first[2]) : 'Every light below is green or not in use yet.'}</span></div>${first ? first[3] : ''}</div>`; })()}
-  ${HGROUPS.map(([g, test]) => { const ls = lights.filter(l => test(l[1])); return ls.length ? `<section class="hgroup"><h2>${g}</h2><div class="htiles">${ls.map(([c, title, text, btn]) => `<div class="htile ${c}">
-      <div class="ht"><span class="hdot" style="background:${LIGHT[c]}" role="img" aria-label="${{ ok: 'Working', warn: 'Needs a look', bad: 'Stopped', grey: 'Not in use' }[c]}"></span><b>${esc(title)}</b></div>
-      <div class="muted" style="font-size:13.5px">${esc(text)}</div>${btn ? `<div class="hb">${btn}</div>` : ''}</div>`).join('')}</div></section>` : ''; }).join('')}
-  ${await timeCard()}
-  ${storageCard()}
-  ${state.support ? `<section class="card pad" style="display:flex;flex-direction:column;gap:10px"><div class="row"><h2>Details for support</h2><span class="tag ok" style="margin-left:auto">Copied</span></div>
-    <p class="muted" style="margin:0;font-size:14px">This is exactly what was copied. Paste it into a message. It has numbers and settings only: no photo names, client names, sites or folder paths.</p>
-    <textarea readonly style="width:100%;min-height:260px;font-family:var(--mono,monospace);font-size:12.5px;border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--sunk);color:var(--ink)">${esc(state.support)}</textarea></section>` : ''}`;
-};
+// The Health page itself is drawn in ui/pp-settings.js (calm look).
 // Skipped photos moved to ui/pp-skipped.js (calm look step 13).
 
 Object.assign(ACTS, {

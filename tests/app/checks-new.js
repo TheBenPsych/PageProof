@@ -111,7 +111,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
 
   // ---- health page + copy details
   await page.goto(url('app.html#health')); await page.waitForTimeout(1500);
-  const lights = await page.evaluate(() => [...document.querySelectorAll('.htile .ht b')].map(b => b.textContent));
+  const lights = await page.evaluate(() => [...document.querySelectorAll('.sx-light .sx-tt > b')].map(b => b.textContent));
   console.log(lights.join(' | '));
   ok(lights.includes('Google Drive photos') && lights.includes('Google Lens') && lights.includes('PageProof version'), 'Health page shows the lights');
   await ctx.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => {});

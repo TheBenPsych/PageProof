@@ -47,6 +47,10 @@ const SX = (() => {
     pause: '<circle cx="8" cy="8" r="6.2"/><path d="M6.4 5.6v4.8M9.6 5.6v4.8"/>',
     chart: '<path d="M2 13.8h12M3.8 11V8M7 11V4.5M10.2 11V6.5M13.2 11V3"/>',
     drive: '<path d="M5.6 2.4h4.8l4.2 7.3-2.4 4H4l-2.4-4z"/><path d="M5.6 2.4 9.8 9.7h4.8M10.4 2.4 4 13.7"/>',
+    clock: '<circle cx="8" cy="8" r="6.2"/><path d="M8 4.6V8l2.4 1.6"/>',
+    photo: '<rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1"/><circle cx="5.6" cy="6.3" r="1.2"/><path d="m1.8 11.4 3.4-3 2.6 2.2 2.4-2 4 3"/>',
+    skip: '<path d="M3 3.5 9 8l-6 4.5zM12 3.5v9"/>',
+    sign: '<path d="M6 2.5H3v11h3M10.5 11 13.5 8l-3-3M13.5 8H6"/>',
     book: '<path d="M2 3.2c2.2-.6 4.2-.3 6 1 1.8-1.3 3.8-1.6 6-1v9.6c-2.2-.6-4.2-.3-6 1-1.8-1.3-3.8-1.6-6-1zM8 4.2v9.6"/>',
     tour: '<path d="M3 14V2.5M3 3h8.5l-1.8 2.5L11.5 8H3"/>',
     redo: '<path d="M13.4 8a5.4 5.4 0 1 1-1.6-3.8M13.4 2.6v2.8h-2.8"/>',
@@ -91,7 +95,7 @@ const SX = (() => {
     ['Back up now', 'backup google drive', 'backups', 'sxHero'], ['Restore a backup', 'bring it back', 'backups', 'sxRestore'], ['Team lists', 'share people', 'backups', 'sxTeam'],
     ['Your photos folder', 'google drive reconnect pick again', 'backups', 'sxPhotos'], ['PageProof folder', 'documents', 'backups', 'sxDocs'], ['Backup folder', 'my drive', 'backups', 'sxBkFolder'],
     ['Moving to a new computer', 'new pc laptop', 'backups', 'sxMoving'],
-    ['Is everything working?', 'health lights sign in', 'health', ''], ['Stats', 'how pageproof is doing numbers', 'stats', ''],
+    ['Is everything working?', 'health lights sign in right now', 'health', ''], ['Space used', 'storage room free up space clear', 'health?tab=space', ''], ['Where the time goes', 'speed slow fast checker', 'health', 'sxTime'], ['Stats', 'how pageproof is doing numbers', 'stats', ''],
     ['Help and tutorial', 'guide learn', 'help', ''], ['Keyboard keys', 'shortcuts', 'help', ''], ['Run setup again', 'first time', 'setup', ''],
   ];
   const find = () => `<div class="sx-find" role="search">${ic('search', 16)}<input id="sxFind" type="search" placeholder="Find a setting" aria-label="Find a setting" autocomplete="off"><div class="sx-found" id="sxFound" hidden></div></div>`;
@@ -465,3 +469,83 @@ V.whatsnew = async () => `${sxHead('What’s new in PageProof ' + esc(VERSION))}
   <div class="sx-stack">${NEWS.map(([t, d]) => SX.row('star', t, d, '', { cls: 'sx-news' })).join('')}</div>
   <div><button class="btn primary kbtn" data-act="newsseen">Got it</button></div></div>`;
 V.whatsnew.after = () => SX.after();
+
+// ---------------------------------------------------------------- Health
+// One page with three tabs: Right now (the lights), Stats (ui/fc-stats.js draws its inside) and
+// Space used. The lights themselves, the support details and the space measuring are worked out
+// in ui/fc-health.js as before; this only draws them.
+function sxHealthFrame(cur, right, body, cls = '') {
+  const n = SX.DOT.health;
+  const tabs = [['now', 'Right now', n], ['stats', 'Stats', 0], ['space', 'Space used', 0]];
+  return `${sxHead('Health')}<div class="sx-page kpn sxp-health ${cls}">
+    <div class="sx-pivot sx-hpivot"><div class="utabs" role="tablist">${tabs.map(([k, l, c]) => `<button role="tab" class="${k === cur ? 'on' : ''}" aria-selected="${k === cur}" data-act="sxhtab" data-v="${k}">${l}${c ? ` <span class="sx-tabwarn" title="${c === 1 ? '1 thing needs a look' : c + ' things need a look'}">${c}</span>` : ''}</button>`).join('')}</div><span class="sp"></span>${right || ''}</div>
+    ${body}</div>`;
+}
+ACTS.sxhtab = v => { location.hash = v === 'stats' ? 'stats' : v === 'space' ? 'health?tab=space' : 'health'; };
+const SX_LIGHT_ICON = [[/^Google Drive/, 'drive'], [/^Computer clock/, 'clock'], [/^Backup to Google Drive/, 'cloud'], [/^Backup in Documents/, 'folder'], [/^Team lists/, 'team'], [/^Preview pictures/, 'photo'], [/^PageProof version/, 'shield'],
+  [/^Keep searching/, 'repeat'], [/^Last photo searched/, 'search'], [/^Skipped photos/, 'skip'], [/^Stats/, 'chart'], [/^(Google Lens|Yandex|Bing)/, 'search'], [/^Signed in/, 'sign']];
+const SX_SAY = { ok: 'Working', warn: 'Needs a look', bad: 'Stopped', grey: 'Not in use' };
+V.health = async () => {
+  const { ic, group, fold, tag } = SX;
+  if (routeArg('tab') === 'space') return sxHealthFrame('space', '', sxSpace(), 'sxp-space');
+  const lights = await healthLights();
+  const bad = lights.filter(l => l[0] === 'bad'), warn = lights.filter(l => l[0] === 'warn');
+  SX.DOT.health = bad.length + warn.length; SX.DOT.at = Math.max(SX.DOT.at, Date.now() - 50000);
+  const isSign = t => /^Signed in: /.test(t), isSite = t => /^(Google Lens|Yandex|Bing)/.test(t), isSearch = t => /^(Keep searching|Last photo searched|Skipped photos|Stats)$/.test(t);
+  const L = ([c, title, text, btn]) => `<div class="sx-row sx-light ${c}"><span class="sx-ic">${ic((SX_LIGHT_ICON.find(x => x[0].test(title)) || [0, 'info'])[1])}</span><span class="sx-tt"><b>${esc(title.replace(/^Signed in: /, ''))}</b><span>${esc(text)}</span></span><span class="sx-ctl">${btn || ''}<span class="sx-dot ${c}" role="img" aria-label="${SX_SAY[c]}"></span></span></div>`;
+  const rows = test => lights.filter(l => test(l[1])).map(L).join('');
+  // The bar on top: what needs you first, with its button.
+  const need = [...bad, ...warn], first = need.find(l => l[3]) || need[0];
+  const tone = bad.length ? 'bad' : warn.length ? 'warn' : 'ok';
+  const bar = `<div class="kbar sx-bar ${tone}" id="sxHealthBar" role="status"><span class="ksq" style="--c:${tone === 'bad' ? '#C42B1C' : tone === 'warn' ? '#9D5D00' : '#0F7B0F'};width:28px;height:28px">${ic(tone === 'ok' ? 'check' : 'warn', 16)}</span><div><b>${bad.length ? plural(bad.length, 'thing has', 'things have') + ' stopped' : warn.length ? plural(warn.length, 'thing needs', 'things need') + ' a look' : 'Everything is working'}</b><span>${bad.length && warn.length ? `and ${warn.length} more ${warn.length === 1 ? 'needs' : 'need'} a look. ` : ''}${first ? esc(first[1].replace(/^Signed in: /, 'Sign in to ')) + ': ' + esc(first[2]) : 'Every light below is green or not in use yet.'}</span></div><span class="sp"></span>${need.filter(l => l[3]).slice(0, 2).map(l => /^Signed in: /.test(l[1]) ? l[3].replace(/>Sign in</, '>Sign in to ' + esc(l[1].slice(11).replace(/ \(.*/, '')) + '<') : l[3]).join('')}</div>`;
+  // Where the time goes (4.16), folded away.
+  const t = await timeSums();
+  const tr = (label, k) => { const a = t && t.avg(k); return `<div><span>${label}</span><b>${a == null ? '–' : msText(a) + ' each'}</b><em>${t ? t.sum[k][0].toLocaleString() + ' times' : ''}</em></div>`; };
+  const time = fold('sxTime', 'speed', 'Where the time goes', t ? esc(timeSlowest(t)) || 'How long each step of a search takes on this computer, last 7 days' : 'How long each step of a search takes. It fills in after the next search',
+    `<div class="sx-facts">${tr('Search sites (one photo on one site)', 'search')}${tr('Downloading a found picture', 'dl')}${tr('Checking a found picture against your photo', 'check')}${tr('Waiting for a free checker', 'wait')}
+      <div><span>Links on your hidden sites, skipped without downloading</span><b>${t ? t.sum.skipped.toLocaleString() : '–'}</b><em></em></div>
+      <div><span>Times a search slowed down because the computer was busy</span><b>${t ? t.sum.eased.toLocaleString() : '–'}</b><em></em></div>
+      <div><span>Graphics card (lines up real copies faster)</span><b>${!t || t.gpu == null ? 'Not used yet' : t.gpu ? 'In use' : 'Not available on this computer'}</b><em></em></div></div>
+      ${t && t.fast === false ? '<p style="margin-top:10px">The fast checker could not start in this browser, so the slower one is used. Results are the same.</p>' : ''}`,
+    false, tag(!t || t.fast == null ? 'Not measured yet' : t.fast ? 'Fast checker on' : 'Fast checker off', t && t.fast === false ? 'warn' : t && t.fast ? 'ok' : 'grey'));
+  const support = state.support ? `<div class="sx-group" id="sxSupport"><h3>Details for support <em>copied · numbers and settings only: no photo names, client names, sites or folder paths</em></h3><textarea readonly class="sx-support">${esc(state.support)}</textarea></div>` : '';
+  const right = `<button class="btn kbtn" data-act="healthagain">${ic('repeat', 16)}Check again</button><button class="btn kbtn" data-act="supportcopy">${ic('copy', 16)}Copy details for support</button>`;
+  return sxHealthFrame('now', right, `${bar}<div class="sx-cols">
+    <div class="sx-col">${group('Your computer', rows(x => !isSign(x) && !isSite(x) && !isSearch(x)), 'sxHComputer')}${group('Searching', rows(isSearch) + time, 'sxHSearching')}</div>
+    <div class="sx-col">${group('Search sites', rows(isSite), 'sxHSites')}${group('Sign-ins <em>optional, but social sites show more when signed in</em>', rows(isSign), 'sxHSign')}</div>
+  </div>${support}`);
+};
+V.health.after = () => SX.after();
+// Space used: measured only when this tab is open (it reads every stored picture's size).
+function sxSpace() {
+  const { ic, group } = SX;
+  const s = state.storage;
+  if (!s) {
+    if (!state.storageBusy) { state.storageBusy = true; ppStorage().then(r => { state.storage = r; }, e => { state.storage = { error: e.message || String(e) }; }).then(() => { state.storageBusy = false; if (state.shown === 'health') render(true); }); }
+    return `<div class="sx-hero sx-space" id="storage"><span class="sx-tt"><b>Measuring…</b><span>Adding up the pictures PageProof keeps in this browser.</span></span></div>`;
+  }
+  if (s.error) return `<div class="sx-hero sx-space" id="storage"><span class="sx-tt"><b>Could not measure it right now</b><span>${esc(s.error)}</span></span></div>`;
+  const pick = state.stPick || (state.stPick = {});
+  const opts = [
+    ['ans', 'Kept pictures for copies you answered Licensed or Removed', s.ans.kept.length + s.ans.pages.length, s.ans.bytes, 'Their copy and the picture of their page. The answer and the link stay'],
+    ['old', 'Pictures of their pages older than 3 months', s.old.pages.length, s.old.bytes, 'Only copies you have not answered. PageProof can take it again'],
+    ['caps', 'Captures from before today still held in the browser', s.caps.old.length, s.caps.oldBytes, 'Your saved evidence packs are files on your computer and are not touched'],
+  ];
+  const chosen = opts.filter(o => pick[o[0]] && o[2]), total = chosen.reduce((a, o) => a + o[3], 0);
+  const pct = s.quota ? Math.min(100, s.used / s.quota * 100) : 0;
+  const COL = { kept: '#0067C0', pages: '#00818A', prev: '#8250DF', caps: '#C27C00', rest: '#8A8A8A' };
+  const count = { kept: ' (' + s.kept.n.toLocaleString() + ')', pages: ' (' + s.pages.n.toLocaleString() + ')', prev: ' (' + s.prev.n.toLocaleString() + ')', caps: ' (' + s.caps.n + ' of the 10 most recent)' };
+  const g = s.guard || { u: {} }, unl = (api.runtime.getManifest().permissions || []).includes('unlimitedStorage');
+  const fail = g.fail ? `<div class="kbar sx-bar bad" role="alert" id="stFail"><span class="ksq" style="--c:#C42B1C;width:28px;height:28px">${ic('warn', 16)}</span><div><b>Some changes could not be saved</b><span>${g.fail.n} times, last ${esc(new Date(g.fail.at).toLocaleString())}${g.fail.quota ? '. The browser said its storage is full. Free up space below.' : '.'}</span></div><span class="sp"></span><button class="btn kbtn" data-act="stfailok">Got it</button></div>` : '';
+  return `${fail}<div class="sx-cols" id="storage">
+    <div class="sx-col">
+      <div class="sx-hero sx-space"><span class="sx-tt"><b class="sx-num">${sizeText(s.used)}</b><span>${s.quota ? `used of the ${sizeText(s.quota)} your browser allows on this computer · ` : ''}${pct > 80 ? 'getting full' : 'plenty of room'}</span>
+        <span class="sx-bar2" role="img" aria-label="What the space is used for">${STORE_PARTS.map(([k, l]) => s.sizes[k] ? `<i style="flex:${Math.max(s.sizes[k], s.used / 150)} 0 0;background:${COL[k]}" title="${l}: ${sizeText(s.sizes[k])}"></i>` : '').join('')}</span>
+        <span class="sx-faint" id="stGuard">Settings and lists: ${g.u.local != null ? sizeText(g.u.local) : 'not known'} · ${unl ? 'no size limit' : 'limit 10 MB'} · ${g.u.persisted ? 'kept safe from the browser\'s clean-up' : 'the browser may clear it when the disk is full'}</span></span></div>
+      ${group('What it is', STORE_PARTS.map(([k, l]) => `<div class="sx-row sx-part"><span class="sx-ic"><i class="sx-sw" style="background:${COL[k]}"></i></span><span class="sx-tt"><b>${l}${count[k] || ''}</b></span><span class="sx-ctl"><span class="sx-val">${sizeText(s.sizes[k])}</span></span></div>`).join(''), 'sxParts')}
+    </div>
+    <div class="sx-col">
+      ${group('Free up space', opts.map(([k, l, n, b, why]) => `<label class="sx-row stopt${n ? '' : ' none'}"><span class="sx-ic"><input type="checkbox" data-act="stpick" data-v="${k}"${pick[k] && n ? ' checked' : ''}${n ? '' : ' disabled data-why="There is nothing of this kind to clear right now."'}></span><span class="sx-tt"><b>${l}</b><span>${n ? n.toLocaleString() + (n === 1 ? ' item. ' : ' items. ') : 'Nothing to clear. '}${why}</span></span><span class="sx-ctl"><span class="sx-val">${n ? sizeText(b) : '–'}</span></span></label>`).join('') +
+        `<div class="sx-row sx-foot"><span class="sx-ic"></span><span class="sx-tt"><span>${ic('check', 14)} Copies you marked Stolen are never deleted here</span></span><span class="sx-ctl"><button class="btn kbtn${chosen.length ? ' primary' : ''}" data-act="stfree"${chosen.length ? '' : ' disabled data-why="Tick at least one kind of saved data above first."'}>${ic('bin', 16)}${chosen.length ? 'Free up ' + sizeText(total) : 'Clear ticked'}</button></span></div>`, 'sxFree')}
+    </div></div>`;
+}
