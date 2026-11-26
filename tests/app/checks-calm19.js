@@ -42,7 +42,35 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(new RegExp('^2 of ' + p0.all + ' lines copied').test(p1.cnt) && p1.copied.join() === 'domain,page', 'copied lines show Copied and the count goes up: ' + JSON.stringify(p1));
   await page.evaluate(() => render(true)); await page.waitForTimeout(900);
   ok(await page.evaluate(() => document.querySelectorAll('#portalcard .prow .sx-tag.ok').length === 2), 'Copied stays after the panel redraws');
+  // Not finished rows: a step chip and Continue (Change answer moves into the ··· menu)
+  await page.locator('.dfoot [data-act="cllater"]').click(); await page.waitForTimeout(1200);
+  await page.keyboard.press('Escape').catch(() => {});
+  await page.evaluate(() => { state.open = ''; location.hash = '#found'; }); await page.waitForTimeout(800);
+  await page.locator('[data-act="ffilter"][data-v="Not finished"]').click(); await page.waitForTimeout(1200);
+  const nf = await page.evaluate(id => { const r = document.querySelector(`.frow[data-v="${id}"]`); return r && { chip: (r.querySelector('.clchip') || {}).innerText, cont: !!r.querySelector('.acts [data-act="openrow"]'), cont2: (r.querySelector('.acts [data-act="openrow"]') || {}).textContent, change: !!r.querySelector('.acts [data-act="rowans"]') }; }, id);
+  ok(nf && /^5 of 5/.test(nf.chip || '') && /legal portal/.test(nf.chip) && nf.cont && nf.cont2 === 'Continue' && !nf.change, 'a Not finished row shows "5 of 5 · Put it in the legal portal" and Continue: ' + JSON.stringify(nf));
+  await page.locator(`.frow[data-v="${id}"] [data-act="rowmenu"]`).click(); await page.waitForTimeout(400);
+  ok(await page.evaluate(id => !!document.querySelector(`#rowMenu [data-act="mdo"][data-v="changeans|${id}"]`), id), 'Change answer is in the ··· menu');
+  await page.keyboard.press('Escape'); await page.mouse.click(5, 500); await page.waitForTimeout(300);
+  await page.locator(`.frow[data-v="${id}"] .acts [data-act="openrow"]`).click(); await page.waitForTimeout(1000);
+  ok(await page.evaluate(id => state.open === id && !!document.querySelector('#claimsteps #portalcard'), id), 'Continue opens the claim at the step it was left on');
+  await page.keyboard.press('Escape').catch(() => {}); await page.evaluate(() => { state.open = ''; }); await page.waitForTimeout(300);
+  // The sweep questions fold into one line
+  const sw = await page.evaluate(async () => {
+    const all = await FC.allCopies(); const st = all.filter(c => c.status === 'stolen').slice(0, 3);
+    window.__sug = FC_RULES.suggestions; FC_RULES.suggestions = async () => st.map((c, i) => ({ kind: 'sweep', site: 'sweepme' + i + '-example.com', client: 'Client A', n: 1 }));
+    await render(true); await new Promise(r => setTimeout(r, 900));
+    const f = document.getElementById('sweepfold');
+    return { line: f && f.innerText, boxes: document.querySelectorAll('[data-act="ruleyes"]').length };
+  });
+  ok(/3 sites could be swept for more of your clients' photos/.test(sw.line || '') && /sweepme0-example\.com, sweepme1-example\.com/.test(sw.line) && sw.boxes === 0, 'three sweep questions fold into one line: ' + JSON.stringify(sw));
+  await page.locator('[data-act="sweepfold"][data-v="1"]').click(); await page.waitForTimeout(900);
+  ok(await page.evaluate(() => document.querySelectorAll('[data-act="ruleyes"]').length === 3 && /Fold them away/.test(document.getElementById('sweepfold').innerText)), 'Look at them shows the three questions');
+  await page.locator('[data-act="sweepfold"][data-v=""]').click(); await page.waitForTimeout(900);
+  ok(await page.evaluate(() => document.querySelectorAll('[data-act="ruleyes"]').length === 0), 'Fold them away puts them back in one line');
+  await page.evaluate(() => { FC_RULES.suggestions = window.__sug; });
   // Dark theme: the header and rows still read
+  await page.evaluate(id => ACTS.openrow(id), id); await page.waitForTimeout(1000);
   await page.evaluate(() => chrome.storage.local.set({ ppTheme: 'dark' })); await page.waitForTimeout(800);
   ok(await page.evaluate(() => { const r = document.querySelector('#claimsteps .clstep > .sx-row'); return getComputedStyle(r).backgroundColor !== getComputedStyle(r).color; }), 'rows have their own colours in dark');
   console.log(fails ? fails + ' FAILED' : 'ALL PASS');

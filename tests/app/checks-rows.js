@@ -81,7 +81,11 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.setViewportSize({ width: 1800, height: 900 });
   const [op] = await fresh(1, used); used.push(op);
   await click(`${sel(op)} .l1`); await page.waitForTimeout(1500);
-  await click(`${sel(op)} button[data-act="rowans"][data-v^="removed|"]`);
+  // Since the calm look a row hides its answer buttons while the panel is open (only ··· stays),
+  // so the row's own Remove is pressed through its action, as the button would.
+  await page.waitForFunction(op => state.open === op && !!document.querySelector('.content > .drawer'), op, { timeout: 5000 }).catch(() => {});
+  if (await page.evaluate(() => !!document.querySelector('.content > .drawer'))) await page.evaluate(v => ACTS.rowans(v), 'removed|' + op);
+  else await click(`${sel(op)} button[data-act="rowans"][data-v^="removed|"]`);
   await goneNowAndLater([op], 'Open row Remove');
   await page.setViewportSize({ width: 1440, height: 900 });
 

@@ -8,9 +8,15 @@
     own: s => [`Is ${esc(s.site)} ${esc(s.client)}'s own site?`, `Its name looks like theirs. Yes approves it for ${esc(s.client)} only, so the ${plural(s.n, 'copy', 'copies')} there ${s.n === 1 ? 'is' : 'are'} Licensed and new ones never land in New.`, 'Yes, their own site'],
     sweep: s => [`Check ${esc(s.site)} for more of ${esc(s.client)}'s photos?`, `You marked a copy there Stolen. PageProof can read the site's own list of pages and pictures, slowly and in your hours, and compare each picture with ${esc(s.client)}'s photos. No Google, Yandex or Bing searches are used. Anything found shows in New as "Found by sweep".`, 'Sweep the site'],
   };
+  // Calm look batch 19: the "Check this site for more photos?" questions fold into one line.
+  // Look at them opens the full questions; the other suggestions show as before.
   function banner() {
     if (!SUG.length) return '';
-    return SUG.map((s, i) => {
+    const sw = SUG.filter(s => s.kind === 'sweep');
+    const fold = sw.length && !state.sweepOpen ? `<div class="sweepfold" id="sweepfold"><b>${plural(sw.length, 'site could', 'sites could')} be swept for more of your clients' photos</b><span class="sfsites">${sw.slice(0, 4).map(s => esc(s.site)).join(', ')}${sw.length > 4 ? ' and ' + (sw.length - 4) + ' more' : ''}</span><button class="btn" data-act="sweepfold" data-v="1">Look at them</button></div>` : '';
+    const shut = sw.length && state.sweepOpen ? `<div class="sweepfold open" id="sweepfold"><b>${plural(sw.length, 'site could', 'sites could')} be swept for more of your clients' photos</b><span class="sfsites"></span><button class="btn" data-act="sweepfold" data-v="">Fold them away</button></div>` : '';
+    return fold + shut + SUG.map((s, i) => {
+      if (s.kind === 'sweep' && !state.sweepOpen) return '';
       const [t, sub, yes] = TEXT[s.kind](s);
       return `<div class="banner info" role="status" id="rule${i}"><div style="flex:1 1 300px;min-width:0"><b>${t}</b><div style="font-size:13px">${sub}</div></div>
         <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn primary sm" data-act="ruleyes" data-v="${i}">${yes}</button><button class="btn sm" data-act="rulelater" data-v="${i}">Not now</button><button class="btn sm" data-act="ruleno" data-v="${i}">${s.kind === 'own' ? 'No' : 'Never ask for this site'}</button></div></div>`;
@@ -24,6 +30,7 @@
     return at < 0 ? banner() + html : html.slice(0, at) + banner() + html.slice(at);
   };
   Object.assign(V.found, { guard: before.guard, after: before.after });
+  ACTS.sweepfold = v => { state.sweepOpen = !!v; render(true); };
 
   // Home: weak Maybes put away, sweeps running or finished.
   const home = homeFinds;

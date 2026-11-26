@@ -59,7 +59,13 @@ function clRowTag(c) {
   const cl = clOf(c);
   if (cl.sent) return `<span class="tag ok" title="${esc('Sent to legal' + (cl.by ? ' by ' + cl.by : ''))}">Sent to legal ${esc(shortDate(cl.sent))}</span>`;
   if (cl.closed) return '<span class="tag grey" title="Closed: no actively registered company was found behind this site">Claim closed</span>';
-  return `<span class="tag warn" title="The claim steps are not finished yet">Not finished${cl.at ? ': ' + esc(cl.at) : ''}</span>`;
+  // Calm look batch 19: a step chip "2 of 5 · step name" instead of "Not finished: step".
+  const names = ['Right photo, and it\'s on their page', 'Is the site viable? Who owns it?', 'Capture their page', 'Make the evidence report', 'Put it in the legal portal'];
+  let n = cl.at ? names.indexOf(cl.at) : -1;
+  if (cl.at === 'Who posted it') n = 1;
+  if (n < 0) n = cl.same === 'yes' && cl.onPage === 'yes' ? (isSoc(c) ? !!c.acct : typeof entOf === 'function' && (entOf(c.site) || {}).status === 'Seemingly viable') ? 2 : 1 : 0;
+  const name = cl.at || (n === 1 && isSoc(c) ? 'Who posted it' : names[n]);
+  return `<span class="clchip" title="${esc('The claim steps are not finished yet. Next: ' + name)}"><i>${n + 1} of 5</i>${esc(name)}</span>`;
 }
 
 // The steps card in the details panel, in the Windows 11 Settings look (calm look batch 19):
