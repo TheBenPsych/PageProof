@@ -26,7 +26,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     for (const s of ['bignews.example', 'midsite.example', 'smallish.example', 'nobody.example', 'piratemovies.example', 'free.blogspot.com', 'login-bank.example']) await FC.DB.put('copies', C(s));
     location.hash = '#found'; await new Promise(r => setTimeout(r, 800)); FCD = null; await loadFC(); state.fTab = 'web'; state.fView = 'list'; state.open = ''; state.fSort = 'pop'; render(true);
     await new Promise(r => setTimeout(r, 700));
-    const rows = () => [...document.querySelectorAll('.crow')].map(r => ({ site: r.querySelector('.l1 b').textContent, tags: [...r.querySelectorAll('.l1 .tag')].map(t => t.textContent.trim()).join('|'), big: r.classList.contains('bigsite') }));
+    const rows = () => [...document.querySelectorAll('.crow:not(.calmhdr)')].map(r => ({ site: r.querySelector('.l1 b').textContent, tags: [...r.querySelectorAll('.l1 .tag')].map(t => t.textContent.trim()).join('|'), big: r.classList.contains('bigsite') }));
     const sorted = rows();
     const qf = [...document.querySelectorAll('.qf')].map(b => b.textContent.trim());
     state.fPop = '10k'; render(true); await new Promise(r => setTimeout(r, 500));

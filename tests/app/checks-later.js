@@ -28,10 +28,12 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await page.goto(url('app.html#found')); await page.waitForTimeout(1500);
   ok(await tabN('Check later') === 1, 'Copies found has a Check later tab with 1 copy');
   const newBefore = await tabN('New');
-  const rowBtn = page.locator('.frow [data-act="rowans"][data-v^="later|"]').first();
+  ok(await page.locator('.frow [data-act="rowans"][data-v^="later|"]').count() === 0, 'Rows have no clock button (calm look): Check later is in the row\'s ⋯ menu');
+  await page.locator('.frow [data-act="rowmenu"]').first().click(); await page.waitForTimeout(300);
+  const rowBtn = page.locator('[data-act="mdo"][data-v^="later|"]').first();
   const v3 = await rowBtn.getAttribute('data-v'), id3 = v3.slice(v3.indexOf('|') + 1);
   await rowBtn.click(); await page.waitForTimeout(900);
-  ok(await st(id3) === 'later' && await tabN('Check later') === 2 && await tabN('New') === newBefore - 1, 'Row clock button moves a copy to Check later');
+  ok(await st(id3) === 'later' && await tabN('Check later') === 2 && await tabN('New') === newBefore - 1, 'Check later in the row menu moves a copy to Check later');
   await page.locator('[data-act="ffilter"][data-v="Check later"]').click(); await page.waitForTimeout(900);
   ok(await page.locator('.frow[data-act="openrow"]').count() === 2, 'Check later tab lists them');
   ok(await page.locator('.frow [data-act="rowans"][data-v^="stolen|"]').count() === 2, 'They still have the Stolen / Licensed / Remove buttons');

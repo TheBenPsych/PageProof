@@ -589,7 +589,10 @@ async function ruleGate(c) {
 }
 // The copy details panel (4.7, calmer): pictures first, a short "Look at these" list of only the
 // things that need you, the rest in four small tabs, and the answer buttons pinned at the bottom.
-const DTABS = [['sum', 'Summary'], ['page', 'Their page'], ['claim', 'Claim'], ['site', 'Site']];
+// Calm look: a picture address short enough for one line: the site, then the file name.
+const shortPic = u => { const t = String(u || '').replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, ''); const parts = t.split('/'); return parts.length > 3 ? parts[0] + '/…/' + parts[parts.length - 1].slice(-48) : t.slice(0, 80); };
+// Calm look: three tabs. "Their page" went: its title, other addresses and hidden data are in This copy.
+const DTABS = [['sum', 'This copy'], ['claim', 'Claim'], ['site', 'The site']];
 async function drawer(list) {
   if (!state.open) return '';
   const c = FCD.copies.find(x => x.id === state.open);
@@ -641,10 +644,12 @@ async function drawer(list) {
   if (ck.dmg && ck.dmg.lvl === 'warn') look.push(['warn', 'clock', ck.dmg.title, ck.dmg.text, 'dtab', 'Claim', 'claim']);
   else if (ck.dmg && ck.dmg.lvl === 'bad') look.push(['bad', 'clock', ck.dmg.title, ck.dmg.text, 'dtab', 'Claim', 'claim']);
   else if (ck.dmg && ck.dmg.lvl === 'ok') fine.push('Statutory damages');
-  if (!c.clientName) look.push(['warn', 'who', 'Client unknown', 'Set the client in the Summary tab.', 'dtab', 'Summary', 'sum']);
+  if (!c.clientName) look.push(['warn', 'who', 'Client unknown', 'Set the client in the This copy tab.', 'dtab', 'This copy', 'sum']);
   const lookN = look.filter(x => x[0] !== 'grey').length;
   const dot = { page: c.credit === 'removed', claim: hits.some(h => h.lvl !== 'info') || (ck.dmg && ck.dmg.lvl !== 'ok'), site: c.risk.level !== 'ok' || (c.repeat && c.status === 'new'), acct: !c.acct || (c.repeat && c.status === 'new') };
-  const tabs = soc ? [['sum', 'Summary'], ['page', 'The post'], ['acct', 'Account'], ['claim', 'Claim']] : DTABS;
+  const tabs = soc ? [['sum', 'This copy'], ['page', 'The post'], ['acct', 'Account'], ['claim', 'Claim']] : DTABS;
+  if (!soc && dot.page) dot.sum = true;
+  if (!tabs.some(t => t[0] === state.dTab)) state.dTab = 'sum';
   const tab = state.dTab, show = k => tab === k ? '' : ' hidden';
   const view = state.dView || 'side';
   // 4.9: social sites nearly all refuse to show inside PageProof, so "The post" shows instead
@@ -655,31 +660,35 @@ async function drawer(list) {
     : view === 'slide' ? `<div class="dslide" style="--cut:${state.slide}%"><img data-our="${esc(c.photo)}" src="${ourSrc}" alt="Your client's photo"><img class="top" src="${theirSrc}" alt="Their copy" referrerpolicy="no-referrer"><span class="lab l">Your client's</span><span class="lab r">Theirs</span><i class="handle" aria-hidden="true"></i><input type="range" min="0" max="100" value="${state.slide}" data-act="dslide" aria-label="Slide between your client's photo and theirs"></div>`
     : `<div class="pair"><div class="frame ours"><img data-our="${esc(c.photo)}" src="${ourSrc}" alt="Your client's photo"><span class="lab">Your client's</span></div><div class="frame theirs"><img src="${theirSrc}" alt="Their copy" referrerpolicy="no-referrer"><span class="lab">Theirs</span></div></div>`;
   if (!FCD) await loadFC();        // something cleared it while the panel was being read
-  return `<aside class="drawer calm" aria-label="Copy details" id="drawer">
+  return `<aside class="drawer calm" aria-label="Copy details" id="drawer"${state.drawerW ? ` style="--dw:${state.drawerW}px"` : ''}><i class="dgrip" id="dgrip" title="Drag to make the panel wider or narrower" aria-hidden="true"></i>
   <div class="dhead"><b class="dtitle">${esc(soc ? platOf(c).name : c.site)}</b>${tagFor(c)}<span style="flex:1"></span><button class="btn sm icon" data-act="closedrawer" aria-label="Close">✕</button></div>
   <div class="dscroll" id="dscroll">
   <div class="dsite${soc ? '' : ' web'}">${soc ? `<div class="row" style="gap:10px;flex-wrap:nowrap">${platBadge(c, 30)}<div style="min-width:0"><h2 style="overflow-wrap:anywhere">${c.acct ? acctHtml(c.acct) : '<span style="color:var(--warn)">Account not found yet</span>'}</h2><div class="muted" style="font-size:12.5px">${esc(postWord(c))}${c.acct ? ` · <a href="${safeUrl(c.acct.url)}" target="_blank" rel="noreferrer">Open account ${ic('ext', 12)}</a>` : ` · <a href="#" data-act="dtab" data-v="acct">Set account</a>`}</div></div></div>` : ''}<a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a></div>
   <div class="dview">${viewer}</div>
+  ${view === 'side' ? `<div class="calm-caps"><span><b>Your client's</b>${p && p.w ? ` · ${p.w} × ${p.h}` : ''}</span><span><b>Theirs</b>${c.w ? ` · ${c.w} × ${c.h}` : ''}</span></div>` : ''}
   <div class="dvbar"><div class="seg sm" role="radiogroup" aria-label="Picture view">${[['side', 'Side by side'], ['slide', 'Slider'], ['page', soc ? 'The post' : 'Their page']].map(([k, l]) => `<button role="radio" aria-checked="${view === k}" class="${view === k ? 'on' : ''}" data-act="dview" data-v="${k}">${l}</button>`).join('')}</div><button class="btn ghost sm" data-act="compare">${ic('layers', 15)} Compare closely</button></div>
-  <div class="dchips">${c.pct >= 0 && c.pct != null ? `<span class="fchip" data-gloss="Lines up"><b style="color:${c.pct >= 80 ? 'var(--bad)' : 'var(--warn)'}">${c.pct}%</b> lines up</span>` : ''}<span class="fchip">${esc(FC.USE[c.use][0])}</span>${c.country ? `<span class="fchip">${esc(c.country)}</span>` : ''}${c.w ? `<span class="fchip">${c.w} × ${c.h}${sz ? ' · ' + sz : ''}</span>` : ''}</div>
+  <div class="dchips factline">${c.pct >= 0 && c.pct != null ? `<span class="fchip" data-gloss="Lines up"><b class="num">${c.pct}%</b> lines up</span>` : ''}<span class="fchip" title="${esc(FC.USE[c.use][1])}">${esc(FC.USE[c.use][0])}</span>${c.country ? `<span class="fchip">${esc(c.country)}</span>` : ''}${sz ? `<span class="fchip">${esc(/^(bigger|smaller)/.test(sz) ? sz.split(' ')[0] + ' copy' : sz)}</span>` : ''}</div>
   ${clHtml}
-  <section class="attn" id="lookbox"><h3>${lookN ? `${ic('warn', 15)} Look at these (${lookN})` : `${ic('check', 15)} Nothing needs a look`}</h3>
-    ${look.map(([col, i, t, s, act, b, v]) => `<div class="it"><span class="ico tag ${col}">${ic(i, 15)}</span><div><b>${esc(t)}</b>${s ? `<span>${esc(s)}</span>` : ''}</div>${act ? `<button class="btn sm" data-act="${act}"${v ? ` data-v="${v}"` : ''}>${b}</button>` : ''}</div>`).join('')}
-    ${fine.length ? `<div class="okline">${ic('check', 14)} ${fine.map(esc).join(' · ')}</div>` : ''}</section>
+  <section class="attn${lookN ? ' has' : ''}" id="lookbox"><h3>${lookN ? `${ic('warn', 15)} Look at these (${lookN})` : `${ic('check', 15)} Nothing needs a look${fine.length ? `<span class="okline"> · ${fine.map(esc).join(' · ')}</span>` : ''}`}</h3>
+    ${look.map(([col, i, t, s, act, b, v]) => `<div class="it"><span class="ico tag ${col}">${ic(i, 15)}</span><div><b>${esc(t)}</b>${s ? `<span class="lkwhy">${esc(s)}</span><span class="lki" tabindex="0" title="${esc(s)}" aria-label="${esc(s)}">ⓘ</span>` : ''}</div>${act ? `<button class="btn sm" data-act="${act}"${v ? ` data-v="${v}"` : ''}>${b}</button>` : ''}</div>`).join('')}
+    ${lookN && fine.length ? `<div class="okline">${ic('check', 14)} ${fine.map(esc).join(' · ')}</div>` : ''}</section>
   <div class="dtabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}" data-act="dtab" data-v="${k}">${l}${dot[k] ? '<span class="dot" title="Something to check here"></span>' : ''}</button>`).join('')}</div>
   <div class="dpane" data-tab="sum"${show('sum')}>
     <dl class="facts">
       <dt>Client</dt><dd>${c.clientName ? esc(c.clientName) : `<span style="color:var(--warn);font-weight:600">Client unknown</span> <select data-act="setclient" aria-label="Set the client" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:13px;padding:2px 4px"><option value="">Set…</option>${clients.map(n => `<option>${esc(n)}</option>`).join('')}</select>`}</dd>
-      <dt>Photo</dt><dd>${esc(c.photoName)}${p && p.w ? `<br><span class="muted" style="font-size:13px">${p.w} × ${p.h}</span>` : ''}${stopRow(c)}</dd>
-      ${picLinkRow(c)}
-      <dt>How it's used</dt><dd>${esc(FC.USE[c.use][0])}<br><span class="muted" style="font-size:13px">${esc(FC.USE[c.use][1])}</span></dd>
+      <dt>Photo</dt><dd>${esc(c.photoName)}<span class="calm-sub">${p && p.w ? `${p.w} × ${p.h}` : ''}${p && p.w && stopRow(c) ? ' · ' : ''}${stopRow(c)}</span></dd>
+      ${picLinkRow(c, true)}
       <dt>Seen</dt><dd>${shortDate(c.firstSeen)}${c.lastSeen && c.lastSeen !== c.firstSeen ? ' → ' + shortDate(c.lastSeen) : ''}, ${c.times > 1 ? c.times + ' times' : 'once'}${c.by ? `<br><span class="muted" style="font-size:13px">First found by ${esc(c.by)}${c.engines && c.engines.length ? ' on ' + c.engines.map(e => ({ google: 'Google Lens', yandex: 'Yandex', bing: 'Bing' }[e] || esc(e))).join(', ') : ''}</span>` : ''}</dd>
-      <dt>Their picture</dt><dd>${/^https?:/i.test(c.img || '') ? `From their page: <a class="mono" style="font-size:12px;overflow-wrap:anywhere" href="${safeUrl(c.img)}" target="_blank" rel="noreferrer">${esc(c.img.replace(/^https?:\/\/(www\.)?/, '').slice(0, 90))}</a>` : `The search site's small preview <span class="muted" style="font-size:13px">(PageProof did not get the picture from their page itself)</span>${!isSoc(c) && c.onPage === 'unknown' ? '<br><span class="muted" style="font-size:13px">Their page could not be read, so this stays a Maybe until you look.</span>' : ''}`}${isSoc(c) ? `<br><span class="muted" style="font-size:13px">${POST_BUSY.has(c.id) || !c.postChk ? 'Checking the post\'s own picture…' : c.postChk.state === 'seen' ? `The post's own picture matches (${c.postChk.pct}% lines up).` : c.postChk.state === 'notSeen' ? `<b style="color:var(--bad)">${c.postChk.browser === 'notSeen' ? 'None of the post\'s pictures is this photo.' : `The post's own ${c.postChk.video ? 'video cover' : 'picture'} is a different photo.`}</b>` : c.postChk.state === 'unsure' ? 'The post\'s picture looks close but not clearly the same. Compare closely.' : 'The post\'s own pictures could not be read (sign in to Facebook or Instagram in this browser so PageProof can look).'}${c.postChk && c.postChk.pic ? ` <a href="${safeUrl(c.postChk.pic)}" target="_blank" rel="noreferrer">See it</a>` : ''}${c.postChk ? ` · <a href="#" data-act="postagain">Check again</a>` : ''}</span>` : ''}</dd>
+      <dt>Their picture</dt><dd>${/^https?:/i.test(c.img || '') ? `<a class="picaddr" href="${safeUrl(c.img)}" target="_blank" rel="noreferrer" title="${esc(c.img)}">${esc(shortPic(c.img))}</a><span class="calm-sub"><button class="linkbtn" data-act="copytext" data-v="${esc(c.img)}">Copy</button> · <a href="${safeUrl(c.img)}" target="_blank" rel="noreferrer">Open</a></span>` : `The search site's small preview <span class="muted" style="font-size:13px">(PageProof did not get the picture from their page itself)</span>${!isSoc(c) && c.onPage === 'unknown' ? '<br><span class="muted" style="font-size:13px">Their page could not be read, so this stays a Maybe until you look.</span>' : ''}`}${isSoc(c) ? `<br><span class="muted" style="font-size:13px">${POST_BUSY.has(c.id) || !c.postChk ? 'Checking the post\'s own picture…' : c.postChk.state === 'seen' ? `The post's own picture matches (${c.postChk.pct}% lines up).` : c.postChk.state === 'notSeen' ? `<b style="color:var(--bad)">${c.postChk.browser === 'notSeen' ? 'None of the post\'s pictures is this photo.' : `The post's own ${c.postChk.video ? 'video cover' : 'picture'} is a different photo.`}</b>` : c.postChk.state === 'unsure' ? 'The post\'s picture looks close but not clearly the same. Compare closely.' : 'The post\'s own pictures could not be read (sign in to Facebook or Instagram in this browser so PageProof can look).'}${c.postChk && c.postChk.pic ? ` <a href="${safeUrl(c.postChk.pic)}" target="_blank" rel="noreferrer">See it</a>` : ''}${c.postChk ? ` · <a href="#" data-act="postagain">Check again</a>` : ''}</span>` : ''}</dd>
       ${doubles.length > 1 ? `<dt>Double</dt><dd><div style="border:1px solid var(--accent);background:var(--accent-soft);border-radius:10px;padding:8px 10px;font-size:13.5px"><b>You have ${doubles.length} versions of this photo</b>${doubles.map(d => `<br>${esc(d.name)}${d.w ? ' (' + d.w + ' × ' + d.h + ')' : ''}${d.id === p.id ? ' · <b>this one</b>' : ''}`).join('')}<br><b style="color:var(--copy)">Note them all in the claim.</b></div></dd>` : ''}
+      ${soc ? '' : `      ${c.title ? `<dt>Title</dt><dd>${esc(c.title)}</dd>` : ''}
+      ${c.alts && c.alts.length ? `<dt>Same page at</dt><dd class="mono altlist" style="font-size:12px;overflow-wrap:anywhere">${c.alts.map(u => `<a href="${safeUrl(u)}" target="_blank" rel="noreferrer">${esc(u)}</a>`).join('<br>')}<div class="faint" style="font-family:inherit;font-size:12px">Other addresses for this one page (phone version, share links). One answer covers them all.</div></dd>` : ''}
+      <dt>Hidden data</dt><dd>${c.credit ? CREDIT[c.credit] : `<button class="btn ghost sm" data-act="checkcredit">Check the hidden data</button>`}</dd>`}
     </dl>
     ${keptBoxHtml(c)}
+    ${soc ? '' : ck.page}
   </div>
-  <div class="dpane" data-tab="page"${show('page')}>
+  ${soc ? `<div class="dpane" data-tab="page"${show('page')}>
     <dl class="facts">
       ${c.title ? `<dt>Title</dt><dd>${esc(c.title)}</dd>` : ''}
       <dt>Page</dt><dd class="mono" style="font-size:12px;overflow-wrap:anywhere"><a href="${safeUrl(c.url)}" target="_blank" rel="noreferrer">${esc(c.url)}</a></dd>
@@ -688,7 +697,7 @@ async function drawer(list) {
     </dl>
     ${ck.page}
     ${soc ? (view !== 'page' || livePage ? postCard(c) : '') : view !== 'page' ? `<button class="btn sm" style="align-self:flex-start" data-act="dview" data-v="page">${ic('eye', 15)} See their page above</button>` : ''}
-  </div>
+  </div>` : ''}
   ${soc ? `<div class="dpane" data-tab="acct"${show('acct')}>${acctPane(c)}</div>` : ''}
   <div class="dpane" data-tab="claim"${show('claim')}>
     ${c.status === 'stolen' ? '' : ck.legalBox}
@@ -722,17 +731,33 @@ async function drawer(list) {
     ${['stolen', 'licensed'].includes(c.status) ? `<div class="row" style="gap:8px;font-size:13.5px"><span>Your answer: ${tagFor(c)}</span><button class="btn ghost sm" style="margin-left:auto" data-act="changeans">Change answer</button></div>` : ''}
     ${c.status === 'later' ? `<div class="row" style="gap:8px;font-size:13.5px"><span>${tagFor(c)} Answer it when you're ready.</span><button class="btn ghost sm" style="margin-left:auto" data-act="rowans" data-v="new|${esc(c.id)}">Back to New</button></div>` : ''}
     ${clOn ? clFoot(c, clx) : `<div class="dans ansstrip" title="Choose one and the next copy opens here">
-      <button class="btn stolen" data-act="dverdict" data-v="stolen"><b>Stolen</b><span class="kbd">Y</span></button>
-      <button class="btn licensed" data-act="dverdict" data-v="licensed"><b>Licensed</b><span class="kbd">L</span></button>
-      <button class="btn" data-act="dverdict" data-v="removed"><b>Remove</b><span class="kbd">N</span></button>
-      ${c.status === 'later' ? '' : `<button class="btn later" data-act="dverdict" data-v="later" title="Not sure yet: move it to Check later"><b>Check later</b><span class="kbd">C</span></button>`}
-      <button class="btn" data-act="dverdict" data-v="skip"><b>Skip</b><span class="kbd">→</span></button>
+      <button class="btn stolen" data-act="dverdict" data-v="stolen" title="Stolen (key Y)"><b>Stolen</b></button>
+      <button class="btn licensed" data-act="dverdict" data-v="licensed" title="Licensed (key L)"><b>Licensed</b></button>
+      <button class="btn" data-act="dverdict" data-v="removed" title="Remove (key N)"><b>Remove</b></button>
+      ${c.status === 'later' ? '' : `<button class="btn later" data-act="dverdict" data-v="later" title="Not sure yet: move it to Check later (key C)"><b>Check later</b></button>`}
+      <button class="btn" data-act="dverdict" data-v="skip" title="Skip (key →)"><b>Skip</b></button>
     </div>`}`}
     <div class="dfoot2"><span class="dnav"><button class="btn sm icon" data-act="dstep" data-v="-1" aria-label="Previous copy"${idx > 0 ? '' : ' disabled data-why="This is the first copy in the list."'}>‹</button><span class="muted num">${idx >= 0 ? `${idx + 1} of ${list.length}` : ''}</span><button class="btn sm icon" data-act="dstep" data-v="1" aria-label="Next copy"${idx >= 0 && idx < list.length - 1 ? '' : ' disabled data-why="This is the last copy in the list."'}>›</button></span><span style="flex:1"></span><button class="btn sm primary" data-act="evidence">${ic('doc', 15)} Evidence report</button><button class="btn sm" data-act="capturecopy">${ic('capture', 15)} Capture</button><button class="btn sm" data-act="dmore" data-v="${esc(c.id)}" aria-label="More choices" title="More choices">${ic('dots', 15)}</button></div>
   </div></aside>`;
 }
 
 // ---------------------------------------------------------------- All copies found
+// Calm look: the title reads "Copies found › All copies" and the Websites / Social media switch
+// sits beside it. No help line under the title.
+const foundHead = (tabs, right = '') => head('', 'All copies', '', right).replace('</h1>', '</h1>' + tabs).replace('class="head"', 'class="head foundhead"');
+// Calm look: the small pictures on the command bar buttons (16 px line drawings).
+const cmdIc = p => `<svg class="cmdic" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
+const CMD = { group: '<rect x="2" y="2.5" width="12" height="4" rx="1"/><rect x="2" y="9.5" width="12" height="4" rx="1"/>', filter: '<path d="M2 3h12L9.5 8.5V13l-3-1.5v-3z"/>', sort: '<path d="M4.5 3v10M2 10.5 4.5 13 7 10.5M11.5 13V3M9 5.5 11.5 3 14 5.5"/>', down: '<path d="M8 2.5v8M4.5 7.5 8 11l3.5-3.5M3 13.5h10"/>', cols: '<rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M6 2.5v11M10 2.5v11"/>' };
+// Calm look: the column names sit once at the top of the list. Click one to sort by it; the tick
+// box picks every copy showing.
+const HSORT = { pct: 'pct', found: 'newest' };
+function colHead(rows) {   // rows = the ids of the copies showing
+  const K = state.fCols, all = rows.length && rows.every(id => state.picked.includes(id));
+  const col = (k, label) => !K[k] || (k === 'client' && state.fView === 'client') ? '' : HSORT[k]
+    ? `<span class="cc-${k}"><button class="hsort${state.fSort === HSORT[k] ? ' on' : ''}" data-act="fset" data-v="fSort|${state.fSort === HSORT[k] ? 'act' : HSORT[k]}" title="${state.fSort === HSORT[k] ? 'Sorted by this. Click to go back to Best to act on.' : 'Click to sort by this'}" aria-pressed="${state.fSort === HSORT[k]}">${label}<i aria-hidden="true">${state.fSort === HSORT[k] ? '↓' : '↕'}</i></button></span>`
+    : `<span class="cc-${k}"><b>${label}</b></span>`;
+  return `<div class="crow calmhdr" id="colHead"><input type="checkbox" class="cpick cpickall" aria-label="Pick every copy showing" title="Pick every copy showing" data-act="pickall" ${all ? 'checked' : ''}><span class="chpair" aria-hidden="true"></span><div class="cinfo"><b>Copy</b></div><div class="ccols">${col('pct', 'Match')}${col('client', 'Client')}${col('dmg', 'Damages')}${col('use', 'How it’s used')}${col('country', 'Country')}${col('found', 'Found')}</div><div class="acts" aria-hidden="true"></div></div>`;
+}
 let LIST = [];           // the copies in the order they're shown, so an answer can open the next one
 const WHEN = { any: ['Any time', 0], today: ['Today', 1], week: ['This week', 7], month: ['This month', 31] };
 const MATCH = { any: 'All', exact: 'Exact', strong: 'Strong', loose: 'Loose' };
@@ -756,21 +781,24 @@ const luBar = p => p == null || p < 0 ? '<span class="faint">–</span>' : `<spa
 // UI overhaul: the friendly page when every new copy has an answer.
 const caughtUp = (nStolen, nLater = 0) => `<div class="cempty caught" role="status"><span class="cok" aria-hidden="true">${ic('check', 30)}</span><b>All caught up</b>Every new copy has an answer. Keep searching adds new finds here as they come in.
   <div class="row" style="justify-content:center;gap:8px;margin-top:14px">${nLater ? `<button class="btn" data-act="ffilter" data-v="Check later">${ic('clock', 15)} Check later (${nLater})</button>` : ''}${nStolen ? `<button class="btn" data-act="ffilter" data-v="Stolen">See the stolen copies (${nStolen})</button>` : ''}<a class="btn" href="#keep">${ic('find', 15)} Keep searching</a></div></div>`;
+// Calm look: a blue dot on copies found since you last opened Copies found.
+const isNewSince = c => !!(state.seenAt && c.status === 'new' && c.firstSeen && String(c.firstSeen) > state.seenAt);
+const newSince = c => isNewSince(c) ? '<span class="newdot" title="New since you last looked"></span>' : '';
 // One copy as a row: both pictures, the site, the page link, quiet warning icons, the columns, and the answer buttons.
 function copyRow(c) {
   const p = FCD.photos.get(c.photo), done = c.status !== 'new' && c.status !== 'later', K = state.fCols;
-  const cell = (k, label, html) => K[k] ? `<span class="cc-${k}"><i>${label}</i>${html}</span>` : '';
+  const cell = (k, label, html) => K[k] && !(k === 'client' && state.fView === 'client') ? `<span class="cc-${k}"><i>${label}</i>${html}</span>` : '';
   return `<div class="frow crow${state.open === c.id ? ' on' : ''}${c.popL >= 3 ? ' bigsite' : ''}" data-act="openrow" data-v="${esc(c.id)}">
     <input type="checkbox" class="cpick" aria-label="Pick ${esc(isSoc(c) && c.acct ? c.acct.handle : c.site)}" data-act="pick" data-v="${esc(c.id)}" ${state.picked.includes(c.id) ? 'checked' : ''}>
     <div class="cpair" data-hover="${esc(c.id)}"><img class="ours" src="${oursImg(p)}" alt="" loading="lazy"><img class="thumb" src="${theirImg(c)}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>
     <div class="cinfo">
-      ${isSoc(c) ? socLine(c) : `<div class="l1"><b>${esc(c.site)}</b>${popTag(c)}${done || c.status === 'later' ? tagFor(c) : ''}${embedTag(c)}${sigIcons(c)}${c.sweep ? '<span class="tag blue" title="Found by reading this site\'s own list of pictures (a sweep), not by a search site">Found by sweep</span>' : ''}${typeof ppRowTags === 'function' ? ppRowTags(c) : ''}${typeof clRowTag === 'function' ? clRowTag(c) : ''}${c.status === 'removed' && c.removedBy === 'stopped' ? '<span class="tag grey" title="Removed when you stopped searching this photo. Search again on the client\'s photos page brings it back.">Photo stopped</span>' : ''}${c.status === 'removed' && c.removedBy === 'weakmaybe' ? '<span class="tag grey" title="A Maybe under 50% that nobody answered for 30 days. Put back if it is a copy.">Weak Maybe, never answered</span>' : ''}</div>`}
+      ${isSoc(c) ? socLine(c) : `<div class="l1">${newSince(c)}<b>${esc(c.site)}</b>${popTag(c)}${done || c.status === 'later' ? tagFor(c) : ''}${embedTag(c)}${sigIcons(c)}${c.sweep ? '<span class="tag blue" title="Found by reading this site\'s own list of pictures (a sweep), not by a search site">Found by sweep</span>' : ''}${typeof ppRowTags === 'function' ? ppRowTags(c) : ''}${typeof clRowTag === 'function' ? clRowTag(c) : ''}${c.status === 'removed' && c.removedBy === 'stopped' ? '<span class="tag grey" title="Removed when you stopped searching this photo. Search again on the client\'s photos page brings it back.">Photo stopped</span>' : ''}${c.status === 'removed' && c.removedBy === 'weakmaybe' ? '<span class="tag grey" title="A Maybe under 50% that nobody answered for 30 days. Put back if it is a copy.">Weak Maybe, never answered</span>' : ''}</div>`}
       <a class="curl" href="${safeUrl(c.url)}" target="_blank" rel="noreferrer" data-act="openlink" title="Open this page in a new tab"><span>${esc(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))}</span>${ic('ext', 13)}</a>${c.alts && c.alts.length ? `<span class="tag grey altn" title="${esc(c.alts.join('\n'))}" data-gloss="Same page">+${c.alts.length} ${c.alts.length === 1 ? 'address' : 'addresses'}</span>` : ''}
       <div class="l3">${esc(c.photoName)}<span class="l3x">${isSoc(c) && c.acct ? ' · ' + esc(c.site) : ''}${c.pct >= 0 && c.pct != null ? ` · <b class="num" data-gloss="Lines up">${c.pct}%</b> lines up` : ''} · ${esc(FC.USE[c.use][0])}${c.country ? ' · ' + esc(c.country) : ''} · found ${shortDate(c.firstSeen).toLowerCase()}</span></div>
     </div>
     <div class="ccols">${cell('pct', 'Match', coverWait(c) ? '<span class="faint" title="The post\'s cover is another picture. PageProof is opening the post to look at all its pictures.">Checking…</span>' : luBar(c.pct))}${cell('client', 'Client', c.clientName ? `<span title="${esc(c.clientName)}">${esc(c.clientName)}</span>` : '<span style="color:var(--warn);font-weight:600">Unknown</span>')}${K.dmg ? (dmgCell(c) ? `<span class="cc-dmg"><i>Damages</i>${dmgCell(c)}</span>` : '<span class="cc-dmg" aria-hidden="true"></span>') : ''}${cell('use', 'Use', `<span title="${esc(FC.USE[c.use][0])}">${esc(FC.USE[c.use][0])}</span>`)}${cell('country', 'Country', `<span>${esc(c.country || 'Not known')}</span>`)}${cell('found', 'Found', `<span>${esc(shortDate(c.firstSeen))}</span>`)}</div>
     <div class="acts">${c.status === 'removed' ? `<button class="btn sm" data-act="rowans" data-v="new|${esc(c.id)}">Put back</button>` : done ? `<button class="btn sm" data-act="rowans" data-v="new|${esc(c.id)}">Change answer</button>`
-      : `<button class="btn sm stolen" data-act="rowans" data-v="stolen|${esc(c.id)}">Stolen</button><button class="btn sm licensed" data-act="rowans" data-v="licensed|${esc(c.id)}">Licensed</button><button class="btn sm" data-act="rowans" data-v="removed|${esc(c.id)}">Remove</button>${c.status === 'later' ? '' : `<button class="btn sm icon" data-act="rowans" data-v="later|${esc(c.id)}" aria-label="Check later" title="Check later: not sure yet">${ic('clock', 17)}</button>`}`}
+      : `<button class="btn sm stolen" data-act="rowans" data-v="stolen|${esc(c.id)}">Stolen</button><button class="btn sm licensed" data-act="rowans" data-v="licensed|${esc(c.id)}">Licensed</button><button class="btn sm" data-act="rowans" data-v="removed|${esc(c.id)}">Remove</button>`}
       <button class="btn sm icon" data-act="rowmenu" data-v="${esc(c.id)}" aria-label="More choices for ${esc(c.site)}">${ic('dots', 18)}</button></div></div>`;
 }
 // 4.56.1: Country for .com and other sites whose ending says nothing. A few sites at a time are read
@@ -846,8 +874,14 @@ V.found = async () => {
   fillCountriesSoon();
   popSoon();
   if (!state.fCols || !state.dView) {
-    const pr = await api.storage.local.get(['fcCols', 'fcDView']).catch(() => ({}));
-    state.fCols = Object.assign({ pct: true, client: true, dmg: true, use: true, country: true, found: true }, pr.fcCols || {});
+    const pr = await api.storage.local.get(['fcCols', 'fcDView', 'fcCalmCols', 'fcDrawerW', 'fcSeenAt']).catch(() => ({}));
+    state.fCols = Object.assign({ pct: true, client: true, dmg: true, use: true, country: false, found: true }, pr.fcCols || {});
+    // Calm look: Country is off to start with (it mostly says "Not known"). Done once; tick it in Columns to bring it back.
+    if (!pr.fcCalmCols) { state.fCols.country = false; api.storage.local.set({ fcCalmCols: 1, fcCols: state.fCols }).catch(() => {}); }
+    state.drawerW = +pr.fcDrawerW || 0;
+    // New since you last looked: copies found after your last visit to this page get a blue dot.
+    state.seenAt = pr.fcSeenAt || '';
+    api.storage.local.set({ fcSeenAt: new Date().toISOString() }).catch(() => {});
     state.dView = pr.fcDView || 'side';
   }
   if (routeArg('open')) { const id = routeArg('open'), oc = FCD.copies.find(x => x.id === id); if (oc) switchTab(isSoc(oc) ? 'social' : 'web'); state.open = id; state.fFilter = 'All'; history.replaceState(null, '', '#found'); }
@@ -991,12 +1025,11 @@ V.found = async () => {
   const nNew = live.filter(c => c.status === 'new').length;
   const bigTabs = `<div class="bigtabs" role="tablist" aria-label="Websites or social media">${[['web', 'Websites', nWeb], ['social', 'Social media', nSoc]].map(([k, l, n]) => `<button role="tab" aria-selected="${state.fTab === k}" class="${state.fTab === k ? 'on' : ''}" data-act="ftab" data-v="${k}">${l} <span class="n num">${n}</span></button>`).join('')}</div>`;
   if (!everything.length && everyTab.length) {
-    return `${head('', 'Copies found', 'Answer right on the row, or click a row to see more.')}
-    ${bigTabs}
+    return `${foundHead(bigTabs)}
     <section class="card pad" style="text-align:center;padding:48px 22px;display:flex;flex-direction:column;align-items:center;gap:12px"><h2>${social ? 'No social media copies yet' : 'No website copies yet'}</h2><p class="muted" style="margin:0;max-width:56ch">${social ? 'Copies posted on Instagram, TikTok, Facebook, X and other social sites show up here.' : 'Copies on websites show up here.'}</p></section>`;
   }
   if (!everything.length) {
-    return `${head('', 'Copies found', 'Every copy found by every search, Keep searching and today\'s 50.')}
+    return `${foundHead('')}
     ${await driveBanner()}
     <section class="card pad" style="text-align:center;padding:48px 22px;display:flex;flex-direction:column;align-items:center;gap:12px"><h2>Nothing found yet</h2><p class="muted" style="margin:0;max-width:56ch">Copies show up here as soon as a search finds them. Turn on Keep searching, run today's 50, or search a few photos now.</p>
     <div class="row" style="justify-content:center"><a class="btn primary" href="#keep">Keep searching</a><a class="btn" href="#search">New search</a></div></section>`;
@@ -1006,29 +1039,29 @@ V.found = async () => {
   const years = [...new Set(everything.map(c => (FCD.photos.get(c.photo) || {}).year).filter(Boolean))].sort((a, b) => b - a);
   // 4.7: one tidy line. Each switch is a small dropdown.
   // 4.11: a dropdown set away from its normal choice (def) turns blue, with an ✕ that puts it back.
-  const dd = (id, label, opts, cur, right, def) => { const chosen = def != null && cur !== def; return `<details class="ddw${right ? ' right' : ''}" data-dd="${id}"><summary class="ddb${chosen ? ' chosen' : ''}">${label}${cur != null ? ` <b>${esc((opts.find(o => o[0] === cur) || opts[0])[1])}</b>` : ''} ${chosen ? `<span class="ddx" role="button" tabindex="0" data-act="fset" data-v="${id}|${def}" title="Back to ${esc((opts.find(o => o[0] === def) || opts[0])[1])}" aria-label="Clear ${label}">✕</span>` : '<span class="caret" aria-hidden="true">▾</span>'}</summary><div class="ddm" role="menu">${opts.map(([k, l, s]) => `<button role="menuitemradio" aria-checked="${cur === k}" class="${cur === k ? 'on' : ''}" data-act="fset" data-v="${id}|${k}">${esc(l)}${s ? `<span class="sub">${esc(s)}</span>` : ''}</button>`).join('')}</div></details>`; };
+  const dd = (id, label, opts, cur, right, def) => { const chosen = def != null && cur !== def; return `<details class="ddw${right ? ' right' : ''}" data-dd="${id}"><summary class="ddb${chosen ? ' chosen' : ''}">${label}${cur != null ? ` <b>${esc((opts.find(o => o[0] === cur) || opts[0])[1])}</b>` : ''} ${chosen ? `<span class="ddx" role="button" tabindex="0" data-act="fset" data-v="${id}|${def}" title="Back to ${esc((opts.find(o => o[0] === def) || opts[0])[1])}" aria-label="Clear ${String(label).replace(/<[^>]+>/g, '')}">✕</span>` : '<span class="caret" aria-hidden="true">▾</span>'}</summary><div class="ddm" role="menu">${opts.map(([k, l, s]) => `<button role="menuitemradio" aria-checked="${cur === k}" class="${cur === k ? 'on' : ''}" data-act="fset" data-v="${id}|${k}">${esc(l)}${s ? `<span class="sub">${esc(s)}</span>` : ''}</button>`).join('')}</div></details>`; };
   const newL = live.filter(c => c.status === 'new' && !ruleHidden(c));
   // 4.24: new spam blog copies (counted whether they are hidden or showing).
   const spamCs = everything.filter(c => c.spam && c.status === 'new' && !siteHidden(c) && !FCD.countries.includes(c.country)), spamN = spamCs.length;
   // 4.11: the old big number cards are now small Quick filter buttons. Solid blue with a tick = on.
   const qf = (label, n, on, act, v, col) => `<button class="qf${on ? ' on' : ''}" data-act="${act}" data-v="${v}" aria-pressed="${on}">${on ? '<span class="tick" aria-hidden="true">✓</span>' : col ? `<i style="background:var(--${col})"></i>` : ''}${label} <span class="num">${n}</span></button>`;
   const fresh = c => c.dmg && c.dmg.end && Date.now() <= c.dmg.end.getTime();
-  return `${head('', 'Copies found', 'Answer right on the row, or click a row to see more.', `<button class="btn" data-act="fcsv">${ic('down', 16)} Download</button>${nNew ? `<a class="btn primary" href="#review?kind=${state.fTab}">One at a time (${nNew})</a>` : ''}`)}
+  return `${foundHead(bigTabs, nNew ? `<a class="btn primary" href="#review?kind=${state.fTab}">One at a time (${nNew})</a>` : '')}
   ${await driveBanner()}
-  ${bigTabs}
   ${socAskBanner(everyTab.filter(visible))}
   ${FCD.unhid && FCD.unhid.length ? `<div class="banner info" role="status"><div style="flex:1 1 260px;min-width:0"><b>${esc(FCD.unhid.join(', '))} ${FCD.unhid.length === 1 ? 'shows' : 'show'} again</b><div style="font-size:13px">A whole social site can no longer be hidden, only its accounts. Its posts are back on the Social media tab. Hide the accounts you don't want from there.</div></div><button class="btn sm" data-act="unhidok">Got it</button></div>` : ''}
   <section class="card found-card">
     <div class="toolbar tidy">
       <div class="tabs ansbar" role="tablist" aria-label="Status">${['New', 'Check later', 'Not finished', 'Stolen', 'Licensed', 'Removed', 'All'].map(f => `<button role="tab" aria-selected="${state.fFilter === f}" class="${state.fFilter === f ? 'on' : ''}" data-act="ffilter" data-v="${f}"${f === 'All' ? ' title="Every copy except the removed ones"' : f === 'Not finished' ? ' title="Stolen copies whose claim steps are not done yet"' : ''}>${state.fFilter === f ? '<i class="tick" aria-hidden="true">✓</i>' : ''}${f} <span>${cnt(f)}</span></button>`).join('')}${['Still online', 'Back online', 'Gone'].includes(state.fFilter) ? `<button role="tab" aria-selected="true" class="on" data-act="ffilter" data-v="${state.fFilter}"><i class="tick" aria-hidden="true">✓</i>${state.fFilter} <span>${cnt(state.fFilter)}</span></button>` : ''}</div>
+      ${rows.filter(isNewSince).length ? `<span class="newsince"><span class="newdot" aria-hidden="true"></span> ${rows.filter(isNewSince).length} new since you last looked</span>` : ''}
       ${social ? `<div class="seg sm" role="radiogroup" aria-label="Show">${[['copies', 'Copies'], ['accounts', 'Accounts']].map(([k, l]) => `<button role="radio" aria-checked="${state.sView === k}" class="${state.sView === k ? 'on' : ''}" data-act="sview" data-v="${k}">${l}</button>`).join('')}</div>` : ''}
-      ${dd('fView', 'Group', social ? [['account', 'Account'], ['client', 'Client'], ['photo', 'Photo'], ['site', 'Platform'], ['list', 'None']] : [['client', 'Client'], ['photo', 'Photo'], ['site', 'Site'], ['owner', 'Site owner'], ['list', 'None']], state.fView)}
-      ${dd('fWhen', 'Found', Object.entries(WHEN).map(([k, v]) => [k, v[0]]), state.fWhen, false, 'any')}
-      ${dd('fMatch', 'Match', [['any', 'All'], ['exact', 'Exact', 'The same photo, 95% or more lines up'], ['strong', 'Strong', '80% or more lines up'], ['loose', 'Loose', 'Less, or only a few details match']], state.fMatch, false, 'any')}
-      <button class="ddb${state.showFilters ? ' on' : ''}${active.length ? ' chosen' : ''}" data-act="togglefilters" aria-expanded="${state.showFilters}">＋ More filters${active.length ? ` <b class="num">${active.length}</b>` : ''}</button>
       <span style="flex:1"></span>
-      ${dd('fSort', 'Sort', [['act', 'Best to act on'], ['pct', 'Lines up most'], ...(social ? [['fol', 'Most followers']] : [['risk', 'Most suspicious'], ['pop', 'Most popular site', 'Biggest websites first (Tranco top 1 million list)']]), ['newest', 'Newest']], state.fSort, true)}
-      <details class="ddw right" data-dd="cols"><summary class="ddb gear" aria-label="Columns" title="Pick the columns">${ic('settings', 16)}</summary><div class="ddm">${FCOLS.map(([k, l]) => `<label><input type="checkbox" data-act="fcol" data-v="${k}" ${state.fCols[k] ? 'checked' : ''}> ${esc(l)}</label>`).join('')}<span class="faint" style="font-size:12px;padding:4px 10px 6px">Narrow windows show fewer columns.</span></div></details>
+      ${dd('fView', cmdIc(CMD.group) + 'Group', social ? [['account', 'Account'], ['client', 'Client'], ['photo', 'Photo'], ['site', 'Platform'], ['list', 'None']] : [['client', 'Client'], ['photo', 'Photo'], ['site', 'Site'], ['owner', 'Site owner'], ['list', 'None']], state.fView)}
+      <button class="ddb cmd${state.showFilters ? ' on' : ''}${active.length || state.fWhen !== 'any' || state.fMatch !== 'any' ? ' chosen' : ''}" data-act="togglefilters" aria-expanded="${state.showFilters}">${cmdIc(CMD.filter)}Filters${active.length + (state.fWhen !== 'any') + (state.fMatch !== 'any') ? ` <b class="num">${active.length + (state.fWhen !== 'any') + (state.fMatch !== 'any')}</b>` : ''}</button>
+      ${dd('fSort', cmdIc(CMD.sort) + 'Sort', [['act', 'Best to act on'], ['pct', 'Lines up most'], ...(social ? [['fol', 'Most followers']] : [['risk', 'Most suspicious'], ['pop', 'Most popular site', 'Biggest websites first (Tranco top 1 million list)']]), ['newest', 'Newest']], state.fSort, true)}
+      <span class="cmdsep" aria-hidden="true"></span>
+      <button class="ddb cmd" data-act="fcsv" title="Download the list as a spreadsheet">${cmdIc(CMD.down)}Download</button>
+      <details class="ddw right" data-dd="cols"><summary class="ddb cmd gear" title="Pick the columns" aria-label="Columns">${cmdIc(CMD.cols)}Columns</summary><div class="ddm">${FCOLS.map(([k, l]) => `<label><input type="checkbox" data-act="fcol" data-v="${k}" ${state.fCols[k] ? 'checked' : ''}> ${esc(l)}</label>`).join('')}<span class="faint" style="font-size:12px;padding:4px 10px 6px">Narrow windows show fewer columns.</span></div></details>
     </div>
     <div class="qfrow" aria-label="Quick filters"><span class="qflabel">Quick filters</span>
       ${qf('Found today', newL.filter(c => new Date(c.firstSeen).toDateString() === new Date().toDateString()).length, state.fWhen === 'today', 'ftoday', '1', 'accent')}
@@ -1043,6 +1076,10 @@ V.found = async () => {
     ${social ? platChips(all.filter(c => passMore(c) && passStatus(c) && passMainNoPlat(c))) : ''}
     ${social ? acctFilterLine(dd, all.filter(c => passStatus(c) && passMainNoAcct(c))) : ''}
     ${state.showFilters ? `<div class="filters fpanel">
+      <div class="row fpdd" style="gap:8px;flex-wrap:wrap">
+      ${dd('fWhen', 'Found', Object.entries(WHEN).map(([k, v]) => [k, v[0]]), state.fWhen, false, 'any')}
+      ${dd('fMatch', 'Match', [['any', 'All'], ['exact', 'Exact', 'The same photo, 95% or more lines up'], ['strong', 'Strong', '80% or more lines up'], ['loose', 'Loose', 'Less, or only a few details match']], state.fMatch, false, 'any')}
+      </div>
       <div class="qchips" aria-label="Quick filters"><span style="font-weight:600">Quick filters</span>
       ${chip('Repeat offenders', live.filter(c => c.repeat && c.status === 'new').length, state.fRepeat, 'qtoggle', 'repeat', 'bad')}
       ${RS_STOLEN.items.length ? chip('On my stolen before list', live.filter(c => c.known).length, state.fKnown === 'only', 'qtoggle', 'known', 'bad') + chip('Hide ones on my stolen before list', live.filter(c => c.known).length, state.fKnown === 'hide', 'qtoggle', 'knownhide') : ''}
@@ -1076,8 +1113,7 @@ V.found = async () => {
     ${shownOn.length ? `<div class="showing" role="status"><span>Showing <b class="num">${rows.length}</b> of <b class="num">${all.filter(c => passStatus(c)).length}</b> ${esc(state.fFilter === 'All' ? '' : state.fFilter.toLowerCase())} copies</span>${shownOn.map(([k, v]) => `<button class="stag" data-act="unfilter" data-v="${k}" title="Turn this filter off">${esc(v)} <span aria-hidden="true">✕</span></button>`).join('')}<button class="sclear" data-act="unfilter" data-v="all">Clear filters</button></div>` : ''}
     ${recent.length ? `<div class="row activebar">
       <details class="justhid" style="margin-left:auto;max-width:100%"${state.justHidOpen ? ' open' : ''}><summary class="faint" style="cursor:pointer;text-align:right">Just hidden (${recent.length})</summary><div class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-top:6px">${recent.map(h => `<button class="chip" style="cursor:pointer;text-decoration:line-through;text-decoration-color:var(--faint)" data-act="showsite" data-v="${esc(h)}" title="Show ${esc(h)} again">${esc(h)} <span style="text-decoration:none">↺</span></button>`).join('')}</div></details></div>` : ''}
-    <div class="cbody">${social && state.sView === 'accounts' ? accountsView(all.filter(c => passMain(c) && passStatus(c))) : body || (state.fFilter === 'New' && !active.length && state.fWhen === 'any' && state.fMatch === 'any' ? caughtUp(cnt('Stolen'), cnt('Check later')) : state.fFilter === 'Not finished' && !rows.length ? `<div class="cempty"><b>Every claim is finished</b>When you mark a copy Stolen, its claim steps open right away. A claim you put aside with Finish later waits here.</div>` : state.fFilter === 'Check later' && !rows.length ? `<div class="cempty"><b>Nothing saved to check later</b>Not sure about a copy? Press Check later (or the C key) and it waits here, out of the New list, until you answer it.</div>` : `<div class="cempty"><b>Nothing matches</b>Try another tab, or clear a filter.</div>`)}</div>
-    <div class="row faint cfoot"><span>Keys with a copy open: <span class="kbd">Y</span> stolen <span class="kbd">L</span> licensed <span class="kbd">N</span> remove <span class="kbd">C</span> check later <span class="kbd">→</span> skip <span class="kbd">U</span> undo <span class="kbd">↑</span><span class="kbd">↓</span> move <span class="kbd">?</span> all keys. Also kept in Documents › PageProof › found-copies.txt.</span></div>
+    <div class="cbody${state.fView === 'client' ? ' grp-client' : ''}">${social && state.sView === 'accounts' || !rows.length ? '' : colHead(list)}${social && state.sView === 'accounts' ? accountsView(all.filter(c => passMain(c) && passStatus(c))) : body || (state.fFilter === 'New' && !active.length && state.fWhen === 'any' && state.fMatch === 'any' ? caughtUp(cnt('Stolen'), cnt('Check later')) : state.fFilter === 'Not finished' && !rows.length ? `<div class="cempty"><b>Every claim is finished</b>When you mark a copy Stolen, its claim steps open right away. A claim you put aside with Finish later waits here.</div>` : state.fFilter === 'Check later' && !rows.length ? `<div class="cempty"><b>Nothing saved to check later</b>Not sure about a copy? Press Check later (or the C key) and it waits here, out of the New list, until you answer it.</div>` : `<div class="cempty"><b>Nothing matches</b>Try another tab, or clear a filter.</div>`)}</div>
   </section>
   ${state.sis ? `<div class="bulk sis"><div style="flex:1 1 300px;min-width:0"><b>Same ${state.sis.same ? 'photo' : 'article'} on ${plural(state.sis.sites.length, 'sister site')} of ${esc(state.sis.owner)}</b><div style="font-size:13px;opacity:.85;overflow-wrap:anywhere">${esc(state.sis.sites.slice(0, 5).join(', '))}${state.sis.sites.length > 5 ? '…' : ''}</div></div><button class="btn" data-act="sisall">Mark ${state.sis.ids.length === 1 ? 'it' : 'all ' + state.sis.ids.length} stolen too</button><button class="btn" data-act="sisno">Not now</button></div>` : ''}
   ${state.picked.length ? `<div class="bulk float" role="toolbar" aria-label="Answer the picked copies"><b class="num">${state.picked.length} picked</b><i class="bsep" aria-hidden="true"></i><button class="bb stolen" data-act="bulk" data-v="stolen">Stolen</button><button class="bb licensed" data-act="bulk" data-v="licensed">Licensed</button><button class="bb" data-act="bulk" data-v="removed">Remove</button><button class="bb" data-act="bulk" data-v="later">Check later</button>${['Stolen', 'Not finished'].includes(state.fFilter) ? '<button class="bb" data-act="bulksent" title="Mark the picked Stolen copies as already sent to legal">Sent to legal</button>' : ''}<button class="bb" data-act="bulkhide">${state.fTab === 'social' ? 'Hide accounts' : 'Hide sites'}</button><button class="bb x" data-act="clearpick" aria-label="Clear the picks" title="Clear">✕</button></div>` : ''}
@@ -1090,8 +1126,9 @@ function spamLine(xs) {
   const bases = [...new Set(xs.map(c => FC.baseOf(c.site)))];
   const eg = esc(xs[0].site);
   const hideAll = `<button class="btn sm" data-act="spamhide" data-v="${esc(bases.join('\n'))}">Hide all ${bases.length === 1 ? 'of ' + esc(bases[0]) : bases.length + ' spam sites'}</button>`;
-  if (state.fSpam === 'hide') return `<div class="spamline" role="status"><span><b>${plural(xs.length, 'spam blog copy', 'spam blog copies')} hidden</b> <span class="muted">Random addresses on throwaway sites, like ${eg}. Nothing was answered for you.</span></span><span class="acts"><button class="btn sm" data-act="spamshow" data-v="show">Show them</button><button class="btn sm" data-act="spamshow" data-v="only">Only them</button>${hideAll}</span></div>`;
-  return `<div class="spamline on" role="status"><span><b>${plural(xs.length, 'spam blog copy', 'spam blog copies')} showing</b> <span class="muted">Each has a grey Spam blog tag. Point at the tag to see why.</span></span><span class="acts"><button class="btn sm" data-act="spamshow" data-v="hide">Hide them again</button>${hideAll}</span></div>`;
+  // Calm look: one short line. The explaining sentence shows when you point at the ⓘ.
+  if (state.fSpam === 'hide') return `<div class="spamline" role="status"><span><b>${plural(xs.length, 'spam blog copy', 'spam blog copies')} hidden</b> <span class="spami" tabindex="0" title="Random addresses on throwaway sites, like ${eg}. Nothing was answered for you." aria-label="Random addresses on throwaway sites, like ${eg}. Nothing was answered for you.">ⓘ</span></span><span class="acts"><button class="btn sm" data-act="spamshow" data-v="show">Show them</button><button class="btn sm" data-act="spamshow" data-v="only">Only them</button>${hideAll}</span></div>`;
+  return `<div class="spamline on" role="status"><span><b>${plural(xs.length, 'spam blog copy', 'spam blog copies')} showing</b> <span class="spami" tabindex="0" title="Each has a grey Spam blog tag. Point at the tag to see why." aria-label="Each has a grey Spam blog tag. Point at the tag to see why.">ⓘ</span></span><span class="acts"><button class="btn sm" data-act="spamshow" data-v="hide">Hide them again</button>${hideAll}</span></div>`;
 }
 // Grouped by site, each site gets one strip: where it is, what PageProof knows, and buttons
 // that act on the whole site.
@@ -1454,6 +1491,7 @@ Object.assign(ACTS, {
   dstep: v => { const n = LIST[LIST.indexOf(state.open) + Number(v)]; if (n) { state.open = n; render(true); } },
   dverdict: v => drawerVerdict(v),
   undo: () => undoLast(),
+  pickall: (v, el) => { const ids = LIST.slice(); state.picked = el && el.checked ? [...new Set([...state.picked, ...ids])] : state.picked.filter(id => !ids.includes(id)); render(true); },
   pick: v => { const i = state.picked.indexOf(v); if (i >= 0) state.picked.splice(i, 1); else state.picked.push(v); render(true); },
   clearpick: () => { state.picked = []; render(true); },
   bulk: async v => {
@@ -2016,3 +2054,18 @@ document.addEventListener('toggle', e => {
   if (d.matches && d.matches('details.justhid')) state.justHidOpen = d.open;   // stays as you left it while the list redraws
   if (d.matches && d.matches('details.ddw') && d.open) document.querySelectorAll('details.ddw[open]').forEach(x => { if (x !== d) x.open = false; });
 }, true);
+
+// Calm look: drag the left edge of the copy panel to make it wider or narrower. The width is
+// remembered on this computer. (--dwp is the room the list leaves for it.)
+function ppDrawerRoom() { const d = document.getElementById('drawer'), c = document.getElementById('view'); if (c) { if (d && state.drawerW) c.style.setProperty('--dwp', state.drawerW + 'px'); else c.style.removeProperty('--dwp'); } }
+document.addEventListener('pointerdown', e => {
+  const g = e.target.closest && e.target.closest('#dgrip');
+  if (!g) return;
+  e.preventDefault();
+  const d = document.getElementById('drawer');
+  const move = ev => { const w = Math.max(400, Math.min(Math.round(window.innerWidth - ev.clientX), Math.round(window.innerWidth * 0.6), 1100)); state.drawerW = w; const el = document.getElementById('drawer'); if (el) { el.style.transition = 'none'; el.style.setProperty('--dw', w + 'px'); } ppDrawerRoom(); };   // the panel may have been redrawn mid-drag
+  const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.body.style.userSelect = ''; const el = document.getElementById('drawer'); if (el) el.style.transition = ''; api.storage.local.set({ fcDrawerW: state.drawerW }).catch(() => {}); };
+  document.body.style.userSelect = 'none'; d.style.transition = 'none';   // follows the mouse at once
+  document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
+});
+try { new MutationObserver(ppDrawerRoom).observe(document.getElementById('view'), { childList: true }); } catch (e) { /* no page */ }

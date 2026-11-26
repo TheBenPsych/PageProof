@@ -1,0 +1,6 @@
+type: new
+title: The calm look, step 2: All copies and the copy panel
+news: All copies has its calm layout. The title is short, the Websites and Social media tabs sit beside it, and one command bar holds Group, Filters, Sort, Download and Columns. The column names show once above the list (click Match or Found to sort), each copy is a card you click to open, and a tick box above the list picks every copy showing. The copy panel has three tabs (This copy, Claim, The site), a line of facts under the two pictures, and you can drag its left edge to make it wider. Check later moved from a clock button on each row into the row's ⋯ menu.
+timeline: Calm look step 2: All copies list and the copy panel
+feature 5: **Calm All copies list.** One command bar (Group, Filters, Sort, Download, Columns), the column names once above the list (click Match or Found to sort), copies as cards, a tick box that picks every copy showing, a blue dot on copies found since your last visit.
+feature 5: **Calm copy panel.** Three tabs (This copy, Claim, The site), the two pictures named "Your client's" and "Theirs", a line of facts under them, and a left edge you can drag to make the panel wider (remembered on this computer).
