@@ -1,5 +1,0 @@
-type: new
-title: The calm look, step 3: One at a time
-news: One at a time has its calm layout. One control line holds the tabs, All / Websites / Social media, your progress, Undo and the view switch. The two pictures fill a card with their names on them, and under them are five big answer buttons (Stolen in red, Licensed in green) and a row for Compare, Evidence report, Capture, Approve and Hide. A side card names the site, shows how well the photo lines up, and has the Page link and the Picture link, each with open and copy, plus two tabs: Their page and About this copy. By site and company is now a simple list. Also fixed: on a big library, answering or skipping quickly could show the same copy again.
-timeline: Calm look step 3: One at a time
-feature 5: **Calm One at a time.** One control line, the two pictures named on their corners, five big answer buttons with icons, a command row (Stop searching this photo is under ⋯), and a side card with the site, the match, Page and Picture links (open and copy) and the tabs Their page / About this copy. Both cards fit a 1080p window without scrolling. By site and company is a list.
