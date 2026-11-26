@@ -1022,3 +1022,99 @@ button.otile:hover{background:var(--hover)}
 .olr.sel{margin:0;padding:10px 0;box-shadow:inset 3px 0 0 var(--accent)}
 button.olr{padding-left:10px!important;padding-right:6px!important;border-radius:4px}
 .odh .kn1>span{flex-wrap:wrap;white-space:normal;overflow:visible}
+
+/* ================= Home (design batch 3: greeting, tiles, level columns, clients board, photo panel) ================= */
+.hnew{display:flex;flex-direction:column;gap:28px}
+.hnew .htiles{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.hnew .htile{padding:20px 22px;gap:6px;border-radius:8px}
+.hnew .htile:hover{transform:none;background:var(--hover)}
+.hnew .htile .hn{font-size:34px;line-height:1.1;font-weight:600;font-family:inherit}
+.hnew .htile .hl{font-size:14.5px;color:var(--ink)}
+.hnew .htile .hs{font-size:13px;color:var(--faint)}
+.hnew .htile .hs .up{font-weight:500}
+.hnew .htile .hs .late{color:var(--bad);font-weight:500}
+.hnew .htile.hring>span{gap:6px}
+.hnew .htile.hring{padding-right:28px}
+.hch{display:flex;align-items:baseline;gap:12px;padding:0 2px 10px;min-height:34px}
+.hch h2{font-size:17px;font-weight:600;margin:0}
+.hch .faint{font-size:13.5px;margin-left:auto}
+.hch .hsee{font-size:14px;color:var(--accent)}
+.hlevel{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:28px;align-items:stretch}
+.hlevel.one{grid-template-columns:minmax(0,1fr)}
+@media (min-width:2200px){.hlevel{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}}
+.hcol{display:flex;flex-direction:column;min-width:0}
+.hnew #homeJobs{flex:1;display:flex;flex-direction:column;gap:4px;overflow:visible;background:transparent;border:0}
+.hnew #homeJobs .job{background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:none;padding:18px 24px;gap:18px}
+.hnew #homeJobs .job:last-child{flex:1;align-content:flex-start;border-bottom:1px solid var(--line)}
+.hnew #homeJobs .job .jdot{width:36px;height:36px;border-radius:8px;background:#0F6CBD;color:#fff}
+.hnew #homeJobs .job.lvl-bad .jdot{background:#C42B1C;color:#fff}
+.hnew #homeJobs .job.lvl-warn .jdot{background:#C27C0E;color:#fff}
+.hnew #homeJobs .job.lvl-ok .jdot{background:#0F7B0F;color:#fff}
+:root[data-theme="dark"] .hnew #homeJobs .job.lvl-bad .jdot{background:#D13438}
+:root[data-theme="dark"] .hnew #homeJobs .job.lvl-warn .jdot{background:#CA8A04}
+:root[data-theme="dark"] .hnew #homeJobs .job.lvl-info .jdot{background:#2B88D8}
+.hnew #homeJobs .job .jt{gap:4px}
+.hnew #homeJobs .job .jt b{font-size:15.5px;font-weight:600}
+.hnew #homeJobs .job .jt>span{font-size:14px;color:var(--muted)}
+.hnew #homeJobs .job .jb .btn{min-width:120px;justify-content:center}
+.hnew #jobSince .btn.ghost,.hnew #jobSince .btn{background:transparent;border-color:transparent;color:var(--accent);min-width:0!important}
+.hnew .hwait{color:var(--bad);font-weight:500!important;font-size:14px!important}
+.hsince{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+.hsince a{color:inherit!important;text-decoration:none!important;font-size:14px}
+.hsince a:hover{color:var(--accent)!important}
+.hsince i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px}
+.hchips{display:flex!important;flex-wrap:wrap;gap:6px;margin-top:6px}
+.hchip{display:inline-flex;gap:6px;align-items:center;padding:2px 10px;border-radius:4px;background:var(--sunk);border:1px solid var(--line);font-size:13px;color:var(--ink)!important;text-decoration:none!important}
+.hchip:hover{background:var(--hover)}
+.hchip b{font-weight:600!important;font-size:13px!important;font-variant-numeric:tabular-nums}
+.hchip.hmore{color:var(--accent)!important;background:transparent}
+.hnew #mostCopied{flex:1;display:flex;flex-direction:column;justify-content:space-between;padding:10px 22px;gap:0}
+.hnew #mostCopied .toprow{grid-template-columns:auto minmax(0,1fr) 90px 34px 18px;border:0;border-top:1px solid var(--line);border-radius:4px;margin:0 -10px;padding:10px;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer;width:calc(100% + 20px)}
+.hnew #mostCopied .toprow:first-child{border-top-color:transparent}
+.hnew #mostCopied .toprow:hover{background:var(--hover)}
+.hnew #mostCopied .toprow.hsel{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.hnew #mostCopied .toprow b{font-weight:400}
+.hnew #mostCopied .toprow>b.num{font-weight:600}
+.hnew .toprow .bar{height:6px}
+.hnew .toprow .bar i{background:var(--accent)}
+.hchev{color:var(--faint);font-size:20px;line-height:1;text-align:right}
+.hbgrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+@media (min-width:2200px){.hbgrid{grid-template-columns:repeat(6,minmax(0,1fr))}}
+@media (max-width:1500px){.hbgrid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}}
+.hbc{display:grid;grid-template-columns:minmax(0,1fr) auto 14px;grid-template-rows:auto auto auto;gap:4px 12px;padding:14px 18px;background:var(--surface);border:1px solid var(--line);border-radius:8px;text-decoration:none;color:var(--ink)}
+.hbc:hover{background:var(--hover);border-color:color-mix(in srgb,var(--line) 70%,var(--ink))}
+.hbn{font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.hstar{font-style:normal;color:#C27C0E;margin-right:6px}
+.hbv{grid-row:1/3;grid-column:2;text-align:right;display:flex;flex-direction:column;align-items:flex-end;justify-content:center}
+.hbv b{font-size:22px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}
+.hbv span{font-size:12.5px;color:var(--faint)}
+.hbbar{grid-column:1;display:block;height:4px;border-radius:4px;background:var(--sunk);overflow:hidden;margin-top:6px}
+.hbbar i{display:block;height:100%;background:var(--accent)}
+.hbs{grid-column:1/3;font-size:12.5px;color:var(--faint)}
+.hbc .hchev{grid-column:3;grid-row:1/4;align-self:center}
+.hbc.zero .hbv b{color:var(--faint);font-weight:400}
+.hbc.hbmore .hbn{color:var(--accent)}
+.hscrim{position:fixed;inset:0;background:rgba(0,0,0,.18);z-index:40}
+#hPhoto{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);box-sizing:border-box;z-index:41;background:var(--bg);border-left:1px solid var(--line);box-shadow:0 8px 32px rgba(0,0,0,.25);padding:24px 28px;display:flex;flex-direction:column;gap:16px;overflow:auto}
+.hph{display:flex;align-items:center}.hph h2{font-size:17px;font-weight:600;flex:1;margin:0}
+.hx{background:transparent;border:0;color:var(--muted);font-size:16px;width:34px;height:34px;border-radius:4px;cursor:pointer}
+.hx:hover{background:var(--hover);color:var(--ink)}
+.hpbig img{width:100%;aspect-ratio:3/2;object-fit:cover;border-radius:8px;display:block;background:var(--sunk)}
+.hpname{display:flex;flex-direction:column;gap:2px}.hpname b{font-size:17px;font-weight:600;overflow-wrap:anywhere}.hpname span{color:var(--faint);font-size:14px}
+.hpnums{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.hpnums div{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column}
+.hpnums b{font-size:22px;font-weight:600}.hpnums span{font-size:13px;color:var(--faint)}
+.hpsec{font-size:14px;color:var(--muted);margin-top:4px}
+.hplist{display:flex;flex-direction:column;gap:4px}
+.hprow{display:grid;grid-template-columns:64px minmax(0,1fr) auto 14px;gap:12px;align-items:center;padding:8px 12px;background:var(--surface);border:1px solid var(--line);border-radius:8px;color:var(--ink);text-decoration:none}
+.hprow:hover{background:var(--hover)}
+.hprow img{width:64px;height:44px;object-fit:cover;border-radius:4px;background:var(--sunk)}
+.hprow b{font-weight:400;font-size:14.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.hprow span span{font-size:12.5px;color:var(--faint)}
+.hpm{font-weight:600}
+.hpbtns{display:flex;flex-direction:column;gap:14px;margin-top:6px}
+.hpgo{justify-content:center;text-align:center;min-height:42px}
+.hpstop{display:flex;flex-direction:column;gap:6px;padding-top:14px;border-top:1px solid var(--line)}
+.hpstopb{color:var(--bad)!important;align-self:flex-start}
+.hpstop span{font-size:13px;color:var(--faint)}
+@media (max-width:1100px){.hlevel{grid-template-columns:1fr}.hnew .htiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.hnew .htiles{grid-template-columns:1fr}.hpnums{grid-template-columns:repeat(2,1fr)}}

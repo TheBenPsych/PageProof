@@ -169,38 +169,42 @@ V.home = async () => {
   const today = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
   const fc = await homeFinds();
   const news = seen !== VERSION ? `<div class="banner info">${ic('ideas', 20)}<div style="flex:1 1 260px;min-width:0"><b>PageProof was updated to ${VERSION}</b> <span class="muted" style="font-size:13.5px">All your captures, settings and lists are still here.</span></div><a class="btn" href="#whatsnew">See what's new</a></div>` : '';
-  const todo = fc.jobs.filter(j => j.lvl !== 'ok');
+  const todo = fc.jobs.filter(j => j.lvl !== 'ok' && j.id !== 'jobSince');
   // 4.40: only the most urgent job keeps a solid blue button; the rest are plain.
   let mainUsed = false;
   for (const j of fc.jobs) if (j.btn && j.btn.main) { if (mainUsed) j.btn = { ...j.btn, main: 0 }; mainUsed = true; }
-  return `${news}
-  ${head(today, hello + (name ? ', ' + esc(name.split(' ')[0]) : ''), todo.length ? 'Here is what needs you, most urgent first.' : 'Nothing needs you right now. Searching carries on by itself.', `<button class="btn" data-act="tour">Take the tour</button>`)}
-  ${homeTiles(fc.stats)}
-  <section class="card jobs" id="homeJobs" aria-label="What to do now">
-    <div class="pad row jobhead"><h2>What to do now</h2><span class="faint" style="margin-left:auto;font-size:13px">${todo.length ? todo.length + ' to do' : 'All done'}</span></div>
+  // Calm look (design batch 3): a plain greeting, four number tiles, then two level columns
+  // (What to do now | Most copied photos) and a board with every client.
+  const jobs = `<div class="hcol"><div class="hch"><h2>What to do now</h2><span class="faint">${todo.length ? todo.length + ' to do' : 'All done'}</span></div>
+    <section class="jobs" id="homeJobs" aria-label="What to do now">
     ${fc.jobs.map(jobRow).join('')}
     ${todo.length ? '' : `<div class="job lvl-ok" id="allDone"><span class="jdot">${ic('check', 16, 3)}</span><div class="jt"><b>All done for today</b><span>New copies will show up here as Keep searching finds them.</span></div></div>`}
-  </section>
-  <section class="home3 quick" aria-label="Start something new">
-    <a class="start" href="#capture"><span class="ic">${ic('capture', 18)}</span><span class="qt"><b>Capture a page</b><span>PDF, web copy, fingerprints, timestamps</span></span><span class="go" aria-hidden="true">›</span></a>
-    <a class="start" href="#search"><span class="ic">${ic('find', 18)}</span><span class="qt"><b>Find copies of a photo</b><span>Google Lens, Yandex and Bing</span></span><span class="go" aria-hidden="true">›</span></a>
-    <a class="start" href="#tools"><span class="ic">${ic('tools', 18)}</span><span class="qt"><b>Look closer at a photo</b><span>Hidden data, compare, mark up</span></span><span class="go" aria-hidden="true">›</span></a>
-  </section>
-  ${fc.more ? `<div class="home3 homemore">${fc.more}</div>` : ''}`;
+    </section></div>`;
+  const most = fc.most ? `<div class="hcol"><div class="hch"><h2>Most copied photos</h2><span class="faint">Pages each one is on</span></div>${fc.most}</div>` : '';
+  return `${news}
+  ${head('', hello + (name ? ', ' + esc(name.split(' ')[0]) : ''), '')}
+  <div class="hnew">${homeTiles(fc.stats)}
+  <div class="hlevel${most ? '' : ' one'}">${jobs}${most}</div>
+  ${fc.board || ''}</div>${await homePhotoPanel()}`;
 };
 // 4.40: four number tiles at the top of Home. Each one is a click to the matching list.
 function homeTiles(s) {
   if (!s) return '';
   const F = s.first || {}, pct = F.total ? Math.floor(F.done / F.total * 100) : null;
   const ring = `<svg class="ring" width="52" height="52" viewBox="0 0 54 54" aria-hidden="true"><circle cx="27" cy="27" r="22" fill="none" stroke="var(--sunk)" stroke-width="7"/><circle cx="27" cy="27" r="22" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round" stroke-dasharray="${(138.2 * (pct || 0) / 100).toFixed(1)} 138.2" transform="rotate(-90 27 27)"/></svg>`;
-  const t = (href, icon, label, n, sub, extra = '') => `<a class="card htile" href="${href}"><span class="hl">${ic(icon, 14)}${label}</span><span class="hn num">${n}</span><span class="hs">${sub}</span>${extra}</a>`;
+  const t = (href, label, n, sub) => `<a class="card htile" href="${href}"><span class="hn num">${n}</span><span class="hl">${label}</span><span class="hs">${sub}</span></a>`;
+  const ans = s.answered ? ` · ${s.answered.toLocaleString()} answered today` : '';
   return `<section class="htiles" id="homeTiles" aria-label="Today in numbers">
-    ${t('#found', 'copies', 'New copies to answer', s.nNew.toLocaleString(), s.newToday ? `<b class="up">+${s.newToday.toLocaleString()}</b> in the last day` : 'none in the last day')}
-    ${t('#tocapture', 'capture', 'Stolen, need a capture', s.caps.toLocaleString(), s.caps ? (s.oldest ? `Oldest waited ${s.oldest} ${s.oldest === 1 ? 'day' : 'days'}` : 'Marked today') : 'All captured')}
-    ${t('#keep', 'find', 'Photos searched today', s.searched.toLocaleString(), s.found ? `${s.found} new ${s.found === 1 ? 'copy' : 'copies'} found` : 'no new copies yet')}
-    <a class="card htile hring" href="#keep?clients=1" id="homeFirstTile"><span><span class="hl">Every photo searched once</span><span class="hn num">${pct == null ? '…' : pct + '%'}</span><span class="hs">${F.total ? F.done.toLocaleString() + ' of ' + F.total.toLocaleString() : 'Counting your photos'}</span></span>${ring}</a>
+    ${t('#found', 'New copies to answer', s.nNew.toLocaleString(), (s.newToday ? `<b class="up">+${s.newToday.toLocaleString()}</b> in the last day` : 'none in the last day') + ans)}
+    ${t('#tocapture', 'Stolen, need a capture', s.caps.toLocaleString(), s.caps ? (s.oldest ? `<b class="${s.oldest >= 3 ? 'late' : ''}">Oldest has waited ${s.oldest} ${s.oldest === 1 ? 'day' : 'days'}</b>` : 'Marked today') : 'All captured')}
+    ${t('#keep', 'Photos searched today', s.searched.toLocaleString(), s.found ? `${s.found} new ${s.found === 1 ? 'copy' : 'copies'} found` : 'no new copies yet')}
+    <a class="card htile hring" href="#keep?clients=1" id="homeFirstTile"><span><span class="hn num">${pct == null ? '…' : pct + '%'}</span><span class="hl">Every photo searched once</span><span class="hs">${homeFirstLine(F, s.doneBy)}</span></span>${ring}</a>
   </section>`;
 }
+const homeFirstLine = (F, by) => F && F.total ? F.done.toLocaleString() + ' of ' + F.total.toLocaleString() + (F.never ? (by && by !== 'Done' ? ' · done ' + esc(String(by).replace(/^~ /, 'about ')) : '') : ' · all done') : 'Counting your photos';
+// Small chips for clients and sites inside a job line.
+const homeChips = list => `<span class="hchips">${list.join('')}</span>`;
+const homeChip = (label, n, href) => `<a class="hchip" href="${href}">${esc(label)}${n != null ? ` <b>${Number(n).toLocaleString()}</b>` : ''}</a>`;
 // One line of Home's "What to do now" list: a coloured dot, what it is, and one button.
 function jobRow(j) {
   const b = j.btn ? (j.btn.href ? `<a class="btn${j.btn.main ? ' primary' : ''}" href="${j.btn.href}"${j.btn.act ? ` data-act="${j.btn.act}"` : ''}>${j.btn.label}</a>` : `<button class="btn${j.btn.main ? ' primary' : ''}" data-act="${j.btn.act}"${j.btn.v != null ? ` data-v="${esc(j.btn.v)}"` : ''}>${j.btn.label}</button>`) : '';
@@ -214,7 +218,7 @@ function jobRow(j) {
 // is kept as a small summary and only worked out again when copies, hidden sites or captures change.
 async function homeSum() {
   const got = await api.storage.local.get(['fcChanged', 'ppHomeSum']), log = await getLog();
-  const key = [(got.fcChanged && got.fcChanged.at) || 0, RS_LISTS.hidden.length, log.length, log.reduce((n, e) => n + ((e.saves || []).length), 0), new Date().toDateString()].join('|');
+  const key = ['v2', (got.fcChanged && got.fcChanged.at) || 0, RS_LISTS.hidden.length, log.length, log.reduce((n, e) => n + ((e.saves || []).length), 0), new Date().toDateString()].join('|');
   const old = got.ppHomeSum;
   if (old && old.key === key && Date.now() - old.at < 30 * 60000) { if (typeof PP_STATS !== 'undefined') PP_STATS.add('home.sumCached'); return old; }
   const t0 = Date.now();
@@ -224,7 +228,8 @@ async function homeSum() {
   const vis = copies.filter(c => !FC.hiddenCopy(c, RS_LISTS.hidden));
   const stolenBases = new Set(vis.filter(c => c.status === 'stolen').map(c => FC.baseOf(c.site)));
   const by = {}, per = new Map(), dayAgo = Date.now() - 86400000;
-  let nNew = 0, newToday = 0, strong = 0;
+  let nNew = 0, newToday = 0, strong = 0, answered = 0;
+  const todayStr = new Date().toDateString();
   const strongBy = {};
   for (const c of vis) {
     if (c.status === 'new') {
@@ -232,11 +237,12 @@ async function homeSum() {
       if (Date.parse(c.firstSeen || '') > dayAgo) newToday++;
       if (typeof FC_RULES !== 'undefined' && FC_RULES.isStrong(c, stolenBases)) { strong++; strongBy[c.client || 'Client unknown'] = (strongBy[c.client || 'Client unknown'] || 0) + 1; }
     }
+    if (c.status !== 'new' && c.answered && new Date(c.answered).toDateString() === todayStr) answered++;
     if (c.status !== 'removed' && c.status !== 'licensed') per.set(c.photo, (per.get(c.photo) || 0) + 1);
   }
   const up = copies.filter(c => c.status === 'stolen' && !c.packAt && !FC.hiddenCopy(c, RS_LISTS.hidden) && ![c.url, ...(c.alts || [])].some(u => saved.has(FC.pageKey(u))))
     .sort((a, b) => String(a.answered || a.firstSeen).localeCompare(String(b.answered || b.firstSeen)));
-  const sum = { key, at: Date.now(), nNew, newToday, strong, strongBy, top: Object.entries(by).sort((a, b) => b[1] - a[1]),
+  const sum = { key, at: Date.now(), nNew, newToday, answered, strong, strongBy, top: Object.entries(by).sort((a, b) => b[1] - a[1]),
     most: [...per.entries()].filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 5),
     caps: { n: up.length, oldest: up.length ? (up[0].answered || up[0].firstSeen) : '', sites: [...new Set(up.map(c => c.site))].slice(0, 3) } };
   await api.storage.local.set({ ppHomeSum: sum }).catch(() => {});
@@ -288,71 +294,103 @@ async function homeFinds() {
   if (S.strong) {
     const sb = Object.entries(S.strongBy).sort((a, b) => b[1] - a[1]);
     jobs.push({ lvl: 'bad', icon: 'copies', id: 'jobStrong', title: `${S.strong.toLocaleString()} ${S.strong === 1 ? 'copy looks' : 'copies look'} like a strong claim`,
-      sub: 'Same photo, and a site that was stolen from before, sells something or took the credit off. ' + sb.slice(0, 3).map(([n, v]) => esc(n) + ' ' + v).join(' · '), btn: { href: '#found?strong=1', label: 'Look at these first', main: 1 } });
+      sub: 'Same photo, and a site that was stolen from before, sells something or took the credit off.' + homeChips(sb.slice(0, 4).map(([n, v]) => homeChip(n, v, '#found?strong=1&client=' + encodeURIComponent(n)))), btn: { href: '#found?strong=1', label: 'Look at these first', main: 1 } });
   }
   if (caps.up.length) jobs.push(capJob(caps.up));
   if (nNew) jobs.push({ lvl: 'warn', icon: 'copies', id: 'jobNew', title: S.strong ? `${(nNew - S.strong).toLocaleString()} other new ${nNew - S.strong === 1 ? 'copy' : 'copies'} to answer` : `${nNew.toLocaleString()} new ${nNew === 1 ? 'copy' : 'copies'} to answer`,
-    sub: top.slice(0, 4).map(([n, v]) => `<a href="#found?client=${encodeURIComponent(n)}">${esc(n)} ${v}</a>`).join(' · ') + (top.length > 4 ? ` · ${top.length - 4} more clients` : ''),
+    sub: homeChips([...top.slice(0, 4).map(([n, v]) => homeChip(n, v, '#found?client=' + encodeURIComponent(n))), ...(top.length > 4 ? [`<a class="hchip hmore" href="#clients">+${top.length - 4} more clients</a>`] : [])]),
     btn: { href: '#review', label: 'Start', main: 1 } });
   // 3. good news and updates
   const fin = (await FC.firstNotes()).filter(n => n.at > (store.fcFirstSeen || '') && Date.now() - Date.parse(n.at) < 14 * 86400000);
   if (fin.length) jobs.push({ lvl: 'info', id: 'firstDone', icon: 'check', title: fin.length === 1 ? esc(fin[0].name) + ': every photo searched at least once' : fin.length + ' clients now have every photo searched at least once',
     sub: esc(fin.map(n => n.name + ' (' + n.n.toLocaleString() + ' photos)').slice(0, 4).join(', ')) + (fin.length > 4 ? ' and more' : '') + '. New photos still get their first search when they arrive.', btn: { href: '#keep', label: 'See progress' }, btn2: { act: 'firstseen', label: 'OK' } });
   // 4. all is well: one quiet line saying searching is running
-  if (k.on && !store.fcPause && alive) jobs.push({ lvl: 'ok', title: 'Keep searching is running', sub: esc(st.text || '') + ` · today ${today.searched} ${today.searched === 1 ? 'photo' : 'photos'} searched, ${today.found} new`, btn: { href: '#keep', label: 'Open' } });
-  else if (!k.on) jobs.push({ lvl: 'warn', title: 'Keep searching is off', sub: 'Turn it on to search your clients\' photos all day.', btn: { href: '#keep', label: 'Turn it on' } });
+  // (calm look: "Keep searching is running" left the list, the status tile at the top says it)
+  if (!k.on) jobs.push({ lvl: 'warn', title: 'Keep searching is off', sub: 'Turn it on to search your clients\' photos all day.', btn: { href: '#keep', label: 'Turn it on' } });
   // The small cards under the jobs.
   const most = S.most;
   let mostHtml = '';
   if (most.length) {
     const ps = await FC.DB.getMany('photos', most.map(m => m[0]));
     const mx = most[0][1];
-    mostHtml = `<section class="card pad" id="mostCopied" style="display:flex;flex-direction:column;gap:6px"><div class="row"><h2>Most copied photos</h2><span class="faint" style="margin-left:auto;font-size:13px">Pages each one is on</span></div>
+    mostHtml = `<section class="card" id="mostCopied" aria-label="Most copied photos">
       ${most.map(([id, n], i) => { const p = ps[i] || { id, name: 'Photo' }; const src = p.thumb ? esc(p.thumb) : p.th ? (FC.pics.seen(p.id) || `data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" data-th="${esc(p.id)}`) : 'icons/icon48.png';
-        return `<a class="toprow" href="#found?photo=${encodeURIComponent(id)}"><img src="${src}" alt=""><span style="min-width:0"><b>${esc(p.name || 'Photo')}</b><span class="faint" style="font-size:12.5px">${esc(p.client || 'Client unknown')}</span></span><span class="bar"><i style="width:${n / mx * 100}%;background:var(--copy)"></i></span><b class="num" style="text-align:right">${n}</b></a>`; }).join('')}
+        return `<button class="toprow${state.homePhoto === id ? ' hsel' : ''}" data-act="homephoto" data-v="${esc(id)}" aria-label="${esc(p.name || 'Photo')}, on ${n} pages"><img src="${src}" alt=""><span style="min-width:0"><b>${esc(p.name || 'Photo')}</b><span class="faint" style="font-size:12.5px">${esc(p.client || 'Client unknown')}</span></span><span class="bar"><i style="width:${n / mx * 100}%"></i></span><b class="num" style="text-align:right">${n}</b><span class="hchev" aria-hidden="true">›</span></button>`; }).join('')}
     </section>`;
   }
-  // 4.40: new copies by client, so the bottom row of Home is always three cards.
-  let byHtml = '';
-  if (top.length) {
-    const mx = top[0][1];
-    byHtml = `<section class="card pad" id="homeByClient" style="display:flex;flex-direction:column;gap:8px"><div class="row"><h2>New copies by client</h2><a class="faint" href="#found" style="margin-left:auto;font-size:13px">See all</a></div>
-      ${top.slice(0, 5).map(([n, v]) => `<a class="byrow" href="#found?client=${encodeURIComponent(n)}"><span>${esc(n)}</span><span class="bar"><i style="width:${v / mx * 100}%"></i></span><b class="num">${v}</b></a>`).join('')}</section>`;
-  }
-  const stats = { nNew, newToday: S.newToday, caps: caps.up.length, oldest: caps.up.length ? ppDaysSince(caps.up.oldest || (caps.up[0] && (caps.up[0].answered || caps.up[0].firstSeen))) : 0, searched: today.searched || 0, found: today.found || 0, first: store.fcFirst };
-  return { jobs, stats, more: homeFirst(store.fcFirst, k, hw, await homeSpeed()) + mostHtml + byHtml };
+  // The clients board: every client being searched, most new copies first, with how much of
+  // its photos have had their first search.
+  let board = '';
+  try {
+    const cls = (await FC.DB.all('clients')).filter(c => c.searching !== false);
+    if (cls.length) {
+      const nBy = Object.fromEntries(top), F = store.fcFirst || {};
+      const rows = cls.map(c => { const f = (F.clients || {})[c.name]; return { name: c.name, n: nBy[c.name] || 0, pri: !!c.priority, pct: f && f[1] > 0 ? Math.floor(f[0] / f[1] * 100) : null }; }).sort((x, y) => y.n - x.n || (y.pri ? 1 : 0) - (x.pri ? 1 : 0) || x.name.localeCompare(y.name));
+      const MAXB = 30, tot = rows.reduce((x, r) => x + r.n, 0);
+      board = `<section id="hBoard" aria-label="Clients"><div class="hch"><h2>Clients</h2><span class="faint">${rows.length.toLocaleString()} being searched · ${tot.toLocaleString()} new ${tot === 1 ? 'copy' : 'copies'} · most new first</span><a href="#clients" class="hsee">See all</a></div><div class="hbgrid">
+        ${rows.slice(0, MAXB).map(r => `<a class="hbc${r.n ? '' : ' zero'}" href="#found?client=${encodeURIComponent(r.name)}" title="See ${esc(r.name)}'s copies"><span class="hbn">${r.pri ? '<i class="hstar" title="Priority client">★</i>' : ''}${esc(r.name)}</span><span class="hbv"><b>${r.n ? r.n.toLocaleString() : '—'}</b><span>${r.n ? 'new' : 'nothing new'}</span></span>${r.pct == null ? '<span class="hbs">Not counted yet</span>' : `<span class="hbbar" title="${r.pct}% of photos searched once"><i style="width:${r.pct}%"></i></span><span class="hbs">${r.pct}% searched once</span>`}<span class="hchev" aria-hidden="true">›</span></a>`).join('')}
+        ${rows.length > MAXB ? `<a class="hbc hbmore" href="#clients"><span class="hbn">+${rows.length - MAXB} more clients</span><span class="hbs">See them in Clients and photos</span><span class="hchev" aria-hidden="true">›</span></a>` : ''}</div></section>`;
+    }
+  } catch (e) { board = ''; }
+  let doneBy = '';
+  try { const F = store.fcFirst; if (F && F.never) { const x = await homeSpeed(); doneBy = firstDoneBy(F.never, firstPerDay(k, hw, F.week, x.sp, x.lad)) || ''; } } catch (e) { doneBy = ''; }
+  const stats = { nNew, newToday: S.newToday, caps: caps.up.length, oldest: caps.up.length ? ppDaysSince(caps.up.oldest || (caps.up[0] && (caps.up[0].answered || caps.up[0].firstSeen))) : 0, searched: today.searched || 0, found: today.found || 0, first: store.fcFirst, answered: S.answered || 0, doneBy };
+  return { jobs, stats, most: mostHtml, board, more: '' };
 }
 function capJob(up) {
-  return { lvl: 'warn', icon: 'capture', id: 'jobCapture', title: `${up.length} stolen ${up.length === 1 ? 'copy needs' : 'copies need'} a capture`, sub: 'Capture them before the site takes them down. Oldest first: ' + esc((up.sites || [...new Set(up.map(c => c.site))]).slice(0, 3).join(', ')), btn: { href: '#tocapture', label: 'Capture them', main: 1 } };
+  const days = up.length ? ppDaysSince(up.oldest || (up[0] && (up[0].answered || up[0].firstSeen))) : 0;
+  const sites = (up.sites || [...new Set(up.map(c => c.site))]).slice(0, 3);
+  return { lvl: days >= 3 ? 'bad' : 'warn', icon: 'capture', id: 'jobCapture', title: `${up.length.toLocaleString()} stolen ${up.length === 1 ? 'copy needs' : 'copies need'} a capture`,
+    sub: (days >= 1 ? `<b class="hwait">The oldest has waited ${days} ${days === 1 ? 'day' : 'days'}.</b> ` : '') + 'Capture them before the sites take them down.' + homeChips(sites.map(x => homeChip(x, null, '#tocapture'))), btn: { href: '#tocapture', label: 'Capture them', main: 1 } };
 }
 // Home card: every photo searched once. Uses the small copy saved by the last count, so Home
 // never reads every photo; a count older than an hour is redone after Home has drawn.
 // This week's speed and the speed ladder's steps, for the done-by date (Speed-ups).
 async function homeSpeed() { try { return { sp: await FC.speed(), lad: (await api.storage.local.get('fcLadder')).fcLadder || null }; } catch (e) { return {}; } }
-function homeFirst(F, k, hw, x = {}) {
-  if (!F || !F.total) return `<section class="card pad firsthome" id="homeFirst" style="display:flex;flex-direction:column;gap:8px"><h2>Every photo searched once</h2><span class="muted" style="font-size:14px">Counting your photos…</span></section>`;
-  const pct = Math.floor(F.done / F.total * 100);
-  let by = '';
-  try { by = firstDoneBy(F.never, firstPerDay(k, hw, F.week, x.sp, x.lad)) || ''; } catch (e) { /* no date */ }
-  return `<section class="card pad firsthome" id="homeFirst" style="display:flex;flex-direction:column;gap:8px">
-    <div class="row"><h2>Every photo searched once</h2><span class="faint num" style="margin-left:auto;font-size:13px">${pct}%</span></div>
-    <span class="bar${F.never ? '' : ' okbar'}"><i style="width:${F.done / F.total * 100}%"></i></span>
-    <span class="muted num" style="font-size:13.5px">${F.done.toLocaleString()} of ${F.total.toLocaleString()} · ${F.never ? F.never.toLocaleString() + ' to go' + (by && by !== 'Done' ? ' · done ' + esc(by) : '') : 'all done, new photos join by themselves'}</span>
-    <a class="btn" href="#keep?clients=1">See by client</a></section>`;
-}
 V.home.after = async () => {
   try {
     const F = (await api.storage.local.get('fcFirst')).fcFirst;
     if ((await FC.drive()).done && (!F || Date.now() - F.at > 3600000)) {
       await FC.coverage();
-      const n = (await api.storage.local.get('fcFirst')).fcFirst, el = document.getElementById('homeFirst');
-      if (el && n && state.shown === 'home') el.outerHTML = homeFirst(n, await FC.keep(), await ppHardware(), await homeSpeed());
+      const n = (await api.storage.local.get('fcFirst')).fcFirst;
       const tl = document.getElementById('homeFirstTile');
-      if (tl && n && n.total && state.shown === 'home') { const p = Math.floor(n.done / n.total * 100); tl.querySelector('.hn').textContent = p + '%'; tl.querySelector('.hs').textContent = n.done.toLocaleString() + ' of ' + n.total.toLocaleString(); const c = tl.querySelectorAll('circle')[1]; if (c) c.setAttribute('stroke-dasharray', (138.2 * p / 100).toFixed(1) + ' 138.2'); }
+      if (tl && n && n.total && state.shown === 'home') { const p = Math.floor(n.done / n.total * 100); tl.querySelector('.hn').textContent = p + '%'; tl.querySelector('.hs').textContent = n.done.toLocaleString() + ' of ' + n.total.toLocaleString() + (n.never ? '' : ' · all done'); const c = tl.querySelectorAll('circle')[1]; if (c) c.setAttribute('stroke-dasharray', (138.2 * p / 100).toFixed(1) + ' 138.2'); }
     }
   } catch (e) { /* counted next time */ }
   try { const c = (await api.commands.getAll()).find(x => x.name === 'capture-page'); if (c && c.shortcut) document.getElementById('shortcut').textContent = c.shortcut; } catch (e) { /* none */ }
 };
+
+// Home › Most copied photos: a panel for one photo (four boxes, its newest copies, See all,
+// Stop searching this photo). Opened by a click on a row.
+async function homePhotoPanel() {
+  const id = state.homePhoto;
+  if (!id) return '';
+  let cs = [], p = null;
+  try { await loadFC(); cs = FCD.copies.filter(c => c.photo === id && visible(c)); p = (await FC.DB.getMany('photos', [id]))[0]; } catch (e) { return ''; }
+  if (!p && !cs.length) { state.homePhoto = ''; return ''; }
+  p = p || { id, name: 'Photo' };
+  const n = st => cs.filter(c => c.status === st).length, livePages = cs.filter(c => c.status !== 'removed' && c.status !== 'licensed').length;
+  const seen = new Set(), top = [];
+  for (const c of cs.filter(c => c.status !== 'removed').sort((a, b) => String(b.firstSeen).localeCompare(String(a.firstSeen)))) { if (seen.has(c.site)) continue; seen.add(c.site); top.push(c); if (top.length === 5) break; }
+  const src = p.thumb ? esc(p.thumb) : (cs[0] && cs[0].photoThumb) ? esc(cs[0].photoThumb) : p.th ? (FC.pics.seen(p.id) || `data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" data-th="${esc(p.id)}`) : 'icons/icon48.png';
+  const ST = { new: 'Needs an answer', stolen: 'Stolen', licensed: 'Licensed', later: 'Check later' };
+  const stopped = !!p.stopped || !!p.noSearch;
+  return `<div class="hscrim" data-act="homephotox"></div><aside id="hPhoto" aria-label="Photo details" role="dialog">
+    <div class="hph"><h2>Most copied photo</h2><button class="hx" data-act="homephotox" aria-label="Close" title="Close">✕</button></div>
+    <div class="hpbig"><img src="${src}" alt=""></div>
+    <div class="hpname"><b>${esc(p.name || 'Photo')}</b><span>${esc(p.client || (cs[0] && cs[0].clientName) || 'Client unknown')}</span></div>
+    <div class="hpnums"><div><b class="num">${livePages}</b><span>pages</span></div><div><b class="num">${n('new')}</b><span>to answer</span></div><div><b class="num">${n('stolen')}</b><span>Stolen</span></div><div><b class="num">${n('removed')}</b><span>Removed</span></div></div>
+    ${top.length ? `<div class="hpsec">Newest copies</div>
+    <div class="hplist">${top.map(c => `<a class="hprow" href="#found?open=${encodeURIComponent(c.id)}"><img src="${safeImg(c.thumb || c.img)}" alt="" loading="lazy"><span><b>${esc(c.site)}</b><span>${ST[c.status] || esc(c.status)}</span></span><span class="hpm num">${c.pct >= 0 && c.pct != null ? c.pct + '%' : ''}</span><span class="hchev" aria-hidden="true">›</span></a>`).join('')}</div>` : ''}
+    <div class="hpbtns"><a class="btn primary hpgo" href="#found?photo=${encodeURIComponent(id)}">See all ${cs.length.toLocaleString()} ${cs.length === 1 ? 'copy' : 'copies'} in Copies found</a>
+    ${cs.length ? `<div class="hpstop"><button class="btn hpstopb" data-act="stopphoto" data-v="${esc(cs[0].id)}">${stopped ? 'Search this photo again' : 'Stop searching this photo'}</button><span>${stopped ? 'This photo is not searched any more.' : `For a photo that matches too much or isn't worth pursuing. Its ${n('new')} unanswered ${n('new') === 1 ? 'copy moves' : 'copies move'} to Removed. Stolen ones stay. You can undo it.`}</span></div>` : ''}</div>
+  </aside>`;
+}
+Object.assign(ACTS, {
+  homephoto: v => { state.homePhoto = state.homePhoto === v ? '' : v; render(true); },
+  homephotox: () => { state.homePhoto = ''; render(true); },
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && state.shown === 'home' && state.homePhoto) { state.homePhoto = ''; render(true); } });
 
 // =====================================================================================
 // Capture a page

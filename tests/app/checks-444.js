@@ -34,7 +34,10 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const h = await page.evaluate(() => ({ strong: (document.getElementById('jobStrong') || {}).textContent || '', nw: (document.getElementById('jobNew') || {}).textContent || '', since: (document.getElementById('jobSince') || {}).textContent || '', behind: (document.getElementById('jobBehind') || {}).textContent || '' }));
   ok(/2 copies look like a strong claim/.test(h.strong), 'Home puts the 2 strong claims first: ' + h.strong.replace(/\s+/g, ' ').slice(0, 90));
   ok(/2 other new copies to answer/.test(h.nw), 'the other new copies are a line of their own: ' + h.nw.replace(/\s+/g, ' ').slice(0, 60));
-  ok(/Since you were last here/.test(h.since) && /2 new copies found, 1 on sites you marked Stolen before/.test(h.since), 'after 5 hours away, Home says what changed: ' + h.since.replace(/\s+/g, ' ').slice(0, 140));
+  ok(/While you were away/.test(h.since) && /things? happened since/.test(h.since) && !/2 new copies found/.test(h.since), 'after 5 hours away, Home has a folded "While you were away" line: ' + h.since.replace(/\s+/g, ' ').slice(0, 100));
+  await page.click('#jobSince [data-act="sinceshow"]'); await page.waitForTimeout(1500);
+  h.since = await page.evaluate(() => (document.getElementById('jobSince') || {}).textContent || '');
+  ok(/2 new copies found, 1 on sites you marked Stolen before/.test(h.since), 'after 5 hours away, Home says what changed: ' + h.since.replace(/\s+/g, ' ').slice(0, 140));
   ok(/2 ★ priority clients are falling behind/.test(h.behind) && /not searched for 12 days/.test(h.behind) && /switched off/.test(h.behind), 'priority clients falling behind are named with the reason: ' + h.behind.replace(/\s+/g, ' ').slice(0, 160));
   await page.click('#jobSince [data-act="sinceok"]'); await page.waitForTimeout(1200);
   ok(!(await page.$('#jobSince')), 'OK puts the "since you were last here" card away');
