@@ -157,34 +157,7 @@ Object.assign(ACTS, {
 });
 
 // ================================================================ 2. Watching
-V.watching = async () => {
-  const list = await PP_WATCH.watchList();
-  const hd = head('Copies found', 'Watching', 'A site or social account with 2 or more copies marked Stolen is watched. Once a week PageProof reads only its new posts and compares their pictures with every client\'s photos. Old Stolen pages are never opened again.');
-  const add = `<section class="card pad row" style="gap:10px"><input id="watchIn" class="chip" style="min-height:40px;padding:0 12px;font-size:15px;flex:1 1 260px" placeholder="Watch another site or account, like example.com or an Instagram link" aria-label="Site or account to watch"><button class="btn primary" data-act="watchadd">＋ Watch it</button></section>`;
-  const row = it => {
-    const when = it.last ? 'Checked ' + shortDate(it.last) : 'Not checked yet';
-    const busy = it.pend && it.pend.length;
-    return `<tr class="${it.off ? 'off' : ''}"><td style="min-width:0"><b>${esc(it.label)}</b> <span class="tag grey">${it.kind === 'acct' ? esc(it.plat || 'Account') : 'Website'}</span>${it.by === 'hand' ? ' <span class="tag blue">Added by you</span>' : ''}${it.off ? ' <span class="tag grey">Not watching</span>' : ''}
-        <div class="faint" style="font-size:12px">${it.stolen ? plural(it.stolen, 'copy', 'copies') + ' marked Stolen' : 'No Stolen copies yet'}${it.kind === 'site' && it.feed ? ' · reads ' + (it.feed === 'sitemap' ? 'its sitemap' : 'its news feed') : ''}</div></td>
-      <td>${busy ? `<span class="tag blue">Checking ${plural(it.pend.length, 'post')}…</span>` : esc(when)}${it.err ? `<div class="faint" style="font-size:12px">${esc(it.err === 'asked to log in' ? 'The site asked to log in. Log in in this browser.' : 'No posts found last time.')}</div>` : ''}</td>
-      <td>${it.newPosts != null ? plural(it.newPosts, 'new post') + ' last time' : ''}${it.found ? `<div><span class="tag bad">${plural(it.found, 'copy', 'copies')} found</span></div>` : ''}</td>
-      <td class="row" style="gap:6px;justify-content:flex-end">${it.off ? `<button class="btn sm" data-act="watchon" data-v="${esc(it.key)}">Watch again</button>` : `<button class="btn sm" data-act="watchnow" data-v="${esc(it.key)}">Check now</button><button class="btn ghost sm" data-act="watchoff" data-v="${esc(it.key)}">Stop watching</button>`}${it.by === 'hand' ? `<button class="btn ghost sm" data-act="watchdrop" data-v="${esc(it.key)}">Remove</button>` : ''}</td></tr>`;
-  };
-  const on = list.filter(x => !x.off).length;
-  return hd + (await ntKeepNote()) + add + ntCard(`${plural(on, 'site or account', 'sites and accounts')} watched`, list.length ? `<div style="overflow-x:auto"><table class="ntt">${list.map(row).join('')}</table></div>` : '<p class="muted" style="margin:0">Nothing yet. Sites and accounts join by themselves once 2 copies there are marked Stolen.</p>', '<a class="btn" href="#found?via=watch">See what it found</a>');
-};
-Object.assign(ACTS, {
-  watchadd: async () => {
-    const v = (document.getElementById('watchIn') || {}).value || '';
-    const it = await PP_WATCH.watchAdd(v);
-    if (!it) return toast('Type a site like example.com, or paste a link to a social account.');
-    toast('Watching ' + it.label + '. Its new posts are checked within the hour while Keep searching is on.'); render(true);
-  },
-  watchnow: async v => { await PP_WATCH.watchNow(v); toast('Checking it next, in the Keep searching tab.'); render(true); },
-  watchoff: async v => { await PP_WATCH.watchOff(v, true); toast('Stopped watching.', async () => { await PP_WATCH.watchOff(v, false); render(true); }); render(true); },
-  watchon: async v => { await PP_WATCH.watchOff(v, false); render(true); },
-  watchdrop: async v => { await PP_WATCH.watchDrop(v); render(true); },
-});
+// The Watching page lives in ui/pp-watching.js (calm look).
 
 // ================================================================ 3. Registrations
 async function ntRegRows() {
