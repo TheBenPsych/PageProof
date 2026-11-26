@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.67.0** (26 Nov 2026).
+Last updated: version **4.68.0** (26 Nov 2026).
 
 ---
 
@@ -153,6 +153,7 @@ Last updated: version **4.67.0** (26 Nov 2026).
 - **Calm All copies list.** One command bar (Group, Filters, Sort, Download, Columns), the column names once above the list (click Match or Found to sort), copies as cards, a tick box that picks every copy showing, a blue dot on copies found since your last visit. (4.66)
 - **Calm copy panel.** Three tabs (This copy, Claim, The site), the two pictures named "Your client's" and "Theirs", a line of facts under them, and a left edge you can drag to make the panel wider (remembered on this computer). (4.66)
 - **Calm One at a time.** One control line, the two pictures named on their corners, five big answer buttons with icons, a command row (Stop searching this photo is under ⋯), and a side card with the site, the match, Page and Picture links (open and copy) and the tabs Their page / About this copy. Both cards fit a 1080p window without scrolling. By site and company is a list. (4.67)
+- **Calm Keep searching in four tabs.** Now (Searching now card, Up next with the reason, Search sites and Social media with today's counts, rest and cool-down times, four number tiles, Last searches with what each found, Today's 50, Extra searches), Progress (ring, Google and Quick look bars, goal line, Kept up to date rings, how searches are shared, 7-day chart), Clients (find, All / ★ Priority / Not done, sort) and Settings (rows for Speed, When, Search sites, Where and what, Today's 50). The tab stays open after a reload. (4.68)
 
 ## 6. Social media accounts
 
@@ -363,3 +364,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.65 | 25 Nov | Calm look step 1: Lexend font, Windows 11 colours, status tiles at the top right |
 | 4.66 | 25 Nov | Calm look step 2: All copies list and the copy panel |
 | 4.67 | 26 Nov | Calm look step 3: One at a time |
+| 4.68 | 26 Nov | Calm look step 4: Keep searching in four tabs |
