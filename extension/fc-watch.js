@@ -67,7 +67,9 @@ const PP_WATCH = (() => {
   const DEFAULT_WORDS = ['"Photo: {name}"', '"Photo by {name}"', '"Credit: {name}"'];
   async function creditCfg() {
     const c = (await FC.meta.get('creditCfg')) || {};
-    return { on: c.on !== false, every: c.every || 15, clients: c.clients || {} };
+    // usual (calm look): the wordings for every client without their own. Empty = the standard 3.
+    const usual = (Array.isArray(c.usual) ? c.usual : []).map(x => String(x).trim()).filter(Boolean).slice(0, 8);
+    return { on: c.on !== false, every: c.every || 15, clients: c.clients || {}, usual };
   }
   async function setCreditCfg(cfg) { await FC.meta.set('creditCfg', cfg); FC.touch('credit'); }
   async function creditState() {
@@ -87,13 +89,24 @@ const PP_WATCH = (() => {
     const cut = Date.now() - 60 * DAY;
     for (const [u, t] of Object.entries(s.seen)) if (t < cut) delete s.seen[u];
     s.nomatch = s.nomatch.slice(-200); s.log = s.log.slice(-60); s.queue = s.queue.slice(0, 150);
+    // What each wording's pages turned out to be, last 30 days: [time, client + "\n" + wording, f|k|n|x].
+    if (s.wlog) s.wlog = s.wlog.filter(x => x[0] > Date.now() - 30 * DAY).slice(-1500);
     await FC.meta.set('creditState', s); FC.touch('credit');
   }
   // The wordings for one client: the ones you typed, or the three usual ones.
   function wordsFor(cfg, name) {
     const c = cfg.clients[name] || {};
-    const w = (c.words && c.words.length ? c.words : DEFAULT_WORDS).map(x => String(x).replace(/\{name\}/g, name).trim()).filter(Boolean);
+    const w = (c.words && c.words.length ? c.words : usualWords(cfg)).map(x => String(x).replace(/\{name\}/g, name).trim()).filter(Boolean);
     return [...new Set(w)].slice(0, 8);
+  }
+  const usualWords = cfg => cfg && cfg.usual && cfg.usual.length ? cfg.usual : DEFAULT_WORDS;
+  // A wording as it is searched: quotes around it keep the words together.
+  const quoteWord = t => { const x = String(t || '').trim().replace(/[“”]/g, '"').replace(/^"+|"+$/g, '').replace(/"/g, '').trim().slice(0, 80); return x ? '"' + x + '"' : ''; };
+  // What each wording found in the last `days` days (and the pages it had read).
+  function wordStats(s, days = 30) {
+    const cut = Date.now() - days * DAY, out = {};
+    for (const [at, key, how] of s.wlog || []) { if (at < cut) continue; const o = out[key] || (out[key] = { found: 0, known: 0, none: 0, pages: 0 }); o.pages++; if (how === 'f') o.found++; else if (how === 'k') o.known++; else if (how === 'n') o.none++; }
+    return out;
   }
   const clientOn = (cfg, cl) => cl.searching !== false && (cfg.clients[cl.name] || {}).on !== false;
   // The next wording that is due (each one once a week), least lately done first.
@@ -225,9 +238,10 @@ const PP_WATCH = (() => {
       if (await FC_RULES.addFound(r.hit.photo, q.url, img, hostOf(q.url), r.hit.dist, { by: 'a credit search for ' + q.words, tag: { via: 'credit' } })) { found++; break; }
       known++;   // their photo is there, but this copy was already in Copies found
     }
-    if (found) { s.found = (s.found || 0) + 1; stat('credit.found'); return 'found'; }
-    if (known) { stat('credit.known'); return 'known'; }
-    stat('credit.none');
+    const note = how => { (s.wlog || (s.wlog = [])).push([Date.now(), q.client + '\n' + q.words, how]); };
+    if (found) { s.found = (s.found || 0) + 1; stat('credit.found'); note('f'); return 'found'; }
+    if (known) { stat('credit.known'); note('k'); return 'known'; }
+    stat('credit.none'); note('n');
     {
       const t = /<title[^>]*>([^<]{1,200})/i.exec(html);
       s.nomatch.push({ url: q.url, title: (q.title || (t && t[1]) || '').trim(), client: q.client, words: q.words, at: new Date().toISOString(), pics: pics.length });
@@ -260,6 +274,15 @@ const PP_WATCH = (() => {
   }
   async function runInfo() { return (await api.storage.local.get(RUN_KEY).catch(() => ({})))[RUN_KEY] || null; }
   let RUN = null;
+  // Stop (calm look): the wording or page in hand is finished, then the search ends. Pages it
+  // had listed but not read stay in line and are read later with the weekly searches.
+  const STOP_KEY = 'fcCreditStop';
+  async function creditStop() {
+    if (RUN && !RUN.end) RUN.stop = true;
+    await api.storage.local.set({ [STOP_KEY]: Date.now() }).catch(() => {});
+    stat('credit.stopped');
+  }
+  const stopAsked = async r => r.stop || (((await api.storage.local.get(STOP_KEY).catch(() => ({})))[STOP_KEY] || 0) > r.start && (r.stop = true));
   // prev (4.64): a run that was cut off (an update closed its page): it carries on from the wording
   // it had reached, with its counts so far, then reads that client's pages still in line.
   async function creditRun(client, prev) {
@@ -272,10 +295,12 @@ const PP_WATCH = (() => {
       : { client, start: Date.now(), beat: Date.now(), phase: 'search', words: words.length, wDone: 0, now: '', links: 0, pages: 0, read: 0, found: 0, known: 0, failed: 0, nomatch: 0, per: {}, both: 0, end: 0, why: '' };
     if (prev) words = prev.phase === 'read' ? [] : words.slice(Math.min(prev.wDone || 0, words.length));
     const save = async () => { r.beat = Date.now(); await api.storage.local.set({ [RUN_KEY]: { ...r } }).catch(() => {}); };
+    if (!prev) await api.storage.local.remove(STOP_KEY).catch(() => {});
     await save();
     const tick = setInterval(save, 20000);
     try {
       for (const w of words) {
+        if (await stopAsked(r)) break;
         if (typeof PP_SOCIAL !== 'undefined' && PP_SOCIAL.halt && PP_SOCIAL.halt.on && !(await api.storage.local.get('fcPause')).fcPause) PP_SOCIAL.halt.on = false;
         if (await allResting()) { r.why = 'robot'; break; }
         r.now = w; await save();
@@ -294,6 +319,7 @@ const PP_WATCH = (() => {
       }
       r.phase = 'read'; r.now = ''; await save();
       for (;;) {
+        if (await stopAsked(r)) { r.why = 'stopped'; r.left = (await creditState()).queue.filter(q => q.client === client).length; break; }
         const st = await creditState();
         const i = st.queue.findIndex(q => q.client === client);
         if (i < 0) break;
@@ -530,6 +556,6 @@ const PP_WATCH = (() => {
     } finally { busy = false; }
   }
 
-  return { DEFAULT_WORDS, ENGINES, ENG_NAME, creditRun, resumeRun, runInfo, runActive, live: () => RUN, creditCfg, setCreditCfg, creditState, wordsFor, creditStep, creditNow, readResultsInTab, readFeed, findFeed, watchList, watchAdd, watchOff, watchNow, watchDrop, watchStep, step, nearest, looks, dropLooks: () => { LOOKS = null; } };
+  return { DEFAULT_WORDS, usualWords, quoteWord, wordStats, creditStop, ENGINES, ENG_NAME, creditRun, resumeRun, runInfo, runActive, live: () => RUN, creditCfg, setCreditCfg, creditState, wordsFor, creditStep, creditNow, readResultsInTab, readFeed, findFeed, watchList, watchAdd, watchOff, watchNow, watchDrop, watchStep, step, nearest, looks, dropLooks: () => { LOOKS = null; } };
 })();
 if (typeof module !== 'undefined') module.exports = PP_WATCH;
