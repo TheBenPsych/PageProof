@@ -1284,12 +1284,12 @@ const FC = (() => {
   // ---------------------------------------------------------------- photos that could not be searched
   // Kept as a short list (newest first) so the Skipped photos page never has to read every photo.
   const SKIP_WHY = {
-    type: 'TIFF and HEIC photos can\'t be searched. Save a JPG copy in the same folder and that copy is searched.',
+    type: 'This TIFF or HEIC photo is too big, or an unusual kind, for PageProof to read. It is left out of searching. Nothing in Drive is changed.',
     gone: 'The file is no longer in that Drive folder (moved, renamed or deleted).',
     empty: 'The file is empty (0 bytes). Google Drive may still be uploading it.',
     broken: 'The file would not open as a picture. It may be damaged, or not really a photo.',
   };
-  const SKIP_LABEL = { type: 'Kind of file', gone: 'File not found', empty: 'Empty file', broken: 'Would not open' };
+  const SKIP_LABEL = { type: 'TIFF or HEIC', gone: 'Moved or deleted', empty: 'Empty file', broken: 'Won\'t open' };
   async function skipped() { const l = await meta.get('skipped'); return Array.isArray(l) ? l : []; }
   async function noteSkip(p, kind) {
     p.unreadable = SKIP_WHY[kind] || SKIP_WHY.broken; p.skip = kind;
@@ -1304,6 +1304,26 @@ const FC = (() => {
     const drop = new Set(ids);
     const list = await skipped();
     if (list.some(x => drop.has(x[0]))) { await meta.set('skipped', list.filter(x => !drop.has(x[0]))); touch('skipped'); }
+  }
+  // "Take off this list": the rows leave the list only. The photos and Drive are not touched.
+  // Returns the rows taken off, so Undo can put them back with skipPutBack.
+  async function skipTakeOff(ids) {
+    const drop = new Set(ids), list = await skipped();
+    const gone = list.filter(x => drop.has(x[0]));
+    if (gone.length) { await meta.set('skipped', list.filter(x => !drop.has(x[0]))); touch('skipped'); }
+    return gone;
+  }
+  async function skipPutBack(rows) {
+    const have = new Set((await skipped()).map(x => x[0]));
+    const list = [...(await skipped()), ...rows.filter(x => !have.has(x[0]))].sort((a, b) => String(b[4]).localeCompare(String(a[4])));
+    await meta.set('skipped', list.slice(0, 5000)); touch('skipped');
+  }
+  // Once: TIFF and HEIC photos skipped before PageProof could read them go back to the line.
+  async function rawOnce() {
+    if (await meta.get('rawRead')) return 0;
+    await meta.set('rawRead', 1);
+    const ids = (await skipped()).filter(x => x[3] === 'type').map(x => x[0]);
+    return ids.length ? retrySkipped(ids) : 0;
   }
   // "Try again": the photos go to the front of the line.
   async function retrySkipped(ids) {
@@ -1371,7 +1391,7 @@ const FC = (() => {
   }
   async function readPhoto(p, opts = {}) {
     const t0 = Date.now();
-    if (/\.(tiff?|heic|heif)$/i.test(p.name || '')) { await noteSkip(p, 'type'); return { error: SKIP_WHY.type }; }
+    const raw = /\.(tiff?|heic|heif)$/i.test(p.name || '');   // read in memory by pp-rawpic.js (read only)
     let file;
     try { file = await fileFor(p); }
     catch (e) {
@@ -1382,7 +1402,7 @@ const FC = (() => {
     if (!file.size) { await noteSkip(p, 'empty'); return { error: SKIP_WHY.empty }; }
     let pic;
     try { pic = await RS_JOB.prepare(file, { fcId: p.id, folderKey: p.rel }); } catch (e) { pic = { error: String(e && e.message || e) }; }
-    if (pic.error) { await noteSkip(p, 'broken'); return { error: SKIP_WHY.broken }; }
+    if (pic.error) { const k = raw ? 'type' : 'broken'; await noteSkip(p, k); return { error: SKIP_WHY[k] }; }
     if (p.unreadable || p.skip) { delete p.unreadable; delete p.skip; await DB.put('photos', p); await clearSkip([p.id]); }
     // 4.42: a photo whose folders give no year gets its date from the camera (EXIF), once.
     if (!p.year && !p.exifY && !p.exifTried) {
@@ -2725,7 +2745,7 @@ const FC = (() => {
     }
   }
 
-  return { claimed, claimReset, SET_ASIDE, DB, meta, open, touch, pics, dropDotMatches, checkerRemove, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, inHours, quietOK, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
+  return { skipTakeOff, skipPutBack, rawOnce, claimed, claimReset, SET_ASIDE, DB, meta, open, touch, pics, dropDotMatches, checkerRemove, pageKey, mergeSamePages, markCaptured, kept, pages, keepOriginal, keepSoon, pruneKept, thumbOf, setThumb, movePics, skipped, retrySkipped, readPhoto, SKIP_LABEL, SKIP_WHY, engines, engineResults, brokenEngines, retryEngine, ENGINE_NAME, perf, timed, countNew, siteFinds, driveStateSoft, keep, setKeep, inHours, quietOK, PACE, drive, setDrive, driveState, allowDrive, pickRoot, pickExtra, rootHandle, extraHandles, fileFor, tidyClient,
     regIn, regFor, setReg, scan, quickClients, clientFolders, dirAt, subfolders, folderInfo, picked, unpicked, forced, setPicked, pickInside, SCAN, applyPendingFlags, missingPicks, movedNote, followMoves, watchFolders, newFolders, newFoldersSeen, goalPlan, workMinutes, exifDate, heatShoot, coolShoot, burstSibling, wakeBurst, lookHash, findDoubles, doublesOf, plan, next, buildQueue, queueDirty, resetQueue, coverage,
     photoForPic, ingest, rescue, searchedNothing, copiesOf, allCopies, answer, licenseSite, approveSite, approveAccount, acctApproved, setAcct, hiddenCopy, setClientOf, setFlag, setStopped, setClients, logWeek, week, weekKey, firstNotes, searchedOnce, dayLog, speed, ladder, LADDER, alikeFrames, mixYears, mixLine,
     isPool, shownCountries, setShownCountries, SHOWN_START, ownerFor, pathOf, logReport, USE, useOf, riskOf, spamMarks, goneLoad, checkGone, GONE_WHY, randomLabel, countryOf, COUNTRY, countryFromDoc, siteCountry, fillCountries, baseOf, groupOf, facts, lookup, owners,

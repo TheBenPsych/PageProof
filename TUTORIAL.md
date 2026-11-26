@@ -354,7 +354,7 @@ Hover a thumbnail to see it next to your client's photo. Click a row to open its
 
 **One at a time** (under Copies found) shows one new copy at a time, side by side or with a swipe slider (S switches), with the same keys. **Repeat offenders come first:** a new copy on a site, or a site owner, that you already marked Stolen gets a red **stolen before** badge.
 
-**Skipped photos** (Clients and photos › Skipped photos) lists photos that could not be searched and why: the file is gone, empty, damaged, or a TIFF or HEIC (those can't be searched; save a JPG copy next to it). **Try again** puts a photo at the front of the line.
+**Skipped photos** (Clients and photos › Skipped photos) lists photos that could not be searched and why: the file is gone, empty, damaged, or a TIFF or HEIC that is too big or an unusual kind (PageProof reads most TIFF and HEIC photos itself, read only; nothing in Drive is changed). **Try again** puts a photo at the front of the line.
 
 **Site owners** puts together sites run by one company (big media groups, the same company in the footer, the same Google Analytics or ad ID). **Who's behind this site** reads a site's own pages for names, contacts and domain facts, gives quick links to OpenCorporates, USPTO trademarks, Google, LinkedIn and ICANN, and lets you capture its About, Contact and Privacy pages.
 

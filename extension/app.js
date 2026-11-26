@@ -1315,6 +1315,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   try { RS_DB.del('handles', 'ppInstall').catch(() => {}); api.storage.local.remove('ppUpdated'); } catch (e) { /* none */ }
   FC.movePics().catch(e => console.warn('PageProof: moving preview pictures', e));
   FC.mergeSamePages().then(n => { if (n) { toast(plural(n, 'copy was', 'copies were') + ' the same page as another copy (phone version or tracking bits on the address), so they are now one row each.'); render(true); } }).catch(e => console.warn('PageProof: same pages', e));
+  // Once: TIFF and HEIC photos skipped before PageProof could read them go back to the line.
+  FC.rawOnce().then(n => { if (n) { toast(plural(n, 'TIFF or HEIC photo goes', 'TIFF and HEIC photos go') + ' to the line. PageProof now reads these itself (read only, nothing in Drive changes).'); render(true); } }).catch(e => console.warn('PageProof: TIFF and HEIC photos', e));
   FC.dropDotMatches().then(n => { if (n) { toast(plural(n, 'wrong match was', 'wrong matches were') + ' moved to Removed (the photo check had scored them too high). Put back is still there.'); render(true); } }).catch(e => console.warn('PageProof: wrong matches', e));
 });
 
