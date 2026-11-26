@@ -124,7 +124,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(sx.c['credit.search'] >= 3 && sx.c['credit.page'] >= 2 && sx.c['credit.none'] >= 1 && sx.c['credit.known'] >= 1 && sx.c['credit.now'] === 1 && sx.t.includes('credit.step') && sx.c['watch.check'] >= 1 && sx.c['watch.post'] >= 1 && sx.c['watch.pic'] >= 1,
     'Credit search and Watching count what they did and how long it took: ' + JSON.stringify(Object.fromEntries(Object.entries(sx.c).filter(([k]) => /^(credit|watch|sweep)\./.test(k)))));
   await page.evaluate(() => { location.hash = '#keep'; }); await page.waitForTimeout(2000);
-  const kx = await page.evaluate(() => document.body.innerText);
+  const kx = await page.evaluate(() => document.body.innerText + ' ' + [...document.querySelectorAll('#keepExtras .kxr')].map(a => a.title).join(' '));
   ok(/Extra searches/.test(kx) && /Sweeps of stolen sites/.test(kx) && /Credit search/.test(kx) && /Watching/.test(kx) && /Google \d+, Bing \d+/.test(kx) && /Last search/.test(kx), 'Keep searching shows each extra search: what it is doing now and its last 7 days');
   await page.evaluate(() => { location.hash = '#stats'; }); await page.waitForTimeout(2500);
   const tx = await page.evaluate(() => document.body.innerText);

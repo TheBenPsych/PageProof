@@ -123,8 +123,9 @@ async function ntStatsDays(n) {
     return PP_STATS.sum(out);
   } catch (e) { return { c: {}, t: {} }; }
 }
-// The card on Keep searching: what each one is doing now, and its last 7 days.
-async function ntKeepExtras() {
+// The rows of the Extra searches card on Keep searching (fc-keep.js): what each one is doing
+// now, and its last 7 days.
+async function ntKeepExtraRows() {
   let sweepNow = 'Nothing to sweep right now. A sweep starts when you say yes to sweeping a site with a Stolen copy.', creditNow = '', watchNow = '';
   try {
     const sw = Object.values(await FC_RULES.sweeps());
@@ -148,15 +149,7 @@ async function ntKeepExtras() {
       : `${plural(items.length, 'site or account', 'sites and accounts')} watched, each checked once a week.${lastAt ? ' Last check ' + esc(shortDate(new Date(lastAt).toISOString())) + '.' : ''}`;
   } catch (e) { /* none */ }
   const now = { sweep: sweepNow, credit: creditNow, watch: watchNow }, link = { sweep: '#found', credit: '#credit', watch: '#watching' };
-  const rows = ntExtraRows(await ntStatsDays(7));
-  return `<section class="card pad" style="display:flex;flex-direction:column;gap:12px">
-    <div class="row" style="gap:10px"><h2 style="margin:0">Extra searches</h2><span class="faint" style="margin-left:auto;font-size:13px">They run between photo searches, one small step at a time</span></div>
-    <div style="overflow-x:auto"><table class="ntt">
-      <tr><th>Search</th><th>Right now</th><th>Last 7 days</th><th>Copies found</th><th>Time spent</th></tr>
-      ${rows.map(r => `<tr><td><a href="${link[r.k]}"><b>${r.name}</b></a></td><td style="min-width:220px;font-size:13.5px">${now[r.k]}</td><td class="faint" style="font-size:12.5px;min-width:180px">${r.work}</td><td><b class="num">${r.found.toLocaleString()}</b></td><td class="num">${r.mins.toLocaleString()} min<div class="faint" style="font-size:12px">${r.worth}</div></td></tr>`).join('')}
-    </table></div>
-    <p class="faint" style="margin:0;font-size:12.5px">The same numbers for today, 7 days and 30 days are in <a href="#stats">How PageProof is doing</a>, and in the stats file you save for Claude.</p>
-  </section>`;
+  return ntExtraRows(await ntStatsDays(7)).map(r => ({ ...r, now: now[r.k], href: link[r.k] }));
 }
 
 // ================================================================ 4. Legal portal card (Ben, 2026-11-25)

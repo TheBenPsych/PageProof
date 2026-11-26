@@ -137,14 +137,17 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     await FC.setKeep({ on: true, pace: 'Faster', ladder: true, ladderTop: 40 });
     await chrome.storage.local.set({ fcLadder: { g: { step: 2, at: Date.now(), cap: 3, day: new Date().toDateString() }, f: { step: 3, at: Date.now(), cap: 3, day: new Date().toDateString() } } });
   });
-  await page.goto(url('app.html#keep')); await page.waitForTimeout(1800);
+  await page.goto(url('app.html#keep?tab=progress')); await page.waitForTimeout(1800);
   const kp = await page.evaluate(() => ({
-    ladder: (document.getElementById('ladderBox') || {}).textContent || '',
-    on: document.querySelectorAll('#ladderBox .ladder span.on').length,
     quick: (document.getElementById('quickRow') || {}).textContent || '',
     lane: !!document.getElementById('quickLane'),
     speed: (document.getElementById('speedStat') || {}).textContent || '',
   }));
+  await page.goto(url('app.html#keep?tab=settings')); await page.waitForTimeout(1500);
+  Object.assign(kp, await page.evaluate(() => ({
+    ladder: (document.getElementById('ladderBox') || {}).textContent || '',
+    on: document.querySelectorAll('#ladderBox .ladder span.on').length,
+  })));
   console.log(JSON.stringify(kp).slice(0, 600));
   ok(/Step 3 of 4/.test(kp.ladder) && kp.on === 3 && /Google 1 photo every 60 s, Yandex and Bing every 20 s/.test(kp.ladder), 'Keep searching shows the speed ladder and where it is now');
   ok(/Quick look/.test(kp.quick) && /4 of 5/.test(kp.quick) && kp.lane, 'Keep searching shows the quick-look bar and the two lanes: ' + kp.quick.replace(/\s+/g, ' '));

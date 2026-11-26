@@ -72,21 +72,25 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(f.store && f.store.done === 13 && f.store.never === 7, 'A small count is saved for Home');
 
   // Keep searching page.
-  await page.goto(url('app.html#keep')); await page.waitForTimeout(1500);
-  const k = await page.evaluate(() => ({
+  // Calm look: the page has four tabs (Progress, Clients and Settings are used here).
+  await page.goto(url('app.html#keep?tab=clients')); await page.waitForTimeout(1500);
+  const k = { rows: await page.evaluate(() => [...document.querySelectorAll('#firstClients .kcr')].map(t => t.querySelector('.kcn').textContent.replace(/\s+/g, ' ').trim() + ' ' + t.textContent.replace(/\s+/g, ' ').trim())) };
+  await page.goto(url('app.html#keep?tab=settings')); await page.waitForTimeout(1200);
+  k.which = await page.evaluate(() => document.querySelectorAll('[data-act="fiftywhich"]').length === 2);
+  await page.click('[data-act="fiftywhich"][data-v="first"]'); await page.waitForTimeout(500);
+  k.whichSaved = await page.evaluate(async () => (await FC.keep()).fiftyWhich);
+  await page.goto(url('app.html#keep?tab=progress')); await page.waitForTimeout(1200);
+  Object.assign(k, await page.evaluate(() => ({
     box: document.getElementById('firstBox') && document.getElementById('firstBox').textContent.replace(/\s+/g, ' '),
-    rows: [...document.querySelectorAll('#firstClients tbody tr')].map(t => t.textContent.replace(/\s+/g, ' ').trim()),
     share: document.querySelector('[data-act="firstshare"].on') && document.querySelector('[data-act="firstshare"].on').textContent,
-    which: document.querySelectorAll('[data-act="fiftywhich"]').length === 2,
-  }));
+  })));
   console.log(JSON.stringify(k));
   ok(k.box && /13\s*of 20 photos searched at least once/.test(k.box) && k.box.includes("can't be searched"), 'Keep searching: big first-search block');
-  ok(k.rows.length === 3 && k.rows[0].startsWith('B') && k.rows[1].startsWith('★ A') && /^C.*All searched once/.test(k.rows[2]), 'Keep searching: client table, lowest first, finished client marked');
+  ok(k.rows.length === 3 && k.rows[0].startsWith('B') && k.rows[1].startsWith('★A') && /^C.*All searched once/.test(k.rows[2]), 'Keep searching: client table, lowest first, finished client marked');
   ok(k.share === '1 in 3' && k.which, 'Keep searching: share switch and Today\'s 50 choice');
   await page.click('[data-act="firstshare"][data-v="2"]'); await page.waitForTimeout(700);
   ok(await page.evaluate(async () => (await FC.keep()).firstShare) === 2 && /1 in 2/.test(await page.textContent('.sharebar')), 'Share switch saves 1 in 2');
-  await page.click('[data-act="fiftywhich"][data-v="first"]'); await page.waitForTimeout(500);
-  ok(await page.evaluate(async () => (await FC.keep()).fiftyWhich) === 'first', 'Today\'s 50 choice saved');
+  ok(k.whichSaved === 'first', 'Today\'s 50 choice saved');
 
   // Home: card + client finished note.
   await page.goto(url('app.html#home')); await page.waitForTimeout(1500);

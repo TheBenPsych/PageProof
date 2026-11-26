@@ -38,10 +38,12 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const sc = await rs.evaluate(async () => { const l = document.querySelector('.res-list'); l.scrollTop = 600; const before = l.scrollTop; renderResults(); await new Promise(r => setTimeout(r, 100)); return { before, after: document.querySelector('.res-list').scrollTop }; });
   ok(sc.before > 300 && Math.abs(sc.after - sc.before) < 2, 'Search results: the photo list keeps its scroll when the page redraws (' + sc.before + ' -> ' + sc.after + ')');
   await page.goto(url('app.html#keep')); await page.waitForTimeout(1800);
-  const k = await page.evaluate(() => ({ now: (document.querySelector('.know') || {}).textContent || '', lights: [...document.querySelectorAll('.englights .e')].map(e => e.textContent).join('|'), tiles: document.querySelectorAll('.ktiles .ktile').length, info: document.querySelectorAll('.kinfo[title]').length }));
+  const k = await page.evaluate(() => ({ now: (document.querySelector('#keepNow') || {}).textContent || '', lights: [...document.querySelectorAll('#keepSites .ksr.e')].map(e => e.textContent).join('|'), tiles: document.querySelectorAll('#keepTiles .kt2').length }));
+  await page.goto(url('app.html#keep?tab=progress')); await page.waitForTimeout(1500);
+  k.info = await page.evaluate(() => document.querySelectorAll('.kinfo[title]').length);
   ok(/Searching now/.test(k.now) && /photo9\.jpg/.test(k.now), 'Keep searching: live card shows the photo being searched');
-  ok(/Bing.*rests until/.test(k.lights) && k.tiles === 3, 'Search site lights (Bing resting) and three small tiles');
-  ok(k.info >= 2, 'Long explanations moved into ⓘ notes (' + k.info + ')');
+  ok(/Bing.*rests until/i.test(k.lights) && k.tiles === 4, 'Search site lights (Bing resting) and four number tiles');
+  ok(k.info >= 1, 'Long explanations moved into ⓘ notes (' + k.info + ')');
   await ctx.close();
   console.log(fails ? fails + ' FAILED' : 'ALL PASSED'); process.exit(fails ? 1 : 0);
 })().catch(e => { console.log('ERR', e); process.exit(1); });
