@@ -1837,7 +1837,7 @@ async function captureCopy(c) {
   // 4.32: when the link was an account page and the exact post was found, capture the post.
   const capUrl = (c.rp && c.rp.post) || c.url;
   await api.storage.local.set({ fcCapFor: { url: capUrl, id: c.id, at: Date.now(), pic } });
-  await api.runtime.sendMessage({ type: 'captureUrl', url: capUrl }).catch(() => {});
+  await api.runtime.sendMessage({ type: 'captureUrl', url: capUrl, src: 'stolen' }).catch(() => {});
   toast('Opening ' + c.site + ' to capture it. When you save the evidence pack, the match report PDF is saved too.');
 }
 // The capture page asks for the match report after saving a pack (fcReportReq). Only one open

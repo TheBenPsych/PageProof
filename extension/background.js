@@ -120,8 +120,8 @@ async function addLog(entry) {
   await api.storage.local.set({ log });
 }
 
-async function capture(tab, auto) {
-  const tabId = tab.id;
+async function capture(tab, auto, src) {
+  const tabId = tab.id, began = Date.now();
   const windowId = tab.windowId;
   await api.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
   // 4.14: close cookie notices and sign-up boxes that cover the page, with the site's own buttons.
@@ -268,7 +268,12 @@ async function capture(tab, auto) {
 
   record.server = await server;
   await PP_DB.put(record);
-  await addLog({ id: record.id, captureId: record.captureId, time: record.time, url: record.url, title: record.title });
+  // The log line also keeps a few small counts for Evidence › Overview (where the capture was
+  // started, how long it took, how long the page was). They live in the log only: nothing here
+  // goes into the capture or the evidence pack.
+  await addLog({ id: record.id, captureId: record.captureId, time: record.time, url: record.url, title: record.title,
+    src: src || 'link', ms: Date.now() - began, screens: record.main.tiles.length, boxes: record.sections.length, popups: popups.length,
+    ...(stopRequested ? { stopped: 1 } : {}), ...(record.notes.some(n => n.includes('kept loading')) ? { endless: 1 } : {}) });
   const q = new URLSearchParams({ id: record.id, ...(auto || {}) });
   await api.tabs.create({ url: api.runtime.getURL('viewer.html?' + q), index: tab.index + 1, windowId: tab.windowId, active: !auto });
   return record.id;
@@ -281,12 +286,12 @@ function requestStop() {
   api.action.setBadgeText({ text: 'STOP' });
 }
 
-async function startCapture(tab) {
+async function startCapture(tab, src) {
   if (busy) return requestStop();
   busy = true;
   stopRequested = false;
   try {
-    await capture(tab);
+    await capture(tab, undefined, src);
   } catch (err) {
     const msg = String((err && err.message) || err);
     await api.tabs.create({ url: api.runtime.getURL('viewer.html?error=' + encodeURIComponent(msg)) });
@@ -303,7 +308,7 @@ try {
   api.commands.onCommand.addListener(async cmd => {
     if (cmd !== 'capture-page') return;
     const [tab] = await api.tabs.query({ active: true, currentWindow: true });
-    if (tab) startCapture(tab);
+    if (tab) startCapture(tab, 'key');
   });
 } catch (e) { /* no shortcuts */ }
 
@@ -331,7 +336,7 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const jobs = {
     status: async () => ({ busy }),
     stop: async () => { if (busy) requestStop(); return { ok: true }; },
-    captureTab: async () => { startCapture(await api.tabs.get(msg.tabId)); return { ok: true }; },
+    captureTab: async () => { startCapture(await api.tabs.get(msg.tabId), msg.src === 'app' ? 'app' : 'popup'); return { ok: true }; },
     pick: async () => { await inPicker(msg.tabId, () => window.__ppPick.start()); return { ok: true }; },
     inspectAll: async () => {
       const tab = await api.tabs.get(msg.tabId);
@@ -568,10 +573,10 @@ try {
     if (id === 'savePage') {
       if (!tab) return;
       if (busy) return note(tab, 0, { kind: 'bad', title: 'A capture is already running', lines: ['Wait for it to finish, or click the PageProof icon to stop it.'] });
-      return startCapture(tab);
+      return startCapture(tab, 'menu');
     }
     if (id === 'saveLink') {
-      if (/^https?:\/\//i.test(info.linkUrl || '')) captureUrl(info.linkUrl, tab);
+      if (/^https?:\/\//i.test(info.linkUrl || '')) captureUrl(info.linkUrl, tab, 'menu');
       return;
     }
     if (['inspectImage', 'jpgImage', 'openImage', 'linkImage', 'revGoogle', 'revYandex', 'revBing', 'revAll'].includes(id)) {
@@ -644,7 +649,7 @@ async function pictureLink(item, tab, info) {
 }
 
 // ---------- Capture a link: open it in a new tab, wait for it to load, then capture ----------
-async function captureUrl(url, near) {
+async function captureUrl(url, near, src) {
   if (!/^https?:\/\//i.test(String(url || ''))) return { ok: false, error: 'Only web pages (http or https) can be captured.' };
   if (busy) return { ok: false, error: 'A capture is already running.' };
   const opts = { url, active: true };
@@ -657,7 +662,7 @@ async function captureUrl(url, near) {
     api.tabs.onUpdated.addListener(on);
   });
   await sleep(1500);   // let the page finish drawing
-  startCapture(await api.tabs.get(tab.id));
+  startCapture(await api.tabs.get(tab.id), src);
   return { ok: true };
 }
 
@@ -1059,7 +1064,7 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || sender.id !== api.runtime.id) return false;
   const jobs = {
-    captureUrl: () => captureUrl(msg.url, sender.tab),
+    captureUrl: () => captureUrl(msg.url, sender.tab, msg.src === 'stolen' ? 'stolen' : 'link'),
     ppSearchWin: async () => ({ windowId: await ppSearchWindowBg(), ownId: await ppOwnWindowBg() }),
     fcKeepWake: async () => { await keepAlive(!!msg.show, true); return { ok: true }; },
     fcBgStart: async () => { await keepAlive(false, true); return { ok: true }; },

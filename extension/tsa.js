@@ -120,5 +120,5 @@ const PP_TSA = (() => {
     return out;
   }
 
-  return { stampAll, readReply };
+  return { stampAll, readReply, SERVICES, SPARES };
 })();

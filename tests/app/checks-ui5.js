@@ -16,8 +16,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   const o = await page.evaluate(() => (document.querySelector('#evWaitBar [data-act="capturecopy"]') || { dataset: {} }).dataset.v);
   ok(t.hash === '#library' && o && o === t.firstId, '"Capture the oldest" opens the top (oldest) copy');
   ok(t.rows > 1 && t.solid === 1 && t.ages === t.rows, 'Only the top row has a solid Capture button; every row says how long it has waited');
-  await page.goto(url('app.html#capture')); await page.waitForTimeout(1500);
-  ok(await page.evaluate(() => document.querySelectorAll('.csteps .cstep').length === 4 && !!document.querySelector('.caphero')), 'Capture a page: last-tab card and four picture steps');
+  await page.goto(url('app.html#capture?how=1')); await page.waitForTimeout(1500);
+  ok(await page.evaluate(() => document.querySelectorAll('#ovHow .cpsteps > div').length === 3 && !!document.querySelector('#ovHow .cplast')), 'Overview › How to capture: three picture steps and the last-tab card');
   await page.goto(url('app.html#weekly')); await page.waitForTimeout(1500);
   ok(await page.evaluate(() => document.querySelectorAll('.wtiles .wtile').length === 6 && /last week/.test(document.querySelector('.wtiles').textContent)), 'Weekly: six tiles, each compared with last week');
   await page.goto(url('verify.html')); await page.waitForTimeout(800);
