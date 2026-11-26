@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.86.0** (26 Nov 2026).
+Last updated: version **4.87.0** (26 Nov 2026).
 
 ---
 
@@ -63,6 +63,7 @@ Last updated: version **4.86.0** (26 Nov 2026).
 - **Find a setting.** A box at the top of every Settings page. Type a word, press Enter, and PageProof opens the page and lights up the row. (4.85)
 - **Site lists.** Hidden sites, approved sites, rejected links, stolen-before links and social sites as six tabs, with a calm list that says what each entry covers and who added it. (4.86)
 - **Help and about.** The version with Copy version, the five newest changes, Tutorial, Take the tour, Checking a pack, Run setup again and Keyboard keys. (4.86)
+- **Health.** One page with three tabs: Right now (every light, with what needs you first on top), Stats, and Space used (what takes room and Free up space). (4.87)
 
 ## 3. Look closer at pictures
 
@@ -407,3 +408,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.84 | 26 Nov | Calm look step 17, part 4: Convert files with Open odd files as its second tab, and numbered steps |
 | 4.85 | 26 Nov | Settings redrawn in the calm look (part 1): six pages, General, Searching, Backups and team, Find a setting, menu dot. |
 | 4.86 | 26 Nov | Settings redrawn in the calm look (part 2): Site lists, Help and about. |
+| 4.87 | 26 Nov | Settings redrawn in the calm look (part 3): Health with Right now, Stats and Space used. |
