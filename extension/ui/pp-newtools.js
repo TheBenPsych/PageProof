@@ -1,7 +1,7 @@
 // New tools and tabs (Ben's picks, 2026-11-24):
 //  1. Copies found › Credit search   (#credit)   PP_WATCH credit line search
 //  2. Copies found › Watching        (#watching) PP_WATCH watch list
-//  3. Clients › Registrations        (#regs)     photos with copies but no VA number yet
+//  3. Registrations (inside Clients and photos, ui/pp-clients.js): photos with copies but no VA number yet
 //  5. Site panel and Who's behind this site: names it goes by, brand to company, is it active
 //     (Ben's way of finding the company behind a site; only actively registered companies are pursued)
 const NT = { regTab: 'none', regMore: 200, creditOpen: '' };
@@ -180,41 +180,7 @@ async function ntRegRows() {
   if (changed) await FC.meta.set('regSeen', seen);
   return rows;
 }
-V.regs = async () => {
-  const rows = await ntRegRows();
-  const cut = Date.now() - 30 * 864e5;
-  const tabs = { none: rows.filter(r => r.st === 'none'), app: rows.filter(r => r.st === 'app'), done: rows.filter(r => r.st === 'va' && r.vaAt && Date.parse(r.vaAt) > cut) };
-  const show = (tabs[NT.regTab] || tabs.none).sort((a, b) => b.stolen - a.stolen || b.copies - a.copies || String(b.last).localeCompare(String(a.last)));
-  const hd = head('Clients', 'Registrations', 'Photos that have copies found but no VA registration number yet: only an application number, or nothing at all. Stolen ones are at the top. When a VA number turns up in the photo\'s folder (folder name or Excel file), it moves to Registered lately by itself.',
-    show.length && NT.regTab !== 'done' ? '<button class="btn primary" data-act="regcopy">Copy the list for the registrar</button>' : '');
-  const seg = `<div class="seg" role="group" aria-label="Which photos">${[['none', 'Not registered'], ['app', 'Applied, no VA yet'], ['done', 'Registered lately']].map(([k, l]) => `<button class="${NT.regTab === k ? 'on' : ''}" aria-pressed="${NT.regTab === k}" data-act="regtab" data-v="${k}">${l} (${tabs[k].length})</button>`).join('')}</div>`;
-  const groups = new Map();
-  for (const r of show.slice(0, NT.regMore)) { const k = r.p.client || 'Client unknown'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
-  const line = r => `<tr><td style="min-width:0"><b>${esc(r.p.name)}</b><div class="mono faint" style="font-size:12px;overflow-wrap:anywhere">${esc(r.p.folder || '')}</div></td>
-    <td>${r.stolen ? `<span class="tag bad">${r.stolen} Stolen</span> ` : ''}<span class="tag grey">${plural(r.copies, 'copy', 'copies')}</span></td>
-    <td>${r.st === 'va' ? `<span class="tag ok">${esc(r.r.va)} ✓</span>` : r.st === 'app' ? `<span class="tag warn">Applied ${esc(r.r.app)}</span>` : '<span class="tag grey">No number</span>'}</td>
-    <td>${r.st === 'va' ? '' : `<input class="sinput" style="width:170px" placeholder="Add the number" data-act="regset" data-v="${esc(r.p.folder || '')}" aria-label="Registration number for this folder">`}</td>
-    <td><a class="btn ghost sm" href="#found?photo=${encodeURIComponent(r.p.id)}">Copies</a></td></tr>`;
-  const body = show.length ? [...groups].map(([cl, rs]) => `<section class="card pad" style="display:flex;flex-direction:column;gap:8px"><div class="row"><h2 style="margin:0">${esc(cl)}</h2><span class="tag grey" style="margin-left:auto">${plural(rs.length, 'photo')}</span></div><div style="overflow-x:auto"><table class="ntt">${rs.map(line).join('')}</table></div></section>`).join('')
-    + (show.length > NT.regMore ? `<button class="btn" data-act="regmore">Show ${Math.min(200, show.length - NT.regMore)} more</button>` : '')
-    : `<section class="card pad"><p class="muted" style="margin:0">${NT.regTab === 'done' ? 'No photo with copies got its VA number in the last 30 days.' : 'Nothing here: every photo with copies found has a number.'}</p></section>`;
-  return `${hd}<div class="row" style="margin-bottom:4px">${seg}</div>
-  <p class="faint" style="margin:0;font-size:12.5px">A number typed here sticks for the whole folder, like "Add the number" in a copy's Claim tab.</p>${body}`;
-};
-Object.assign(ACTS, {
-  regtab: v => { NT.regTab = v; NT.regMore = 200; render(true); },
-  regmore: () => { NT.regMore += 200; render(true); },
-  regset: async (v, el) => {
-    if (!v) return toast('This photo has no folder, so the number can\'t be saved for it.');
-    if (!(await FC.setReg(v, el.value || ''))) return toast('That doesn\'t look like a VA number or a 1-… application number.');
-    toast('Saved for the whole folder.'); render(true);
-  },
-  regcopy: async () => {
-    const rows = (await ntRegRows()).filter(r => r.st === (NT.regTab === 'app' ? 'app' : 'none')).sort((a, b) => b.stolen - a.stolen || b.copies - a.copies);
-    const text = ['Client\tPhoto\tFolder\tCopies found\tStolen\tApplication number', ...rows.map(r => [r.p.client || '', r.p.name, r.p.folder || '', r.copies, r.stolen, (r.r && r.r.app) || ''].join('\t'))].join('\n');
-    ntCopy(text, plural(rows.length, 'photo') + ' copied. Paste it into an email or a spreadsheet');
-  },
-});
+// The Registrations panel is drawn in ui/pp-clients.js (calm look): it lives inside Clients and photos.
 
 
 // ================================================================ 5. Find the company (Ben's way)

@@ -419,51 +419,7 @@ const AV_COLS = ['#2E6BE6', '#7C3AED', '#0F8A6A', '#C2410C', '#BE185D', '#0E7490
 const avColor = n => { let h = 0; for (const ch of String(n)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return AV_COLS[h % AV_COLS.length]; };
 const initials = n => String(n || '?').replace(/^(the)\s+/i, '').split(/[\s&,.\-_/]+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
 const avatar = (n, size) => `<span class="cav" style="background:${avColor(n)}${size ? `;width:${size}px;height:${size}px;font-size:${Math.round(size * 0.38)}px` : ''}" aria-hidden="true">${esc(initials(n))}</span>`;
-V.clients = async () => {
-  const clients = await FC.DB.all('clients');
-  const copies = await FC.allCopies();
-  const nNew = {}, nAll = {};
-  for (const c of copies) { const k = c.client || ''; if (c.status === 'new') nNew[k] = (nNew[k] || 0) + 1; if (c.status !== 'removed') nAll[k] = (nAll[k] || 0) + 1; }
-  const q = state.cQ.toLowerCase();
-  const tabs = { All: () => true, Priority: c => c.priority, 'With new copies': c => nNew[c.name], 'Not searching': c => c.searching !== true };
-  const list = clients.filter(tabs[state.cTab] || tabs.All).filter(c => !q || c.name.toLowerCase().includes(q))
-    .sort((a, b) => state.cSort === 'new' ? (nNew[b.name] || 0) - (nNew[a.name] || 0) : state.cSort === 'photos' ? (b.photos || 0) - (a.photos || 0) : (b.priority - a.priority) || a.name.localeCompare(b.name));
-  const sc = await FC.meta.get('scan');
-  const nSkipped = (await FC.skipped()).length;
-  const F1 = ((await FC.coverage().catch(() => null)) || {}).first || {}, once = (F1.clients || {});
-  // Speed meter (Ben's pick): this week's speed and when each client is searched once.
-  const spC = await FC.speed();
-  const rateC = firstPerDay(await FC.keep(), await ppHardware(), F1.week || 0, spC, (await api.storage.local.get('fcLadder')).fcLadder || null);
-  const doneBy = Object.fromEntries(firstClientRows(F1).map(r => [r.name, r.left <= 0 ? '' : firstDoneBy(r.need, rateC)]));
-  const allBy = F1.never ? firstDoneBy(F1.never, rateC) : '';
-  return `${head('Find copies', 'Clients and photos', 'Every client folder in your shared Google Drive. Pick which clients you search for, and star the ones that matter most.', `${nSkipped ? `<a class="btn" href="#skipped">Skipped photos <span class="pill-n" style="background:var(--warn);margin:0">${nSkipped > 999 ? '999+' : nSkipped}</span></a>` : ''}<button class="btn" data-act="cscan"${FC.SCAN.busy ? ' disabled data-why="PageProof is already looking for new photos. Wait for it to finish."' : ''}>${ic('refresh', 16)} ${FC.SCAN.busy ? 'Looking…' : 'Look for new photos'}</button><a class="btn" href="#connect" data-act="csreset">Change folder</a>`)}
-  ${await driveBanner()}
-  ${state.scanText ? `<div class="scanbar"><span class="spin"></span>${esc(state.scanText)}</div>` : sc ? `<p class="faint" style="margin:0;font-size:13px">Last looked ${fmtDate(sc.at)}${sc.added ? ' · ' + sc.added + ' new photos' : ''}. PageProof looks in this and last quarter's folders every hour, and every folder once a week on a weekday (8 AM to 6 PM).</p>` : ''}
-  ${F1.total ? `<div class="row" id="clientSpeed" style="gap:10px;font-size:14px"><span class="tag ${spC.days ? 'ok' : 'grey'}">${spC.days ? Math.round(spC.full).toLocaleString() + ' photos a day this week' : 'Speed shows after a day of searching'}</span>${spC.days && spC.quick ? `<span class="faint">+ ${Math.round(spC.quick).toLocaleString()} quick looks a day</span>` : ''}${allBy ? `<span style="margin-left:auto">Every photo searched once <b>${esc(allBy.replace('~ ', 'by about '))}</b></span>` : ''}</div>` : ''}
-  <section class="card" style="overflow:hidden">
-    <div class="toolbar">
-      <div class="tabs" role="tablist">${Object.keys(tabs).map(t => `<button role="tab" aria-selected="${state.cTab === t}" class="${state.cTab === t ? 'on' : ''}" data-act="ctab" data-v="${t}">${t} <span>${clients.filter(tabs[t]).length}</span></button>`).join('')}</div>
-      <div class="row" style="gap:8px;margin-left:auto"><input type="search" id="cQ" class="chip" style="min-height:36px;padding:0 10px;font-size:14px" placeholder="Search clients" value="${esc(state.cQ)}" aria-label="Search clients">
-      <label class="mini">Sort<select data-act="csort">${[['name', 'Priority, then A–Z'], ['new', 'Most new copies'], ['photos', 'Most photos']].map(([k, l]) => `<option value="${k}" ${state.cSort === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
-    </div>
-    <div class="scroll"><table class="ctable"><thead><tr><th style="width:34px"></th><th>Client</th><th class="r">Photos</th><th style="width:170px">Searched once</th><th class="r">Copies</th><th>New</th><th>Searching</th><th style="width:28px"></th></tr></thead><tbody>
-    ${list.map(c => { const [d, t] = once[c.name] || [0, 0], pct = t ? Math.floor(d / t * 100) : 0; return `<tr class="rowlink" data-act="cphotos" data-v="${esc(c.name)}" title="Open ${esc(c.name)}'s photos"><td><input type="checkbox" data-act="cpick" data-v="${esc(c.name)}" ${state.cPicked.includes(c.name) ? 'checked' : ''} aria-label="Pick ${esc(c.name)}"></td>
-      <td><div class="clname">${avatar(c.name)}<button class="starplain${c.priority ? ' on' : ''}" data-act="cstar" data-v="${esc(c.name)}" aria-pressed="${!!c.priority}" aria-label="Priority client" title="${c.priority ? 'Priority client: searched right after High priority photos' : 'Make a priority client'}">★</button><a class="cname" href="#photos" data-act="cphotos" data-v="${esc(c.name)}">${esc(c.name)}</a>${c.extra ? ' <span class="tag grey" style="font-size:11.5px">Own folder</span>' : ''}</div></td>
-      <td class="num r">${(c.photos || 0).toLocaleString()}</td>
-      <td>${t ? `<div class="oncebar" title="${d.toLocaleString()} of ${t.toLocaleString()} photos searched at least once"><span class="bar"><i style="width:${pct}%"${pct >= 100 ? ' class="done"' : ''}></i></span><b class="num">${pct}%</b></div>${doneBy[c.name] ? `<span class="cdone">done by ${esc(doneBy[c.name].replace('~ ', ''))}</span>` : ''}` : '<span class="faint">—</span>'}</td>
-      <td class="num r">${nAll[c.name] || 0}</td>
-      <td>${nNew[c.name] ? `<a class="tag copy" href="#found" data-act="cfound" data-v="${esc(c.name)}">${nNew[c.name]} new</a>` : '<span class="faint">—</span>'}</td>
-      <td><button class="swt${c.searching === true ? ' on' : ''}" data-act="csearch" data-v="${esc(c.name)}" role="switch" aria-checked="${c.searching === true}" aria-label="Search for ${esc(c.name)}"><i></i><span>${c.searching === true ? 'On' : 'Off'}</span></button></td>
-      <td class="chev" aria-hidden="true">›</td></tr>`; }).join('') || '<tr><td colspan="8" class="muted" style="padding:24px;text-align:center">No clients here.</td></tr>'}
-    </tbody></table></div>
-  </section>
-  ${state.cPicked.length ? `<div class="bulk"><b>${state.cPicked.length} picked</b><button class="btn" style="margin-left:auto" data-act="cbulk" data-v="start">Start searching</button><button class="btn" data-act="cbulk" data-v="stop">Stop searching</button><button class="btn" data-act="cbulk" data-v="pri">★ Make priority</button><button class="btn" data-act="cbulk" data-v="norm">Make normal</button><button class="btn" data-act="cbulk" data-v="clear">Clear</button></div>` : ''}`;
-};
-V.clients.guard = V.found.guard;
-V.clients.after = () => {
-  const i = document.getElementById('cQ');
-  if (i) i.oninput = () => { state.cQ = i.value; clearTimeout(i._t); i._t = setTimeout(() => { render(true).then(() => { const j = document.getElementById('cQ'); if (j) { j.focus(); j.setSelectionRange(j.value.length, j.value.length); } }); }, 250); };
-};
+// The Clients and photos page itself (V.clients) is drawn in ui/pp-clients.js (calm look).
 async function clientUndo(names, ch, label) {
   const before = [];
   for (const n of names) { const c = await FC.DB.get('clients', n); if (c) before.push([n, { searching: c.searching, priority: c.priority }]); }
@@ -506,61 +462,7 @@ Object.assign(ACTS, {
 let PH = null;
 api.storage.onChanged.addListener(ch => { if (ch.fcChanged || ch.fcQueueDirty) PH = null; });
 const phFolder = p => String(p.year || 'No year') + ' ' + (p.quarter ? 'Q' + p.quarter : 'Other');
-V.photos = async () => {
-  const clients = (await FC.DB.all('clients')).sort((a, b) => a.name.localeCompare(b.name));
-  if (!state.phClient || !clients.some(c => c.name === state.phClient)) state.phClient = (clients.find(c => c.searching === true) || clients[0] || {}).name || '';
-  const cl = clients.find(c => c.name === state.phClient);
-  if (!PH || PH.client !== state.phClient) PH = { client: state.phClient, list: (await FC.DB.by('photos', 'client', state.phClient)).filter(p => !p.gone) };
-  const all = PH.list;
-  const q = state.phQ.toLowerCase(), fy = state.phYear || '';
-  // A folder on the left shows only that year (or that quarter).
-  const inFolder = p => !fy || (fy.includes(' ') ? phFolder(p) === fy : String(p.year || 'No year') === fy);
-  const list = all.filter(p => inFolder(p) && (!state.phStop || p.stopped) && (!q || p.name.toLowerCase().includes(q) || (p.rel || '').toLowerCase().includes(q))).sort((a, b) => (b.flag === 'hi') - (a.flag === 'hi') || (b.order || 0) - (a.order || 0) || a.name.localeCompare(b.name));
-  const doubles = all.filter(p => p.doubleOf);
-  const stopped = all.filter(p => p.stopped).length;
-  const show = list.slice(0, state.phMore);
-  const regs = new Map();
-  for (const p of show) if (!regs.has(p.folder)) regs.set(p.folder, await FC.regFor(p));
-  // The year › quarter tree
-  const tree = {};
-  for (const p of all) { const y = p.year || 'No year', qq = p.quarter ? 'Q' + p.quarter : 'Other'; (tree[y] = tree[y] || {})[qq] = ((tree[y] || {})[qq] || 0) + 1; }
-  const due = p => { const pl = FC.plan(p, cl); return pl.due ? (pl.tier === 0 ? 'Next' : 'Due') : ''; };
-  const card = p => {
-    const r = regs.get(p.folder);
-    return `<div class="pcard${state.phPicked.includes(p.id) ? ' on' : ''}">
-      <label class="tick"><input type="checkbox" data-act="phpick" data-v="${esc(p.id)}" ${state.phPicked.includes(p.id) ? 'checked' : ''} aria-label="Pick ${esc(p.name)}"></label>
-      <div class="frame ours ptile${p.thumb || p.th ? '' : ' noimg'}" style="aspect-ratio:3/2;border-radius:8px"><img data-lazy="${esc(p.id)}" src="${p.thumb ? safeImg(p.thumb) : p.th ? (FC.pics.seen(p.id) || lazyPic(p)) : 'icons/icon48.png'}" alt="" loading="lazy" style="object-fit:${p.thumb || p.th ? 'cover' : 'scale-down'}"><span class="nolab">Picture not loaded yet</span>
-        <span class="cflags"><button class="flagbtn${p.flag === 'hi' ? ' on hi' : ''}" data-act="phflag" data-v="${esc(p.id)}|hi" aria-pressed="${p.flag === 'hi'}" aria-label="High priority" title="High priority: searched next, then every 3 days">⚑</button><button class="flagbtn${p.flag === 'pop' ? ' on pop' : ''}" data-act="phflag" data-v="${esc(p.id)}|pop" aria-pressed="${p.flag === 'pop'}" aria-label="Popular" title="Popular: searched every 7 days">★</button></span></div>
-      <b style="font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.name)}">${esc(p.name)}</b>
-      <span class="faint" style="font-size:12px">${p.year || ''}${p.quarter ? ' Q' + p.quarter : ''}${p.searches ? ' · searched ' + plural(p.searches, 'time') : ' · not searched yet'}${p.copies ? ' · ' + plural(p.copies, 'copy', 'copies') : ''}</span>
-      <div class="tdots">${r && r.va ? `<span class="td ok" title="Registered: ${esc(r.va)}">${esc(r.va)}</span>` : r && r.app ? `<span class="td warn" title="Registration applied for">Applied</span>` : '<span class="td grey" title="No registration number found">No number</span>'}${p.doubleOf ? '<span class="td grey" title="Looks the same as another photo of this client">Double</span>' : ''}${FC.isPool(p.name) ? '<span class="td warn" title="POOL: shared with other papers, so it is never searched. Rename it without POOL to search it.">POOL</span>' : ''}${p.empty >= 5 ? `<span class="td grey" title="${p.empty} searches found nothing: searched ${p.empty >= 10 ? 'every 3 months' : 'monthly'}">Quiet</span>` : ''}${due(p) ? `<span class="td copy" title="Due for a search">${due(p)}</span>` : ''}${p.stopped ? `<span class="td grey" title="You stopped searching this photo on ${esc(new Date(p.stopped).toLocaleDateString())}. Keep searching and Today's 50 skip it. Its copies found so far stay.">Not searched</span><button class="td btnlike" data-act="phstop" data-v="${esc(p.id)}|0" title="Keep searching and Today's 50 search this photo again">Search again</button>` : ''}${p.doubleOf ? `<button class="td btnlike" data-act="phnotdouble" data-v="${esc(p.id)}" title="These are different photos">Not the same</button>` : ''}</div>
-    </div>`;
-  };
-  return `<div class="head clhead"><div class="l"><div class="eyebrow">Clients and photos</div><div class="row" style="gap:14px;flex-wrap:nowrap;min-width:0">${avatar(state.phClient || '?', 52)}<div style="min-width:0">
-      <h1 class="clsel"><select data-act="phclient" aria-label="Client">${clients.map(c => `<option ${c.name === state.phClient ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></h1>
-      ${cl ? `<p class="lede" style="margin:2px 0 0">${all.length.toLocaleString()} photos · ${cl.searching === true ? '<span style="color:var(--ok);font-weight:600">Searching</span>' : 'Not searching'}${cl.priority ? ' · <span style="color:var(--warn);font-weight:600">★ Priority</span>' : ''}</p>` : ''}</div></div></div>
-    <div class="row headact"><span class="faint" style="font-size:12.5px;max-width:260px">⚑ High priority: searched next, then every 3 days. ★ Popular: every 7 days.</span><a class="btn" href="#clients">All clients</a></div></div>
-  ${await driveBanner()}
-  <div class="row" style="gap:10px">
-    <input type="search" id="phQ" class="chip" style="min-height:36px;padding:0 10px;font-size:14px;margin-left:auto" placeholder="Find a photo by name" value="${esc(state.phQ)}" aria-label="Find a photo by name">
-  </div>
-  ${doubles.length ? `<div class="banner info"><span style="flex:1"><b>${plural(doubles.length, 'photo looks', 'photos look')} the same as another of this client's photos</b><br><span class="muted" style="font-size:13.5px">Doubles are searched once, and every copy is checked against both. If two are really different photos, click "Not the same".</span></span></div>` : ''}
-  ${stopped || state.phStop ? `<div class="banner info"><span style="flex:1"><b>${plural(stopped, 'photo is', 'photos are')} not searched any more</b><br><span class="muted" style="font-size:13.5px">Someone chose "Stop searching this photo". Keep searching and Today's 50 skip ${stopped === 1 ? 'it' : 'them'}. Click "Search again" on a photo to turn it back on.</span></span><button class="btn" data-act="phstopshow">${state.phStop ? 'Show every photo' : 'Show ' + (stopped === 1 ? 'it' : 'them')}</button></div>` : ''}
-  <div class="split">
-    <aside class="card pad" style="flex:0 1 220px;display:flex;flex-direction:column;gap:6px;align-self:flex-start" aria-label="Folders">
-      <b style="font-size:14px">Folders</b>
-      ${Object.keys(tree).length ? `<button class="btn ghost sm" data-act="phyear" data-v="" aria-pressed="${!fy}" style="width:100%;justify-content:flex-start${!fy ? ';background:var(--accent-soft);color:var(--accent)' : ''}">All folders <span class="faint" style="margin-left:auto">${all.length.toLocaleString()}</span></button>` : ''}
-      ${Object.keys(tree).sort((a, b) => String(b).localeCompare(String(a))).map(y => `<div><button class="btn ghost sm" data-act="phyear" data-v="${y}" aria-pressed="${fy === String(y)}" style="width:100%;justify-content:flex-start${fy === String(y) ? ';background:var(--accent-soft);color:var(--accent)' : ''}">${y} <span class="faint" style="margin-left:auto">${Object.values(tree[y]).reduce((a, b) => a + b, 0).toLocaleString()}</span></button>${Object.entries(tree[y]).sort().map(([qq, n]) => `<button class="btn ghost sm" data-act="phyear" data-v="${y} ${qq}" aria-pressed="${fy === y + ' ' + qq}" style="width:100%;justify-content:flex-start;padding-left:22px;font-weight:400${fy === y + ' ' + qq ? ';background:var(--accent-soft);color:var(--accent);font-weight:600' : ''}">${qq} <span class="faint" style="margin-left:auto">${n.toLocaleString()}</span></button>`).join('')}</div>`).join('') || '<span class="faint" style="font-size:13px">No photos read yet.</span>'}
-    </aside>
-    <div style="flex:4 1 520px;min-width:0;display:flex;flex-direction:column;gap:14px">
-      ${fy || q ? `<div class="row" style="gap:8px"><span class="muted" style="font-size:13.5px">Showing ${list.length.toLocaleString()} of ${all.length.toLocaleString()} photos</span>${fy ? `<button class="chip" style="cursor:pointer" data-act="phyear" data-v="">${esc(fy)} ✕</button>` : ''}</div>` : ''}
-      <div class="pgrid">${show.map(card).join('') || `<p class="muted">${fy || q ? 'No photos match.' : 'No photos found. Try "Look for new photos" on Clients and photos.'}</p>`}</div>
-      ${list.length > show.length ? `<button class="btn" style="align-self:center" data-act="phmore">Show 50 more (${(list.length - show.length).toLocaleString()} not shown)</button>` : ''}
-    </div>
-  </div>
-  ${state.phPicked.length ? `<div class="bulk"><b>${state.phPicked.length} picked</b><button class="btn primary" style="margin-left:auto" data-act="phsearch">Search now</button><button class="btn" data-act="phbulkflag" data-v="hi">⚑ High priority</button><button class="btn" data-act="phbulkflag" data-v="pop">★ Popular</button><button class="btn" data-act="phbulkflag" data-v="">No flag</button><button class="btn" data-act="phstop" data-v="|1">Stop searching</button><button class="btn" data-act="phstop" data-v="|0">Search again</button><button class="btn" data-act="phclear">Clear</button></div>` : ''}`;
-};
-V.photos.guard = V.found.guard;
+// One client's page (V.photos) is drawn in ui/pp-clients.js (calm look).
 // Rest the mouse on a photo for a moment: a bigger preview pops up beside it.
 function hoverPreviews() {
   let tip = document.getElementById('hovpic'), timer = 0;
@@ -577,12 +479,6 @@ function hoverPreviews() {
   });
   window.addEventListener('scroll', hide, { passive: true, once: true });
 }
-V.photos.after = () => {
-  hoverPreviews();
-  const i = document.getElementById('phQ');
-  if (i) i.oninput = () => { state.phQ = i.value; state.phMore = 50; clearTimeout(i._t); i._t = setTimeout(() => render(true).then(() => { const j = document.getElementById('phQ'); if (j) { j.focus(); j.setSelectionRange(j.value.length, j.value.length); } }), 300); };
-  lazyThumbs();
-};
 // Small pictures are read from Drive as they scroll into view, and kept (with a "look"
 // fingerprint, so doubles can be found).
 let THUMB_OBS = null;

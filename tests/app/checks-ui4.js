@@ -12,13 +12,13 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   page.on('pageerror', e => { fails++; console.log('PAGEERROR', String(e).slice(0, 300)); });
   await page.goto(url('app.html#help')); await page.waitForTimeout(1000); await seed(page);
   await page.goto(url('app.html#clients')); await page.waitForTimeout(2500);
-  const c = await page.evaluate(() => ({ av: document.querySelectorAll('.ctable .cav').length, star: document.querySelectorAll('.ctable .starplain').length, rows: document.querySelectorAll('.ctable tr.rowlink').length, old: document.querySelectorAll('.ctable .starbtn, .ctable a.btn').length, name: (document.querySelectorAll('.ctable tr.rowlink .cname')[1] || {}).textContent }));
+  const c = await page.evaluate(() => ({ av: document.querySelectorAll('#clientList .clr2 .cav').length, star: document.querySelectorAll('#clientList .clr2 .cpri').length, rows: document.querySelectorAll('#clientList .clr2').length, old: document.querySelectorAll('#clientList .starbtn, #clientList a.btn, .ctable').length, name: (document.querySelectorAll('#clientList .clr2')[1] || { dataset: {} }).dataset.name }));
   ok(c.av > 0 && c.av === c.rows && c.star === c.rows && !c.old, 'Clients: initials badge and plain star on every row, no boxed buttons');
-  await page.click('.ctable tr.rowlink:nth-child(2) td.num'); await page.waitForTimeout(1500);
+  await page.locator('#clientList .clr2').nth(1).locator('.r.num').first().click(); await page.waitForTimeout(1500);
   ok(await page.evaluate(n => location.hash.startsWith('#photos') && state.phClient === n, c.name), 'Clicking a row opens that client\'s photos (' + c.name + ')');
-  const p = await page.evaluate(() => ({ head: !!document.querySelector('.clhead select[data-act="phclient"]'), av: !!document.querySelector('.clhead .cav'), corner: document.querySelectorAll('.pcard .ptile .cflags .flagbtn').length, cards: document.querySelectorAll('.pcard').length, dots: document.querySelectorAll('.pcard .tdots .td').length }));
+  const p = await page.evaluate(() => ({ head: !!document.querySelector('.clhead select[data-act="phclient"]'), av: !!document.querySelector('.clhead .cav'), corner: document.querySelectorAll('.pcard .ptile .cflags .flagbtn').length, cards: document.querySelectorAll('.pcard').length, dots: document.querySelectorAll('.pcard .tdots .rgc').length }));
   ok(p.head && p.av, 'Photos page: the heading is the client, with a badge and a switch');
-  ok(p.cards > 0 && p.corner === p.cards * 2 && p.dots >= p.cards, 'Photos: ⚑ and ★ on each picture\'s corner, tags as dots');
+  ok(p.cards > 0 && p.corner === p.cards * 2 && p.dots >= p.cards, 'Photos: ⚑ and ★ on each picture\'s corner, the registration as a light');
   await page.goto(url('app.html#owners')); await page.waitForSelector('#ownerSites', { timeout: 60000 });
   ok(await page.evaluate(() => document.querySelectorAll('#ownerWhy .owhy .okc').length > 0 && document.querySelectorAll('#ownerSites .osr .osl').length > 0), 'Site owners: green ticks and letter badges on their sites');
   await ctx.close();

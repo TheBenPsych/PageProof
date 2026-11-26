@@ -72,8 +72,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(await page.evaluate(async c => !(await FC.DB.get('photos', c.photo)).stopped && (await FC.DB.get('copies', c.id)).status === 'new', c), 'Search again turns it back on and brings the match back to New');
   // Bulk on the photos page
   await page.evaluate(() => { state.phStop = false; return render(); }); await page.waitForTimeout(600);
-  await page.locator('.pcard [data-act="phpick"]').first().check(); await page.waitForTimeout(400);
-  await page.locator('.bulk [data-act="phstop"][data-v="|1"]').click(); await page.waitForTimeout(500);
+  await page.locator('.pcard [data-act="phpick"]').first().check({ force: true }); await page.waitForTimeout(400);
+  await page.locator('#photoBulk [data-act="phstop"][data-v="|1"]').click(); await page.waitForTimeout(500);
   await page.locator('dialog.stopask .stopok').check(); await page.locator('dialog.stopask .stopgo').click(); await page.waitForTimeout(900);
   ok(await page.evaluate(async n => (await FC.DB.by('photos', 'client', n)).filter(p => p.stopped).length === 1, c.client), 'Bulk Stop searching stops the picked photo');
   // One at a time
