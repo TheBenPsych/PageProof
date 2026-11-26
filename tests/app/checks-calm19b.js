@@ -23,9 +23,14 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   });
   ok(a.bg === 'rgb(0, 95, 184)', 'Save evidence pack is blue: ' + a.bg);
   ok(a.one === 'Or just one part' && a.cols === 4 && a.tiles.join('|') === 'Copy|Mark up|PDF|HTML' && new Set(a.tops).size === 1, 'Copy, Mark up, PDF and HTML sit in one row under "Or just one part": ' + JSON.stringify(a));
-  // The test computer can't reach the timestamp services, so none answers.
-  const t = await v.evaluate(() => { const b = document.getElementById('tsBar'); return { shown: !b.hidden, txt: b.innerText, li: b.querySelectorAll('details li').length, open: b.querySelector('details').open, status: document.getElementById('status').textContent, proof: document.getElementById('pfStamp').className }; });
-  ok(t.proof === 'bad' && t.shown && /No trusted timestamp could be added/.test(t.txt) && /Everything else is saved\. For a timestamp, capture the page again in a minute\./.test(t.txt) && !t.open && t.li >= 3, 'no timestamp shows an amber bar in plain words, with each service folded: ' + JSON.stringify({ ...t, txt: t.txt.slice(0, 160) }));
+  // Whether timestamp services answer depends on the test computer's network, so check the bar
+  // matches what happened, then show it with five services that didn't answer.
+  await v.waitForFunction(() => document.getElementById('pfStamp').className !== 'wait', null, { timeout: 60000 }).catch(() => {});
+  const real = await v.evaluate(() => ({ proof: document.getElementById('pfStamp').className, shown: !document.getElementById('tsBar').hidden }));
+  ok(real.shown === (real.proof === 'bad'), 'the bar shows only when no timestamp came: ' + JSON.stringify(real));
+  await v.evaluate(() => tsBar(['A', 'B', 'C', 'D', 'E'].map(n => ({ service: n, error: 'no answer after 3 tries' }))));
+  const t = await v.evaluate(() => { const b = document.getElementById('tsBar'); return { shown: !b.hidden, txt: b.innerText, li: b.querySelectorAll('details li').length, open: b.querySelector('details').open, status: document.getElementById('status').textContent }; });
+  ok(t.shown && /No trusted timestamp could be added/.test(t.txt) && /None of the 5 timestamp services answered/.test(t.txt) && /Everything else is saved\. For a timestamp, capture the page again in a minute\./.test(t.txt) && !t.open && t.li === 5, 'no timestamp shows an amber bar in plain words, with each service folded: ' + JSON.stringify({ ...t, txt: t.txt.slice(0, 200) }));
   ok(!/No trusted timestamp could be added/.test(t.status), 'the blue status line no longer repeats it');
   const z = await v.evaluate(() => { const b = document.getElementById('zoomBar'); return { shown: !b.hidden, txt: b.innerText, fit: document.getElementById('zFit').classList.contains('on') }; });
   ok(z.shown && z.fit && /Fit the window/.test(z.txt) && /Real size/.test(z.txt) && /1 section · [\d,]+ × [\d,]+ px/.test(z.txt), 'the preview has Fit the window / Real size and the size: ' + z.txt.replace(/\n/g, ' '));
