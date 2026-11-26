@@ -66,7 +66,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(/Keep searching: on time and pauses/.test(txt) && /Google Drive speed/.test(txt) && /Photos covered/.test(txt) && /Computer strain/.test(txt) && /Post check, account reader/.test(txt) && /Save stats for Claude/.test(txt), 'and the rest of them');
   ok(/of Bing's links could not be checked in the last 3 days/.test(txt), 'A red alert says most of Bing\'s links could not be checked');
   ok(await page.$('.st-alert.bad') !== null, 'It shows in red at the top');
-  ok(await page.evaluate(() => [...document.querySelectorAll('.side .subs a')].some(a => a.getAttribute('href') === '#stats')), 'Settings has How PageProof is doing in the menu');
+  ok(await page.evaluate(() => [...document.querySelectorAll('.side .subs a')].some(a => a.getAttribute('href') === '#health' && a.classList.contains('on'))), 'The stats page lights up Health in the Settings menu');
   await page.click('[data-act="strange"][data-v="30"]'); await page.waitForTimeout(1500);
   ok(await page.evaluate(() => state.stRange === '30' && document.querySelector('.st-range .on').textContent === '30 days'), 'The 30 days switch works');
 

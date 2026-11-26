@@ -457,25 +457,6 @@ async function libCsv() {
 }
 
 // =====================================================================================
-// Toolbar
-// =====================================================================================
-V.browser = async () => `${head('In your browser', 'Toolbar', 'Keep PageProof one click away on every website.')}
-  <div class="grid g2">
-    <section class="card pad" style="display:flex;flex-direction:column;gap:10px"><h2>1. Pin the icon</h2>
-      <p class="muted" style="margin:0">Click the jigsaw piece ${ic('files', 14)} next to the address bar, then the pin beside <b>PageProof</b>. The icon then stays in the toolbar.</p>
-      <p class="muted" style="margin:0">Click the icon for the toolbar menu: <b>Capture this page</b>, the photos on the page, and <b>Open full PageProof</b>.</p></section>
-    <section class="card pad" style="display:flex;flex-direction:column;gap:10px"><h2>Keyboard shortcut</h2>
-      <p class="muted" style="margin:0"><span class="kbd" id="shortcut2">Alt+Shift+P</span> captures the page you're on straight away.</p>
-      <button class="btn" data-act="shortcuts" style="align-self:flex-start">Change the shortcut</button></section>
-    <section class="card pad" style="display:flex;flex-direction:column;gap:10px"><h2>Right-click menu</h2>
-      <p class="muted" style="margin:0">Right-click a photo, the page or a link and look for <b>PageProof</b>:</p>
-      <ul class="hwlist"><li><b>On a photo:</b> Inspect this photo, Find copies of it (Google Lens, Yandex, Bing or all three), Save biggest copy, Open biggest copy in a tab</li><li><b>Anywhere on the page:</b> Capture this page</li><li><b>On a link:</b> Capture the linked page</li></ul></section>
-  </div>`;
-V.browser.after = async () => {
-  try { const c = (await api.commands.getAll()).find(x => x.name === 'capture-page'); if (c && c.shortcut) document.getElementById('shortcut2').textContent = c.shortcut; } catch (e) { /* none */ }
-};
-
-// =====================================================================================
 // Settings
 // =====================================================================================
 // Text size: the browser's own zoom, set for every PageProof page at once (the browser keeps it
@@ -492,89 +473,11 @@ ACTS.textsize = async v => {
   catch (e) { toast('Could not change the size here. Hold Ctrl and press + instead.'); }
   render(true);
 };
-// UI overhaul batch 7: Settings in sections with a small index on the left, one setting per line
-// (what it is on the left, the switch or button on the right), and switches for every on/off.
-const sLine = (title, note, ctl, id) => `<div class="sline"${id ? ` id="${id}"` : ''}><div class="sl-t"><b>${title}</b>${note ? `<span>${note}</span>` : ''}</div><div class="sl-c">${ctl}</div></div>`;
-const sSwitch = (attrs, on, label) => `<label class="switch"><input type="checkbox" ${attrs} ${on ? 'checked' : ''} aria-label="${esc(label)}"><span></span></label>`;
-const S_SECTIONS = [['you', 'You'], ['look', 'Look'], ['capture', 'Capturing'], ['search', 'Searching'], ['backup', 'Backups and team'], ['lists', 'Lists'], ['help', 'Help']];
-V.settings = async () => {
-  const [name, hw, docs] = [await getName(), await ppHardware(), await RS_DOCS.state()];
-  await RS_LISTS.load();
-  const zoomKey = await ppZoomKey();
-  const st = await api.storage.local.get(['ppPopups', 'ppAcctRead', 'fcPageAuto']);
-  const pops = st.ppPopups !== false, acct = st.ppAcctRead !== false, pageAuto = st.fcPageAuto !== false;
-  const place = (await api.storage.local.get('ppSearchPlace').catch(() => ({}))).ppSearchPlace === 'pinned' ? 'pinned' : 'window';   // 4.57
-  const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
-  const sec = (id, title, lines) => `<section class="card ssec" id="ss-${id}"><h2>${title}</h2>${lines}</section>`;
-  const docsCtl = docs === 'granted' ? `<span class="tag ok">${ic('check', 13, 3)} Connected</span><button class="btn" data-act="docschoose">Change folder</button>`
-    : docs === 'prompt' ? `<span class="tag warn">Needs one click</span><button class="btn primary" data-act="docsallow">Allow</button>`
-    : `<span class="tag warn">Not set up</span><button class="btn primary" data-act="docschoose">Set it up</button>`;
-  return `${head('Settings', 'Settings', 'These apply to everything in PageProof and are saved on this computer.')}
-  <div class="sgrid">
-    <nav class="sindex" aria-label="Settings sections">${S_SECTIONS.map(([id, t], i) => `<button class="${i ? '' : 'on'}" data-act="sjump" data-v="${id}">${t}</button>`).join('')}</nav>
-    <div class="ssecs">
-    ${sec('you', 'You',
-      sLine('Your name', 'Printed as "Collected by" on every pack and report.', `<input id="sName" class="sinput" value="${esc(name)}" placeholder="For example, Ben" aria-label="Your name">`) +
-      sLine('Version', 'PageProof ' + VERSION, '<a class="btn" href="#whatsnew">What\'s new</a><button class="btn" data-act="tour">Take the tour again</button>'))}
-    ${sec('look', 'Look',
-      sLine('Text size', 'Makes words, buttons and pictures bigger. Ctrl and + or − also works.', `<div class="seg" role="group" aria-label="Text size">${TEXT_SIZES.map(([k, l, z]) => `<button class="${zoomKey === k ? 'on' : ''}" aria-pressed="${zoomKey === k}" data-act="textsize" data-v="${k}"><span style="font-size:${Math.round(14 * z)}px">${l}</span></button>`).join('')}</div>`, 'textsize') +
-      sLine('Colours', 'Light or dark. The moon button at the top does the same.', `<div class="seg" role="group" aria-label="Colours">${[['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button class="${theme === k ? 'on' : ''}" aria-pressed="${theme === k}" data-act="themeset" data-v="${k}">${l}</button>`).join('')}</div>`, 'themeSet'))}
-    ${sec('capture', 'Capturing',
-      sLine('Close pop-ups before the first screen', 'Cookie notices, newsletter and "open in the app" boxes. PageProof presses the site\'s own close button and the capture log says what it closed. Log-in walls are left alone.', sSwitch('id="sPopups"', pops, 'Close pop-ups'), 'popSet'))}
-    ${sec('search', 'Searching',
-      sLine('Keep searching', 'Pace, hours, a goal date and Today\'s 50.', '<a class="btn" href="#keep">Open Keep searching</a>') +
-      sLine('Where searches run', 'Separate minimized window: every search tab opens in one small PageProof searching window, kept minimized, so your own window stays clear. Pinned tabs: small pinned tabs at the left of your own window, like before.', `<div class="seg" role="group" aria-label="Where searches run">${[['window', 'Separate minimized window'], ['pinned', 'Pinned tabs']].map(([k, l]) => `<button class="${place === k ? 'on' : ''}" aria-pressed="${place === k}" data-act="searchplace" data-v="${k}">${l}</button>`).join('')}</div>`) +
-      sLine('Read account details by itself', 'Followers, verified and owner company of social accounts, one account a minute, only while Keep searching is on.', sSwitch('data-act="acctread"', acct, 'Read account details by itself')) +
-      sLine('Show their pages by themselves', 'In a copy\'s panel, load the site\'s page in a small window and keep a small picture of it.', sSwitch('data-act="pageauto"', pageAuto, 'Show their pages by themselves')) +
-      sLine('Your computer', `${hw.cores} cores, ${hw.memGB} GB memory. Up to ${hw.limits.checks} photo ${hw.limits.checks > 1 ? 'checks' : 'check'} and ${hw.limits.tabs} search ${hw.limits.tabs > 1 ? 'tabs' : 'tab'} at once.`, `<span class="tag ${hw.level === 'Light' ? 'warn' : 'ok'}">${hw.level}</span><a class="btn" href="#computer">See limits</a>`))}
-    ${sec('backup', 'Backups and team',
-      '<!--sync-->' +
-      sLine('PageProof folder', 'Documents › PageProof. Keeps your lists as text files, so they survive updates and reinstalls.', docsCtl))}
-    ${sec('lists', 'Lists',
-      await popLines() +
-      sLine('Hidden and approved sites', `${RS_LISTS.hidden.length.toLocaleString()} hidden · ${RS_LISTS.allowed.length.toLocaleString()} approved · ${RS_REJECT.items.length.toLocaleString()} rejected links.`, '<a class="btn" href="#hidden">See and edit</a>'))}
-    ${sec('help', 'Help',
-      sLine('Is everything working?', 'Lights for Google Drive, Keep searching, each search site and your backup.', '<a class="btn" href="#health">Check now</a>') +
-      sLine('How PageProof is doing', 'Day-by-day stats and a file to send for help.', '<a class="btn" href="#stats">See the stats</a>') +
-      sLine('Help and tutorial', 'Step-by-step guides for everything PageProof does.', '<a class="btn" href="#help">Open help</a>'))}
-    </div>
-  </div>`;
-};
-// 4.58: the site lists PageProof downloads by itself: how popular a site is, and known bad sites.
-async function popLines() {
-  const day = t => t ? new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-  let h = '';
-  if (typeof PP_POP !== 'undefined') {
-    const i = await PP_POP.info();
-    h += sLine('Site popularity list', i.date ? `The Tranco list of the world's ${(i.n || 0).toLocaleString()} most visited websites, from ${day(i.date)}. Gives each copy's site a Top 1K to Top 1M tag. Updated about once a week, kept on this computer.${i.err ? ' Last try failed: ' + esc(i.err) : ''}`
-      : `Not downloaded yet (a few MB, once a week).${i.err ? ' Last try failed: ' + esc(i.err) : ' It downloads by itself when you open Copies found.'}`, `<button class="btn" data-act="popnow" ${PP_POP.busy() ? 'disabled' : ''}>${PP_POP.busy() ? 'Downloading…' : 'Download now'}</button>`);
-  }
-  if (typeof PP_BAD !== 'undefined') {
-    const i = await PP_BAD.info(), src = i.src || {};
-    const parts = PP_BAD.SOURCES.map(s => src[s.id] && src[s.id].n ? `${s.name} ${src[s.id].n.toLocaleString()}` + (src[s.id].err ? ' (last try failed)' : '') : `${s.name}: ${src[s.id] && src[s.id].err ? 'failed, ' + src[s.id].err : 'not yet'}`);
-    h += sLine('Known bad site lists', `Free public lists of piracy, scam, phishing and malware sites${i.date ? `, last put together ${day(i.date)}` : ''}. Their copies get a red tag and count as Suspicious. ${esc(parts.join(' · '))}.`, `<button class="btn" data-act="badnow" ${PP_BAD.busy() ? 'disabled' : ''}>${PP_BAD.busy() ? 'Downloading…' : 'Download now'}</button>`);
-  }
-  return h;
-}
+// The Settings pages themselves (General, Searching, Backups and team) are drawn in ui/pp-settings.js.
 Object.assign(ACTS, {
   popnow: async () => { const p = PP_POP.refresh(true); render(true); const r = await p; toast(r.err ? 'The popularity list could not download: ' + r.err : 'Popularity list ready: ' + (r.n || 0).toLocaleString() + ' sites.'); if (typeof dropFC === 'function') dropFC(); render(true); },
   badnow: async () => { const p = PP_BAD.refresh(true); render(true); const r = await p; toast(r.errs && r.errs.length ? 'Some lists could not download: ' + r.errs.join('; ') : 'Known bad site lists ready.'); if (typeof dropFC === 'function') dropFC(); render(true); },
 });
-V.settings.after = () => {
-  // The index lights up the section on screen.
-  if (!window.ppSpyOn) {
-    window.ppSpyOn = true;
-    addEventListener('scroll', () => {
-      const secs = [...document.querySelectorAll('.ssec')]; if (!secs.length) return;
-      let cur = secs[0]; for (const x of secs) if (x.getBoundingClientRect().top < 160) cur = x;
-      document.querySelectorAll('.sindex button').forEach(b => b.classList.toggle('on', 'ss-' + b.dataset.v === cur.id));
-    }, { passive: true, capture: true });
-  }
-  const n = document.getElementById('sName');
-  n.onchange = async () => { await setName(n.value.trim()); toast('Saved. New packs say "Collected by ' + (n.value.trim() || '…') + '".'); };
-  const pp = document.getElementById('sPopups');
-  pp.onchange = async () => { await api.storage.local.set({ ppPopups: pp.checked }); toast(pp.checked ? 'Pop-ups will be closed before each capture.' : 'Pop-ups are left as they are.'); };
-};
 
 // =====================================================================================
 // Hidden and approved sites
@@ -645,7 +548,6 @@ V.hidden.after = () => {
 };
 Object.assign(ACTS, {
   keyhelp: () => { if (window.ppKeyHelp) window.ppKeyHelp(true); },
-  sjump: v => { const el = document.getElementById('ss-' + v); if (el) el.scrollIntoView({ block: 'start' }); document.querySelectorAll('.sindex button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); },
   themeset: async v => { await ppTheme(v); render(true); },
   socadd: async v => {
     const site = RS_SITE.tidy(state.hidQ || '').split('/')[0];
@@ -685,36 +587,6 @@ document.getElementById('hidUnload').addEventListener('change', async e => {
   toast('Took out ' + n.toLocaleString() + ' sites added by ' + f.name + (before.length ? '. ' + before.length.toLocaleString() + ' were there before it, so they stay.' : '.'), async () => { const l = await RS_IMPORTS.all(); if (l[0]) await RS_IMPORTS.toggle(l[0].id); render(true); });
   render(true);
 });
-
-// =====================================================================================
-// Your computer
-// =====================================================================================
-V.computer = async () => {
-  const h = await ppHardware(), L = h.limits;
-  return `${head('Settings', 'Your computer', 'PageProof checks how strong this computer is and sets its own limits, so searching never slows down your work. These numbers are read from the computer you\'re on now.')}
-  <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
-    <div class="row" style="gap:10px"><h2>This computer</h2><span class="tag ${h.level === 'Light' ? 'warn' : 'ok'}" style="margin-left:auto">${h.level} computer</span></div>
-    <div class="ofacts">
-      <div class="ofact"><span>Processor</span><b>${h.cores} cores</b></div>
-      <div class="ofact"><span>Memory</span><b>${h.memGB} GB${h.freeGB !== null ? ` (${h.freeGB} GB free now)` : ''}</b></div>
-      <div class="ofact"><span>System</span><b>${esc(h.system)}</b></div>
-      <div class="ofact"><span>Checked</span><b>Just now, again every week</b></div></div>
-    <div class="dsec"><div class="dsh">So PageProof will use at most</div>
-    <div class="hwlim">
-      <div><b>${L.checks}</b><span>photo ${L.checks > 1 ? 'checks' : 'check'} at a time</span></div>
-      <div><b>${L.tabs}</b><span>search ${L.tabs > 1 ? 'tabs' : 'tab'} open at once</span></div>
-      <div><b>${L.dl}</b><span>found pictures downloaded at once</span></div>
-      <div><b>${L.pace}</b><span>fastest Keep searching pace</span></div>
-      <div><b>${L.ram}</b><span>of memory</span></div></div>
-    <span class="muted" style="font-size:13.5px">The daily 50 takes ${L.fifty} at this level.</span></div>
-    <div class="dsec"><div class="dsh">It also backs off by itself</div>
-      <ul class="hwlist"><li>Keep searching pauses while almost all of the memory is in use, or on a laptop running on battery below 30%, and picks up again when that passes.</li><li>Big searches (today's 50, a search you start) slow down to one photo check and one search tab at those times instead, so they still finish, and go back to full speed a minute later.</li><li>A busy processor doesn't slow searching down: it counts PageProof's own photo checks too, so searches used to slow themselves down.</li><li>Never goes over the limits above, even if you pick a faster pace or search speed.</li><li>This only sets how much work your computer does. How often Google, Yandex and Bing are asked stays at the safe search speed, so a stronger computer never causes more robot checks.</li></ul></div>
-    <label class="field" style="max-width:420px">Speed level<select id="hwsel">${[['auto', `Let PageProof decide (${h.auto})`], ['Light', 'Light: older or busy computer'], ['Normal', 'Normal'], ['Strong', 'Strong: fast computer']].map(([k, l]) => `<option value="${k}" ${h.choice === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-  </section>`;
-};
-V.computer.after = () => {
-  document.getElementById('hwsel').onchange = async e => { await api.storage.local.set({ ppHw: { choice: e.target.value } }); toast('Speed level saved'); render(true); };
-};
 
 // =====================================================================================
 // What's new, help

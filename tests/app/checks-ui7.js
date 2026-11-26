@@ -14,18 +14,18 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
 
   await page.goto(url('app.html#settings')); await page.waitForTimeout(1500);
   const s = await page.evaluate(() => ({
-    idx: [...document.querySelectorAll('.sindex button')].map(b => b.textContent), secs: document.querySelectorAll('.ssec').length,
-    lines: document.querySelectorAll('.ssec .sline').length, ticks: document.querySelectorAll('.ssec input[type=checkbox]:not(.switch input)').length,
-    switches: document.querySelectorAll('.ssec .switch input').length, theme: !!document.querySelector('#themeSet [data-v="dark"]'),
+    subs: [...document.querySelectorAll('.side .subs a')].map(a => a.textContent.trim()), groups: [...document.querySelectorAll('.sx-group h3')].map(x => x.textContent),
+    rows: document.querySelectorAll('.sx-page .sx-row').length, ticks: document.querySelectorAll('.sx-page input[type=checkbox]:not(.switch input)').length,
+    switches: document.querySelectorAll('.sx-page .switch input').length, theme: !!document.querySelector('#themeSet [data-v="dark"]'),
   }));
-  ok(s.idx.length === 7 && s.secs === 7, 'Settings: 7 sections with a small index: ' + s.idx.join(', '));
-  ok(s.lines >= 10, 'Settings: one setting per line (' + s.lines + ' lines)');
-  ok(s.ticks === 0 && s.switches >= 3, 'Settings: on/off settings are switches (' + s.switches + '), no tick boxes');
+  ok(s.subs.join('|') === 'General|Searching|Site lists|Backups and team|Health|Help and about', 'Settings: six pages in the menu: ' + s.subs.join(', '));
+  ok(s.groups.join('|') === 'You|Look|Capturing|Toolbar and shortcuts|About' && s.rows >= 8, 'Settings › General: one setting per row, in 5 groups (' + s.rows + ' rows)');
+  ok(s.ticks === 0 && s.switches >= 1, 'Settings: on/off settings are switches (' + s.switches + '), no tick boxes');
   await page.click('#themeSet [data-v="dark"]'); await page.waitForTimeout(700);
   ok(await page.evaluate(async () => document.documentElement.dataset.theme === 'dark' && (await chrome.storage.local.get('ppTheme')).ppTheme === 'dark'), 'Settings › Colours › Dark switches to dark');
   await page.click('#themeSet [data-v="light"]'); await page.waitForTimeout(700);
-  await page.click('.sindex button[data-v="help"]'); await page.waitForTimeout(900);
-  ok(await page.evaluate(() => document.getElementById('ss-help').getBoundingClientRect().top < innerHeight - 150), 'The index jumps to its section');
+  await page.fill('#sxFind', 'speed level'); await page.waitForTimeout(300); await page.keyboard.press('Enter'); await page.waitForTimeout(1200);
+  ok(await page.evaluate(() => location.hash === '#ssearch' && !!document.querySelector('#sxSpeed.sx-flash')), 'Find a setting jumps to the setting on its page');
 
   await page.goto(url('app.html#health')); await page.waitForTimeout(2500);
   const h = await page.evaluate(() => ({ sum: !!document.querySelector('.hsum b'), groups: [...document.querySelectorAll('.hgroup h2')].map(x => x.textContent), tiles: document.querySelectorAll('.htile').length, edge: getComputedStyle(document.querySelector('.htile')).borderLeftWidth }));
