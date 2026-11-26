@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.84.0** (26 Nov 2026).
+Last updated: version **4.85.0** (26 Nov 2026).
 
 ---
 
@@ -59,6 +59,8 @@ Last updated: version **4.84.0** (26 Nov 2026).
 - **Calm Compare two photos.** Both files on one line with Swap, the view bar floating on the picture, the result and three folds on the right. (4.83)
 - **Calm Mark up a copy.** One toolbar across the top of the picture that stays in view on long captures. (4.83)
 - **Calm Convert files.** Two tabs (Convert files, Open odd files), numbered steps on the right, and one box to drop files in. (4.84)
+- **Settings, six pages.** General, Searching, Site lists, Backups and team, Health, Help and about. One row per setting, folds for the longer notes, and old addresses still open the right place. (4.85)
+- **Find a setting.** A box at the top of every Settings page. Type a word, press Enter, and PageProof opens the page and lights up the row. (4.85)
 
 ## 3. Look closer at pictures
 
@@ -401,3 +403,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.82 | 26 Nov | Calm look step 17, part 2: Inspect a photo (file on one line, picture left, answers right, case details asked when saving a pack) |
 | 4.83 | 26 Nov | Calm look step 17, part 3: Compare two photos (files on one line, floating view bar, result card and folds) and Mark up a copy (one toolbar across the top) |
 | 4.84 | 26 Nov | Calm look step 17, part 4: Convert files with Open odd files as its second tab, and numbered steps |
+| 4.85 | 26 Nov | Settings redrawn in the calm look (part 1): six pages, General, Searching, Backups and team, Find a setting, menu dot. |
