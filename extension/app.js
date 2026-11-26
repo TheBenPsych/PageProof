@@ -482,70 +482,8 @@ Object.assign(ACTS, {
 // =====================================================================================
 // Hidden and approved sites
 // =====================================================================================
-const KIND_CLS = { 'Whole site': 'k-whole', 'Sub-site': 'k-sub', 'Account or part': 'k-acct', 'Ending': 'k-end' };
-const hidName = h => { const b = String(h).replace(/^\.|^www\./, ''); return `<span class="hidname"><span class="sl" aria-hidden="true">${esc((b[0] || '?'))}</span>${esc(h)}</span>`; };
 const kindOf = s => s.startsWith('.') ? 'Ending' : s.includes('/') ? 'Account or part' : s.split('.').length > 2 && !/\.(co|com|org|net|gov|ac)\.[a-z]{2}$/.test(s) ? 'Sub-site' : 'Whole site';
-V.hidden = async () => {
-  await RS_LISTS.load();
-  const tab = state.hidTab, q = state.hidQ.toLowerCase();
-  // 4.9: which sites are social media (their copies go on the Social media tab of Copies found).
-  if (tab === 'social') {
-    await PP_SOCIAL.ready;
-    // 4.25.0: a fixed list of platforms (16 now: Reddit was taken out, it is a forum). Every other site goes on the Websites tab.
-    const plats = new Map();
-    for (const [d, [name]] of Object.entries(PP_SOCIAL.SITES)) { if (!plats.has(name)) plats.set(name, []); plats.get(name).push(d); }
-    const rows = [...plats].filter(([n, ds]) => !q || n.toLowerCase().includes(q) || ds.some(d => d.includes(q)));
-    const readOn = (await api.storage.local.get('ppAcctRead')).ppAcctRead !== false;
-    return `${head('Settings', 'Hidden and approved sites', 'Hidden sites never show up in any search. Approved sites may use the photos: copies found there are marked Licensed by themselves.')}
-    <section class="card" style="overflow:hidden">
-      <div class="toolbar hidtabs"><div class="tabs" role="tablist">${[['hidden', 'Hidden sites'], ['allowed', 'Approved for every client'], ['client', 'Approved for one client'], ['rejected', 'Rejected links'], ['stolen', 'Stolen before links'], ['social', 'Social sites']].map(([k, l]) => `<button role="tab" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}" data-act="hidtab" data-v="${k}">${l}</button>`).join('')}</div></div>
-      <div class="row" style="gap:10px;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--bg)">
-        <input id="hidq" class="chip" style="min-height:38px;padding:0 12px;font-size:14px;flex:1 1 260px" placeholder="Find a platform, like vimeo" value="${esc(state.hidQ)}" aria-label="Find a platform"></div>
-      <p class="muted" style="margin:0;padding:12px 18px;font-size:13.5px;border-bottom:1px solid var(--line)">Only these ${plats.size} platforms count as social media. Every other site (blogs, video sites, forums, chat apps...) shows on the Websites tab like any website, and can be hidden as a whole site.</p>
-      <div class="scroll"><table><thead><tr><th>Platform</th><th>Web addresses it covers</th></tr></thead><tbody>
-        ${rows.map(([n, ds]) => `<tr><td><b>${esc(n)}</b></td><td class="mono" style="font-size:12.5px">${esc(ds.join(', '))}${n === 'Pinterest' || n === 'Nextdoor' ? ' <span class="faint">+ country sites</span>' : ''}<br><span class="faint">and their mobile and sub-sites (m., mobile., www.)</span></td></tr>`).join('') || '<tr><td colspan="2" class="faint">No platform matches. That site counts as a website.</td></tr>'}
-      </tbody></table></div>
-    </section>
-    <section class="card pad"><div class="row" style="gap:12px;align-items:flex-start;flex-wrap:nowrap"><label class="switch" style="margin-top:2px"><input type="checkbox" id="acctread" data-act="acctread" ${readOn ? 'checked' : ''} aria-label="Read account details by itself"><span></span></label><span><b>Read account details by itself</b><br><span class="muted" style="font-size:13px">Followers, verified, account type, country and owner company. PageProof opens each account's profile in a background tab of your browser for a few seconds, one account a minute (X: one every 2 minutes, 30 a day), every 90 days, only for copies still to review, only while Keep searching is on and inside its hours (Pause stops it too). Off: only when you press "Read again now" on an account.</span></span></div></section>
-    <p class="faint" style="margin:0;font-size:12.5px">Copies on social sites go on the Social media tab of Copies found, where Stolen, Hide and Approve work per account. Saved with your settings backup.</p>`;
-  }
-  // Approved for one client: kept with each client (site | client).
-  const perClient = [];
-  for (const c of await FC.DB.all('clients')) for (const s of c.licensed || []) perClient.push(s + ' | ' + c.name);
-  await RS_STOLEN.load();
-  const list = tab === 'rejected' ? RS_REJECT.items.map(r => r.url) : tab === 'client' ? perClient.sort().reverse() : tab === 'stolen' ? RS_STOLEN.items : RS_LISTS[tab];
-  const rows = [...list].reverse().filter(s => s.toLowerCase().includes(q) && (tab === 'rejected' || tab === 'client' || tab === 'stolen' || state.hidKind === 'All' || kindOf(s) === state.hidKind));
-  const T = [['hidden', 'Hidden sites', RS_LISTS.hidden.length], ['allowed', 'Approved for every client', RS_LISTS.allowed.length], ['client', 'Approved for one client', perClient.length], ['rejected', 'Rejected links', RS_REJECT.items.length], ['stolen', 'Stolen before links', RS_STOLEN.items.length], ['social', 'Social sites', new Set(Object.values(PP_SOCIAL.SITES).map(x => x[0])).size]];
-  const flat = tab === 'rejected' || tab === 'client' || tab === 'stolen';
-  const page = rows.slice(0, state.hidMore || 100);
-  return `${head('Settings', 'Hidden and approved sites', 'Hidden sites never show up in any search. Approved sites may use the photos: copies found there are marked Licensed by themselves.', `<button class="btn" data-act="hidsave">${ic('down', 18)} Download list</button><button class="btn" data-act="hidload">Add from a file</button>`)}
-  <section class="card" style="overflow:hidden">
-    <div class="toolbar hidtabs"><div class="tabs" role="tablist">${T.map(([k, l, n]) => `<button role="tab" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}" data-act="hidtab" data-v="${k}">${l} <span>${n.toLocaleString()}</span></button>`).join('')}</div></div>
-    <div class="row" style="gap:10px;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--bg)">
-      <input id="hidq" class="chip" style="min-height:38px;padding:0 12px;font-size:14px;flex:1 1 260px" placeholder="${tab === 'stolen' ? 'Find a link' : tab === 'rejected' ? 'Find a rejected link' : tab === 'client' ? 'Find a site or a client' : 'Find or add a site, like patch.com or x.com/examplenews'}" value="${esc(state.hidQ)}" aria-label="Find a site">
-      ${tab === 'client' ? '<span class="faint" style="font-size:13px">Add one from a copy: open it in Copies found and press Approve site.</span>' : ''}${tab === 'stolen' ? '<span class="faint" style="font-size:13px;flex:1 1 300px">Pages you already dealt with. A copy found on one of them gets a red Stolen before tag in Copies found, and its site counts as a repeat offender. Add them with Add from a file.</span>' : ''}${!flat ? `<button class="btn primary" data-act="hidadd">＋ ${tab === 'hidden' ? 'Hide' : 'Approve'} it</button>
-      <div class="seg">${['All', 'Whole site', 'Sub-site', 'Account or part', 'Ending'].map(k => `<button class="${state.hidKind === k ? 'on' : ''}" data-act="hidkind" data-v="${k}">${k}</button>`).join('')}</div>` : ''}</div>
-    <div class="scroll"><table><thead><tr><th>${tab === 'rejected' || tab === 'stolen' ? 'Link' : tab === 'client' ? 'Site' : 'Site or account'}</th>${tab === 'stolen' ? '<th></th>' : tab === 'rejected' ? '<th>Photo</th>' : tab === 'client' ? '<th>Approved for</th>' : '<th>What it covers</th>'}<th></th></tr></thead><tbody>
-      ${page.map(h => { if (tab === 'stolen') return `<tr><td><a class="mono" style="font-size:13px;overflow-wrap:anywhere" href="${esc(h)}" target="_blank" rel="noreferrer">${esc(h)}</a></td><td></td><td style="text-align:right"><button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ Take off the list</button></td></tr>`;
-        const r = tab === 'rejected' ? RS_REJECT.items.find(x => x.url === h) : null; if (tab === 'client') { const [site, who] = h.split(' | '); return `<tr><td>${hidName(site)}</td><td>${esc(who)}</td><td style="text-align:right"><button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ Remove</button></td></tr>`; }
-        return `<tr><td>${hidName(h)}</td><td>${r ? esc(r.pic || 'every photo') : `<span class="kind ${KIND_CLS[kindOf(h)]}">${kindOf(h)}</span>${typeof ppTeamTag === 'function' ? ppTeamTag(h, tab) : ''}`}</td><td style="text-align:right">${!r && typeof ppTeamBtn === 'function' ? ppTeamBtn(h, tab) : ''}<button class="btn" style="min-height:32px;font-size:13px" data-act="hidremove" data-v="${esc(h)}">↺ ${tab === 'hidden' ? 'Show again' : tab === 'allowed' ? 'Remove' : 'Bring back'}</button></td></tr>`; }).join('') || `<tr><td colspan="3" class="muted" style="padding:28px;text-align:center">${q ? (flat ? 'Nothing matches.' : 'Nothing matches. Press the button to add it.') : 'This list is empty.'}</td></tr>`}
-    </tbody></table></div>
-    <div class="row faint" style="padding:10px 18px;border-top:1px solid var(--line);font-size:12.5px;gap:12px"><span>Showing ${page.length.toLocaleString()} of ${rows.length.toLocaleString()}.</span>${rows.length > page.length ? '<button class="btn" style="min-height:30px;font-size:13px;margin-left:auto" data-act="hidmore">Show more</button>' : ''}</div>
-  </section>
-  ${flat && tab !== 'stolen' ? '' : impCard((await RS_IMPORTS.all()).filter(e => e.kind === tab), tab)}
-  <p class="faint" style="margin:0;font-size:12.5px">${RS_LISTS.fileState === 'granted' ? 'Saved in Documents › PageProof as hidden-sites.txt, allowed-sites.txt, rejected-links.txt and stolen-links.txt.' : 'Saved in this browser. <a href="#settings">Set up the PageProof folder</a> to also keep them as text files that survive a reinstall.'}</p>`;
-};
-// 4.22: files added to this list, each with Undo this import.
-const impCard = (list, tab) => `<section class="card" style="overflow:hidden">
-  <div class="row" style="padding:14px 18px;border-bottom:1px solid var(--line);gap:10px"><b style="flex:1">Files you added</b><button class="btn" style="min-height:32px;font-size:13px" data-act="hidunload">Take out the sites in a file…</button></div>
-  ${list.map(e => { const live = (e.op === 'add') === !e.undone; return `<div class="row" style="padding:12px 18px;border-bottom:1px solid var(--line);gap:12px;flex-wrap:nowrap"><span style="flex:1;min-width:0"><b style="overflow-wrap:anywhere">${esc(e.name)}</b><br><span class="muted" style="font-size:13px">${e.op === 'add' ? 'Added' : 'Took out'} ${e.sites.length.toLocaleString()} ${tab === 'stolen' ? 'links' : 'sites'} · ${fmtDate(e.at)}${e.undone ? ' · <b>undone ' + fmtDate(e.undone) + '</b>' : ''}</span></span><button class="btn${live && e.op === 'add' ? ' primary' : ''}" style="min-height:32px;font-size:13px;white-space:nowrap" data-act="impundo" data-v="${esc(e.id)}">${e.op === 'add' ? (live ? '↶ Undo this import' : 'Add them again') : (live ? '↶ Put them back' : 'Take them out again')}</button></div>`; }).join('')}
-  <p class="faint" style="margin:0;padding:10px 18px;font-size:12.5px">${list.length ? 'Undo takes out only the sites that file added. Sites that were on the list before stay.' : 'No files added yet.'} Added a file before PageProof kept this list? Press "Take out the sites in a file" and pick the same file: only the sites it added come out.</p>
-</section>`;
-V.hidden.after = () => {
-  const i = document.getElementById('hidq');
-  i.oninput = () => { state.hidQ = i.value; state.hidMore = 0; render(true).then(() => { const j = document.getElementById('hidq'); j.focus(); j.setSelectionRange(j.value.length, j.value.length); }); };
-  i.onkeydown = e => { if (e.key === 'Enter' && state.hidTab === 'social') return; else if (e.key === 'Enter' && !['rejected', 'client'].includes(state.hidTab)) act('hidadd'); };
-};
+// The Site lists page itself is drawn in ui/pp-settings.js (calm look); the buttons' work is below.
 Object.assign(ACTS, {
   keyhelp: () => { if (window.ppKeyHelp) window.ppKeyHelp(true); },
   themeset: async v => { await ppTheme(v); render(true); },
@@ -847,18 +785,7 @@ V.reconnect.after = async () => {
     if (JSON.stringify(state.rc) !== was && state.shown === 'reconnect') render(true);
   } finally { state.rcBusy = false; }
 };
-V.whatsnew = async () => `${head('Settings', 'What\'s new in PageProof ' + VERSION, 'Shown once after each update. Your captures, settings and lists carry over.')}
-  <section class="card" style="overflow:hidden">${NEWS.map(([t, d]) => `<div class="row" style="padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:nowrap;gap:14px"><span class="newbadge" style="margin:0">New</span><span><b>${t}</b><br><span class="muted" style="font-size:14px">${d}</span></span></div>`).join('')}</section>
-  <button class="btn primary" style="align-self:flex-start" data-act="newsseen">Got it</button>`;
-// UI overhaul batch 7: Help as even tiles in one row, each with its own icon colour.
-V.help = async () => `${head('Help', 'Help and tutorial', 'Step-by-step guides for everything PageProof does.')}
-  <div class="helptiles">
-    <a class="start ht-blue" href="https://github.com/TheBenPsych/PageProof/blob/main/TUTORIAL.md" target="_blank"><span class="ic">${ic('help', 22)}</span><b>Tutorial</b><span>Capture, find copies, inspect, compare, mark up and more, one step at a time.</span></a>
-    <a class="start ht-green" href="https://github.com/TheBenPsych/PageProof/blob/main/VERIFYING.md" target="_blank"><span class="ic">${ic('verify', 22)}</span><b>Checking a pack</b><span>How anyone can check that an evidence pack was not changed.</span></a>
-    <button class="start ht-purple" data-act="tour"><span class="ic">${ic('home', 22)}</span><b>Take the tour</b><span>Five quick stops around this page.</span></button>
-    <a class="start ht-amber" href="#setup"><span class="ic">${ic('settings', 22)}</span><b>Run setup again</b><span>Your name, the PageProof folder, a computer check, and keeping PageProof handy.</span></a>
-    <button class="start ht-pink" data-act="keyhelp"><span class="ic"><b class="kq">?</b></span><b>Keyboard keys</b><span>Y Stolen, L Licensed, N Remove, U Undo, / to search. Press ? anywhere.</span></button>
-  </div>`;
+// What's new and Help and about are drawn in ui/pp-settings.js (calm look).
 
 // =====================================================================================
 // First-time setup (opens by itself after installing)

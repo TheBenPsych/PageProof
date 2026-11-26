@@ -82,7 +82,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
 
   // ---- pages
   await page.goto(url('app.html#hidden')); await page.waitForTimeout(1200);
-  const hid = await page.evaluate(() => ({ tag: [...document.querySelectorAll('tr')].some(tr => /d\.com/.test(tr.textContent) && /Team · Sam/.test(tr.textContent)), btn: !!document.querySelector('[data-act="teamskip"][data-v="d.com"]') }));
+  const hid = await page.evaluate(() => ({ tag: [...document.querySelectorAll('.sx-lrow')].some(tr => /d\.com/.test(tr.textContent) && /Team · Sam/.test(tr.textContent)), btn: !!document.querySelector('[data-act="teamskip"][data-v="d.com"]') }));
   ok(hid.tag && hid.btn, 'Hidden sites shows "Team · Sam" and Show for me on d.com');
   await page.goto(url('app.html#team')); await page.waitForTimeout(1200);
   ok(await page.evaluate(() => !!document.getElementById('teamDis') && /disagrees on 1 site/.test(document.body.textContent) && /Shared with 1 teammate: Sam/.test(document.body.textContent)), 'Team lists shows the disagreement and who shares');
