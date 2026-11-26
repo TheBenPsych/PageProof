@@ -102,10 +102,10 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(go.done.done && go.none === null, 'a met goal (or no goal) leaves the pace you picked');
   await page.evaluate(() => chrome.storage.local.set({ fcDrive: { label: 'G:\\Shared drives\\Photos', done: true } }));
   await page.evaluate(() => FC.setKeep({ goal: new Date(Date.now() + 90 * 864e5).toISOString().slice(0, 10) }));
-  await page.goto(url('app.html#keep')); await page.waitForTimeout(2500);
+  await page.goto(url('app.html#keep?tab=settings')); await page.waitForTimeout(2500);
   const kp = await page.evaluate(() => ({ input: !!document.querySelector('input[type=date][data-act=keepgoal]'), text: document.body.innerText }));
   ok(kp.input && /On track|Behind|Goal met/.test(kp.text), 'the Keep searching page has the goal date and says on track or behind');
-  ok(/carries on at half speed while it runs/.test(kp.text), 'Today\'s 50 no longer says Keep searching pauses');
+  ok(/goes at half speed while it runs/.test(kp.text), 'Today\'s 50 no longer says Keep searching pauses');
 
   // ---- 6. new client folders spotted once a week
   const nf = await page.evaluate(async () => {

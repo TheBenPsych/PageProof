@@ -671,19 +671,6 @@ Object.assign(ACTS, {
 // ---------------------------------------------------------------- every photo searched once (4.10)
 // How many first searches a day: Keep searching gives 1 in N of its photos to never-searched
 // photos, Today's 50 (if it starts by itself) too, or all 50 when set to "Never searched first".
-// 4.42 (Ben's pick): a goal instead of a pace. "Every photo searched once by <date>".
-function goalRow(k, F, hw) {
-  const g = FC.goalPlan(k, F.never, hw.limits.pace);
-  const day = iso => new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-  const min = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
-  let line = '<span class="faint" style="font-size:13px">Or set a date and PageProof works out the pace for you (never faster than is safe).</span>';
-  if (g && g.done) line = '<span class="tag ok">Goal met</span> <span class="faint" style="font-size:13px">Every photo has had its first search, so the pace above is used again.</span>';
-  else if (g && g.onTrack) line = `<span class="tag ok">On track</span> <span class="faint" style="font-size:13px">${g.never.toLocaleString()} photos to go, about ${g.perDay.toLocaleString()} a work day: 1 photo every ${Math.round(g.gap * 10) / 10} minutes. This replaces the pace above.</span>`;
-  else if (g) line = `<span class="tag warn">Behind</span> <span class="faint" style="font-size:13px">${g.never.toLocaleString()} photos to go is too many for ${esc(day(g.goal))} at the fastest safe pace. At that pace it would be done about ${esc(day(g.eta))}. PageProof goes as fast as is safe meanwhile. Today's 50 helps catch up.</span>`;
-  return `<div style="display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:10px">
-    <div class="row" style="gap:8px"><label class="mini">Goal: every photo searched once by<input type="date" min="${min}" value="${esc(k.goal || '')}" data-act="keepgoal" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);padding:2px 6px"></label>${k.goal ? '<button class="btn sm" data-act="keepgoaloff">No goal</button>' : ''}</div>
-    <div>${line}</div></div>`;
-}
 // Speed-ups: sp = FC.speed() (what really happened this week), lad = the speed ladder's steps
 // (storage fcLadder). Google's lane sets the full searches, Yandex and Bing's the quick looks.
 function firstPerDay(k, hw, week, sp = {}, lad = null) {
@@ -703,20 +690,6 @@ function firstPerDay(k, hw, week, sp = {}, lad = null) {
     googlePerDay, gSec, fSec, ladOn, sp };
 }
 const secWords = sec => sec >= 120 ? Math.round(sec / 60) + ' min' : sec + ' s';
-// The speed ladder on Keep searching (Ben's pick): where it is now and how high it may climb.
-function ladderRow(k, lad, rate) {
-  const top = [60, 40, 30].includes(+k.ladderTop) ? +k.ladderTop : 40, n = FC.LADDER.indexOf(top) + 1;
-  const g = lad && lad.g ? lad.g : { step: 0, cap: n - 1 }, f = lad && lad.f ? lad.f : { step: 0 };
-  const today = new Date().toDateString();
-  const dropped = lad && lad.g && lad.g.day === today && lad.g.drops;
-  return `<div id="ladderBox" style="display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:10px">
-    <div class="row" style="gap:8px"><label class="switch"><input type="checkbox" data-act="keepladder" aria-label="Speed ladder" ${k.ladder !== false ? 'checked' : ''}><span></span></label><b>Speed ladder</b>${kInfo('On Faster, Keep searching speeds up one step after every hour without an "are you a robot" check: 1 photo every 2 min, then 90, 60 and 40 seconds. If a site asks, it rests for an hour as always, and comes back two steps slower for the rest of the day. Google and the Yandex + Bing lane each have their own ladder.')}
-      ${k.ladder !== false ? `<span class="tag ${dropped ? 'warn' : 'ok'}" style="margin-left:auto">Step ${g.step + 1} of ${n}</span>` : '<span class="faint" style="margin-left:auto;font-size:13px">Off: 1 photo every 2 min</span>'}</div>
-    ${k.ladder !== false ? `<div class="ladder" role="img" aria-label="Speed step ${g.step + 1} of ${n}">${FC.LADDER.slice(0, n).map((sec, i) => `<span class="${i <= g.step ? 'on' : ''}" style="height:${30 + i * 70 / Math.max(1, n - 1)}%"><small>${secWords(sec)}</small></span>`).join('')}</div>
-    <span class="faint" style="font-size:13px">Now: Google 1 photo every ${secWords(FC.LADDER[g.step])}, Yandex and Bing every ${secWords(FC.LADDER[f.step] / 2)}. About ${Math.round(rate.googlePerDay).toLocaleString()} Google searches a day.${dropped ? ' A site asked "are you a robot" today, so it stays at this step until tomorrow.' : g.step < n - 1 ? ' Next step after an hour with no robot check.' : ''}</span>
-    <div class="row" style="gap:8px"><span class="faint" style="font-size:13px">Fastest step</span><div class="seg" role="radiogroup" aria-label="Fastest step">${[60, 40, 30].map(t => `<button role="radio" aria-checked="${top === t}" class="${top === t ? 'on' : ''}" data-act="laddertop" data-v="${t}">${t} s</button>`).join('')}</div></div>` : ''}
-  </div>`;
-}
 // The day "left" first searches are done, at "perDay" a day (weekends skipped if weekdays only).
 function firstDoneBy(left, rate) {
   if (left <= 0) return 'Done';
@@ -738,155 +711,14 @@ function firstClientRows(F) {
   for (const r of rest) r.need = before + rest.reduce((a, o) => a + Math.min(o.left, r.left), 0);
   return rows.sort((a, b) => a.d / a.t - b.d / b.t || b.left - a.left);
 }
-function firstClientTable(F, rate, all) {
-  const rows = firstClientRows(F);
-  if (!rows.length) return '<p class="muted" style="margin:0">No photos yet.</p>';
-  const shown = all ? rows : rows.slice(0, 10);
-  return `<div class="scroll"><table class="firsttbl"><thead><tr><th>Client</th><th>Searched once</th><th style="width:160px"></th><th>Never searched</th><th>Done by</th></tr></thead><tbody>
-    ${shown.map(r => { const pct = r.d / r.t * 100, done = r.left <= 0; return `<tr><td><b>${r.pri ? '★ ' : ''}${esc(r.name)}</b>${r.cant ? `<div class="faint" style="font-size:12px">${r.cant.toLocaleString()} can't be searched</div>` : ''}</td><td class="num">${r.d.toLocaleString()} of ${r.t.toLocaleString()}</td><td><span class="bar${done ? ' okbar' : ''}"><i style="width:${pct}%"></i></span></td><td class="num">${r.left.toLocaleString()}</td><td>${done ? '<span class="tag ok">All searched once</span>' : esc(firstDoneBy(r.need, rate) || 'Turn on Keep searching')}</td></tr>`; }).join('')}
-  </tbody></table></div>
-  ${rows.length > shown.length ? `<button class="btn ghost" style="align-self:flex-start" data-act="firstall">Show all ${rows.length} clients</button>` : ''}`;
-}
-function firstBlock(F, rate) {
-  const pct = F.total ? Math.floor(F.done / F.total * 100) : 100;
-  const by = firstDoneBy(F.never, rate);
-  const q = Math.max(F.quick || 0, F.done), qpct = F.total ? Math.floor(q / F.total * 100) : 100;
-  const qby = firstDoneBy(F.total - q, { perDay: rate.quickPerDay, weekdays: rate.weekdays });
-  const sp = rate.sp || {};
-  return `<div class="firstbox" id="firstBox">
-    <div class="row"><h3 style="margin:0">First search for every photo</h3><span class="tag ${F.never ? 'warn' : 'ok'}" style="margin-left:auto">${F.never ? 'In progress' : 'Every photo searched once'}</span></div>
-    <div class="row" style="align-items:baseline;gap:8px"><span class="firstbig num">${F.done.toLocaleString()}</span><span class="muted num">of ${F.total.toLocaleString()} photos searched at least once · ${pct}%</span></div>
-    <span class="bar big"><i style="width:${F.total ? F.done / F.total * 100 : 100}%"></i></span>
-    <div id="quickRow" style="display:flex;flex-direction:column;gap:4px">
-      <div class="row" style="font-size:14px"><b>Quick look (Yandex + Bing)</b>${kInfo('Yandex and Bing give every photo a quick look first, in their own lane, so nothing waits months for a first check. A photo counts as searched once when Google has searched it too. A copy found in a quick look sends the photo to Google next.')}<span class="faint num" style="margin-left:auto">${q.toLocaleString()} of ${F.total.toLocaleString()} · ${qpct}%${qby && qby !== 'Done' ? ' · all by ' + esc(qby.replace('~ ', '')) : ''}</span></div>
-      <span class="bar quickbar"><i style="width:${F.total ? q / F.total * 100 : 100}%"></i></span>
-    </div>
-    <div class="grid g4f">
-      <div class="stat"><b>${F.never.toLocaleString()}</b><span>never searched yet</span></div>
-      <div class="stat" id="speedStat"><b>${sp.days ? Math.round(sp.full).toLocaleString() : '—'}</b><span>${sp.days ? 'photos searched a day this week (+' + Math.round(sp.quick).toLocaleString() + ' quick looks) · ' + F.week.toLocaleString() + ' first searches in 7 days' : 'photos a day: shown after the first day of searching'}</span></div>
-      <div class="stat"><b>${esc(by || '—')}</b><span>${by === 'Done' ? 'new photos join by themselves' : by ? 'all done at this pace' : 'turn on Keep searching for a date'}</span></div>
-      <div class="stat"><b>${F.cant.toLocaleString()}</b><span>can't be searched (POOL, TIFF, HEIC, broken)${F.cant ? ' · <a href="#skipped">See them</a>' : ''}</span></div>
-    </div>
-    <span class="faint" style="font-size:12.5px">New photos you add to Google Drive are picked up within the hour and join the never-searched photos by themselves.</span>
-  </div>`;
-}
 
-// ---------------------------------------------------------------- Keep searching and today's 50
+
+// ---------------------------------------------------------------- Keep searching and today's 50 (the page itself is in fc-keep.js)
 const STATE_TAG = { running: ['Searching', 'ok'], waiting: ['Resting between photos', 'ok'], off: ['Off', 'grey'], paused: ['Paused', 'grey'], hours: ['Outside your hours', 'grey'], fifty: ['Big search running', 'ok'],
   offline: ['Google Drive offline', 'bad'], allow: ['Needs one click', 'warn'], busy: ['Computer busy', 'warn'], resting: ['Search sites resting', 'warn'], setup: ['Not set up', 'warn'], idle: ['Nothing due right now', 'ok'], closed: ['Stopped', 'bad'] };
 // UI overhaul (batch 3): small helpers for Keep searching.
 const kInfo = t => `<span class="kinfo" tabindex="0" role="note" title="${esc(t)}" aria-label="${esc(t)}">ⓘ</span>`;
 const kClock = t => new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-// Google Lens, Yandex and Bing with a green, amber or red light.
-function kEngLights(broken, rest) {
-  const B = Object.fromEntries(broken), Rr = Object.fromEntries(rest);
-  return `<div class="englights" role="list" aria-label="Search sites">${['google', 'yandex', 'bing'].map(e => {
-    const [c, note] = B[e] ? ['bad', 'may have stopped · until ' + kClock(B[e])] : Rr[e] ? ['warn', 'rests until ' + kClock(Rr[e])] : ['ok', ''];
-    return `<span class="e" role="listitem" title="${esc(FC.ENGINE_NAME[e] + (note ? ': ' + note : ': working'))}"><i class="${c}"></i>${esc(FC.ENGINE_NAME[e])}${note ? `<small>${esc(note)}</small>` : ''}</span>`;
-  }).join('')}</div>`;
-}
-function kRing(done, total, z) {
-  const r = z / 2 - 5, c = 2 * Math.PI * r, f = total ? Math.min(1, done / total) : 0;
-  return `<span class="kring" style="width:${z}px;height:${z}px" role="img" aria-label="${done} of ${total} done"><svg width="${z}" height="${z}" viewBox="0 0 ${z} ${z}" aria-hidden="true"><circle cx="${z / 2}" cy="${z / 2}" r="${r}" fill="none" stroke="var(--line)" stroke-width="6"/><circle cx="${z / 2}" cy="${z / 2}" r="${r}" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-dasharray="${(c * f).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${z / 2} ${z / 2})"/></svg><b>${Math.round(f * 100)}%</b></span>`;
-}
-V.keep = async () => {
-  if (routeArg('start50')) { history.replaceState(null, '', '#keep'); setTimeout(() => ACTS.fifty(), 300); }
-  if (routeArg('clients')) { history.replaceState(null, '', '#keep'); setTimeout(() => { const el = document.getElementById('firstClients'); if (el) el.scrollIntoView({ block: 'start' }); }, 200); }
-  const [k, st, cov, hw, store] = [await FC.keep(), (await api.storage.local.get('fcStatus')).fcStatus, await FC.coverage(), await ppHardware(), await api.storage.local.get(['fcToday', 'fcRest', 'fcPause', 'fcFifty'])];
-  const alive = st && Date.now() - st.beat < 90000;
-  const s = !k.on ? 'off' : store.fcPause ? 'paused' : alive ? st.state : st && st.state === 'closed' ? 'closed' : 'waiting';
-  const [tl, tc] = STATE_TAG[s] || ['Starting', 'grey'];
-  const today = store.fcToday && store.fcToday.day === new Date().toDateString() ? store.fcToday : { searched: 0, found: 0 };
-  const rest = Object.entries(store.fcRest || {}).filter(([, t]) => t > Date.now());
-  const broken = Object.entries(await FC.brokenEngines());
-  const ORDER = ['Gentle', 'Steady', 'Faster'];
-  const pace = ORDER[Math.min(ORDER.indexOf(k.pace), ORDER.indexOf(hw.limits.pace))] || 'Steady';
-  const perHour = 60 / FC.PACE[pace];
-  const hrs = k.hours === 'all' ? 24 : Math.max(1, k.to - k.from);
-  const G = cov.groups, F = cov.first;
-  const lad = (await api.storage.local.get('fcLadder')).fcLadder || null;
-  const rate = firstPerDay(k, hw, F.week, await FC.speed(), lad);
-  const share = [2, 3, 4].includes(k.firstShare) ? k.firstShare : 3;
-  const bar = (label, [a, b], note) => `<div style="display:flex;flex-direction:column;gap:4px"><div class="row" style="font-size:14px"><b>${label}</b><span class="faint" style="margin-left:auto">${b ? Math.round(a / b * 100) : 100}% up to date · ${a.toLocaleString()} of ${b.toLocaleString()}</span></div><span class="bar"><i style="width:${b ? a / b * 100 : 100}%"></i></span><span class="faint" style="font-size:12.5px">${note}</span></div>`;
-  const fifty = !!(store.fcFifty && store.fcFifty.beat && store.fcFifty.running !== false && Date.now() - store.fcFifty.beat < 5 * 60000);
-  const hourOpts = Array.from({ length: 24 }, (_, h) => h);
-  const hlabel = h => new Date(2000, 0, 1, h).toLocaleTimeString(undefined, { hour: 'numeric' });
-  let fiftyJob = null;
-  if (fifty && store.fcFifty.id) try {
-    const j = await RS_DB.get('jobs', store.fcFifty.id);
-    if (j && j.pics) { const d = j.pics.filter(p => Object.values(p.runs).every(r => !['wait', 'go', 'captcha'].includes(r.state))).length; fiftyJob = { done: d, total: j.pics.length, left: j.pics.length - d > 0 ? Math.max(1, Math.round((j.pics.length - d) * 0.6)) + ' min' : '' }; }
-  } catch (e) { /* no job yet */ }
-  return `${head('Find copies', 'Keep searching', 'Searches your clients\' photos one at a time, all day, in the background. It goes gently so the search sites don\'t block you.')}
-  ${await driveBanner()}
-  ${k.on && !store.fcPause && st && st.state === 'closed' ? keepClosedBanner() : ''}${await keepReopenedBanner()}
-  <section class="card pad keeplive" style="display:flex;flex-direction:column;gap:14px">
-    <div class="row"><label class="switch"><input type="checkbox" data-act="keepon" aria-label="Keep searching" ${k.on ? 'checked' : ''}><span></span></label><h2>Keep searching is ${k.on ? 'on' : 'off'}</h2><span class="tag ${tc}" style="margin-left:auto">${tl}</span></div>
-    ${k.on ? `<div class="know${alive && st.current ? '' : ' empty'}">
-        ${alive && st.current ? `<img class="kthumb" src="${safeImg(st.current.thumb) || 'icons/icon48.png'}" alt="">` : `<span class="kthumb">${ic('find', 22)}</span>`}
-        <div class="kt"><b>${s === 'running' ? '<span class="kpulse" aria-hidden="true"></span>Searching now' : esc(tl)}</b>
-          <span>${alive && st.current ? esc(st.current.name) + (st.current.sub ? ' · ' + esc(st.current.sub) : '') : esc(alive ? st.text : st && st.state === 'closed' ? 'Stopped: its pinned tab was closed.' : 'Starting the search tab…')}</span></div>
-        ${kEngLights(broken, rest)}
-      </div>
-      <div class="row"><button class="btn" data-act="keeppause">${store.fcPause ? 'Resume' : 'Pause'}</button><button class="btn ghost" data-act="keepshow">Show the search tab</button>${broken.length ? '<a href="#health" style="font-size:13.5px">Why a search site may have stopped</a>' : ''}</div>`
-    : `<div class="row" style="gap:12px"><p class="muted" style="margin:0;flex:1 1 300px">Turn it on and PageProof searches in the background while you work. You can stop it any time.</p>${kEngLights(broken, rest)}</div>`}
-    <div class="ktiles">
-      <div class="ktile"><b class="num">${today.searched}</b><span>photos searched today</span></div>
-      <div class="ktile"><b class="num">${today.found}</b><span>new copies today</span></div>
-      <div class="ktile"><b class="num">~${Math.round(rate.ladOn ? rate.googlePerDay : perHour * hrs).toLocaleString()}</b><span>photos a day at this ${rate.ladOn ? 'speed step' : 'pace'}${today.quick ? ' · ' + today.quick + ' quick looks today' : ''}</span></div>
-    </div>
-  </section>
-  ${typeof ntKeepExtras === 'function' ? await ntKeepExtras() : ''}
-  <div class="grid g2">
-    <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
-      <h2>How it searches</h2>
-      <div class="kline"><span class="kl">Pace ${kInfo('Gentle: 1 photo every ' + FC.PACE.Gentle + ' minutes. Steady: every ' + FC.PACE.Steady + '. Faster: every ' + FC.PACE.Faster + '. If a search site asks "are you a robot?", PageProof never tries to get past it: that site rests for an hour and the others carry on.')}</span>
-        <div class="seg" role="radiogroup" aria-label="Pace">${Object.entries(FC.PACE).map(([p, m]) => `<button role="radio" aria-checked="${k.pace === p}" class="${k.pace === p ? 'on' : ''}" data-act="keepset" data-v="pace|${p}" title="1 photo every ${m} minutes">${p}</button>`).join('')}</div></div>
-      ${pace !== k.pace ? `<p class="faint" style="margin:0;font-size:13px">Your computer is ${esc(hw.level)}, so it goes ${pace} (1 photo every ${FC.PACE[pace]} min). <a href="#computer">Computer check</a></p>` : ''}
-      ${pace === 'Faster' ? ladderRow(k, lad, rate) : ''}
-      ${goalRow(k, F, hw)}
-      <div class="kline"><span class="kl">Hours</span>
-        <div class="seg" role="radiogroup" aria-label="Hours">${[['work', 'Work hours'], ['all', 'All day and night']].map(([h, l]) => `<button role="radio" aria-checked="${k.hours === h}" class="${k.hours === h ? 'on' : ''}" data-act="keepset" data-v="hours|${h}">${l}</button>`).join('')}</div></div>
-      ${k.hours === 'work' ? `<div class="row" style="padding-left:114px"><label class="mini">From<select data-act="keepnum" data-v="from">${hourOpts.map(h => `<option value="${h}" ${k.from === h ? 'selected' : ''}>${hlabel(h)}</option>`).join('')}</select></label><label class="mini">To<select data-act="keepnum" data-v="to">${hourOpts.map(h => `<option value="${h}" ${k.to === h ? 'selected' : ''}>${hlabel(h)}</option>`).join('')}</select></label><label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="checkbox" data-act="keepwd" ${k.weekdays ? 'checked' : ''}> Weekdays only</label></div>` : ''}
-      ${await searchPlaceRow()}
-      ${await acctReadRow()}
-    </section>
-    <section class="card pad" style="display:flex;flex-direction:column;gap:12px">
-      <div class="row"><h2>Today's 50</h2>${kInfo('A bigger batch at once. It runs quietly in the small pinned PageProof tab, so you can keep working and close this page (see how far it is in All searches). Keep searching carries on at half speed while it runs. On this computer 50 photos take ' + hw.limits.fifty + '.')}${fifty ? '<span class="tag ok" style="margin-left:auto">Running now</span>' : ''}</div>
-      ${fifty && fiftyJob ? `<div class="row" style="gap:14px">${kRing(fiftyJob.done, fiftyJob.total, 62)}<div><b>${fiftyJob.done} of ${fiftyJob.total} photos searched</b><div class="muted" style="font-size:13.5px">${fiftyJob.left ? 'About ' + fiftyJob.left + ' left' : 'Finishing up'} · <a href="#searches">See it in All searches</a></div></div></div>` : `<p class="muted" style="margin:0;font-size:14px">Search a bigger batch now, in the background.</p>`}
-      <p class="faint" style="margin:0;font-size:13px">Keep searching carries on at half speed while it runs.</p>
-      <div class="kline"><span class="kl">Which photos</span><div class="chipset" role="radiogroup" aria-label="Which photos">${[['next', 'Next in line'], ['first', 'Never searched first']].map(([v, l]) => { const on = (k.fiftyWhich === 'first' ? 'first' : 'next') === v; return `<button role="radio" aria-checked="${on}" class="chip${on ? ' on' : ''}" data-act="fiftywhich" data-v="${v}">${on ? '✓ ' : ''}${l}</button>`; }).join('')}</div></div>
-      <div class="kline"><span class="kl">How many</span><select data-act="keepnum" data-v="perDay" aria-label="How many photos">${[10, 25, 50, 75, 100].map(n => `<option value="${n}" ${k.perDay === n ? 'selected' : ''}>${n}</option>`).join('')}</select><button class="btn primary" style="margin-left:auto" data-act="fifty"${fifty ? ' disabled data-why="Today\'s check is already running. It carries on by itself."' : ''}>Check ${k.perDay} now</button></div>
-      <label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" data-act="keepauto" ${k.fiftyAuto ? 'checked' : ''}> Start by itself every weekday at <input type="time" value="${esc(k.fiftyTime)}" data-act="keeptime" style="border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);padding:2px 6px"></label>
-    </section>
-  </div>
-  <section class="card pad" style="display:flex;flex-direction:column;gap:14px">
-    <h2>Where the searches go</h2>
-    <p class="muted" style="margin:0;font-size:14px">${cov.total.toLocaleString()} photos are searched for ${plural((await FC.DB.all('clients')).filter(c => c.searching === true).length, 'client')}. Every photo gets searched at least once, and the most important ones are kept up to date more often.</p>
-    ${firstBlock(F, rate)}
-    <div style="display:flex;flex-direction:column;gap:8px">
-      <h3 style="margin:0;font-size:15px">How the searches are shared</h3>
-      ${F.never ? `<div class="lanes"><span class="lanel">Google</span><div class="sharebar" role="img" aria-label="Google: High priority first, then 1 in ${share} searches for never-searched photos, the rest keep photos up to date"><span class="s1">⚑ High first</span><span class="s2" style="flex:1">1 in ${share}: never searched</span><span class="s3" style="flex:${share - 1}">The rest: keeping photos up to date</span></div>
-        <span class="lanel">Yandex + Bing</span><div class="sharebar" id="quickLane" role="img" aria-label="Yandex and Bing: a quick look at every never-searched photo first, then re-searches"><span class="s4" style="flex:${Math.max(1, F.total - Math.max(F.quick || 0, F.done))}">Quick look at never-searched photos</span><span class="s3" style="flex:${Math.max(1, Math.round(F.total / 6))}">then re-searches</span></div></div>
-        <span class="faint" style="font-size:12.5px">The two lanes run side by side. Inside each client, 2 of every 3 first searches are its newest photos and 1 comes from a random older year.</span>` : '<p class="muted" style="margin:0;font-size:14px">Every photo has had its first search, so all searches go to keeping photos up to date. When new photos arrive, they get their share again.</p>'}
-      <div class="row" style="gap:10px"><span class="faint" style="font-size:13px">Share for never-searched photos</span>
-        <div class="seg" role="radiogroup" aria-label="Share for never-searched photos">${[4, 3, 2].map(n => `<button role="radio" aria-checked="${share === n}" class="${share === n ? 'on' : ''}" data-act="firstshare" data-v="${n}">1 in ${n}</button>`).join('')}</div>
-        <span class="faint" style="font-size:12.5px">⚑ High priority photos always go first.</span></div>
-    </div>
-    ${bar('⚑ High priority and ★ priority clients', G.top, 'Searched every 3 to 7 days')}
-    ${bar('Newest photos (this and last quarter)', G.recent, 'Searched every month')}
-    ${bar('This year', G.year, 'Searched every 6 months')}
-    ${bar('Older photos', G.older, 'Searched once a year')}
-    <div class="row faint" style="font-size:13px;gap:16px"><span>${cov.quiet.toLocaleString()} quiet photos (nothing found 5 times: searched monthly, 10 times: every 3 months)</span><span>${cov.doubles.toLocaleString()} doubles searched once with their twin</span></div>
-    <details><summary class="muted" style="cursor:pointer">Which photos go first?</summary><ol style="margin:8px 0 0;padding-left:20px;font-size:14px;display:flex;flex-direction:column;gap:4px">
-      <li><b>⚑ High priority</b> photos: next in line, then every 3 days.</li><li><b>★ Priority clients</b>: their photos come right after.</li><li><b>Newest photos</b>, by year, quarter and day.</li><li><b>★ Popular</b> photos and photos stolen before: every 7 days.</li><li>Everything else, the longest-waiting first.</li><li>Quiet photos last.</li></ol>
-      <p class="muted" style="margin:8px 0 0;font-size:14px">On top of that, 1 in ${share} searches goes to a photo that was never searched, until there are none left. ★ Priority clients get their first searches first, then the clients take turns, newest photos first.</p></details>
-  </section>
-  <section class="card pad" id="firstClients" style="display:flex;flex-direction:column;gap:12px">
-    <div class="row"><h2>First search, client by client</h2><span class="faint" style="margin-left:auto;font-size:13px">Lowest first</span></div>
-    ${firstClientTable(F, rate, state.firstAll)}
-  </section>`;
-};
-V.keep.guard = V.found.guard;
 // 4.57 (Ben): search tabs in one separate minimized window (default) or pinned in your own window.
 async function searchPlaceRow() {
   const place = (await api.storage.local.get('ppSearchPlace').catch(() => ({}))).ppSearchPlace === 'pinned' ? 'pinned' : 'window';
@@ -944,38 +776,7 @@ Object.assign(ACTS, {
   },
 });
 
-// 4.15: the searching tab was closed by hand and came back by itself.
-async function keepReopenedBanner() {
-  const r = (await api.storage.local.get('fcReopened')).fcReopened;
-  if (!r || !r.at || r.seen || Date.now() - r.at > 3 * 3600000) return '';
-  return `<div class="banner info" role="status" id="keepReopened">${ic('help', 22)}<div style="flex:1 1 260px;min-width:0"><b>The searching tab was closed, so PageProof opened it again</b><div style="font-size:13.5px">It's the small pinned tab at the far left, and it carried on where it was at ${new Date(r.at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}. Nothing was lost.</div></div><button class="btn ghost" data-act="reopenpause">Pause searching</button><button class="btn" data-act="reopenok">OK</button></div>`;
-}
 Object.assign(ACTS, {
   reopenok: async () => { const r = (await api.storage.local.get('fcReopened')).fcReopened || {}; await api.storage.local.set({ fcReopened: { ...r, seen: true } }); render(true); },
   reopenpause: async () => { const r = (await api.storage.local.get('fcReopened')).fcReopened || {}; await api.storage.local.set({ fcPause: Date.now(), fcReopened: { ...r, seen: true } }); toast('Searching is paused. Press Resume on Keep searching to start again.'); render(true); },
 });
-// Shown when Keep searching is on but you closed its pinned tab (Ben, 4.4.3).
-function keepClosedBanner() {
-  return `<div class="banner warn" role="alert">${ic('help', 22)}<div style="flex:1 1 260px;min-width:0"><b>Keep searching is stopped</b><div style="font-size:13.5px">Its pinned PageProof tab was closed, so no new photos are being searched.</div></div><button class="btn primary" data-act="keepshow">Start it again</button></div>`;
-}
-
-// 4.30.2 (Ben): the account details reader's own switch, and what it is doing now.
-async function acctReadRow() {
-  const st = await api.storage.local.get(['ppAcctRead', 'fcAcctRead', 'fcAcctLimits']);
-  const on = st.ppAcctRead !== false, a = st.fcAcctRead || {}, L = st.fcAcctLimits || {};
-  const t = ms => new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-  const name = x => x === 'x' ? 'X' : x.replace(/\.com$/, '').replace(/^./, c => c.toUpperCase());
-  const resting = Object.entries(L).filter(([, v]) => v.restUntil > Date.now()).map(([k, v]) => name(k) + ' until ' + t(v.restUntil));
-  // 4.64: sites that said "too many requests" (429) and are left alone for a while.
-  if (globalThis.PP_PACE) for (const r of PP_PACE.rests()) if (!resting.some(x => x.startsWith(r.name + ' '))) resting.push(r.name + ' until ' + t(r.until) + ' (it said too many requests)');
-  const fresh = a.beat && Date.now() - a.beat < 10 * 60000;
-  const now = !on ? 'Off: account details are only read when you press "Read again now" on an account.'
-    : fresh && (a.state === 'reading' || a.state === 'resting') && a.total ? 'Reading account details ' + Math.min(a.done + 1, a.total) + ' of ' + a.total + '.'
-    : fresh && a.state === 'held' && a.why === 'paused' ? 'Paused with Keep searching.'
-    : fresh && a.state === 'held' && a.why === 'hours' ? 'Waiting for your hours.'
-    : fresh && a.state === 'held' && a.why === 'limit' ? 'Had enough for now: carries on at ' + t(a.until) + '.'
-    : 'Reads each social account once a month, one a minute, inside your hours.';
-  return `<div class="row" style="gap:10px;align-items:flex-start;border-top:1px solid var(--line);padding-top:12px"><label class="switch"><input type="checkbox" id="acctread" data-act="acctread" ${on ? 'checked' : ''}><span></span></label>
-    <div style="flex:1;min-width:0"><b>Read account details</b> ${kInfo('Followers, check mark, type and country, from each social account\'s profile in a small pinned tab. X: at most one profile every 2 minutes and 30 a day. A site that shows empty pages twice is left alone for 6 hours.')}
-    <div class="muted" style="font-size:13px">${esc(now)}${resting.length ? ' Resting now: ' + esc(resting.join(', ')) + '.' : ''}</div></div></div>`;
-}

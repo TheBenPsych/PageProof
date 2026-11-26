@@ -1956,8 +1956,18 @@ const FC = (() => {
     const today = t.day === day ? t : { day, searched: 0, found: 0 };
     if (quick) today.quick = (today.quick || 0) + 1; else if (!opts.shared) today.searched++;
     today.found += fresh;
-    await api.storage.local.set({ fcToday: today, fcLastSearch: Date.now() });
-    if (!opts.shared) await dayLog(quick ? { quick: 1 } : { full: 1, first: firstTime ? 1 : 0 });
+    // Calm look (Keep searching, Now tab): how many photos each search site searched today, and
+    // the last few searches with what they found.
+    if (opts.engines && !opts.shared) { today.eng = today.eng || {}; for (const e of opts.engines) today.eng[e] = (today.eng[e] || 0) + 1; }
+    const set = { fcToday: today, fcLastSearch: Date.now() };
+    if (!opts.shared) try {
+      const th = String(pic.thumb || '');
+      const rec = ((await api.storage.local.get('fcRecent')).fcRecent || []).filter(r => r && r.at);
+      rec.unshift({ at: Date.now(), id: p.id, name: p.name || pic.name || '', client: p.client || '', eng: opts.engines || [], fresh, links: links.length, quick: quick ? 1 : 0, by, thumb: th.length <= 24000 ? th : '' });
+      set.fcRecent = rec.slice(0, 8);
+    } catch (e) { /* the list is only for show */ }
+    await api.storage.local.set(set);
+    if (!opts.shared) await dayLog(quick ? { quick: 1, found: fresh } : { full: 1, first: firstTime ? 1 : 0, found: fresh });
     await logWeek({ searched: quick || opts.shared ? 0 : 1, found: fresh, first: firstTime && !quick && !opts.shared ? 1 : 0, client: p.client || '' });
     queueDirty(true); backupCopiesSoon(); touch('copies');
     return { photo: p, fresh };
@@ -2300,7 +2310,7 @@ const FC = (() => {
     const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     const all = (await api.storage.local.get('fcDays')).fcDays || {};
     const o = all[key] = all[key] || { full: 0, first: 0, quick: 0 };
-    for (const k of ['full', 'first', 'quick']) if (add[k]) o[k] = (o[k] || 0) + add[k];
+    for (const k of ['full', 'first', 'quick', 'found']) if (add[k]) o[k] = (o[k] || 0) + add[k];
     for (const k of Object.keys(all).sort().slice(0, -21)) delete all[k];
     await api.storage.local.set({ fcDays: all });
   }

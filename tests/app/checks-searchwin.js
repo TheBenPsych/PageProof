@@ -69,7 +69,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(e.pinned && e.here && e.none, 'pinned tabs: search tabs open pinned in your own window as before');
   // The setting row on Keep searching.
   await page.evaluate(() => chrome.storage.local.set({ ppSearchPlace: 'window', fcDrive: { label: 'G:\\Shared drives\\Photos', done: true } }));
-  await page.goto(url('app.html#keep')); await page.waitForTimeout(2500);
+  await page.goto(url('app.html#keep?tab=settings')); await page.waitForTimeout(2500);
   const txt = await page.evaluate(() => document.body.innerText);
   ok(/Where searches run/.test(txt) && /Separate minimized window/.test(txt) && /Pinned tabs/.test(txt), 'Keep searching shows the Where searches run setting');
   const f = await page.evaluate(async () => { const b = [...document.querySelectorAll('[data-act="searchplace"]')].find(x => /Pinned/.test(x.textContent)); if (!b) return 'none'; b.click(); await new Promise(r => setTimeout(r, 500)); return (await chrome.storage.local.get('ppSearchPlace')).ppSearchPlace; });

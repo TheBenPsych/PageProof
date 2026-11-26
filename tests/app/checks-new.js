@@ -209,8 +209,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
       await page.waitForTimeout(3000);
     }
     await page.goto(url('app.html#keep')); await page.waitForTimeout(2000);
-    ok(await page.evaluate(() => /Keep searching is stopped/.test(document.body.textContent) && !!document.querySelector('.banner [data-act="keepshow"]')), 'Closing the pinned tab shows Keep searching is stopped with Start it again');
-    await page.evaluate(() => document.querySelector('.banner [data-act="keepshow"]').click()); await page.waitForTimeout(4000);
+    ok(await page.evaluate(() => /Keep searching is stopped/.test(document.body.textContent) && !!document.querySelector('.kbar [data-act="keepshow"]')), 'Closing the pinned tab shows Keep searching is stopped with Start it again');
+    await page.evaluate(() => document.querySelector('.kbar [data-act="keepshow"]').click()); await page.waitForTimeout(4000);
     ok(ctx.pages().some(x => x.url().includes('runner.html')), 'Start it again opens the pinned tab again');
     for (const x of ctx.pages()) if (x.url().includes('runner.html')) await x.close();
     await page.evaluate(k => chrome.storage.local.set({ fcKeep: k || { on: false } }), kv);

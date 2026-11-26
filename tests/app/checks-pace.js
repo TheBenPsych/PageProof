@@ -80,7 +80,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await tab.close();
 
   // ---- 5. the account reader's settings line names the rest
-  const p5 = await page.evaluate(async () => { await PP_PACE.load(); return typeof acctReadRow === 'function' ? await acctReadRow() : 'none'; });
+  const p5 = await page.evaluate(async () => { await PP_PACE.load(); return typeof keepAcctInfo === 'function' ? (await keepAcctInfo()).now : 'none'; });
   ok(/Instagram until .*too many requests/.test(p5), 'Settings says Instagram is resting and why');
 
   await ctx.close();
