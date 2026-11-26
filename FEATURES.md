@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.88.0** (26 Nov 2026).
+Last updated: version **4.88.1** (26 Nov 2026).
 
 ---
 
@@ -411,3 +411,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.86 | 26 Nov | Settings redrawn in the calm look (part 2): Site lists, Help and about. |
 | 4.87 | 26 Nov | Settings redrawn in the calm look (part 3): Health with Right now, Stats and Space used. |
 | 4.88 | 26 Nov | Settings redrawn in the calm look (part 4): Stats charts. |
+| 4.88.1 | 26 Nov | Fix: Old page names ("Hidden and approved sites", "Is everything working", "How PageProof is doing") replaced in hints, the tour and the tutorial; the tour gained a Tools stop. |
