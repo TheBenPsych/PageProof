@@ -8,7 +8,7 @@ It is grouped by **what the tool does**, then there is a **version timeline** at
 > one line in the timeline, with the version number. Plain words only. No client names, real photos or real
 > case details (this repository is public).
 
-Last updated: version **4.89.0** (26 Nov 2026).
+Last updated: version **4.90.0** (26 Nov 2026).
 
 ---
 
@@ -180,6 +180,8 @@ Last updated: version **4.89.0** (26 Nov 2026).
 - **Calm Site owners under Copies found.** Tabs Owners / Look up a site, list with Sites, Copies, New and Stolen columns, find, kinds, sort, owner header with four clickable tiles, Why they're one owner with proof, Their sites table, What their sites say grouped, Clients they copied, Copy owner details, sites read lately on the Look up tab. (4.73)
 - **Finish this claim in the Settings look.** Step N of 5 card with one bar, steps as fold rows with a tag (Next step, Done, Skipped, To do), checks as rows with a round tick, Part 2 locked until Part 1 is done. (4.89)
 - **Legal portal form shows what you copied.** Each line's Copy turns into Copied, and the top says "3 of 10 lines copied". Drop-down lines are marked. (4.89)
+- **Not finished shows the step.** A chip says which of the 5 claim steps a copy is on, and Continue opens it. Change answer is in the ··· menu. (4.90)
+- **Sweep questions fold away.** "N sites could be swept for more of your clients' photos" in one line, Look at them to see each. (4.90)
 
 ## 6. Social media accounts
 
@@ -415,3 +417,4 @@ PNG output (1.4), carousels / fold-outs / sideways scroll (1.8), Wayback Machine
 | 4.88 | 26 Nov | Settings redrawn in the calm look (part 4): Stats charts. |
 | 4.88.1 | 26 Nov | Fix: Old page names ("Hidden and approved sites", "Is everything working", "How PageProof is doing") replaced in hints, the tour and the tutorial; the tour gained a Tools stop. |
 | 4.89 | 26 Nov | Finish this claim in the Windows 11 look, portal form counts copied lines |
+| 4.90 | 26 Nov | Not finished rows show the step and Continue, sweep questions fold into one line |
