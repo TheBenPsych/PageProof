@@ -44,6 +44,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     await chrome.storage.local.set({ rsTiming: { fast: true, checks: 2, at: Date.now(), days: { [day]: { search: [10, 180000], dl: [400, 360000], check: [400, 48000], wait: [400, 8000], skipped: 37 } } } });
   });
   await page.goto(url('app.html#health')); await page.waitForTimeout(2500);
+  await page.click('#sxTime summary'); await page.waitForTimeout(300);
   const t = await page.evaluate(() => document.body.innerText);
   ok(/Where the time goes/.test(t) && /Fast checker on/.test(t), 'Is everything working shows Where the time goes, with the fast checker on');
   ok(/18\.0 seconds each/.test(t) && /120 ms each/.test(t) && /37/.test(t), 'It shows the average for each step and the skipped hidden-site links');

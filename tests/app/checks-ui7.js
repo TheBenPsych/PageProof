@@ -28,8 +28,8 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(await page.evaluate(() => location.hash === '#ssearch' && !!document.querySelector('#sxSpeed.sx-flash')), 'Find a setting jumps to the setting on its page');
 
   await page.goto(url('app.html#health')); await page.waitForTimeout(2500);
-  const h = await page.evaluate(() => ({ sum: !!document.querySelector('.hsum b'), groups: [...document.querySelectorAll('.hgroup h2')].map(x => x.textContent), tiles: document.querySelectorAll('.htile').length, edge: getComputedStyle(document.querySelector('.htile')).borderLeftWidth }));
-  ok(h.sum && h.groups.join('|') === 'Your computer|Searching|Search sites' && h.tiles > 8 && h.edge === '4px', 'Is everything working: summary banner, then tiles in 3 groups with a coloured edge');
+  const h = await page.evaluate(() => ({ sum: !!document.querySelector('#sxHealthBar b'), groups: [...document.querySelectorAll('.sx-group > h3')].map(x => x.firstChild.textContent.trim()), tiles: document.querySelectorAll('.sx-light').length, dots: document.querySelectorAll('.sx-light .sx-dot').length }));
+  ok(h.sum && h.groups.join('|') === 'Your computer|Searching|Search sites|Sign-ins' && h.tiles > 8 && h.dots === h.tiles, 'Health: summary bar, then rows in 4 groups, each with a coloured light');
 
   await page.goto(url('app.html#stats')); await page.waitForTimeout(2000);
   ok(await page.evaluate(() => document.querySelectorAll('.st-funnel .fun-r').length === 5), 'How PageProof is doing: From search to copy is a funnel of 5 bars');

@@ -12,11 +12,11 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   await ctx.addCookies([{ name: 'c_user', value: '1', domain: '.facebook.com', path: '/', secure: true, sameSite: 'None', expires: Math.floor(Date.now() / 1000) + 3600 }]);
   await page.goto(url('app.html#health')); await page.waitForTimeout(1800);
   const txt = await page.textContent('main');
-  ok(/Signed in: Facebook\s*Yes, in this browser/.test(txt), 'Facebook shows as signed in');
-  ok(/Signed in: Instagram\s*Not signed in\. Instagram shows a sign-in wall/.test(txt), 'Instagram shows as not signed in, with why');
-  ok(/Signed in: X \(Twitter\)\s*Not signed in/.test(txt), 'X shows as not signed in');
-  ok(/Signed in: Bing[\s\S]*Optional/.test(txt), 'Bing is optional');
-  ok(await page.locator('.htile a[href="https://www.instagram.com/"]').count() === 1, 'A Sign in button opens Instagram');
+  ok(/Facebook\s*Yes, in this browser/.test(txt), 'Facebook shows as signed in');
+  ok(/Instagram\s*Not signed in\. Instagram shows a sign-in wall/.test(txt), 'Instagram shows as not signed in, with why');
+  ok(/X \(Twitter\)\s*Not signed in/.test(txt), 'X shows as not signed in');
+  ok(/Sign-ins[\s\S]*Bing[\s\S]*Optional/.test(txt), 'Bing is optional');
+  ok(await page.locator('#sxHSign .sx-light a[href="https://www.instagram.com/"]').count() === 1, 'A Sign in button opens Instagram');
   console.log(fails ? fails + ' FAILED' : 'ALL PASSED');
   await ctx.close(); process.exit(fails ? 1 : 0);
 })();

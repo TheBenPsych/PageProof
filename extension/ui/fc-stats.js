@@ -219,7 +219,7 @@ V.stats = async () => {
   const range = `<div class="tabs st-range" role="tablist">${[['today', 'Today'], ['7', '7 days'], ['30', '30 days']].map(([v, l]) => `<button role="tab" class="${state.stRange === v ? 'on' : ''}" aria-selected="${state.stRange === v}" data-act="strange" data-v="${v}">${l}</button>`).join('')}</div>`;
   const al = m.alerts;
   const empty = !Object.keys(m.days).length;
-  return `${head('Settings', 'How PageProof is doing', 'What PageProof did on this computer, day by day: what it found, how fast, and what went wrong. Numbers only, never names.', `${range}<button class="btn primary" data-act="stsave">${ic('down', 18)} Save stats for Claude</button>`)}
+  return sxHealthFrame('stats', `${range}<button class="btn kbtn" data-act="stsave">${ic('down', 16)} Save stats for Claude</button>`, `<p class="sx-note">What PageProof did on this computer, day by day: what it found, how fast, and what went wrong. Numbers only, never names.</p>
   ${al.length ? `<section class="card st-alerts">${al.map(([lvl, a, b]) => `<div class="st-alert ${lvl}"><b>!</b><div><b>${esc(a)}.</b> <span class="muted">${esc(b)}</span></div></div>`).join('')}</section>`
     : `<div class="banner info" style="font-size:15px"><b>Nothing looks off</b><span class="muted">${empty ? 'Stats start now. They fill in as PageProof searches.' : 'PageProof compares each day with this computer\'s usual numbers.'}</span></div>`}
   <div class="st-tiles">
@@ -238,8 +238,9 @@ V.stats = async () => {
   ${await stPop()}
   ${stHelpers(m)}
   ${stExtra(m)}
-  ${await stSaveCard(m)}`;
+  ${await stSaveCard(m)}`, 'sxp-stats');
 };
+V.stats.after = () => SX.after();
 
 async function stFile() {
   const m = await PP_REPORT.model(state.stRange === 'today' ? 'today' : state.stRange);

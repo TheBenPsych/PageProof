@@ -74,7 +74,7 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
     for (const id of Object.values(ids)) { await FC.kept.put(id, { blob: new Blob([new Uint8Array(50000)]), type: 'image/jpeg', size: 50000, sha: 'ab'.repeat(32), at: new Date().toISOString() }); await FC.pages.put(id, { pic: 'data:image/jpeg;base64,' + 'A'.repeat(20000), at: new Date().toISOString() }); }
     return ids;
   });
-  await go('health');
+  await go('health?tab=space');
   await page.waitForSelector('#storage .stopt', { timeout: 20000 }).catch(async () => console.log('storage card says: ' + await page.evaluate(() => (document.querySelector('#storage') || document.body).textContent.slice(0, 300) + ' | route ' + location.hash + ' shown ' + state.shown)));
   const st = await page.evaluate(() => ({ text: document.querySelector('#storage').textContent, opts: document.querySelectorAll('#storage .stopt').length, btn: document.querySelector('[data-act="stfree"]').disabled }));
   ok(st.opts === 3 && /Kept copies of their pictures \(3\)/.test(st.text) && /never deleted here/.test(st.text) && st.btn, 'Storage meter lists what takes room, and the button waits for a tick');
