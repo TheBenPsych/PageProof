@@ -97,7 +97,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); 
     await go(r, 1500);
     ok(await page.evaluate(sub => (document.querySelector('.side .subs a.on') || {}).textContent.trim() === sub && document.getElementById('view').textContent.length > 200, sub), '#' + r + ' still opens and lights ' + sub + ' in the menu');
   }
-  ok(await page.evaluate(() => { const d = document.getElementById('sxLists'); return !!d && !!d.querySelector('[data-act="popnow"]') && !!d.querySelector('[data-act="badnow"]') && d.previousElementSibling.classList.contains('head'); }), 'Site lists: the popularity list and the known bad site lists sit at the top, each with Download now');
+  ok(await page.evaluate(() => { const d = document.getElementById('sxLists'); return !!d && !!d.querySelector('[data-act="popnow"]') && !!d.querySelector('[data-act="badnow"]') && d === d.parentNode.firstElementChild; }), 'Site lists: the popularity list and the known bad site lists sit at the top, each with Download now');
 
   // ---------- Backups and team: nothing set up yet
   await go('backups', 2200);

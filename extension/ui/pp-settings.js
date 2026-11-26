@@ -47,6 +47,13 @@ const SX = (() => {
     pause: '<circle cx="8" cy="8" r="6.2"/><path d="M6.4 5.6v4.8M9.6 5.6v4.8"/>',
     chart: '<path d="M2 13.8h12M3.8 11V8M7 11V4.5M10.2 11V6.5M13.2 11V3"/>',
     drive: '<path d="M5.6 2.4h4.8l4.2 7.3-2.4 4H4l-2.4-4z"/><path d="M5.6 2.4 9.8 9.7h4.8M10.4 2.4 4 13.7"/>',
+    book: '<path d="M2 3.2c2.2-.6 4.2-.3 6 1 1.8-1.3 3.8-1.6 6-1v9.6c-2.2-.6-4.2-.3-6 1-1.8-1.3-3.8-1.6-6-1zM8 4.2v9.6"/>',
+    tour: '<path d="M3 14V2.5M3 3h8.5l-1.8 2.5L11.5 8H3"/>',
+    redo: '<path d="M13.4 8a5.4 5.4 0 1 1-1.6-3.8M13.4 2.6v2.8h-2.8"/>',
+    star: '<path d="m8 1.8 1.9 3.9 4.2.6-3 3 .7 4.2L8 11.5l-3.8 2 .7-4.2-3-3 4.2-.6z"/>',
+    copy: '<rect x="2" y="4.5" width="8" height="9" rx="1"/><path d="M5 4.5V3a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-3"/>',
+    file: '<path d="M4 1.8h5.5L12.5 5v9.2H4z"/><path d="M9.5 1.8V5h3M8 7.5v4.5M6 10l2 2 2-2"/>',
+    bin: '<path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4"/>', plus: '<path d="M8 3v10M3 8h10"/>',
     check: '<path d="m3 8.5 3.2 3L13 4.5"/>', info: '<circle cx="8" cy="8" r="6.2"/><path d="M8 7.2v4M8 4.9v.2"/>',
     chev: '<path d="m6 3.5 4.5 4.5L6 12.5"/>', chevd: '<path d="M3.5 6 8 10.5 12.5 6"/>',
     warn: '<path d="M8 2 14.5 13.5h-13z"/><path d="M8 6.5v3.2M8 11.6v.2"/>',
@@ -336,7 +343,7 @@ V.backups.after = async () => {
 V.moving = async () => { state.sxFold.sxMoving = true; state.sxFlash = 'sxMoving'; setTimeout(() => location.replace('#backups'), 0); return ''; };
 
 // ---------------------------------------------------------------- Site lists: the two lists PageProof downloads
-// (The rest of Site lists is drawn in app.js.) Shown as two rows above the tabs.
+// Shown as two rows above the tabs.
 async function sxLists() {
   const { tag, ic } = SX;
   const day = t => t ? new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
@@ -348,18 +355,113 @@ async function sxLists() {
   if (typeof PP_BAD !== 'undefined') {
     const i = await PP_BAD.info(), src = i.src || {};
     const parts = PP_BAD.SOURCES.map(s => src[s.id] && src[s.id].n ? `${s.name} ${src[s.id].n.toLocaleString()}` + (src[s.id].err ? ' (last try failed)' : '') : `${s.name}: ${src[s.id] && src[s.id].err ? 'failed, ' + src[s.id].err : 'not yet'}`);
-    h += `<div class="sx-row"><span class="sx-ic">${ic('warn')}</span><span class="sx-tt"><b>Known bad site lists</b><span>${esc(parts.join(' · '))}${i.date ? ' · ' + day(i.date) : ''} · their copies get a red tag</span></span><span class="sx-ctl">${i.date ? tag('Ready', 'ok') : ''}<button class="btn kbtn" data-act="badnow" ${PP_BAD.busy() ? 'disabled' : ''}>${ic('down', 16)}${PP_BAD.busy() ? 'Downloading…' : 'Download now'}</button></span></div>`;
+    h += `<div class="sx-row"><span class="sx-ic">${ic('warn')}</span><span class="sx-tt"><b>Known bad site lists</b><span>${i.date ? esc(parts.join(' · ')) + ' · ' + day(i.date) + ' · their copies get a red tag' : 'Not downloaded yet · free public lists of piracy, scam, phishing and malware sites'}</span></span><span class="sx-ctl">${i.date ? tag('Ready', 'ok') : ''}<button class="btn kbtn" data-act="badnow" ${PP_BAD.busy() ? 'disabled' : ''}>${ic('down', 16)}${PP_BAD.busy() ? 'Downloading…' : 'Download now'}</button></span></div>`;
   }
   return h ? `<div class="sx-dl kpn" id="sxLists">${h}</div>` : '';
 }
-{
-  const old = V.hidden, oldAfter = V.hidden.after;
-  let dl = '';
-  V.hidden = async () => { dl = await sxLists(); return old(); };
-  V.hidden.after = () => {
-    const hd = document.querySelector('#view .head');
-    if (hd && dl && !document.getElementById('sxLists')) hd.insertAdjacentHTML('afterend', dl);
-    if (oldAfter) oldAfter();
-    SX.after();
+
+// ---------------------------------------------------------------- Site lists
+// Hidden sites, approved sites, rejected links, stolen-before links and the social platforms.
+// The lists and what the buttons do are the same as before (the buttons' work lives in app.js).
+const SX_KINDS = ['All', 'Whole site', 'Sub-site', 'Account or part', 'Ending'];
+V.hidden = async () => {
+  const { ic, group, sw } = SX;
+  await RS_LISTS.load();
+  const tab = state.hidTab, q = state.hidQ.toLowerCase();
+  const perClient = [];
+  for (const c of await FC.DB.all('clients')) for (const x of c.licensed || []) perClient.push(x + ' | ' + c.name);
+  await RS_STOLEN.load(); await PP_SOCIAL.ready;
+  const plats = new Map();
+  for (const [d, [name]] of Object.entries(PP_SOCIAL.SITES)) { if (!plats.has(name)) plats.set(name, []); plats.get(name).push(d); }
+  const T = [['hidden', 'Hidden', RS_LISTS.hidden.length], ['allowed', 'Approved for every client', RS_LISTS.allowed.length], ['client', 'Approved for one client', perClient.length], ['rejected', 'Rejected links', RS_REJECT.items.length], ['stolen', 'Stolen before links', RS_STOLEN.items.length], ['social', 'Social sites', plats.size]];
+  const tabs = `<div class="sx-pivot"><div class="utabs" role="tablist">${T.map(([k, l, n]) => `<button role="tab" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}" data-act="hidtab" data-v="${k}">${l} <span>${n.toLocaleString()}</span></button>`).join('')}</div></div>`;
+  const flat = tab === 'rejected' || tab === 'client' || tab === 'stolen';
+  const findBox = ph => `<label class="sx-search">${ic('search', 16)}<input id="hidq" type="search" placeholder="${ph}" value="${esc(state.hidQ)}" aria-label="${ph}" autocomplete="off"></label>`;
+  const b = (act, icon, t, cls = '') => `<button class="btn kbtn${cls}" data-act="${act}">${icon ? ic(icon, 16) : ''}${t}</button>`;
+  const top = `${sxHead('Site lists')}<div class="sx-page kpn sxp-sites">${await sxLists()}${tabs}`;
+  const saved = `<p class="sx-note">${RS_LISTS.fileState === 'granted' ? 'Saved in Documents › PageProof as hidden-sites.txt, allowed-sites.txt, rejected-links.txt and stolen-links.txt.' : 'Saved in this browser. <a href="#backups">Set up the PageProof folder</a> to also keep them as text files that survive a reinstall.'}</p>`;
+
+  // Social sites: the fixed list of platforms.
+  if (tab === 'social') {
+    const rows = [...plats].filter(([n, ds]) => !q || n.toLowerCase().includes(q) || ds.some(d => d.includes(q)));
+    const readOn = (await api.storage.local.get('ppAcctRead')).ppAcctRead !== false;
+    return `${top}
+      <div class="sx-cmd"><span class="sx-note" style="flex:1 1 300px">Only these ${plats.size} platforms count as social media. Every other site (blogs, video sites, forums, chat apps...) shows on the Websites tab like any website, and can be hidden as a whole site.</span>${findBox('Find a platform, like vimeo')}</div>
+      <div class="sx-list sx-l2"><div class="sx-lhead"><span>Platform</span><span>Web addresses it covers</span></div>
+        ${rows.map(([n, ds]) => `<div class="sx-lrow"><span class="sx-site">${esc(n)}</span><span class="sx-addr">${esc(ds.join(', '))}${n === 'Pinterest' || n === 'Nextdoor' ? ' + country sites' : ''}<em>and their mobile and sub-sites (m., mobile., www.)</em></span></div>`).join('') || '<div class="sx-lempty">No platform matches. That site counts as a website.</div>'}
+      </div>
+      ${group('', `<div class="sx-row"><span class="sx-ic">${ic('acct')}</span><span class="sx-tt"><b>Read account details by itself</b><span>Followers, verified, account type, country and owner company. PageProof opens each account's profile in a background tab of your browser for a few seconds, one account a minute (X: one every 2 minutes, 30 a day), every 90 days, only for copies still to review, only while Keep searching is on and inside its hours (Pause stops it too). Off: only when you press "Read again now" on an account.</span></span><span class="sx-ctl">${sw('id="acctread" data-act="acctread"', readOn, 'Read account details by itself')}</span></div>`)}
+      <p class="sx-note">Copies on social sites go on the Social media tab of Copies found, where Stolen, Hide and Approve work per account. Saved with your settings backup.</p></div>`;
+  }
+
+  const list = tab === 'rejected' ? RS_REJECT.items.map(r => r.url) : tab === 'client' ? perClient.sort().reverse() : tab === 'stolen' ? RS_STOLEN.items : RS_LISTS[tab];
+  const rows = [...list].reverse().filter(x => x.toLowerCase().includes(q) && (flat || state.hidKind === 'All' || kindOf(x) === state.hidKind));
+  const page = rows.slice(0, state.hidMore || 100);
+  const imports = flat && tab !== 'stolen' ? [] : (await RS_IMPORTS.all()).filter(e => e.kind === tab);
+  // Who added it: a teammate, a file you added, or you.
+  const fromFile = new Map();
+  for (const e of imports) if (e.op === 'add' && !e.undone) for (const x of e.sites) fromFile.set(x, e.at);
+  const sday = t => new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const who = h => { const t = typeof ppTeamTag === 'function' ? ppTeamTag(h, tab).replace(/<[^>]+>/g, '').trim() : ''; if (t) { const [a, d] = t.split(', '); return `${esc(a)}${d ? `<em>${esc(d)}</em>` : ''}`; } return fromFile.has(h) ? `From a file<em>${sday(fromFile.get(h))}</em>` : 'You'; };
+  const undo = (h, t) => `<button class="btn kbtn" data-act="hidremove" data-v="${esc(h)}">${ic('repeat', 16)}${t}</button>`;
+  const cols = tab === 'stolen' ? ['Link', '', ''] : tab === 'rejected' ? ['Link', 'Photo', ''] : tab === 'client' ? ['Site', 'Approved for', ''] : ['Site or account', 'What it covers', 'Added'];
+  const line = h => {
+    if (tab === 'stolen') return `<div class="sx-lrow"><a class="sx-site sx-link" href="${esc(h)}" target="_blank" rel="noreferrer">${esc(h)}</a><span></span><span></span><span class="sx-lact">${undo(h, 'Take off the list')}</span></div>`;
+    if (tab === 'client') { const [site, w] = h.split(' | '); return `<div class="sx-lrow"><span class="sx-site">${esc(site)}</span><span class="sx-who">${esc(w)}</span><span></span><span class="sx-lact">${undo(h, 'Remove')}</span></div>`; }
+    if (tab === 'rejected') { const r = RS_REJECT.items.find(x => x.url === h); return `<div class="sx-lrow"><span class="sx-site sx-link">${esc(h)}</span><span class="sx-who">${esc((r && r.pic) || 'every photo')}</span><span></span><span class="sx-lact">${undo(h, 'Bring back')}</span></div>`; }
+    return `<div class="sx-lrow"><span class="sx-site">${esc(h)}</span><span><span class="sx-kind">${kindOf(h)}</span></span><span class="sx-who">${who(h)}</span><span class="sx-lact">${typeof ppTeamBtn === 'function' ? ppTeamBtn(h, tab) : ''}${undo(h, tab === 'hidden' ? 'Show again' : 'Remove')}</span></div>`;
   };
-}
+  const cmd = `<div class="sx-cmd">
+    ${!flat ? b('hidadd', 'plus', tab === 'hidden' ? 'Hide a site' : 'Approve a site', ' primary') : ''}${b('hidload', 'file', 'Add from a file', tab === 'stolen' ? ' primary' : '')}${b('hidsave', 'down', 'Download list')}${flat && tab !== 'stolen' ? '' : b('hidunload', 'bin', 'Take out a file’s sites')}
+    <span class="sp"></span>${findBox(tab === 'stolen' ? 'Find a link' : tab === 'rejected' ? 'Find a rejected link' : tab === 'client' ? 'Find a site or a client' : 'Find or add a site, like patch.com or x.com/examplenews')}
+    ${!flat ? `<select data-act="sxkind" aria-label="What it covers">${SX_KINDS.map(k => `<option value="${k}" ${state.hidKind === k ? 'selected' : ''}>${k === 'All' ? 'All kinds' : k}</option>`).join('')}</select>` : ''}</div>`;
+  const note = tab === 'client' ? 'Add one from a copy: open it in Copies found and press Approve site.'
+    : tab === 'stolen' ? 'Pages you already dealt with. A copy found on one of them gets a red Stolen before tag in Copies found, and its site counts as a repeat offender. Add them with Add from a file.'
+    : tab === 'hidden' ? 'Hidden sites never show up in any search. To hide one, type it in the box and press Hide a site.'
+    : tab === 'allowed' ? 'Approved sites may use the photos: copies found there are marked Licensed by themselves.' : 'Links you said are not a copy. They never come back for that photo.';
+  const files = flat && tab !== 'stolen' ? '' : group('Files you added', (imports.map(e => { const live = (e.op === 'add') === !e.undone; return `<div class="sx-row"><span class="sx-ic">${ic('file')}</span><span class="sx-tt"><b>${esc(e.name)}</b><span>${e.op === 'add' ? 'Added' : 'Took out'} ${e.sites.length.toLocaleString()} ${tab === 'stolen' ? 'links' : 'sites'} · ${fmtDate(e.at)}${e.undone ? ' · <b>undone ' + fmtDate(e.undone) + '</b>' : ''}</span></span><span class="sx-ctl"><button class="btn kbtn${live && e.op === 'add' ? ' primary' : ''}" data-act="impundo" data-v="${esc(e.id)}">${e.op === 'add' ? (live ? 'Undo this import' : 'Add them again') : (live ? 'Put them back' : 'Take them out again')}</button></span></div>`; }).join('') || `<div class="sx-row"><span class="sx-ic">${ic('file')}</span><span class="sx-tt"><b>No files added yet</b></span><span class="sx-ctl"></span></div>`) +
+    `<p class="sx-note" style="margin:8px 2px 0">${imports.length ? 'Undo takes out only the sites that file added. Sites that were on the list before stay. ' : ''}Added a file before PageProof kept this list? Press "Take out a file’s sites" and pick the same file: only the sites it added come out.</p>`, 'sxFiles');
+  return `${top}${cmd}<p class="sx-note">${note}</p>
+    <div class="sx-list${tab === 'stolen' ? ' sx-l1' : ''}"><div class="sx-lhead"><span>${cols[0]}</span><span>${cols[1]}</span><span>${cols[2]}</span><span></span></div>
+      ${page.map(line).join('') || `<div class="sx-lempty">${q ? (flat ? 'Nothing matches.' : 'Nothing matches. Press the button to add it.') : 'This list is empty.'}</div>`}
+      <div class="sx-more">${rows.length > page.length ? '<button class="btn kbtn" data-act="hidmore">Show more</button>' : ''}<span>Showing ${page.length.toLocaleString()} of ${rows.length.toLocaleString()}</span></div></div>
+    ${files}${saved}</div>`;
+};
+V.hidden.after = () => {
+  SX.after();
+  const i = document.getElementById('hidq');
+  i.oninput = () => { state.hidQ = i.value; state.hidMore = 0; render(true).then(() => { const j = document.getElementById('hidq'); j.focus(); j.setSelectionRange(j.value.length, j.value.length); }); };
+  i.onkeydown = e => { if (e.key === 'Enter' && state.hidTab === 'social') return; else if (e.key === 'Enter' && !['rejected', 'client', 'stolen'].includes(state.hidTab)) act('hidadd'); };
+};
+ACTS.sxkind = (v, el) => { state.hidKind = el.value; render(true); };
+
+// ---------------------------------------------------------------- Help and about
+V.help = async () => {
+  const { ic, row, group } = SX;
+  const tile = (c, icon, t, d, attrs, tagName = 'button') => `<${tagName} class="sx-tile" ${attrs}><span class="sx-sti" style="color:${c}">${ic(icon, 32)}</span><b>${t}</b><span>${d}</span></${tagName}>`;
+  const key = (k, t) => `<span><span class="sx-kbd">${k}</span>${t}</span>`;
+  return `${sxHead('Help and about')}<div class="sx-page kpn sxp-help">
+    <div class="sx-about" id="sxAboutCard"><img src="icons/icon128.png" width="64" height="64" alt=""><span class="sx-tt"><b>PageProof ${esc(VERSION)}</b><span>Your captures, settings and lists carry over when PageProof is updated · new versions come from your team lead</span></span><span class="sx-ctl"><button class="btn kbtn" data-act="sxcopyver">${ic('copy', 16)}Copy version</button></span></div>
+    <div class="sx-cols">
+      <div class="sx-col">${group('What’s new', NEWS.slice(0, 5).map(([t, d]) => row('star', t, d)).join('') + `<a class="sx-row sx-morerow" href="#whatsnew"><span class="sx-ic"></span><span class="sx-tt"><b>See all ${NEWS.length} changes</b></span><span class="sx-ctl">${SX.chev}</span></a>`, 'sxNews')}</div>
+      <div class="sx-col">
+        ${group('Learn PageProof', `<div class="sx-start">
+          ${tile('#0067C0', 'book', 'Tutorial', 'Capture, find copies, inspect, compare, mark up, one step at a time', 'href="https://github.com/TheBenPsych/PageProof/blob/main/TUTORIAL.md" target="_blank" rel="noopener"', 'a')}
+          ${tile('#8250DF', 'tour', 'Take the tour', 'Five quick stops around this page', 'data-act="tour"')}
+          ${tile('#0F7B0F', 'shield', 'Checking a pack', 'How anyone can check an evidence pack was not changed', 'href="https://github.com/TheBenPsych/PageProof/blob/main/VERIFYING.md" target="_blank" rel="noopener"', 'a')}
+          ${tile('#C27C00', 'redo', 'Run setup again', 'Your name, the PageProof folder, a computer check', 'href="#setup"', 'a')}
+          ${tile('#C239B3', 'key', 'Keyboard keys', 'Press ? anywhere', 'data-act="keyhelp"')}</div>`, 'sxLearn')}
+        ${group('Keyboard keys', `<div class="sx-keys">${key('Y', 'Stolen')}${key('L', 'Licensed')}${key('N', 'Remove')}${key('U', 'Undo')}${key('/', 'Search')}${key('?', 'All keys')}</div>`, 'sxKeys')}
+      </div></div></div>`;
+};
+V.help.after = () => SX.after();
+ACTS.sxcopyver = async () => {
+  try { await navigator.clipboard.writeText('PageProof ' + VERSION); toast('Copied: PageProof ' + VERSION); }
+  catch (e) { toast('Could not copy here. The version is PageProof ' + VERSION + '.'); }
+};
+// Every change, newest first. Opens by itself once after an update.
+V.whatsnew = async () => `${sxHead('What’s new in PageProof ' + esc(VERSION))}<div class="sx-page kpn sxp-news">
+  <div class="sx-cmd"><span class="sx-note" style="flex:1">Shown once after each update. Your captures, settings and lists carry over.</span><button class="btn primary kbtn" data-act="newsseen">Got it</button></div>
+  <div class="sx-stack">${NEWS.map(([t, d]) => SX.row('star', t, d, '', { cls: 'sx-news' })).join('')}</div>
+  <div><button class="btn primary kbtn" data-act="newsseen">Got it</button></div></div>`;
+V.whatsnew.after = () => SX.after();

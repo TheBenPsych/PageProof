@@ -27,7 +27,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); 
       font: document.fonts.check('15px Lexend'), bodyFont: getComputedStyle(document.body).fontFamily, h1Font: cs('.head h1', 'fontFamily'), btnFont: cs('.btn', 'fontFamily'),
       h1: (document.querySelector('.head h1') || {}).textContent || '', bc: !!document.querySelector('.head h1 .bc'),
       eyebrow: cs('.head .eyebrow', 'display'),
-      navRadius: cs('.nav', 'borderTopLeftRadius'), btnRadius: cs('.btn', 'borderTopLeftRadius'), cardRadius: cs('.card', 'borderTopLeftRadius'),
+      navRadius: cs('.nav', 'borderTopLeftRadius'), btnRadius: cs('.btn', 'borderTopLeftRadius'), cardRadius: cs('.sx-list', 'borderTopLeftRadius'),
       cog: /19\.4 15a1\.65/.test((document.querySelector('.side a.nav[href="#settings"] svg') || {}).innerHTML || ''),
       icons: ['home', 'found', 'clients', 'library', 'tools', 'settings'].map(h => cs(`.side a.nav[href="#${h}"] svg`, 'color')),
       sideBg: cs('.side', 'backgroundColor'),
@@ -35,7 +35,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); 
   });
   ok(r.font && /^Lexend/.test(r.bodyFont) && /^Lexend/.test(r.h1Font) && /^Lexend/.test(r.btnFont), 'Lexend is loaded and used for text, titles and buttons');
   ok(await css('--bg') === '#F3F3F3' && await css('--surface') === '#FBFBFB' && await css('--accent') === '#005FB8' && await css('--ink') === '#1B1B1B', 'Light uses the Windows 11 colours');
-  ok(r.bc && /Settings\s*›\s*Hidden and approved sites/.test(r.h1.replace(/\s+/g, ' ')) && r.eyebrow === 'none', 'The page title reads "Settings › Hidden and approved sites" on one line: ' + r.h1.replace(/\s+/g, ' ').slice(0, 60));
+  ok(r.bc && /Settings\s*›\s*Site lists/.test(r.h1.replace(/\s+/g, ' ')) && r.eyebrow === 'none', 'The page title reads "Settings › Site lists" on one line: ' + r.h1.replace(/\s+/g, ' ').slice(0, 60));
   ok(r.navRadius === '4px' && r.btnRadius === '4px' && r.cardRadius === '8px', `Controls have 4 px corners and cards 8 px (${r.navRadius}, ${r.btnRadius}, ${r.cardRadius})`);
   ok(r.cog, 'Settings has the cogwheel icon');
   ok(new Set(r.icons).size === 6, 'Each menu item has its own icon colour');

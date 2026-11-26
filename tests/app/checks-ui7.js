@@ -35,13 +35,13 @@ const ok = (c, m) => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL ') + m)
   ok(await page.evaluate(() => document.querySelectorAll('.st-funnel .fun-r').length === 5), 'How PageProof is doing: From search to copy is a funnel of 5 bars');
 
   await page.goto(url('app.html#hidden')); await page.waitForTimeout(1800);
-  const hd = await page.evaluate(() => { const n = document.querySelector('.hidname'); return { badge: !!(n && n.querySelector('.sl')), mono: n ? /mono/i.test(getComputedStyle(n).fontFamily) : true, kind: !!document.querySelector('.kind.k-whole, .kind.k-sub, .kind.k-acct, .kind.k-end'), bar: !!document.querySelector('.hidtabs .tabs') }; });
-  ok(hd.badge && !hd.mono && hd.kind && hd.bar, 'Hidden sites: normal letters with a letter badge, coloured kind chips, tabs in one switch bar');
+  const hd = await page.evaluate(() => ({ rows: document.querySelectorAll('.sx-list .sx-lrow').length, mono: /mono/i.test(getComputedStyle(document.querySelector('.sx-site')).fontFamily), kind: !!document.querySelector('.sx-lrow .sx-kind'), bar: document.querySelectorAll('.sx-pivot .utabs [data-act="hidtab"]').length }));
+  ok(hd.rows > 10 && !hd.mono && hd.kind && hd.bar === 6, 'Site lists: normal letters, a kind chip on each row, six tabs in one line');
 
   await page.goto(url('app.html#help')); await page.waitForTimeout(2500);
-  const hp = await page.evaluate(() => { const t = [...document.querySelectorAll('.helptiles .start')]; return { n: t.length, row: new Set(t.map(x => Math.round(x.offsetTop / 20))).size, keys: t.some(x => /Keyboard keys/.test(x.textContent)) }; });
-  ok(hp.n === 5 && hp.row === 1 && hp.keys, 'Help: 5 even tiles in one row, with Keyboard keys');
-  await page.click('.helptiles [data-act="keyhelp"]'); await page.waitForTimeout(500);
+  const hp = await page.evaluate(() => { const t = [...document.querySelectorAll('.sx-start .sx-tile')]; return { n: t.length, keys: t.some(x => /Keyboard keys/.test(x.textContent)), strip: document.querySelectorAll('.sx-keys .sx-kbd').length }; });
+  ok(hp.n === 5 && hp.keys && hp.strip === 6, 'Help and about: 5 learn tiles with Keyboard keys, and a strip of 6 keys');
+  await page.click('.sx-start [data-act="keyhelp"]'); await page.waitForTimeout(500);
   ok(await page.evaluate(() => { const k = document.getElementById('keyhelp'); return !!k && !k.hidden; }), 'The Keyboard keys tile opens the keys help');
   await ctx.close();
   console.log(fails ? fails + ' FAILED' : 'ALL PASSED'); process.exit(fails ? 1 : 0);
