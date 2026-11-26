@@ -84,6 +84,7 @@ async function render1(keep, me, auto) {
     const want = FRAMES[r];
     const f = view.querySelector('iframe.tool');
     if (!f || f.dataset.src !== want) view.innerHTML = `<iframe class="tool" data-src="${want}" src="${want}" title="${esc(PP_CRUMBS[r])}"></iframe>`;
+    if (typeof ppToolFrame === 'function') ppToolFrame(r, view.querySelector('iframe.tool'));   // Opened lately, and files handed over from All tools
   } else {
     view.classList.toggle('still', !!keep);
     // Keep every scroll position (the page and boxes that scroll inside it, like the folder list)

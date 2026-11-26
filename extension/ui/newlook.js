@@ -77,49 +77,7 @@ async function ppSideLive() {
   } catch (e) { /* nothing to show yet */ }
 }
 
-// ---------------------------------------------------------------- Tools
-// UI overhaul batch 6: Tools is its own menu item. Each group has its own colour, and "Used lately"
-// shows the last 3 tools opened (kept only in this browser; if storage is blocked the row just hides).
-const TOOL_LIST = [
-  ['Capture and prove', 'blue', [
-    ['capture', 'cam', 'Capture a page', 'Save a whole web page as an evidence pack.'],
-    ['verify', 'verify', 'Verify a pack', 'Show that a pack has not been changed.'],
-    ['library', 'library', 'Evidence library', 'Every capture and report you have made.'],
-    ['weekly', 'doc', 'Weekly summary', 'What was searched, found and answered each week.'],
-  ]],
-  ['Look closer at a photo', 'purple', [
-    ['inspect', 'eye', 'Inspect a photo', 'Read the hidden data inside any photo.'],
-    ['compare', 'layers', 'Compare two photos', 'Lay a copy over the original.'],
-    ['markup', 'pen', 'Mark up a copy', 'Highlight, box and arrow on a capture.'],
-    ['files', 'swap', 'Convert files', 'Turn photos and documents into PDF or JPG.'],
-    ['openfiles', 'files', 'Open odd files', 'View files your computer cannot open.'],
-  ]],
-  ['Find copies', 'green', [
-    ['search', 'find', 'New search', 'Search a few photos right now.'],
-    ['searches', 'loop', 'All searches', 'Every search you have run.'],
-    ['skipped', 'flag', 'Skipped photos', 'Photos the search could not use, and why.'],
-    ['owners', 'owner', 'Site owners', 'Sites that belong to one company.'],
-    ['hidden', 'ban', 'Hidden and approved sites', 'Sites you never want, and sites that are allowed.'],
-    ['health', 'check', 'Is everything working?', 'Lights for each part, and updates.'],
-    ['stats', 'eye', 'How PageProof is doing', 'Day-by-day stats, the checker test, and a file to send for help.'],
-  ]],
-];
-const TOOL_RECENT = ['inspect', 'compare', 'markup', 'files', 'openfiles', 'verify', 'capture', 'weekly'];
-function toolsUsed() { try { return JSON.parse(localStorage.getItem('ppToolsUsed') || '[]').filter(r => TOOL_RECENT.includes(r)); } catch (e) { return []; } }
-function noteToolUsed() {
-  const r = (location.hash.slice(1).split('?')[0] || '');
-  if (!TOOL_RECENT.includes(r)) return;
-  try { localStorage.setItem('ppToolsUsed', JSON.stringify([r, ...toolsUsed().filter(x => x !== r)].slice(0, 3))); } catch (e) {}
-}
-addEventListener('hashchange', noteToolUsed); noteToolUsed();
-V.tools = async () => {
-  const all = {}; for (const [, col, items] of TOOL_LIST) for (const it of items) all[it[0]] = [col, ...it];
-  const used = toolsUsed().filter(r => all[r]);
-  const recent = used.length ? `<section class="toolsec"><h2>Used lately</h2><div class="toolrecent">${used.map(r => { const [col, , i, t] = all[r]; return `<a class="card tused ${col}" href="#${r}"><span class="ic">${ic(i, 18)}</span><b>${t}</b>${ic('chev', 16)}</a>`; }).join('')}</div></section>` : '';
-  return `${head('', 'Tools', 'Everything else PageProof can do, in one place.')}
-  ${recent}
-  ${TOOL_LIST.map(([g, col, items]) => `<section class="toolsec ${col}"><h2>${g}</h2><div class="toolgrid">${items.map(([r, i, t, d]) => `<a class="card tool ${col}" href="#${r}"><span class="ic">${ic(i, 20)}</span><b>${t}</b><span>${d}</span></a>`).join('')}</div></section>`).join('')}`;
-};
+// Tools › All tools lives in ui/pp-tools.js (calm look, step 17).
 
 // ---------------------------------------------------------------- the ⋯ menu on a copy
 function closeRowMenu() { const m = $id('rowMenu'); if (m) m.remove(); }

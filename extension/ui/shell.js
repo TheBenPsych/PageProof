@@ -14,7 +14,7 @@ const PP_MENU = [
   { id: 'library', label: 'Evidence', href: 'library',
     subs: [['All evidence', 'library'], ['Overview', 'capture'], ['Weekly summary', 'weekly']] },
   { id: 'tools', label: 'Tools', href: 'tools', icon: 'tools',
-    subs: [['All tools', 'tools'], ['Inspect a photo', 'inspect'], ['Compare two photos', 'compare'], ['Mark up a copy', 'markup'], ['Convert files', 'files']] },
+    subs: [['All tools', 'tools'], ['Inspect a photo', 'inspect'], ['Compare two photos', 'compare'], ['Mark up a copy', 'markup'], ['Convert files', 'files'], ['Verify a pack', 'verify']] },
   { id: 'settings', label: 'Settings', href: 'settings',
     subs: [['Settings', 'settings'], ['Is everything working?', 'health'], ['How PageProof is doing', 'stats'], ['Hidden and approved sites', 'hidden'], ['In your browser', 'browser'], ['Help and tutorial', 'help']] },
 ];
@@ -23,14 +23,14 @@ const PP_MENU = [
 const PP_ROUTES = {
   home: ['home'], search: ['find', 'search'], searches: ['find', 'searches'], results: ['find', 'searches'], found: ['find', 'found'], review: ['find', 'review'], keep: ['find', 'keep'], connect: ['find', 'found'], credit: ['find', 'credit'], watching: ['find', 'watching'],
   clients: ['clients', 'clients'], photos: ['clients', 'clients'], owners: ['find', 'owners'], who: ['find', 'owners'], skipped: ['clients', 'skipped'], regs: ['clients', 'clients'],
-  library: ['library', 'library'], tocapture: ['library', 'library'], capture: ['library', 'capture'], verify: ['tools', 'tools'], weekly: ['library', 'weekly'],
+  library: ['library', 'library'], tocapture: ['library', 'library'], capture: ['library', 'capture'], verify: ['tools', 'verify'], weekly: ['library', 'weekly'],
   tools: ['tools', 'tools'], inspect: ['tools', 'inspect'], compare: ['tools', 'compare'], markup: ['tools', 'markup'], files: ['tools', 'files'], openfiles: ['tools', 'files'],
   settings: ['settings', 'settings'], health: ['settings', 'health'], stats: ['settings', 'stats'], hidden: ['settings', 'hidden'], browser: ['settings', 'browser'], setup: ['settings', 'browser'], help: ['settings', 'help'],
   computer: ['settings', 'settings'], whatsnew: ['settings', 'settings'], reconnect: ['settings', 'settings']
 };
 const PP_CRUMBS = {
   results: 'Search results', credit: 'Credit search', watching: 'Watching', regs: 'Registrations',
-  home: 'Home', tools: 'All tools', capture: 'Evidence › Overview', search: 'New search', searches: 'All searches', found: 'All copies found',
+  home: 'Home', tools: 'Tools', capture: 'Evidence › Overview', search: 'New search', searches: 'All searches', found: 'All copies found',
   review: 'One at a time', clients: 'Clients and photos', photos: 'Clients and photos', owners: 'Site owners',
   who: 'Who\'s behind this site', keep: 'Keep searching', connect: 'Connect your photos', weekly: 'Evidence › Weekly summary', tocapture: 'Evidence › All evidence',
   inspect: 'Tools › Inspect a photo', compare: 'Tools › Compare two photos', markup: 'Tools › Mark up a copy', files: 'Tools › Convert files',
